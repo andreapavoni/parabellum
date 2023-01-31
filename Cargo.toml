@@ -1,0 +1,48 @@
+[package]
+name = "parabellum"
+version = "0.1.0"
+description = "API server for Parabellum, a reimplementation of the famouse MMORPG browser game Travian v3.x"
+repository = "https://github.com/andreapavoni/parabellum_server"
+authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
+license = "MIT"
+keywords = ["travian", "MMORPG", "game", "browsergame"]
+readme = "README.md"
+publish = false
+rust-version = "1.63"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Web and HTTP
+axum = { version = "0.6", features = ["headers", "json"] }
+tower-http = { version = "0.3", features = [
+  "trace",
+  "compression-br",
+  "propagate-header",
+  "sensitive-headers",
+] }
+
+# JSON handling
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Date and time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Uuid
+uuid = { version = "1.1", features = ["serde", "v4"] }
+
+# Result and Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging & tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Random number generator
+rand = "0.8.5"
