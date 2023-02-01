@@ -9,6 +9,25 @@ pub struct Valley {
     pub id: u64,
     pub position: Position,
     pub topology: ValleyTopology,
+    pub player_id: Option<String>,
+    pub village_id: Option<u64>,
+}
+
+impl TryFrom<MapField> for Valley {
+    type Error = &'static str;
+
+    fn try_from(value: MapField) -> Result<Self, Self::Error> {
+        match value.topology {
+            MapFieldTopology::Valley(topology) => Ok(Self {
+                id: value.id,
+                player_id: value.player_id,
+                village_id: value.village_id,
+                position: value.position,
+                topology,
+            }),
+            _ => Err("This map field is not a Valley"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -58,7 +77,7 @@ impl Position {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum OasisVariant {
+pub enum OasisTopology {
     Lumber,
     LumberCrop,
     Clay,
@@ -71,9 +90,11 @@ pub enum OasisVariant {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Oasis {
-    id: u64,
-    position: Position,
-    variant: OasisVariant,
+    pub id: u64,
+    pub player_id: Option<String>,
+    pub village_id: Option<u64>,
+    pub position: Position,
+    pub topology: OasisTopology,
 }
 
 impl Oasis {
@@ -83,24 +104,24 @@ impl Oasis {
         let mut iron: u8 = 0;
         let mut crop: u8 = 0;
 
-        match &self.variant {
-            OasisVariant::Lumber => lumber += 25,
-            OasisVariant::LumberCrop => {
+        match &self.topology {
+            OasisTopology::Lumber => lumber += 25,
+            OasisTopology::LumberCrop => {
                 lumber += 25;
                 crop += 25;
             }
-            OasisVariant::Clay => clay += 25,
-            OasisVariant::ClayCrop => {
+            OasisTopology::Clay => clay += 25,
+            OasisTopology::ClayCrop => {
                 clay += 25;
                 crop += 25;
             }
-            OasisVariant::Iron => iron += 25,
-            OasisVariant::IronCrop => {
+            OasisTopology::Iron => iron += 25,
+            OasisTopology::IronCrop => {
                 iron += 25;
                 crop += 25;
             }
-            OasisVariant::Crop => crop += 25,
-            OasisVariant::Crop50 => crop += 50,
+            OasisTopology::Crop => crop += 25,
+            OasisTopology::Crop50 => crop += 50,
         }
 
         ProductionBonus {
@@ -112,9 +133,26 @@ impl Oasis {
     }
 }
 
+impl TryFrom<MapField> for Oasis {
+    type Error = &'static str;
+
+    fn try_from(value: MapField) -> Result<Self, Self::Error> {
+        match value.topology {
+            MapFieldTopology::Oasis(topology) => Ok(Self {
+                id: value.id,
+                player_id: value.player_id,
+                village_id: value.village_id,
+                position: value.position,
+                topology,
+            }),
+            _ => Err("This map field is not an Oasis"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FieldType {
-    Oasis(OasisVariant),
+pub enum MapFieldTopology {
+    Oasis(OasisTopology),
     Valley(ValleyTopology),
 }
 
@@ -124,10 +162,33 @@ pub struct MapField {
     pub player_id: Option<String>,
     pub village_id: Option<u64>,
     pub position: Position,
-    pub field: FieldType,
+    pub topology: MapFieldTopology,
 }
 
-// TODO: usare struct per la map (da usare a db). nella map e nella generate bisogna includere tutto quello che serve su db prendendolo da oasis o valley.
+impl From<Valley> for MapField {
+    fn from(valley: Valley) -> Self {
+        MapField {
+            id: valley.id,
+            player_id: valley.player_id,
+            village_id: valley.village_id,
+            position: valley.position,
+            topology: MapFieldTopology::Valley(valley.topology),
+        }
+    }
+}
+
+impl From<Oasis> for MapField {
+    fn from(oasis: Oasis) -> Self {
+        MapField {
+            id: oasis.id,
+            player_id: oasis.player_id,
+            village_id: oasis.village_id,
+            position: oasis.position,
+            topology: MapFieldTopology::Oasis(oasis.topology),
+        }
+    }
+}
+
 pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
     let mut map: Vec<MapField> = vec![];
 
@@ -142,7 +203,7 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
                 map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 4, 4, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)),
                     id,
                     position,
                 });
@@ -153,84 +214,84 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
                 0..=10 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(3, 3, 3, 9)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(3, 3, 3, 9)),
                     id,
                     position,
                 }),
                 11..=90 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(3, 4, 5, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(3, 4, 5, 6)),
                     id,
                     position,
                 }),
                 91..=400 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 4, 4, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)),
                     id,
                     position,
                 }),
                 401..=480 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 5, 3, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 5, 3, 6)),
                     id,
                     position,
                 }),
                 481..=560 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(5, 4, 3, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(5, 4, 3, 6)),
                     id,
                     position,
                 }),
                 561..=570 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(1, 1, 1, 15)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(1, 1, 1, 15)),
                     id,
                     position,
                 }),
                 571..=600 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 4, 3, 7)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 3, 7)),
                     id,
                     position,
                 }),
                 601..=630 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(3, 4, 4, 7)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(3, 4, 4, 7)),
                     id,
                     position,
                 }),
                 631..=660 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 3, 4, 7)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 3, 4, 7)),
                     id,
                     position,
                 }),
                 661..=740 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(3, 5, 4, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(3, 5, 4, 6)),
                     id,
                     position,
                 }),
                 741..=820 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(4, 3, 5, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 3, 5, 6)),
                     id,
                     position,
                 }),
                 821..=900 => map.push(MapField {
                     player_id: None,
                     village_id: None,
-                    field: FieldType::Valley(ValleyTopology(5, 3, 4, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(5, 3, 4, 6)),
                     id,
                     position,
                 }),
@@ -238,56 +299,56 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::Lumber),
+                    topology: MapFieldTopology::Oasis(OasisTopology::Lumber),
                     position,
                 }),
                 909..=924 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::LumberCrop),
+                    topology: MapFieldTopology::Oasis(OasisTopology::LumberCrop),
                     position,
                 }),
                 925..=932 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::Clay),
+                    topology: MapFieldTopology::Oasis(OasisTopology::Clay),
                     position,
                 }),
                 933..=948 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::ClayCrop),
+                    topology: MapFieldTopology::Oasis(OasisTopology::ClayCrop),
                     position,
                 }),
                 949..=956 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::Iron),
+                    topology: MapFieldTopology::Oasis(OasisTopology::Iron),
                     position,
                 }),
                 957..=972 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::IronCrop),
+                    topology: MapFieldTopology::Oasis(OasisTopology::IronCrop),
                     position,
                 }),
                 973..=980 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::Crop),
+                    topology: MapFieldTopology::Oasis(OasisTopology::Crop),
                     position,
                 }),
                 981..=1000 => map.push(MapField {
                     player_id: None,
                     village_id: None,
                     id,
-                    field: FieldType::Oasis(OasisVariant::Crop50),
+                    topology: MapFieldTopology::Oasis(OasisTopology::Crop50),
                     position,
                 }),
                 _ => map.push(MapField {
@@ -295,7 +356,7 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
                     village_id: None,
                     id,
                     position,
-                    field: FieldType::Valley(ValleyTopology(4, 4, 4, 6)),
+                    topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)),
                 }),
             }
         }
@@ -307,7 +368,7 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{generate_new_map, FieldType, OasisVariant, ValleyTopology};
+    use super::{generate_new_map, MapFieldTopology, OasisTopology, ValleyTopology};
     use crate::game::models::map::Position;
 
     #[test]
@@ -338,18 +399,20 @@ mod tests {
     }
 
     #[test]
+    // This test it's just for debugging purposes. It prints map fields topology with
+    // percentuals about each field type.
     fn test_generated_map_topology() {
         let world_size = 100;
         let map = generate_new_map(world_size);
-        let mut oases: HashMap<OasisVariant, u64> = HashMap::new();
+        let mut oases: HashMap<OasisTopology, u64> = HashMap::new();
         let mut valleys: HashMap<ValleyTopology, u64> = HashMap::new();
 
         for f in map.clone() {
-            match f.field {
-                FieldType::Oasis(to) => {
+            match f.topology {
+                MapFieldTopology::Oasis(to) => {
                     *oases.entry(to).or_insert(0) += 1;
                 }
-                FieldType::Valley(tv) => {
+                MapFieldTopology::Valley(tv) => {
                     *valleys.entry(tv).or_insert(0) += 1;
                 }
             }
