@@ -9,6 +9,9 @@ use super::{
     map::{Oasis, Valley, WORLD_MAX_SIZE},
 };
 
+// TODO: add standalone rally point?
+// TODO: add standalone wall?
+// TODO: add reinforcements to other villages?
 #[derive(Debug, Clone)]
 pub struct Village {
     pub id: u64,
