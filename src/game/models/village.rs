@@ -1,23 +1,26 @@
-use std::collections::HashMap;
-
 use anyhow::{Error, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 use super::{
     army::Army,
     buildings::{Building, BuildingGroup, BuildingName},
-    common::{Player, SmithyUpgrades, Tribe},
     map::{Oasis, Valley, WORLD_MAX_SIZE},
+    {Player, SmithyUpgrades, Tribe},
 };
 
 // TODO: add standalone rally point?
 // TODO: add standalone wall?
 // TODO: add reinforcements to other villages?
+// TODO: add warehouse and granary total size!
 #[derive(Debug, Clone)]
 pub struct Village {
-    pub id: u64,
+    pub id: u32,
     pub name: String,
-    pub player_id: String,
-    pub valley_id: u64,
+    pub player_id: Uuid,
+    pub valley_id: u32,
     pub tribe: Tribe,
     pub buildings: HashMap<u8, Building>,
     pub oases: Vec<Oasis>,
@@ -28,6 +31,8 @@ pub struct Village {
     pub production: VillageProduction,
     pub is_capital: bool,
     pub smithy: SmithyUpgrades,
+    pub stocks: StockCapacity,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Village {
@@ -58,11 +63,16 @@ impl Village {
             loyalty: 100,
             production,
             is_capital,
-            smithy: smithy,
+            smithy,
+            stocks: StockCapacity {
+                warehouse: 800,
+                granary: 800,
+            }, // FIXME: set from config according to server speed
+            updated_at: Utc::now(),
         };
 
         village.init_village_buildings(valley);
-        village.update_production();
+        village.update_stats();
         village
     }
 
@@ -81,13 +91,10 @@ impl Village {
 
         let building = Building::new(name);
 
-        match building.validate_build(&self.tribe, &self.buildings, self.is_capital) {
-            Err(msg) => return Err(Error::msg(msg)),
-            Ok(_) => {
-                self.buildings.insert(slot_id, building);
-                self.update_production();
-            }
-        }
+        building.validate_build(&self.tribe, &self.buildings, self.is_capital)?;
+        self.buildings.insert(slot_id, building);
+        self.update_stats();
+
         Ok(())
     }
 
@@ -97,7 +104,7 @@ impl Village {
                 Ok(_) => {
                     let next = b.next_level().unwrap();
                     self.buildings.insert(slot_id, next);
-                    self.update_production();
+                    self.update_stats();
                 }
                 Err(msg) => return Err(Error::msg(msg)),
             },
@@ -111,7 +118,7 @@ impl Village {
             Some(b) => {
                 let building = b.at_level(level)?;
                 self.buildings.insert(slot_id, building);
-                self.update_production();
+                self.update_stats();
             }
             None => return Err(Error::msg("No buildings found on this slot")),
         };
@@ -123,7 +130,7 @@ impl Village {
             Some(b) => {
                 if b.group == BuildingGroup::Resources {
                     b.at_level(0)?;
-                    self.update_production();
+                    self.update_stats();
                 } else {
                     self.buildings.remove(&slot_id);
                 }
@@ -175,9 +182,13 @@ impl Village {
         }
     }
 
-    // Updates the village raw production and bonuses from buildings and oases bonuses.
-    pub fn update_production(&mut self) {
-        // production bonuses from infrastructures
+    // Updates the village stats (population, production, bonuses from buildings and oases, etc).
+    fn update_stats(&mut self) {
+        self.population = 0;
+        self.production = Default::default();
+        self.stocks = Default::default();
+
+        // data from infrastructures
         for (_, b) in self.buildings.clone() {
             match b.name {
                 BuildingName::Woodcutter => self.production.lumber += b.value,
@@ -189,8 +200,12 @@ impl Village {
                 BuildingName::IronFoundry => self.production.bonus.iron += b.value as u8,
                 BuildingName::GrainMill => self.production.bonus.crop += b.value as u8,
                 BuildingName::Bakery => self.production.bonus.crop += b.value as u8,
+                BuildingName::Warehouse => self.stocks.warehouse += b.value,
+                BuildingName::Granary => self.stocks.granary += b.value,
                 _ => continue,
             }
+            self.population += b.cost().upkeep;
+            self.production.upkeep += b.cost().upkeep;
         }
 
         // oases production bonuses
@@ -205,7 +220,8 @@ impl Village {
             self.production.upkeep += r.upkeep();
         }
 
-        self.production.update_effective_production();
+        // update effective production apllying bonuses and upkeep
+        self.production.calculate_effective_production();
     }
 
     fn init_village_buildings(&mut self, valley: &Valley) {
@@ -238,45 +254,42 @@ impl Village {
 }
 
 // Gross production of a village with upkeep and bonuses values ready to apply.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VillageProduction {
-    pub lumber: u64,
-    pub clay: u64,
-    pub iron: u64,
-    pub crop: u64,
-    pub upkeep: u64,
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+    pub upkeep: u32,
     pub bonus: ProductionBonus,
     pub effective: VillageEffectiveProduction,
 }
 
 impl VillageProduction {
-    pub fn update_effective_production(&mut self) {
-        let mut production: VillageEffectiveProduction = Default::default();
+    pub fn calculate_effective_production(&mut self) {
+        let mut ep: VillageEffectiveProduction = Default::default();
 
-        production.lumber =
-            ((self.lumber as f64) * ((self.bonus.lumber as f64 / 100.0) + 1.0)).floor() as u64;
-        production.clay =
-            (self.clay as f64 * ((self.bonus.clay as f64 / 100.0) + 1.0)).floor() as u64;
-        production.iron =
-            (self.iron as f64 * ((self.bonus.iron as f64 / 100.0) + 1.0)).floor() as u64;
-        production.crop =
-            (self.crop as f64 * ((self.bonus.crop as f64 / 100.0) + 1.0)).floor() as i64;
-        production.crop -= self.upkeep as i64;
+        ep.lumber =
+            ((self.lumber as f64) * ((self.bonus.lumber as f64 / 100.0) + 1.0)).floor() as u32;
+        ep.clay = (self.clay as f64 * ((self.bonus.clay as f64 / 100.0) + 1.0)).floor() as u32;
+        ep.iron = (self.iron as f64 * ((self.bonus.iron as f64 / 100.0) + 1.0)).floor() as u32;
+        ep.crop = (self.crop as f64 * ((self.bonus.crop as f64 / 100.0) + 1.0)).floor() as i64;
+        ep.crop -= self.upkeep as i64;
 
-        self.effective = production;
+        self.effective = ep;
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VillageEffectiveProduction {
-    pub lumber: u64,
-    pub clay: u64,
-    pub iron: u64,
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
     pub crop: i64,
 }
 
 // Bonus to be applied to resources production.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ProductionBonus {
     pub lumber: u8,
     pub clay: u8,
@@ -291,4 +304,10 @@ impl ProductionBonus {
         self.iron = bonus.iron;
         self.crop = bonus.crop;
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct StockCapacity {
+    warehouse: u32,
+    granary: u32,
 }

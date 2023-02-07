@@ -3,8 +3,8 @@ use rand::Rng;
 use super::models::{
     army::Army,
     buildings::{Building, BuildingName},
-    common::Tribe,
     village::Village,
+    Tribe,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -29,10 +29,10 @@ impl CataTargets {
 #[derive(Debug, Clone, Default)]
 struct BattleState {
     atk_won: bool,
-    atk_points: u64,
-    def_points: u64,
-    winner_points: u64,
-    loser_points: u64,
+    atk_points: u32,
+    def_points: u32,
+    winner_points: u32,
+    loser_points: u32,
     immensity_factor: f64,
     winner_losses_percent: f64,
     loser_losses_percent: f64,
@@ -105,20 +105,20 @@ impl Battle {
         }
 
         // Calculate the Cavalry Attacking Power (CAP) and Infantry Attacking Power (IAP)
-        let cavalry_atk_points: u64;
+        let cavalry_atk_points: u32;
         // Calculate the Defensive Power against Cavalry (CDP) and Defensive Power
         // against Infantry (IDP)
-        let infantry_atk_points: u64;
+        let infantry_atk_points: u32;
         (infantry_atk_points, cavalry_atk_points) = self.attacker_army.attack_points();
 
-        let mut cavalry_def_points: u64;
-        let mut infantry_def_points: u64;
+        let mut cavalry_def_points: u32;
+        let mut infantry_def_points: u32;
         (infantry_def_points, cavalry_def_points) = self.defender_village.army.defense_points();
 
         // Include reinforcements defensive power
         for r in self.defender_village.reinforcements.clone() {
-            let rcdp: u64;
-            let ridp: u64;
+            let rcdp: u32;
+            let ridp: u32;
             (ridp, rcdp) = r.defense_points();
             infantry_def_points += ridp;
             cavalry_def_points += rcdp;
@@ -131,7 +131,7 @@ impl Battle {
 
         self.state.def_points = (infantry_def_points as f64 * infantry_atk_percent
             + cavalry_def_points as f64 * cavalry_atk_percent)
-            .floor() as u64;
+            .floor() as u32;
 
         // Each village has a basic defense value of 10
         self.state.def_points += 10;
@@ -144,8 +144,8 @@ impl Battle {
     // Palace/Residence have some defense value
     fn apply_palace_defense(&mut self) {
         self.state.def_points += match self.defender_village.get_palace_or_residence() {
-            Some((building, _)) => (building.level * building.level) as u64 * 2,
-            None => 0 as u64,
+            Some((building, _)) => (building.level * building.level) as u32 * 2,
+            None => 0 as u32,
         };
     }
 
@@ -161,7 +161,7 @@ impl Battle {
 
             let bonus = tribe_bonus.powf(wall.level as f64);
 
-            self.state.def_points = (self.state.def_points as f64 * bonus).floor() as u64
+            self.state.def_points = (self.state.def_points as f64 * bonus).floor() as u32
         }
 
         // bonus := math.Pow(tribeBonus, float64(level))
@@ -186,7 +186,7 @@ impl Battle {
             bonus = 1.5
         }
 
-        self.state.def_points = (self.state.def_points as f64 * bonus) as u64;
+        self.state.def_points = (self.state.def_points as f64 * bonus) as u32;
     }
 
     // Determine winner and loser of this battle.
@@ -315,7 +315,7 @@ impl Battle {
                 let cata_needed =
                     self.get_siege_units_needed(morale, b.level, cata_smithy, buildings_durability);
 
-                if working_catas / self.cata_targets.targets().len() as u64 >= cata_needed {
+                if working_catas / self.cata_targets.targets().len() as u32 >= cata_needed {
                     // Destroy building
                     let _ = self.defender_village.destroy_building(slot_id);
                 } else {
@@ -374,16 +374,16 @@ impl Battle {
     }
 
     // Calculates working catapults/rams based on battle points.
-    fn get_working_siege_units(&self, units: u64) -> u64 {
+    fn get_working_siege_units(&self, units: u32) -> u32 {
         let battle_ratio =
             ((self.state.atk_points as f64) / (self.state.def_points as f64)).powf(1.5);
 
         if battle_ratio >= 1.0 {
             // Attacker is bigger/stronger
-            ((units as f64) * (1.0 - 0.5 / battle_ratio)).floor() as u64
+            ((units as f64) * (1.0 - 0.5 / battle_ratio)).floor() as u32
         } else {
             // Defender is bigger/stronger
-            ((units as f64) * 0.5 * battle_ratio).floor() as u64
+            ((units as f64) * 0.5 * battle_ratio).floor() as u32
         }
     }
 
@@ -400,18 +400,18 @@ impl Battle {
     }
 
     // Calculates amount of catapults/rams needed to destroy a building/wall.
-    fn get_siege_units_needed(&self, morale: f64, level: u8, smithy: u8, durability: u16) -> u64 {
+    fn get_siege_units_needed(&self, morale: f64, level: u8, smithy: u8, durability: u16) -> u32 {
         ((morale * ((level * level) + level + 1) as f64 / (8 * smithy as u16 / durability) as f64)
             + 0.5)
-            .round() as u64
+            .round() as u32
     }
 
     // Determine the damage caused by a siege unit to a building.
     fn calculate_building_level_damage(
         &self,
         level: u8,
-        working_units: u64,
-        units_needed: u64,
+        working_units: u32,
+        units_needed: u32,
     ) -> u8 {
         let damage_percent = (working_units * 100) as f64 / units_needed as f64;
         (level as f64 * damage_percent).floor() as u8

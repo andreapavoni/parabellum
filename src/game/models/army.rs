@@ -1,6 +1,8 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use super::common::{Cost, ResourceGroup, SmithyUpgrades, Tribe};
+use super::{Cost, ResourceGroup, SmithyUpgrades, Tribe};
 
 #[derive(Debug, Clone)]
 pub enum UnitRole {
@@ -102,12 +104,13 @@ pub enum UnitName {
 }
 
 type TribeUnits = [Unit; 10];
-pub type TroopSet = [u64; 10];
 
-#[derive(Debug, Clone)]
+pub type TroopSet = [u32; 10];
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Army {
-    pub village_id: u64,
-    pub player_id: String,
+    pub village_id: u32,
+    pub player_id: Uuid,
     pub tribe: Tribe,
     pub units: TroopSet,
     pub smithy: SmithyUpgrades,
@@ -115,8 +118,8 @@ pub struct Army {
 
 impl Army {
     pub fn new(
-        village_id: u64,
-        player_id: String,
+        village_id: u32,
+        player_id: Uuid,
         tribe: Tribe,
         units: TroopSet,
         smithy: SmithyUpgrades,
@@ -134,18 +137,18 @@ impl Army {
         Ok(get_tribe_units(self.tribe.clone())[idx as usize].clone())
     }
 
-    pub fn unit_amount(&self, idx: u8) -> u64 {
+    pub fn unit_amount(&self, idx: u8) -> u32 {
         self.units[idx as usize]
     }
 
     // Returns the total raw number of troops in the army.
-    pub fn immensity(&self) -> u64 {
+    pub fn immensity(&self) -> u32 {
         self.units.into_iter().sum()
     }
 
-    pub fn upkeep(&self) -> u64 {
+    pub fn upkeep(&self) -> u32 {
         let units = get_tribe_units(self.tribe.clone());
-        let mut total: u64 = 0;
+        let mut total: u32 = 0;
 
         units.into_iter().for_each(|u| {
             total += u.cost.upkeep;
@@ -154,9 +157,9 @@ impl Army {
         total
     }
 
-    pub fn attack_points(&self) -> (u64, u64) {
-        let mut infantry_points: u64 = 0;
-        let mut cavalry_points: u64 = 0;
+    pub fn attack_points(&self) -> (u32, u32) {
+        let mut infantry_points: u32 = 0;
+        let mut cavalry_points: u32 = 0;
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
             let u = self.get_unit(idx.try_into().unwrap()).unwrap();
@@ -171,9 +174,9 @@ impl Army {
         (infantry_points, cavalry_points)
     }
 
-    pub fn defense_points(&self) -> (u64, u64) {
-        let mut infantry_points: u64 = 0;
-        let mut cavalry_points: u64 = 0;
+    pub fn defense_points(&self) -> (u32, u32) {
+        let mut infantry_points: u32 = 0;
+        let mut cavalry_points: u32 = 0;
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
             let u = self.get_unit(idx.try_into().unwrap()).unwrap();
@@ -187,33 +190,44 @@ impl Army {
         (infantry_points, cavalry_points)
     }
 
-    pub fn scouting_attack_points(&self) -> u64 {
+    pub fn scouting_attack_points(&self) -> u32 {
         self.scouting_points(35)
     }
 
-    pub fn scouting_defense_points(&self) -> u64 {
+    pub fn scouting_defense_points(&self) -> u32 {
         self.scouting_points(20)
-    }
-
-    fn scouting_points(&self, base_points: u8) -> u64 {
-        let idx: usize = 3;
-        let quantity = self.units[idx];
-        let unit = self.get_unit(idx as u8).unwrap();
-        let smithy_improvement = self.apply_smithy_upgrade(unit.clone(), idx, base_points as u64);
-        smithy_improvement * quantity
     }
 
     pub fn apply_losses(&mut self, percent: f64) {
         for (idx, quantity) in self.units.into_iter().enumerate() {
-            self.units[idx] = quantity - ((quantity as f64) * percent / 100.0).floor() as u64;
+            self.units[idx] = quantity - ((quantity as f64) * percent / 100.0).floor() as u32;
         }
     }
 
-    fn apply_smithy_upgrade(&self, unit: Unit, idx: usize, combat_value: u64) -> u64 {
+    pub fn deploy(&mut self, set: TroopSet) -> Result<TroopSet> {
+        for (idx, quantity) in set.into_iter().enumerate() {
+            if self.units[idx] > quantity {
+                self.units[idx] -= quantity;
+            } else {
+                return Err(anyhow!("The number of available units is not enough"));
+            }
+        }
+        Ok(set.clone())
+    }
+
+    fn scouting_points(&self, base_points: u8) -> u32 {
+        let idx: usize = 3;
+        let quantity = self.units[idx];
+        let unit = self.get_unit(idx as u8).unwrap();
+        let smithy_improvement = self.apply_smithy_upgrade(unit.clone(), idx, base_points as u32);
+        smithy_improvement * quantity
+    }
+
+    fn apply_smithy_upgrade(&self, unit: Unit, idx: usize, combat_value: u32) -> u32 {
         let level: i32 = self.smithy[idx as usize].into();
         ((combat_value as f64)
             + ((combat_value + 300 * unit.cost.upkeep) as f64 / 7.0)
-                * ((1.007f64).powi(level.try_into().unwrap()) - 1.0).floor()) as u64
+                * ((1.007f64).powi(level.try_into().unwrap()) - 1.0).floor()) as u32
     }
 }
 
@@ -222,9 +236,9 @@ pub struct Unit {
     pub name: UnitName,
     pub role: UnitRole,
     pub group: UnitGroup,
-    pub attack: u64,
-    pub defense_infantry: u64,
-    pub defense_cavalry: u64,
+    pub attack: u32,
+    pub defense_infantry: u32,
+    pub defense_cavalry: u32,
     pub speed: u8,
     pub capacity: u32,
     pub cost: Cost,
