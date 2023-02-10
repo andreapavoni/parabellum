@@ -4,7 +4,16 @@ use uuid::Uuid;
 
 use super::village::ProductionBonus;
 
-pub const WORLD_MAX_SIZE: i32 = 400;
+// FIXME: use config
+pub const WORLD_MAX_SIZE: i32 = 100;
+
+#[derive(Debug, Clone)]
+pub enum Quadrant {
+    NorthEast,
+    EastSouth,
+    SouthWest,
+    WestNorth,
+}
 
 #[derive(Debug, Clone)]
 pub struct Valley {
@@ -33,20 +42,20 @@ impl TryFrom<MapField> for Valley {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ValleyTopology(u8, u8, u8, u8);
+pub struct ValleyTopology(pub u8, pub u8, pub u8, pub u8);
 
 impl ValleyTopology {
     pub fn lumber(&self) -> u8 {
         self.0
     }
     pub fn clay(&self) -> u8 {
-        self.0
+        self.1
     }
     pub fn iron(&self) -> u8 {
-        self.0
+        self.2
     }
     pub fn crop(&self) -> u8 {
-        self.0
+        self.3
     }
 }
 

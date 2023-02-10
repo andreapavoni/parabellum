@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::game::models::{
     army::Army,
     buildings::Building,
-    map::Oasis,
+    map::{Oasis, Position},
     village::{StockCapacity, Village as GameVillage, VillageProduction},
     {SmithyUpgrades, Tribe},
 };
@@ -18,9 +18,10 @@ use crate::game::models::{
 pub struct Village {
     #[ormlite(primary_key)]
     pub id: u32,
+    pub x: i32,
+    pub y: i32,
     pub name: String,
     pub player_id: Uuid,
-    pub valley_id: u32,
     pub tribe: Json<Tribe>,
     pub buildings: Json<HashMap<u8, Building>>,
     pub oases: Json<Vec<Oasis>>,
@@ -40,8 +41,8 @@ impl From<Village> for GameVillage {
         Self {
             id: v.id,
             name: v.name,
+            position: Position { x: v.x, y: v.y },
             player_id: v.player_id,
-            valley_id: v.valley_id,
             tribe: v.tribe.as_ref().clone(),
             buildings: v.buildings.as_ref().clone(),
             oases: v.oases.as_ref().clone(),
@@ -62,9 +63,10 @@ impl From<GameVillage> for Village {
     fn from(v: GameVillage) -> Self {
         Self {
             id: v.id,
+            x: v.position.x,
+            y: v.position.y,
             name: v.name,
             player_id: v.player_id,
-            valley_id: v.valley_id,
             tribe: Json(v.tribe),
             buildings: Json(v.buildings.clone()),
             oases: Json(v.oases.clone()),

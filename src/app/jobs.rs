@@ -1,10 +1,9 @@
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::game::{
     battle::CataTargets,
     models::{
-        army::{TroopSet, UnitName},
+        army::{Army, UnitName},
         buildings::BuildingName,
         ResourceGroup,
     },
@@ -16,19 +15,13 @@ pub struct Job {
     pub player_id: Uuid,
     pub village_id: u32,
     pub task: JobTask,
-    pub started_at: DateTime<Utc>,
-    pub ends_at: DateTime<Utc>,
-    pub done: bool, // ??? if true it means it has been "consumed"
+    pub duration: u64,
+    pub done: bool,        // ??? if true it means it has been "consumed"
+    pub cancellable: bool, // TODO: some tasks are only cancellable for some time (eg: army actions)
 }
 
 impl Job {
-    pub fn new(
-        player_id: Uuid,
-        village_id: u32,
-        started_at: DateTime<Utc>,
-        ends_at: DateTime<Utc>,
-        task: JobTask,
-    ) -> Self {
+    pub fn new(player_id: Uuid, village_id: u32, duration: u64, task: JobTask) -> Self {
         let id = Uuid::new_v4();
 
         Self {
@@ -36,9 +29,9 @@ impl Job {
             player_id,
             village_id,
             task,
-            started_at,
-            ends_at,
+            duration,
             done: false,
+            cancellable: false,
         }
     }
 }
@@ -46,23 +39,23 @@ impl Job {
 #[derive(Debug, Clone)]
 pub enum JobTask {
     Attack {
-        units: TroopSet,
+        army: Army,
         cata_targets: CataTargets,
         village_id: u32,
         player_id: Uuid,
     },
     Raid {
-        units: TroopSet,
+        army: Army,
         village_id: u32,
         player_id: Uuid,
     },
     Reinforcement {
-        units: TroopSet,
+        army: Army,
         village_id: u32,
         player_id: Uuid,
     },
     ArmyReturn {
-        units: TroopSet,
+        army: Army,
         resources: ResourceGroup,
         village_id: u32,
     },

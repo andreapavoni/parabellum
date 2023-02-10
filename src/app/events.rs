@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use super::jobs::Job;
-use crate::game::models::army::TroopSet;
+use crate::game::models::{army::Army, village::Village, Player};
 
 pub trait EventStore {
     fn emit(event: GameEvent) -> Result<()>;
@@ -10,8 +10,10 @@ pub trait EventStore {
 
 #[derive(Debug, Clone)]
 pub enum GameEvent {
+    PlayerRegistered(Player),
+    VillageFounded(Village),
     JobEnqueued(Job),
-    ArmyDeployed { units: TroopSet, village_id: u32 },
+    ArmyDeployed { army: Army, village_id: u32 },
     TargetAttacked,
     TargetRaided,
     TargetReinforced,

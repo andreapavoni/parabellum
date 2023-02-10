@@ -15,7 +15,8 @@ pub struct MapField {
     pub id: u32,
     pub player_id: Option<Uuid>,
     pub village_id: Option<u32>,
-    pub position: Json<Position>,
+    pub x: i32,
+    pub y: i32,
     pub topology: Json<MapFieldTopology>,
 }
 
@@ -25,7 +26,7 @@ impl From<MapField> for GameMapField {
             id: f.id,
             player_id: f.player_id,
             village_id: f.village_id,
-            position: f.position.as_ref().clone(),
+            position: Position { x: f.x, y: f.y },
             topology: f.topology.as_ref().clone(),
         }
     }
@@ -40,7 +41,7 @@ impl TryFrom<MapField> for Valley {
                 id: f.id,
                 player_id: f.player_id,
                 village_id: f.village_id,
-                position: f.position.as_ref().clone(),
+                position: Position { x: f.x, y: f.y },
                 topology,
             }),
             _ => Err(Error::msg("This map field is not a Valley")),
@@ -57,7 +58,10 @@ impl TryFrom<MapField> for Oasis {
                 id: value.id,
                 player_id: value.player_id,
                 village_id: value.village_id,
-                position: value.position.as_ref().clone(),
+                position: Position {
+                    x: value.x,
+                    y: value.y,
+                },
                 topology,
             }),
             _ => Err(Error::msg("This map field is not an Oasis")),
@@ -71,7 +75,8 @@ impl From<GameMapField> for MapField {
             id: f.id,
             player_id: f.player_id,
             village_id: f.village_id,
-            position: Json(f.position),
+            x: f.position.x,
+            y: f.position.y,
             topology: Json(f.topology),
         }
     }
@@ -83,7 +88,8 @@ impl From<Valley> for MapField {
             id: valley.id,
             player_id: valley.player_id,
             village_id: valley.village_id,
-            position: Json(valley.position),
+            x: valley.position.x,
+            y: valley.position.y,
             topology: Json(MapFieldTopology::Valley(valley.topology)),
         }
     }
@@ -95,7 +101,8 @@ impl From<Oasis> for MapField {
             id: oasis.id,
             player_id: oasis.player_id,
             village_id: oasis.village_id,
-            position: Json(oasis.position),
+            x: oasis.position.x,
+            y: oasis.position.y,
             topology: Json(MapFieldTopology::Oasis(oasis.topology)),
         }
     }
