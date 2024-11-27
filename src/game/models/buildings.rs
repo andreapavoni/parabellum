@@ -219,12 +219,7 @@ impl Building {
         let data = building.data[level as usize].clone();
 
         Cost {
-            resources: ResourceGroup {
-                lumber: data.0,
-                clay: data.1,
-                iron: data.2,
-                crop: data.3,
-            },
+            resources: ResourceGroup::new(data.0, data.1, data.2, data.3),
             upkeep: data.4,
             build_time: data.6,
         }
