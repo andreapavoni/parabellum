@@ -14,6 +14,14 @@ pub enum UnitRole {
 }
 
 #[derive(Debug, Clone)]
+pub enum UnitGroup {
+    Infantry,
+    Cavalry,
+    Siege,
+    Expansion,
+}
+
+#[derive(Debug, Clone)]
 pub enum UnitName {
     // Romans
     Legionnaire,
@@ -213,6 +221,7 @@ impl Army {
 pub struct Unit {
     pub name: UnitName,
     pub role: UnitRole,
+    pub group: UnitGroup,
     pub attack: u64,
     pub defense_infantry: u64,
     pub defense_cavalry: u64,
@@ -225,6 +234,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Legionnaire,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 40,
         defense_infantry: 35,
         defense_cavalry: 50,
@@ -239,6 +249,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Praetorian,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 30,
         defense_infantry: 65,
         defense_cavalry: 35,
@@ -253,6 +264,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Imperian,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 70,
         defense_infantry: 40,
         defense_cavalry: 25,
@@ -266,7 +278,8 @@ static ROMAN_UNITS: TribeUnits = [
     },
     Unit {
         name: UnitName::EquitesLegati,
-        role: UnitRole::Cavalry,
+        role: UnitRole::Scout,
+        group: UnitGroup::Cavalry,
         attack: 0,
         defense_infantry: 20,
         defense_cavalry: 10,
@@ -281,6 +294,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::EquitesImperatoris,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 120,
         defense_infantry: 65,
         defense_cavalry: 50,
@@ -295,6 +309,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::EquitesCaesaris,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 180,
         defense_infantry: 80,
         defense_cavalry: 105,
@@ -309,6 +324,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::BatteringRam,
         role: UnitRole::Ram,
+        group: UnitGroup::Siege,
         attack: 60,
         defense_infantry: 30,
         defense_cavalry: 75,
@@ -323,6 +339,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::FireCatapult,
         role: UnitRole::Cata,
+        group: UnitGroup::Siege,
         attack: 75,
         defense_infantry: 60,
         defense_cavalry: 10,
@@ -337,6 +354,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Senator,
         role: UnitRole::Chief,
+        group: UnitGroup::Expansion,
         attack: 50,
         defense_infantry: 40,
         defense_cavalry: 30,
@@ -351,6 +369,7 @@ static ROMAN_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Settler,
         role: UnitRole::Settler,
+        group: UnitGroup::Expansion,
         attack: 0,
         defense_infantry: 80,
         defense_cavalry: 80,
@@ -368,6 +387,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Maceman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 40,
         defense_infantry: 20,
         defense_cavalry: 5,
@@ -382,6 +402,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Spearman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 10,
         defense_infantry: 35,
         defense_cavalry: 60,
@@ -396,6 +417,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Axeman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 60,
         defense_infantry: 30,
         defense_cavalry: 30,
@@ -409,7 +431,8 @@ static TEUTON_UNITS: TribeUnits = [
     },
     Unit {
         name: UnitName::Scout,
-        role: UnitRole::Infantry,
+        role: UnitRole::Scout,
+        group: UnitGroup::Infantry,
         attack: 0,
         defense_infantry: 10,
         defense_cavalry: 5,
@@ -424,6 +447,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Paladin,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 55,
         defense_infantry: 100,
         defense_cavalry: 40,
@@ -438,6 +462,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::TeutonicKnight,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 150,
         defense_infantry: 50,
         defense_cavalry: 75,
@@ -452,6 +477,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Ram,
         role: UnitRole::Ram,
+        group: UnitGroup::Siege,
         attack: 65,
         defense_infantry: 30,
         defense_cavalry: 80,
@@ -466,6 +492,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Catapult,
         role: UnitRole::Cata,
+        group: UnitGroup::Siege,
         attack: 50,
         defense_infantry: 60,
         defense_cavalry: 10,
@@ -480,6 +507,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Chief,
         role: UnitRole::Chief,
+        group: UnitGroup::Expansion,
         attack: 40,
         defense_infantry: 60,
         defense_cavalry: 40,
@@ -494,6 +522,7 @@ static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Settler,
         role: UnitRole::Settler,
+        group: UnitGroup::Expansion,
         attack: 10,
         defense_infantry: 80,
         defense_cavalry: 80,
@@ -511,6 +540,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Phalanx,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 15,
         defense_infantry: 40,
         defense_cavalry: 50,
@@ -525,6 +555,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Swordsman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 65,
         defense_infantry: 35,
         defense_cavalry: 20,
@@ -538,7 +569,8 @@ static GAUL_UNITS: TribeUnits = [
     },
     Unit {
         name: UnitName::Pathfinder,
-        role: UnitRole::Cavalry,
+        role: UnitRole::Scout,
+        group: UnitGroup::Cavalry,
         attack: 0,
         defense_infantry: 20,
         defense_cavalry: 10,
@@ -553,6 +585,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::TheutatesThunder,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 100,
         defense_infantry: 25,
         defense_cavalry: 40,
@@ -567,6 +600,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Druidrider,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 45,
         defense_infantry: 115,
         defense_cavalry: 55,
@@ -581,6 +615,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Haeduan,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 140,
         defense_infantry: 60,
         defense_cavalry: 165,
@@ -595,6 +630,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Ram,
         role: UnitRole::Ram,
+        group: UnitGroup::Siege,
         attack: 50,
         defense_infantry: 30,
         defense_cavalry: 105,
@@ -609,6 +645,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Trebuchet,
         role: UnitRole::Cata,
+        group: UnitGroup::Siege,
         attack: 70,
         defense_infantry: 45,
         defense_cavalry: 10,
@@ -623,6 +660,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Chieftain,
         role: UnitRole::Chief,
+        group: UnitGroup::Expansion,
         attack: 40,
         defense_infantry: 50,
         defense_cavalry: 50,
@@ -637,6 +675,7 @@ static GAUL_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Settler,
         role: UnitRole::Settler,
+        group: UnitGroup::Expansion,
         attack: 0,
         defense_infantry: 80,
         defense_cavalry: 80,
@@ -654,6 +693,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Rat,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 10,
         defense_infantry: 25,
         defense_cavalry: 20,
@@ -668,6 +708,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Spider,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 20,
         defense_infantry: 35,
         defense_cavalry: 40,
@@ -682,6 +723,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Serpent,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 60,
         defense_infantry: 40,
         defense_cavalry: 60,
@@ -696,6 +738,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Bat,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 80,
         defense_infantry: 66,
         defense_cavalry: 50,
@@ -710,6 +753,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::WildBoar,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 50,
         defense_infantry: 70,
         defense_cavalry: 33,
@@ -724,6 +768,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Wolf,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 100,
         defense_infantry: 80,
         defense_cavalry: 70,
@@ -738,6 +783,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Bear,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 250,
         defense_infantry: 140,
         defense_cavalry: 200,
@@ -752,6 +798,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Crocodile,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 450,
         defense_infantry: 380,
         defense_cavalry: 240,
@@ -766,6 +813,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Tiger,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 200,
         defense_infantry: 170,
         defense_cavalry: 250,
@@ -780,6 +828,7 @@ static NATURE_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Elephant,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 600,
         defense_infantry: 440,
         defense_cavalry: 520,
@@ -797,6 +846,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Pikeman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 20,
         defense_infantry: 35,
         defense_cavalry: 50,
@@ -811,6 +861,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::ThornedWarrior,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 65,
         defense_infantry: 30,
         defense_cavalry: 10,
@@ -825,6 +876,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Guardsman,
         role: UnitRole::Infantry,
+        group: UnitGroup::Infantry,
         attack: 100,
         defense_infantry: 90,
         defense_cavalry: 75,
@@ -839,6 +891,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::BirdsOfPrey,
         role: UnitRole::Scout,
+        group: UnitGroup::Infantry,
         attack: 0,
         defense_infantry: 10,
         defense_cavalry: 0,
@@ -853,6 +906,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Axerider,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 155,
         defense_infantry: 80,
         defense_cavalry: 50,
@@ -867,6 +921,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::NatarianKnight,
         role: UnitRole::Cavalry,
+        group: UnitGroup::Cavalry,
         attack: 170,
         defense_infantry: 140,
         defense_cavalry: 80,
@@ -881,6 +936,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Warelephant,
         role: UnitRole::Ram,
+        group: UnitGroup::Siege,
         attack: 250,
         defense_infantry: 120,
         defense_cavalry: 150,
@@ -895,6 +951,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Ballista,
         role: UnitRole::Cata,
+        group: UnitGroup::Siege,
         attack: 60,
         defense_infantry: 45,
         defense_cavalry: 10,
@@ -909,6 +966,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::NatarianEmperor,
         role: UnitRole::Chief,
+        group: UnitGroup::Expansion,
         attack: 80,
         defense_infantry: 50,
         defense_cavalry: 50,
@@ -923,6 +981,7 @@ static NATAR_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Settler,
         role: UnitRole::Settler,
+        group: UnitGroup::Expansion,
         attack: 30,
         defense_infantry: 40,
         defense_cavalry: 40,
