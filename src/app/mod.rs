@@ -9,6 +9,7 @@ use self::{
     consumers::MainConsumer,
 };
 
+pub mod aggregates;
 pub mod commands;
 pub mod consumers;
 pub mod events;

@@ -1,108 +1,110 @@
 use std::env;
 
 use anyhow::{Error, Result};
-use ormlite::{sqlite::SqlitePoolOptions, types::Json, Model, Pool};
-use sqlx::{pool::PoolConnection, Sqlite, SqlitePool, Transaction};
+use polodb_core::{bson::doc, Collection, CollectionT, Database};
 use uuid::Uuid;
 
-use super::models::{map::MapField, player::Player, village::Village};
 use crate::game::models::{
-    map::{generate_new_map, Oasis, Quadrant, Valley},
-    village::Village as GameVillage,
-    Player as GamePlayer, Tribe,
+    map::{generate_new_map, MapField, Oasis, Position, Quadrant, Valley},
+    village::Village,
+    Player, Tribe,
 };
 
-// use crate::game::models::village::Village;
+// TODO: everything here could/should be managed through commands/queries, no need for a Repository object
 
-#[derive(Debug, Clone)]
 pub struct Repository {
-    pool: SqlitePool,
+    db: Database,
 }
 
 impl Repository {
     pub async fn new_from_env() -> Result<Self> {
-        let url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
-        let pool = Self::new_connection_pool(&url).await?;
-        Ok(Self { pool })
+        let path = env::var("DATABASE_PATH").expect("DATABASE_PATH is not set");
+        let db = Database::open_path(path)?;
+
+        Ok(Self { db })
     }
 
-    pub async fn new(url: String) -> Result<Self> {
-        let pool = Self::new_connection_pool(&url).await?;
-        Ok(Self { pool })
-    }
+    pub async fn new(path: String) -> Result<Self> {
+        let db = Database::open_path(path)?;
 
-    pub fn with_connection_pool(pool: SqlitePool) -> Self {
-        Self { pool }
-    }
-
-    pub async fn get_pool_connection(&self) -> Result<PoolConnection<Sqlite>> {
-        let conn = self.pool.acquire().await?;
-        Ok(conn)
-    }
-
-    pub async fn begin_transaction(&self) -> Result<Transaction<Sqlite>> {
-        let tx = self.pool.begin().await?;
-        Ok(tx)
-    }
-
-    async fn new_connection_pool(url: &str) -> Result<Pool<Sqlite>> {
-        Ok(SqlitePoolOptions::new()
-            .max_connections(20)
-            .connect(&url)
-            .await?)
+        Ok(Self { db })
     }
 }
 #[async_trait::async_trait]
 impl crate::repository::Repository for Repository {
-    async fn bootstrap_new_map(&self, size: u32) -> Result<()> {
+    async fn bootstrap_new_map(&self, size: u32) -> Result<(), Error> {
         let map = generate_new_map(size as i32);
-        let mut tx = self.begin_transaction().await?;
+        let tx = self.db.start_transaction()?;
 
         print!("Generating a map of {} fields... ", size * size * 4);
-        for f in map {
-            let fm: MapField = f.into();
-            fm.insert(&mut tx).await?;
+
+        for mf in map {
+            let map_fields = tx.collection::<MapField>("map_fields");
+            map_fields.insert_one(mf)?;
         }
-        tx.commit().await?;
+        tx.commit()?;
         println!("done!");
 
         Ok(())
     }
 
     async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley> {
-        let mut conn = self.get_pool_connection().await?;
+        let map_fields = self.db.collection::<MapField>("map_fields");
+
         let query = match quadrant {
             Some(Quadrant::NorthEast) => {
-                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y >= 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
-	RANDOM()")
+                map_fields.find(doc! {
+                   "player_id": { "$eq": None },
+                   "village_id": { "$eq": None },
+                   "position.x": { "$gte": 0 },
+                   "position.y": { "$gte": 0 },
+                   "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
+                }) // TODO: order by random
             }
             Some(Quadrant::EastSouth) => {
-                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
-	RANDOM()" )
+                map_fields.find(doc! {
+                   "player_id": { "$eq": None },
+                   "village_id": { "$eq": None },
+                   "position.x": { "$gte": 0 },
+                   "position.y": { "$lt": 0 },
+                   "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
+                }) // TODO: order by random
             }
             Some(Quadrant::SouthWest) => {
-                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x < 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
-	RANDOM()")
+                map_fields.find(doc! {
+                   "player_id": { "$eq": None },
+                   "village_id": { "$eq": None },
+                   "position.x": { "$lt": 0 },
+                   "position.y": { "$lt": 0 },
+                   "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
+                }) // TODO: order by random
             }
             Some(Quadrant::WestNorth) => {
-                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
-	RANDOM()")
+                map_fields.find(doc! {
+                   "player_id": { "$eq": None },
+                   "village_id": { "$eq": None },
+                   "position.x": { "$lt": 0 },
+                   "position.y": { "$gte": 0 },
+                   "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
+                }) // TODO: order by random
             }
-            None => { MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM()") }
+            None => map_fields.find(doc! {
+               "player_id": { "$eq": None },
+               "village_id": { "$eq": None },
+            }),
         };
-        let valley = query.fetch_one(&mut conn).await?;
+        let valley: MapField = query.limit(1).run()?;
 
         Ok(valley.try_into()?)
     }
 
-    async fn register_player(&self, username: String, tribe: Tribe) -> Result<GamePlayer> {
-        let mut tx = self.begin_transaction().await?;
+    async fn register_player(&self, username: String, tribe: Tribe) -> Result<Player> {
+        let tx = self.db.start_transaction()?;
+        let collection = tx.collection::<Player>("players");
 
-        if let Ok(_) = Player::query("SELECT * FROM players WHERE username = ?")
-            .bind(username.clone())
-            // FIXME this method is better to lookup records by their columns `.fetch_optional(&mut tx)`
-            .fetch_one(&mut tx)
-            .await
+        if let Ok(_) = collection
+            .find(doc! { "username": { "$eq": username.clone() }, })
+            .run()
         {
             return Err(Error::msg("Username already used."));
         }
@@ -110,61 +112,54 @@ impl crate::repository::Repository for Repository {
         let player = Player {
             id: Uuid::new_v4(),
             username,
-            tribe: Json(tribe),
+            tribe,
         };
-        player.clone().insert(&mut tx).await?;
 
-        tx.commit().await?;
-
-        Ok(player.into())
-    }
-
-    async fn get_player_by_id(&self, player_id: Uuid) -> Result<GamePlayer> {
-        let mut conn = self.get_pool_connection().await?;
-        let player = Player::query("SELECT * FROM players WHERE id = ?")
-            .bind(player_id)
-            .fetch_one(&mut conn)
-            .await?;
+        collection.insert_one(player)?;
+        tx.commit()?;
 
         Ok(player.into())
     }
 
-    async fn get_player_by_username(&self, username: String) -> Result<GamePlayer> {
-        let mut conn = self.get_pool_connection().await?;
-        let player = Player::query("SELECT * FROM players WHERE username = ?")
-            .bind(username)
-            .fetch_one(&mut conn)
-            .await?;
+    async fn get_player_by_id(&self, player_id: Uuid) -> Result<Player> {
+        let collection = self.db.collection::<Player>("players");
+        let player: Player = collection
+            .find(doc! { "id": { "$eq": player_id }, })
+            .run()?;
+
+        Ok(player.into())
+    }
+
+    async fn get_player_by_username(&self, username: String) -> Result<Player> {
+        let collection = self.db.collection::<Player>("players");
+        let player: Player = collection
+            .find(doc! { "username": { "$eq": username }, })
+            .run()?;
 
         Ok(player.into())
     }
 
     async fn get_village_by_id(&self, village_id: u32) -> Result<GameVillage> {
-        let mut conn = self.get_pool_connection().await?;
-        let village = Village::query("SELECT * FROM villages WHERE id = ?")
-            .bind(village_id)
-            .fetch_one(&mut conn)
-            .await?;
+        let collection = self.db.collection::<Village>("villages");
+        let village: Village = collection
+            .find(doc! { "id": { "$eq": village_id }, })
+            .run()?;
 
         Ok(village.into())
     }
 
     async fn get_valley_by_id(&self, valley_id: u32) -> Result<Valley> {
-        let mut conn = self.get_pool_connection().await?;
-        let valley = MapField::query("SELECT * FROM map_fields WHERE id = ?")
-            .bind(valley_id)
-            .fetch_one(&mut conn)
-            .await?;
+        let collection = self.db.collection::<MapField>("map_fields");
+        let valley: MapField = collection
+            .find(doc! { "id": { "$eq": valley_id }, })
+            .run()?;
 
         Ok(valley.try_into()?)
     }
 
     async fn get_oasis_by_id(&self, oasis_id: u32) -> Result<Oasis> {
-        let mut conn = self.get_pool_connection().await?;
-        let oasis = MapField::query("SELECT * FROM map_fields WHERE id = ?")
-            .bind(oasis_id)
-            .fetch_one(&mut conn)
-            .await?;
+        let collection = self.db.collection::<MapField>("map_fields");
+        let oasis: MapField = collection.find(doc! { "id": { "$eq": oasis_id }, }).run()?;
 
         Ok(oasis.try_into()?)
     }

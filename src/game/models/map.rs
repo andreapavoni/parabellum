@@ -167,7 +167,7 @@ pub enum MapFieldTopology {
     Valley(ValleyTopology),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MapField {
     pub id: u32,
     pub player_id: Option<Uuid>,
