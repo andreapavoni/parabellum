@@ -150,9 +150,9 @@ impl Army {
         let units = get_tribe_units(self.tribe.clone());
         let mut total: u32 = 0;
 
-        units.into_iter().for_each(|u| {
-            total += u.cost.upkeep;
-        });
+        for (idx, quantity) in self.units.into_iter().enumerate() {
+            total += units[idx].cost.upkeep * quantity;
+        }
 
         total
     }
@@ -162,7 +162,7 @@ impl Army {
         let mut cavalry_points: u32 = 0;
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
-            let u = self.get_unit(idx.try_into().unwrap()).unwrap();
+            let u = self.get_unit(idx as u8).unwrap();
 
             let smithy_improvement = self.apply_smithy_upgrade(u.clone(), idx, u.attack);
 
@@ -179,7 +179,7 @@ impl Army {
         let mut cavalry_points: u32 = 0;
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
-            let u = self.get_unit(idx.try_into().unwrap()).unwrap();
+            let u = self.get_unit(idx as u8).unwrap();
 
             let smithy_infantry = self.apply_smithy_upgrade(u.clone(), idx, u.defense_infantry);
             let smithy_cavalry = self.apply_smithy_upgrade(u.clone(), idx, u.defense_cavalry);
@@ -204,6 +204,7 @@ impl Army {
         }
     }
 
+    // Returns a new Army which has been extracted from the current one.
     pub fn deploy(&mut self, set: TroopSet) -> Result<TroopSet> {
         for (idx, quantity) in set.into_iter().enumerate() {
             if self.units[idx] > quantity {
@@ -213,6 +214,20 @@ impl Army {
             }
         }
         Ok(set.clone())
+    }
+
+    // Returns the actual speed of the Army by taking the speed of slowest unit.
+    pub fn speed(&self) -> u8 {
+        let mut speed: u8 = 0;
+        for (idx, quantity) in self.units.into_iter().enumerate() {
+            if quantity > 0 {
+                let u = self.get_unit(idx as u8).unwrap();
+                if u.speed < speed {
+                    speed = u.speed;
+                }
+            }
+        }
+        speed
     }
 
     fn scouting_points(&self, base_points: u8) -> u32 {
