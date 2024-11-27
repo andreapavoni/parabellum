@@ -1,4 +1,6 @@
 use rand::Rng;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::village::ProductionBonus;
 
@@ -6,11 +8,11 @@ pub const WORLD_MAX_SIZE: i32 = 400;
 
 #[derive(Debug, Clone)]
 pub struct Valley {
-    pub id: u64,
+    pub id: u32,
     pub position: Position,
     pub topology: ValleyTopology,
-    pub player_id: Option<String>,
-    pub village_id: Option<u64>,
+    pub player_id: Option<Uuid>,
+    pub village_id: Option<u32>,
 }
 
 impl TryFrom<MapField> for Valley {
@@ -30,7 +32,7 @@ impl TryFrom<MapField> for Valley {
     }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ValleyTopology(u8, u8, u8, u8);
 
 impl ValleyTopology {
@@ -48,15 +50,15 @@ impl ValleyTopology {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
 }
 
 impl Position {
-    pub fn to_id(&self, world_size: i32) -> u64 {
-        ((world_size - self.y) * (world_size * 2 + 1) + (world_size + self.x + 1)) as u64
+    pub fn to_id(&self, world_size: i32) -> u32 {
+        ((world_size - self.y) * (world_size * 2 + 1) + (world_size + self.x + 1)) as u32
     }
 
     // Returns the distance between two points.
@@ -76,7 +78,7 @@ impl Position {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum OasisTopology {
     Lumber,
     LumberCrop,
@@ -88,11 +90,11 @@ pub enum OasisTopology {
     Crop50,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Oasis {
-    pub id: u64,
-    pub player_id: Option<String>,
-    pub village_id: Option<u64>,
+    pub id: u32,
+    pub player_id: Option<Uuid>,
+    pub village_id: Option<u32>,
     pub position: Position,
     pub topology: OasisTopology,
 }
@@ -150,7 +152,7 @@ impl TryFrom<MapField> for Oasis {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MapFieldTopology {
     Oasis(OasisTopology),
     Valley(ValleyTopology),
@@ -158,9 +160,9 @@ pub enum MapFieldTopology {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapField {
-    pub id: u64,
-    pub player_id: Option<String>,
-    pub village_id: Option<u64>,
+    pub id: u32,
+    pub player_id: Option<Uuid>,
+    pub village_id: Option<u32>,
     pub position: Position,
     pub topology: MapFieldTopology,
 }
@@ -404,8 +406,8 @@ mod tests {
     fn test_generated_map_topology() {
         let world_size = 100;
         let map = generate_new_map(world_size);
-        let mut oases: HashMap<OasisTopology, u64> = HashMap::new();
-        let mut valleys: HashMap<ValleyTopology, u64> = HashMap::new();
+        let mut oases: HashMap<OasisTopology, u32> = HashMap::new();
+        let mut valleys: HashMap<ValleyTopology, u32> = HashMap::new();
 
         for f in map.clone() {
             match f.topology {
@@ -424,12 +426,12 @@ mod tests {
         for (v, o) in oases.clone() {
             println!("\t{:?}: {} ({}%)", v, o, (100.0 * o as f64 / map_size));
         }
-        println!("Total: {}", oases.values().sum::<u64>());
+        println!("Total: {}", oases.values().sum::<u32>());
 
         println!("\n\nValleys:");
         for (v, o) in valleys.clone() {
             println!("\t{:?}: {} ({}%)", v, o, (100.0 * o as f64 / map_size));
         }
-        println!("Total: {}", valleys.values().sum::<u64>());
+        println!("Total: {}", valleys.values().sum::<u32>());
     }
 }

@@ -1,17 +1,17 @@
+use anyhow::{Error, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use anyhow::{Error, Result};
+use super::{Cost, ResourceGroup, Tribe};
 
-use super::common::{Cost, ResourceGroup, Tribe};
-
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingGroup {
     Infrastructure,
     Resources,
     Military,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingName {
     Woodcutter,
     ClayPit,
@@ -57,11 +57,11 @@ pub enum BuildingName {
     GreatWorkshop,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Building {
     pub name: BuildingName,
     pub group: BuildingGroup,
-    pub value: u64,
+    pub value: u32,
     pub culture_points: u16,
     pub level: u8,
 }
@@ -132,14 +132,14 @@ impl Building {
         tribe: &Tribe,
         village_buildings: &HashMap<u8, Building>,
         is_capital: bool,
-    ) -> Result<(), String> {
+    ) -> Result<()> {
         let data = get_building_data(self.name.clone()).unwrap();
 
         // tribe constraint (if any)?
         if !data.rules.tribes.is_empty() {
             let ok = data.rules.tribes.contains(&tribe);
             if !ok {
-                return Err("not compatible with village tribe".to_string());
+                return Err(Error::msg("not compatible with village tribe"));
             }
         }
 
@@ -149,7 +149,7 @@ impl Building {
                 .constraints
                 .contains(&BuildingConstraint::NonCapital)
         {
-            return Err("can't build in capital".to_string());
+            return Err(Error::msg("can't build in capital"));
         }
 
         if !is_capital
@@ -158,7 +158,7 @@ impl Building {
                 .constraints
                 .contains(&BuildingConstraint::OnlyCapital)
         {
-            return Err("can be built only in capital".to_string());
+            return Err(Error::msg("can be built only in capital"));
         }
 
         for (_, vb) in village_buildings {
@@ -166,13 +166,13 @@ impl Building {
 
             for req in data.rules.requirements {
                 if vb.name == req.0 && vb.level == req.1 {
-                    return Err("missing building requirements".to_string());
+                    return Err(Error::msg("missing building requirements"));
                 }
             }
 
             for conflict in data.rules.conflicts {
                 if vb.name == conflict.0 {
-                    return Err("conflicts with X".to_string());
+                    return Err(Error::msg("conflicts with X"));
                 }
             }
 
@@ -180,13 +180,13 @@ impl Building {
             if self.name == vb.name {
                 // and allows multiple
                 if !data.rules.allow_multiple {
-                    return Err("can be built only once".to_string());
+                    return Err(Error::msg("can be built only once"));
                 }
                 // and has reached max level
                 if self.level != data.rules.max_level {
-                    return Err(
-                        "must complete other constructions of same type to max level".to_string(),
-                    );
+                    return Err(Error::msg(
+                        "must complete other constructions of same type to max level",
+                    ));
                 }
             }
         }
@@ -228,7 +228,7 @@ impl Building {
 
 // lumber, clay, iron, crop, upkeep, culture_points, value, time
 #[derive(Debug, Clone)]
-struct BuildingValueData(u64, u64, u64, u64, u64, u16, u64, u64);
+struct BuildingValueData(u32, u32, u32, u32, u32, u16, u32, u32);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum BuildingConstraint {
