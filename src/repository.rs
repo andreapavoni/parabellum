@@ -2,7 +2,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use crate::game::models::{
-    map::{Oasis, Quadrant, Valley},
+    map::{MapQuadrant, Oasis, Valley},
     village::Village,
     Player, Tribe,
 };
@@ -11,7 +11,7 @@ use crate::game::models::{
 pub trait Repository: Send + Sync {
     async fn bootstrap_new_map(&self, size: u32) -> Result<()>;
     async fn register_player(&self, username: String, tribe: Tribe) -> Result<Player>;
-    async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley>;
+    async fn get_unoccupied_valley(&self, quadrant: Option<MapQuadrant>) -> Result<Valley>;
     async fn get_player_by_id(&self, player_id: Uuid) -> Result<Player>;
     async fn get_player_by_username(&self, username: String) -> Result<Player>;
     async fn get_village_by_id(&self, village_id: u32) -> Result<Village>;
