@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use chrono::NaiveDateTime;
 use uuid::Uuid;
 
 use crate::game::{
@@ -16,6 +19,7 @@ pub struct Job {
     pub village_id: u32,
     pub task: JobTask,
     pub duration: u64,
+    pub completed_at: NaiveDateTime,
     pub done: bool,        // ??? if true it means it has been "consumed"
     pub cancellable: bool, // TODO: some tasks are only cancellable for some time (eg: army actions)
 }
@@ -24,6 +28,8 @@ impl Job {
     pub fn new(player_id: Uuid, village_id: u32, duration: u64, task: JobTask) -> Self {
         let id = Uuid::new_v4();
 
+        let completed_at = NaiveDateTime::now() + Duration::new(duration, 0);
+
         Self {
             id,
             player_id,
@@ -31,6 +37,7 @@ impl Job {
             task,
             duration,
             done: false,
+            completed_at,
             cancellable: false,
         }
     }
@@ -40,7 +47,7 @@ impl Job {
 pub enum JobTask {
     Attack {
         army: Army,
-        cata_targets: CataTargets,
+        cata_targets: Option<CataTargets>,
         village_id: u32,
         player_id: Uuid,
     },
@@ -124,6 +131,7 @@ pub enum JobTask {
     ResearchAcademy {
         unit: UnitName,
     },
+
     ResearchSmithy {
         unit: UnitName,
     },
@@ -131,5 +139,6 @@ pub enum JobTask {
     CelebrationTownHall {
         big: bool,
     },
+
     CelebrationBrewery,
 }
