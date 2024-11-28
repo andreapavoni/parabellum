@@ -33,7 +33,7 @@ impl ResourceGroup {
 
 pub type SmithyUpgrades = [u8; 10];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,

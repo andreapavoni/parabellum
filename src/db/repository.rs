@@ -1,11 +1,12 @@
 use std::env;
 
 use anyhow::{Error, Result};
-use polodb_core::{bson::doc, Collection, CollectionT, Database};
+use bson::Bson;
+use polodb_core::{bson::doc, CollectionT, Database};
 use uuid::Uuid;
 
 use crate::game::models::{
-    map::{generate_new_map, MapField, Oasis, Position, Quadrant, Valley},
+    map::{generate_new_map, MapField, MapFieldTopology, Oasis, Quadrant, Valley, ValleyTopology},
     village::Village,
     Player, Tribe,
 };
@@ -48,14 +49,14 @@ impl crate::repository::Repository for Repository {
         Ok(())
     }
 
-    async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley> {
+    async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley, Error> {
         let map_fields = self.db.collection::<MapField>("map_fields");
 
         let query = match quadrant {
             Some(Quadrant::NorthEast) => {
                 map_fields.find(doc! {
-                   "player_id": { "$eq": None },
-                   "village_id": { "$eq": None },
+                   "player_id": Bson::Null,
+                   "village_id": Bson::Null,
                    "position.x": { "$gte": 0 },
                    "position.y": { "$gte": 0 },
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
@@ -63,8 +64,8 @@ impl crate::repository::Repository for Repository {
             }
             Some(Quadrant::EastSouth) => {
                 map_fields.find(doc! {
-                   "player_id": { "$eq": None },
-                   "village_id": { "$eq": None },
+                   "player_id": Bson::Null,
+                   "village_id": Bson::Null,
                    "position.x": { "$gte": 0 },
                    "position.y": { "$lt": 0 },
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
@@ -72,8 +73,8 @@ impl crate::repository::Repository for Repository {
             }
             Some(Quadrant::SouthWest) => {
                 map_fields.find(doc! {
-                   "player_id": { "$eq": None },
-                   "village_id": { "$eq": None },
+                   "player_id": Bson::Null,
+                   "village_id": Bson::Null,
                    "position.x": { "$lt": 0 },
                    "position.y": { "$lt": 0 },
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
@@ -81,21 +82,22 @@ impl crate::repository::Repository for Repository {
             }
             Some(Quadrant::WestNorth) => {
                 map_fields.find(doc! {
-                   "player_id": { "$eq": None },
-                   "village_id": { "$eq": None },
+                   "player_id": Bson::Null,
+                   "village_id": Bson::Null,
                    "position.x": { "$lt": 0 },
                    "position.y": { "$gte": 0 },
-                   "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
+                   "topology": MapFieldTopology::Valley(ValleyTopology(4,4,4,6)),
                 }) // TODO: order by random
             }
             None => map_fields.find(doc! {
-               "player_id": { "$eq": None },
-               "village_id": { "$eq": None },
+               "player_id": Bson::Null,
+               "village_id": Bson::Null,
             }),
         };
-        let valley: MapField = query.limit(1).run()?;
-
-        Ok(valley.try_into()?)
+        let result = query.limit(1).run()?;
+        let map_field = (result.last().unwrap())?;
+        let valley: Valley = map_field.try_into()?;
+        Ok(valley)
     }
 
     async fn register_player(&self, username: String, tribe: Tribe) -> Result<Player> {
@@ -115,7 +117,7 @@ impl crate::repository::Repository for Repository {
             tribe,
         };
 
-        collection.insert_one(player)?;
+        collection.insert_one(player.clone())?;
         tx.commit()?;
 
         Ok(player.into())
@@ -123,44 +125,51 @@ impl crate::repository::Repository for Repository {
 
     async fn get_player_by_id(&self, player_id: Uuid) -> Result<Player> {
         let collection = self.db.collection::<Player>("players");
-        let player: Player = collection
+        let result = collection
             .find(doc! { "id": { "$eq": player_id }, })
             .run()?;
 
-        Ok(player.into())
+        let player = (result.last().unwrap())?;
+        Ok(player)
     }
 
     async fn get_player_by_username(&self, username: String) -> Result<Player> {
         let collection = self.db.collection::<Player>("players");
-        let player: Player = collection
+        let result = collection
             .find(doc! { "username": { "$eq": username }, })
             .run()?;
 
-        Ok(player.into())
+        let player = (result.last().unwrap())?;
+        Ok(player)
     }
 
-    async fn get_village_by_id(&self, village_id: u32) -> Result<GameVillage> {
+    async fn get_village_by_id(&self, village_id: u32) -> Result<Village> {
         let collection = self.db.collection::<Village>("villages");
-        let village: Village = collection
+        let result = collection
             .find(doc! { "id": { "$eq": village_id }, })
             .run()?;
 
-        Ok(village.into())
+        let village = (result.last().unwrap())?;
+        Ok(village)
     }
 
     async fn get_valley_by_id(&self, valley_id: u32) -> Result<Valley> {
         let collection = self.db.collection::<MapField>("map_fields");
-        let valley: MapField = collection
+        let result = collection
             .find(doc! { "id": { "$eq": valley_id }, })
             .run()?;
 
-        Ok(valley.try_into()?)
+        let map_field = (result.last().unwrap())?;
+        let valley: Valley = map_field.try_into()?;
+        Ok(valley)
     }
 
     async fn get_oasis_by_id(&self, oasis_id: u32) -> Result<Oasis> {
         let collection = self.db.collection::<MapField>("map_fields");
-        let oasis: MapField = collection.find(doc! { "id": { "$eq": oasis_id }, }).run()?;
+        let result = collection.find(doc! { "id": { "$eq": oasis_id }, }).run()?;
 
-        Ok(oasis.try_into()?)
+        let map_field = (result.last().unwrap())?;
+        let oasis: Oasis = map_field.try_into()?;
+        Ok(oasis)
     }
 }
