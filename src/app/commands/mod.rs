@@ -1,26 +1,17 @@
 pub mod register_player;
 
-// RegisterPlayer
-// Attack {
-//     village_id: u32,
-//     army: Army,
-//     cata_targets: CataTargets,
-//     defender_map_id: u32,
-// },
-// Raid,
-// Reinforce,
-// ReturnArmy,
-// SendMerchant,
-// ReturnMerchant,
-// TrainBarracksUnit,
-// TrainStableUnit,
-// TrainWorkshopUnit,
-// TrainExpansionUnit,
-// TrainTrapperUnit,
-// TrainGreatBarracksUnit,
-// TrainGreatStableUnit,
-// TrainGreatWorkshopUnit,
-// ResearchAcademy,
-// ResearchSmithy,
-// StartTownHallCelebration,
-// StartBreweryCelebration,
+use std::sync::Arc;
+
+use anyhow::{Error, Result};
+
+use crate::repository::Repository;
+
+#[async_trait::async_trait]
+pub trait Command {
+    type Output;
+    fn validate(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error>;
+}
