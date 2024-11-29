@@ -4,7 +4,7 @@ pub mod jobs;
 use anyhow::{Error, Result};
 use std::sync::Arc;
 
-use crate::{command::Command, repository::Repository};
+use crate::{command::Command, query::Query, repository::Repository};
 
 // RegisterPlayer
 // Attack
@@ -41,5 +41,13 @@ impl App {
     {
         cmd.validate()?;
         cmd.run(self.repo.clone()).await
+    }
+
+    pub async fn query<Q>(&self, query: Q) -> Result<Q::Output, Error>
+    where
+        Q: Query + Send + Sync,
+    {
+        query.validate()?;
+        query.run(self.repo.clone()).await
     }
 }
