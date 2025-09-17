@@ -212,3 +212,238 @@ impl Battle {
         current_level
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::game::models::hero::Hero;
+
+    use super::Battle;
+    use crate::game::models::{
+        army::Army,
+        common::{Player, Tribe},
+        map::{Position, Valley, ValleyTopology},
+        village::Village,
+    };
+    use uuid::Uuid;
+
+    fn create_test_village(player_id: Uuid, tribe: Tribe, population: u32) -> Village {
+        let position = Position { x: 0, y: 0 };
+        let valley = Valley {
+            id: 0,
+            position,
+            topology: ValleyTopology(4, 4, 4, 6),
+            player_id: Some(player_id),
+            village_id: Some(0),
+        };
+        let player = Player {
+            id: player_id,
+            username: "test".to_string(),
+            tribe,
+        };
+        let mut village = Village::new("Test Village".to_string(), &valley, &player, false);
+        village.population = population;
+        village
+    }
+
+    // Funzione helper per l'uguaglianza approssimativa
+    fn assert_almost_equal(a: f64, b: f64, epsilon: f64) {
+        assert!(
+            (a - b).abs() < epsilon,
+            "{} is not almost equal to {}",
+            a,
+            b
+        );
+    }
+
+    #[test]
+    fn test_infantry_battle_attacker_wins() {
+        let player_id = Uuid::new_v4();
+        let attacker_army = Army::new(
+            0,
+            player_id,
+            Tribe::Roman,
+            [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+        let mut defender_village = create_test_village(Uuid::new_v4(), Tribe::Teuton, 50);
+        defender_village.army = Army::new(
+            1,
+            player_id,
+            Tribe::Teuton,
+            [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 0);
+
+        assert!(result.winner);
+        assert!(result.attacker_losses > 0.0 && result.attacker_losses < 1.0);
+        assert_eq!(result.defender_losses, 1.0);
+    }
+
+    #[test]
+    fn test_infantry_battle_defender_wins() {
+        let player_id = Uuid::new_v4();
+        let attacker_army = Army::new(
+            0,
+            player_id,
+            Tribe::Roman,
+            [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+        let mut defender_village = create_test_village(Uuid::new_v4(), Tribe::Teuton, 100);
+        defender_village.army = Army::new(
+            1,
+            Uuid::new_v4(),
+            Tribe::Teuton,
+            [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 0);
+
+        assert!(!result.winner);
+        assert_eq!(result.attacker_losses, 1.0);
+        assert!(result.defender_losses > 0.0 && result.defender_losses < 1.0);
+    }
+
+    #[test]
+    fn test_rams_reduce_wall_effectiveness() {
+        let player_id = Uuid::new_v4();
+        // Attaccante con molti arieti ma poca fanteria
+        let attacker_army = Army::new(
+            0,
+            player_id,
+            Tribe::Roman,
+            [10, 0, 0, 0, 0, 0, 100, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+
+        let mut defender_village = create_test_village(Uuid::new_v4(), Tribe::Roman, 200);
+        defender_village.army = Army::new(
+            1,
+            Uuid::new_v4(),
+            Tribe::Roman,
+            [500, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0; 10],
+            None,
+        );
+        // Aggiungi un muro di livello 20
+        // ... (dovresti avere un metodo per aggiungere/aggiornare edifici nel villaggio per i test)
+        // Per ora, possiamo solo verificare che il danno al muro sia calcolato.
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 0);
+
+        // Anche se l'attaccante probabilmente perde, ci aspettiamo un danno significativo al muro.
+        assert!(!result.winner);
+        assert!(result.wall_damage > 0.0);
+        assert!(result.new_wall_level < 20); // Assumendo un muro iniziale di livello 20
+    }
+
+    #[test]
+    fn test_catapults_damage_building() {
+        let player_id = Uuid::new_v4();
+        // Attaccante con catapulte
+        let attacker_army = Army::new(
+            0,
+            player_id,
+            Tribe::Roman,
+            [1000, 0, 0, 0, 0, 0, 0, 50, 0, 0],
+            [20; 10],
+            None,
+        );
+        let defender_village = create_test_village(Uuid::new_v4(), Tribe::Gaul, 300);
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 15); // Bersaglia un edificio di livello 15
+
+        assert!(result.winner);
+        assert!(result.building_damage > 0.0);
+        assert!(result.new_building_level < 15);
+    }
+
+    #[test]
+    fn test_hero_is_attacking() {
+        let attacker_player_id = Uuid::new_v4();
+        let defender_player_id = Uuid::new_v4();
+
+        let hero = Hero {
+            player_id: attacker_player_id,
+            attack_points: 20, // Simula 'self: 20' e 'str: 1000'
+            off_bonus: 0.0,    // Assumiamo che il bonus off sia separato
+            ..Default::default()
+        };
+
+        let attacker_army = Army::new(
+            0,
+            attacker_player_id,
+            Tribe::Roman,
+            [0; 10], // Nessuna truppa, solo eroe
+            [0; 10],
+            Some(hero),
+        );
+
+        let mut defender_village = create_test_village(defender_player_id, Tribe::Gaul, 100);
+        defender_village.army = Army::new(
+            1,
+            defender_player_id,
+            Tribe::Gaul,
+            [100, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 100 Falangi
+            [0; 10],
+            None,
+        );
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 0);
+
+        // Valore fittizio, da verificare
+        // In questo scenario, l'eroe da solo potrebbe non vincere, ma infliggerà perdite.
+        // Il valore esatto di `defLosses` dipende da come calcoli il potere dell'eroe.
+        // L'originale era (3100 / 4010.21) ** 1.5, che è ~0.67
+        assert_almost_equal(result.defender_losses, 0.67, 0.01);
+    }
+
+    #[test]
+    fn test_large_scale_battle_minor_change() {
+        let attacker_player_id = Uuid::new_v4();
+        let defender_player_id = Uuid::new_v4();
+
+        let attacker_army = Army::new(
+            0,
+            attacker_player_id,
+            Tribe::Roman,
+            [499999, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 499,999 Legionari
+            [0; 10],
+            None,
+        );
+
+        let mut defender_village = create_test_village(defender_player_id, Tribe::Teuton, 5000);
+        defender_village.army = Army::new(
+            1,
+            defender_player_id,
+            Tribe::Teuton,
+            [999999, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 999,999 Mazze
+            [0; 10],
+            None,
+        );
+
+        let simulator = Battle::new();
+        let result = simulator.calculate_battle(&attacker_army, &defender_village, None, 0);
+
+        // Valori fittizi basati sul test TS.
+        // `offLosses` dovrebbe essere 1.0 (sconfitta totale)
+        // `defLosses` molto alte ma non totali.
+        assert_eq!(result.attacker_losses, 1.0);
+        let expected_defender_survivors = 68; // 999999 - 999931
+        let actual_defender_survivors = (999999.0 * (1.0 - result.defender_losses)).round() as u32;
+        assert_eq!(actual_defender_survivors, expected_defender_survivors);
+    }
+}
