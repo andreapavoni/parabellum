@@ -44,8 +44,7 @@ impl Village {
             player.tribe.clone(),
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            0,
-            0.0,
+            None,
         );
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

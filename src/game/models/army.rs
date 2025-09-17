@@ -2,6 +2,8 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::game::models::hero::Hero;
+
 use super::{Cost, ResourceGroup, SmithyUpgrades, Tribe};
 
 #[derive(Debug, Clone)]
@@ -114,9 +116,8 @@ pub struct Army {
     pub tribe: Tribe,
     pub units: TroopSet,
     pub smithy: SmithyUpgrades,
-    // hero stuff
-    pub hero_attack_bonus: u32,
-    pub hero_off_bonus: f64,
+    /// L'eroe è opzionale, potrebbe non essere presente in tutte le armate.
+    pub hero: Option<Hero>,
 }
 
 impl Army {
@@ -126,8 +127,7 @@ impl Army {
         tribe: Tribe,
         units: TroopSet,
         smithy: SmithyUpgrades,
-        hero_attack_bonus: u32,
-        hero_off_bonus: f64,
+        hero: Option<Hero>,
     ) -> Self {
         Army {
             village_id,
@@ -135,8 +135,7 @@ impl Army {
             tribe,
             units,
             smithy,
-            hero_attack_bonus,
-            hero_off_bonus,
+            hero,
         }
     }
 
@@ -279,6 +278,14 @@ pub struct Unit {
     pub speed: u8,
     pub capacity: u32,
     pub cost: Cost,
+}
+
+impl Unit {
+    pub fn apply_smithy_upgrade(&self, smithy_level: i32, upkeep: u32, combat_value: u32) -> u32 {
+        ((combat_value as f64)
+            + ((combat_value + 300 * upkeep) as f64 / 7.0)
+                * ((1.007f64).powi(smithy_level.try_into().unwrap()) - 1.0).floor()) as u32
+    }
 }
 
 static ROMAN_UNITS: TribeUnits = [
