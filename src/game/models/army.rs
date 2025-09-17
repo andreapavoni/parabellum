@@ -25,7 +25,7 @@ pub enum UnitGroup {
 
 #[derive(Debug, Clone)]
 pub enum UnitName {
-    // Romans
+    // --- Romans ---
     Legionnaire,
     Praetorian,
     Imperian,
@@ -36,7 +36,7 @@ pub enum UnitName {
     FireCatapult,
     Senator,
     Settler,
-    // Teutons
+    // --- Teutons ---
     Maceman,
     Spearman,
     Axeman,
@@ -46,7 +46,7 @@ pub enum UnitName {
     Ram,
     Catapult,
     Chief,
-    // Gauls
+    // --- Gauls ---
     Phalanx,
     Swordsman,
     Pathfinder,
@@ -55,7 +55,7 @@ pub enum UnitName {
     Haeduan,
     Trebuchet,
     Chieftain,
-    // Nature
+    // --- Nature ---
     Rat,
     Spider,
     Serpent,
@@ -66,7 +66,7 @@ pub enum UnitName {
     Crocodile,
     Tiger,
     Elephant,
-    // Natars
+    // --- Natars ---
     Pikeman,
     ThornedWarrior,
     Guardsman,
@@ -76,31 +76,31 @@ pub enum UnitName {
     Warelephant,
     Ballista,
     NatarianEmperor,
-    // Huns
-    Mercenary,
-    Bowman,
-    Spotter,
-    SteppeRider,
-    Marksman,
-    Marauder,
-    Logades,
-    // Egyptians
-    SlaveMilitia,
-    AshWarden,
-    KhopeshWarrior,
-    SopduExplorer,
-    AnhurGuard,
-    ReshephChariot,
-    StoneCatapult,
-    Nomarch,
-    // Spartans
-    Hoplite,
-    Sentinel,
-    Shieldsman,
-    TwinsteelTherion,
-    ElpidaRider,
-    CorinthianCrusher,
-    Ephor,
+    // // --- Huns ---
+    // Mercenary,
+    // Bowman,
+    // Spotter,
+    // SteppeRider,
+    // Marksman,
+    // Marauder,
+    // Logades,
+    // // --- Egyptians
+    // SlaveMilitia,
+    // AshWarden,
+    // KhopeshWarrior,
+    // SopduExplorer,
+    // AnhurGuard,
+    // ReshephChariot,
+    // StoneCatapult,
+    // Nomarch,
+    // // --- Spartans ---
+    // Hoplite,
+    // Sentinel,
+    // Shieldsman,
+    // TwinsteelTherion,
+    // ElpidaRider,
+    // CorinthianCrusher,
+    // Ephor,
 }
 
 type TribeUnits = [Unit; 10];
@@ -114,6 +114,9 @@ pub struct Army {
     pub tribe: Tribe,
     pub units: TroopSet,
     pub smithy: SmithyUpgrades,
+    // hero stuff
+    pub hero_attack_bonus: u32,
+    pub hero_off_bonus: f64,
 }
 
 impl Army {
@@ -123,6 +126,8 @@ impl Army {
         tribe: Tribe,
         units: TroopSet,
         smithy: SmithyUpgrades,
+        hero_attack_bonus: u32,
+        hero_off_bonus: f64,
     ) -> Self {
         Army {
             village_id,
@@ -130,6 +135,8 @@ impl Army {
             tribe,
             units,
             smithy,
+            hero_attack_bonus,
+            hero_off_bonus,
         }
     }
 
@@ -143,7 +150,7 @@ impl Army {
 
     // Returns the total raw number of troops in the army.
     pub fn immensity(&self) -> u32 {
-        self.units.into_iter().sum()
+        self.units.iter().sum()
     }
 
     pub fn upkeep(&self) -> u32 {
@@ -228,6 +235,21 @@ impl Army {
             }
         }
         speed
+    }
+
+    pub fn get_troop_count_by_role(&self, role: UnitRole) -> u32 {
+        self.units
+            .iter()
+            .enumerate()
+            .filter(|(idx, &quantity)| {
+                if quantity > 0 {
+                    let unit = self.get_unit(*idx as u8).unwrap();
+                    return std::mem::discriminant(&unit.role) == std::mem::discriminant(&role);
+                }
+                false
+            })
+            .map(|(_, &q)| q)
+            .sum()
     }
 
     fn scouting_points(&self, base_points: u8) -> u32 {
