@@ -25,7 +25,12 @@ impl Command for FoundVillage {
     type Output = Village;
 
     async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error> {
-        let valley = repo.get_unoccupied_valley(None).await?;
+        // TODO: get world size from some global config
+        let world_size = 100;
+        let valley = repo
+            .get_valley_by_id(self.position.to_id(world_size))
+            .await?;
+
         let village = Village::new("New Village".to_string(), &valley, &self.player, false);
 
         Ok(village)
