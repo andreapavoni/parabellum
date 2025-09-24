@@ -1,13 +1,4 @@
-use std::{collections::HashMap, f64};
-
-use serde::{Deserialize, Serialize};
-
-/// Battle
-use crate::game::models::{
-    army::{Army, UnitRole}, buildings::Building, village::Village, Tribe
-};
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
+// Enum per definire il tipo di attacco
 pub enum AttackType {
     Scout, // Esplorazione
     Raid,  // Raid/Attacco rapido
@@ -38,7 +29,7 @@ pub struct BattleContext {
     pub base_durability_artifact_multiplier: f64, // Moltiplicatore da artefatti
 
     // Informazioni sulle catapulte
-    pub catapult_targets: Vec<Building>, // Lista di edifici target
+    pub catapult_targets: Vec<BuildingTarget>, // Lista di edifici target
 }
 
 // Struttura per il risultato
@@ -47,7 +38,7 @@ pub struct BattleResult {
     pub defender_casualties: HashMap<u8, u32>,
     pub reinforcement_casualties: Vec<HashMap<u8, u32>>,
     pub wall_new_level: u8,
-    pub building_damages: HashMap<Building, u8>, // Danni agli edifici
+    pub building_damages: HashMap<BuildingTarget, u8>, // Danni agli edifici
     pub bounty_carried: u32,
     // ... altri dati come salute eroe persa, etc.
 }
@@ -75,43 +66,68 @@ impl BattleEngine {
         // FASE 1: Calcolo dei Punti Attacco (AP) e Difesa (DP) totali
         // ====================================================================
 
-        let mut total_attacker_infantry_points: u32 = 0;
-        let mut total_attacker_cavalry_points: u32 = 0;
-
-        (total_attacker_infantry_points, total_attacker_cavalry_points) = context.attacker.attack_points();
+        let mut total_attacker_infantry_points: f64 = 0.0;
+        let mut total_attacker_cavalry_points: f64 = 0.0;
 
         // 1.1: Calcolo punti dell'attaccante
+        // Itera sulle unità dell'attaccante
+        for (unit_id, count) in context.attacker.units {
+            let upgrade_level = context.attacker.armory_levels.get(unit_id).unwrap_or(0);
 
+            // `get_unit_data` è un helper che recupera statistiche base (atk, def, pop, etc.)
+            let unit_data = get_unit_data(unit_id);
+
+            let single_unit_attack = unit_data.attack +
+                (unit_data.attack + 300.0 * unit_data.population / 7.0) * (1.007_f64.powi(upgrade_level) - 1.0);
+
+            let total_unit_attack = single_unit_attack * count as f64;
+
+            if unit_data.is_cavalry {
+                total_attacker_cavalry_points += total_unit_attack;
+            } else {
+                total_attacker_infantry_points += total_unit_attack;
+            }
+        }
 
         // 1.2: Applica bonus Eroe attaccante
         if let Some(hero) = &context.attacker.hero {
-            let hero_bonus_multiplier = 1.0 + (hero.get_attack_bonus(true) as f64 / 100.0);
-            total_attacker_infantry_points = (total_attacker_infantry_points as f64 *  hero_bonus_multiplier) as u32;
-            total_attacker_cavalry_points = (total_attacker_cavalry_points as f64 * hero_bonus_multiplier) as u32;
+            let hero_bonus_multiplier = 1.0 + (hero.attack_bonus_percentage / 100.0);
+            total_attacker_infantry_points *= hero_bonus_multiplier;
+            total_attacker_cavalry_points *= hero_bonus_multiplier;
             // Aggiungi la forza di combattimento dell'eroe (qui va interpretato se è fanteria o cavalleria)
-            total_attacker_infantry_points += hero.attack_points;
+            total_attacker_infantry_points += hero.base_attack as f64;
         }
 
         // 1.3: Calcolo punti del difensore (truppe proprie + rinforzi)
-        let mut total_defender_infantry_points: u32 = 0;
-        let mut total_defender_cavalry_points: u32 = 0;
+        let mut total_defender_infantry_points: f64 = 0.0;
+        let mut total_defender_cavalry_points: f64 = 0.0;
 
         // Aggiungi le truppe del villaggio e tutti i rinforzi a una lista per processarli
-        (total_defender_infantry_points, total_defender_cavalry_points) = context.defender_village_owner.defense_points();
+        let mut all_defenders = vec![&context.defender_village_owner];
+        all_defenders.extend(context.defender_reinforcements.iter());
 
-        for defender_army in context.defender_reinforcements {
-            let (defender_infantry_points, defender_cavalry_points) = defender_army.defense_points();
+        for defender_army in all_defenders {
+            for (unit_id, count) in defender_army.units {
+                let upgrade_level = defender_army.armory_levels.get(unit_id).unwrap_or(0);
+                let unit_data = get_unit_data(unit_id);
 
-            total_defender_infantry_points += defender_infantry_points;
-            total_defender_cavalry_points += defender_cavalry_points;
+                let single_unit_inf_def = unit_data.infantry_defense +
+                    (unit_data.infantry_defense + 300.0 * unit_data.population / 7.0) * (1.007_f64.powi(upgrade_level) - 1.0);
+
+                let single_unit_cav_def = unit_data.cavalry_defense +
+                    (unit_data.cavalry_defense + 300.0 * unit_data.population / 7.0) * (1.007_f64.powi(upgrade_level) - 1.0);
+
+                total_defender_infantry_points += single_unit_inf_def * count as f64;
+                total_defender_cavalry_points += single_unit_cav_def * count as f64;
+            }
 
             // Applica bonus Eroe difensore (se presente in questo gruppo)
             if let Some(hero) = &defender_army.hero {
-                let hero_bonus_multiplier = 1.0 + (hero.get_defense_bonus() as f64 / 100.0);
-                total_defender_infantry_points = (total_defender_infantry_points as f64 * hero_bonus_multiplier) as u32;
-                total_defender_cavalry_points = (total_defender_cavalry_points as f64 * hero_bonus_multiplier) as u32;
-                total_defender_infantry_points += hero.defense_points;
-                total_defender_cavalry_points += hero.defense_points;
+                let hero_bonus_multiplier = 1.0 + (hero.defense_bonus_percentage / 100.0);
+                total_defender_infantry_points *= hero_bonus_multiplier;
+                total_defender_cavalry_points *= hero_bonus_multiplier;
+                total_defender_infantry_points += hero.base_infantry_defense as f64;
+                total_defender_cavalry_points += hero.base_cavalry_defense as f64;
             }
         }
 
