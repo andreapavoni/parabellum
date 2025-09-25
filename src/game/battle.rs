@@ -1,326 +1,307 @@
-use std::{collections::HashMap, f64};
-
-use serde::{Deserialize, Serialize};
-
 /// Battle
-use crate::game::models::{
-    army::{Army, UnitRole}, buildings::Building, village::Village, Tribe
-};
+use serde::{Deserialize, Serialize};
+use std::f64;
+
+use crate::game::models::{army::Army, buildings::Building, village::Village, Tribe};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum AttackType {
-    Scout, // Esplorazione
-    Raid,  // Raid/Attacco rapido
-    Normal, // Attacco normale
+    Raid,   // Raid
+    Normal, // Attack / Siege / Conquer
 }
 
-
-// Statistiche dell'eroe rilevanti per la battaglia
-pub struct HeroStats {
-    pub attack_bonus_percentage: f64, // Bonus offensivo per l'esercito
-    pub defense_bonus_percentage: f64, // Bonus difensivo per l'esercito
-    pub base_attack: u32,
-    pub base_infantry_defense: u32,
-    pub base_cavalry_defense: u32,
-}
-
-// Contesto completo della battaglia
-pub struct BattleContext {
-    pub attack_type: AttackType,
-    pub attacker: Army,
-    pub defender_village_owner: Army,
-    pub defender_reinforcements: Vec<Army>,
-
-    // Stato del villaggio difensore
-    pub wall_level: u8,
-    pub residence_palace_level: u8,
-    pub stonemason_level: u8,
-    pub base_durability_artifact_multiplier: f64, // Moltiplicatore da artefatti
-
-    // Informazioni sulle catapulte
-    pub catapult_targets: Vec<Building>, // Lista di edifici target
-}
-
-// Struttura per il risultato
+// Represents the outcome of a battle
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BattleResult {
-    pub attacker_casualties: HashMap<u8, u32>,
-    pub defender_casualties: HashMap<u8, u32>,
-    pub reinforcement_casualties: Vec<HashMap<u8, u32>>,
-    pub wall_new_level: u8,
-    pub building_damages: HashMap<Building, u8>, // Danni agli edifici
-    pub bounty_carried: u32,
     // ... altri dati come salute eroe persa, etc.
+    pub attacker_loss_percentage: f64,
+    pub defender_loss_percentage: f64,
+    pub wall_level: u8,
+    pub buildings_damages: [u8; 2], // Danni agli edifici
+    pub bounty: u32,
 }
 
 pub struct ScoutBattleResult {
     // Indica se la presenza di scout difensori ha "rilevato" l'attacco.
     // Se true, il difensore riceve un report dell'attacco.
     pub was_detected: bool,
-
-    // Mappa con le perdite degli scout attaccanti.
-    // Conterrà solo le unità di tipo scout.
-    pub attacker_casualties: HashMap<u8, u32>,
+    pub attacker_loss_percentage: f64,
 }
 
-pub struct BattleEngine {}
+pub struct Battle {
+    attack_type: AttackType,
+    attacker: Army,
+    attacker_village: Village,
+    defender_village: Village,
+    catapult_targets: [Building; 2], // Lista di edifici target
+}
 
-impl BattleEngine {
+impl Battle {
+    pub fn new(
+        attack_type: AttackType,
+        attacker: Army,
+        attacker_village: Village,
+        defender_village: Village,
+        catapult_targets: [Building; 2],
+    ) -> Self {
+        Self {
+            attack_type,
+            attacker,
+            attacker_village,
+            defender_village,
+            catapult_targets,
+        }
+    }
 
-
-
-    // Funzione principale che orchestra tutto il calcolo
-    pub fn calculate_battle(context: &BattleContext) -> BattleResult {
-
+    // Main function to calculate the battle
+    pub fn calculate_battle(&self) -> BattleResult {
         // ====================================================================
-        // FASE 1: Calcolo dei Punti Attacco (AP) e Difesa (DP) totali
+        // FASE 1: Calculate total attack and defense points
         // ====================================================================
 
-        let mut total_attacker_infantry_points: u32 = 0;
-        let mut total_attacker_cavalry_points: u32 = 0;
+        let mut total_attacker_infantry_points: u32;
+        let mut total_attacker_cavalry_points: u32;
 
-        (total_attacker_infantry_points, total_attacker_cavalry_points) = context.attacker.attack_points();
+        (
+            total_attacker_infantry_points,
+            total_attacker_cavalry_points,
+        ) = self.attacker.attack_points();
 
-        // 1.1: Calcolo punti dell'attaccante
+        // 1.1: Attack points
 
-
-        // 1.2: Applica bonus Eroe attaccante
-        if let Some(hero) = &context.attacker.hero {
+        // 1.2: Hero attack bonus
+        if let Some(hero) = &self.attacker.hero {
             let hero_bonus_multiplier = 1.0 + (hero.get_attack_bonus(true) as f64 / 100.0);
-            total_attacker_infantry_points = (total_attacker_infantry_points as f64 *  hero_bonus_multiplier) as u32;
-            total_attacker_cavalry_points = (total_attacker_cavalry_points as f64 * hero_bonus_multiplier) as u32;
-            // Aggiungi la forza di combattimento dell'eroe (qui va interpretato se è fanteria o cavalleria)
+            total_attacker_infantry_points =
+                (total_attacker_infantry_points as f64 * hero_bonus_multiplier) as u32;
+            total_attacker_cavalry_points =
+                (total_attacker_cavalry_points as f64 * hero_bonus_multiplier) as u32;
+            // Hero attack points
             total_attacker_infantry_points += hero.attack_points;
         }
 
-        // 1.3: Calcolo punti del difensore (truppe proprie + rinforzi)
-        let mut total_defender_infantry_points: u32 = 0;
-        let mut total_defender_cavalry_points: u32 = 0;
+        // 1.3: Defense points (village troops + reinforcements)
+        let mut total_defender_infantry_points: u32;
+        let mut total_defender_cavalry_points: u32;
+        let mut total_defender_immensity: u32 = 0;
 
-        // Aggiungi le truppe del villaggio e tutti i rinforzi a una lista per processarli
-        (total_defender_infantry_points, total_defender_cavalry_points) = context.defender_village_owner.defense_points();
+        (
+            total_defender_infantry_points,
+            total_defender_cavalry_points,
+        ) = self.defender_village.army.defense_points();
+        total_defender_immensity += self.defender_village.army.immensity();
 
-        for defender_army in context.defender_reinforcements {
-            let (defender_infantry_points, defender_cavalry_points) = defender_army.defense_points();
+        for defender_army in self.defender_village.reinforcements.iter() {
+            let (defender_infantry_points, defender_cavalry_points) =
+                defender_army.defense_points();
 
             total_defender_infantry_points += defender_infantry_points;
             total_defender_cavalry_points += defender_cavalry_points;
+            total_defender_immensity += defender_army.immensity();
 
-            // Applica bonus Eroe difensore (se presente in questo gruppo)
+            // Apply hero defense bonus
             if let Some(hero) = &defender_army.hero {
                 let hero_bonus_multiplier = 1.0 + (hero.get_defense_bonus() as f64 / 100.0);
-                total_defender_infantry_points = (total_defender_infantry_points as f64 * hero_bonus_multiplier) as u32;
-                total_defender_cavalry_points = (total_defender_cavalry_points as f64 * hero_bonus_multiplier) as u32;
+                total_defender_infantry_points =
+                    (total_defender_infantry_points as f64 * hero_bonus_multiplier) as u32;
+                total_defender_cavalry_points =
+                    (total_defender_cavalry_points as f64 * hero_bonus_multiplier) as u32;
                 total_defender_infantry_points += hero.defense_points;
                 total_defender_cavalry_points += hero.defense_points;
             }
         }
 
-        // 1.4: Calcolo bonus difensivi del villaggio (Mura, Residenza/Palazzo)
-        // Bonus base della Residenza/Palazzo
-        let residence_bonus = 2.0 * (context.residence_palace_level as f64).powi(2);
-        total_defender_infantry_points += residence_bonus;
-        total_defender_cavalry_points += residence_bonus;
+        // 1.4: Calculate village defense bonus
+        // Resindence/Palace
+        if let Some((residence_palace, _)) = self.defender_village.get_palace_or_residence() {
+            let bonus = 2.0 * (residence_palace.level as f64).powi(2);
+            total_defender_infantry_points = (total_defender_infantry_points as f64 + bonus) as u32;
+            total_defender_cavalry_points = (total_defender_cavalry_points as f64 + bonus) as u32;
+        }
 
-        // Bonus percentuale delle Mura
-        if context.wall_level > 0 {
-            let wall_factor = match context.defender_village_owner.tribe {
-                1 => 1.030, // Romani
-                2 => 1.020, // Germani
-                3 => 1.025, // Galli
-                _ => 1.020, // Default
+        // Wall
+        if let Some(defender_wall) = self.defender_village.get_wall() {
+            let wall_factor: f64 = match self.defender_village.tribe {
+                Tribe::Roman => 1.030,  // Romani
+                Tribe::Teuton => 1.020, // Germani
+                Tribe::Gaul => 1.025,   // Galli
+                _ => 1.020,             // Default
             };
-            let wall_multiplier = wall_factor.powi(context.wall_level as i32);
-            total_defender_infantry_points *= wall_multiplier;
-            total_defender_cavalry_points *= wall_multiplier;
+            let wall_multiplier = wall_factor.powf(defender_wall.level as f64);
+            total_defender_infantry_points =
+                (total_defender_infantry_points as f64 * wall_multiplier) as u32;
+            total_defender_cavalry_points =
+                (total_defender_cavalry_points as f64 * wall_multiplier) as u32;
         }
 
         // ====================================================================
-        // FASE 2: Calcolo della Potenza Totale e delle Perdite
+        // FASE 2: Calculate total power and casualties
         // ====================================================================
 
-        // 2.1: Calcolo potenza totale d'attacco
+        // 2.1 Total attack power
         let total_attack_power = total_attacker_infantry_points + total_attacker_cavalry_points;
-        if total_attack_power == 0.0 { /* gestione divisione per zero */ }
 
-        // 2.2: Calcolo potenza totale di difesa (pesata sulla composizione dell'attacco)
+        // 2.2: Total defence power
         let infantry_ratio = total_attacker_infantry_points / total_attack_power;
         let cavalry_ratio = total_attacker_cavalry_points / total_attack_power;
-        let total_defense_power = (total_defender_infantry_points * infantry_ratio) + (total_defender_cavalry_points * cavalry_ratio);
+        let total_defense_power = (total_defender_infantry_points * infantry_ratio)
+            + (total_defender_cavalry_points * cavalry_ratio);
 
-        // 2.3: Bonus Morale (se popolazione attaccante > difensore)
+        // 2.3: Morale bonus (if attacker pop > defender pop)
         let mut morale_bonus = 1.0;
-        let total_defender_population = context.defender_village_owner.population +
-                                       context.defender_reinforcements.iter().map(|a| a.population).sum::<u32>();
+        let total_defender_population = self.defender_village.population
+            + self
+                .defender_village
+                .reinforcements
+                .iter()
+                .map(|a| a.upkeep())
+                .sum::<u32>();
 
-        if context.attacker.population > total_defender_population {
-            let ratio = total_defender_population as f64 / context.attacker.population as f64;
-            morale_bonus = ratio.powf(0.2); // Semplificato, la formula originale è più complessa
+        if self.attacker_village.population > total_defender_population {
+            let ratio = total_defender_population as f64 / self.attacker_village.population as f64;
+            morale_bonus = ratio.powf(0.2); // TODO: Semplificato, la formula originale è più complessa
         }
 
-        let effective_attack_power = total_attack_power / morale_bonus;
+        let effective_attack_power = (total_attack_power as f64 / morale_bonus) as u32;
 
-        // 2.4: Formula di combattimento
-        let power_ratio = effective_attack_power / total_defense_power;
+        // 2.4: Combat formula
+        let power_ratio: f64 = effective_attack_power as f64 / total_defense_power as f64;
+        // Immensity
+        let total_units_involved = self.attacker.immensity() + total_defender_immensity;
 
-        // Fattore "Grande Battaglia" (Mfactor)
-        let total_units_involved = context.attacker.units.values().sum::<u32>() +
-                                  all_defenders.iter().flat_map(|a| a.units.values()).sum::<u32>();
-        let m_factor = if total_units_involved >= 1000 {
-            (2.0 * (1.8592 - (total_units_involved as f64).powf(0.015))).clamp(1.2578, 1.5)
-        } else {
-            1.5
+        let (attacker_loss_percentage, defender_loss_percentage) = self.calculate_losses(
+            effective_attack_power,
+            total_defense_power,
+            total_units_involved,
+        );
+
+        let (attacker_survivors, _attacker_losses) =
+            self.attacker.calculate_losses(attacker_loss_percentage);
+
+        // ====================================================================
+        // FASE 3: Calculate damages to wall and buildings
+        // ====================================================================
+
+        let mut wall_level = match self.defender_village.get_wall() {
+            Some(wall) => wall.level,
+            _ => 0,
         };
 
-        let mut attacker_loss_percentage: f64;
-        let mut defender_loss_percentage: f64;
+        // Variables to calculate buildings damages
+        let buildings_durability = self.defender_village.get_buildings_durability();
 
-        if effective_attack_power > total_defense_power { // Attaccante vince
-            let loss_factor = (total_defense_power / effective_attack_power).powf(m_factor);
-
-            if context.attack_type == AttackType::Raid {
-                attacker_loss_percentage = loss_factor / (1.0 + loss_factor);
-                defender_loss_percentage = 1.0 / (1.0 + loss_factor);
-            } else { // Normal
-                attacker_loss_percentage = loss_factor;
-                defender_loss_percentage = 1.0;
-            }
-        } else { // Difensore vince (o pareggio)
-            let loss_factor = (effective_attack_power / total_defense_power).powf(m_factor);
-
-            if context.attack_type == AttackType::Raid {
-                attacker_loss_percentage = 1.0 / (1.0 + loss_factor);
-                defender_loss_percentage = loss_factor / (1.0 + loss_factor);
-            } else { // Normal
-                attacker_loss_percentage = 1.0;
-                defender_loss_percentage = loss_factor;
-            }
-        }
-
-        // ====================================================================
-        // FASE 3: Calcolo Danni a Mura ed Edifici
-        // ====================================================================
-
-        let mut final_wall_level = context.wall_level;
-        // ... altre variabili per danni agli edifici
-
-        // 3.1: Danno Arieti (Rams)
-        let surviving_rams = calculate_surviving_units(&context.attacker, "rams", attacker_loss_percentage);
-        if surviving_rams > 0 && context.wall_level > 0 {
+        // 3.1: Rams damage
+        let surviving_rams = attacker_survivors[6];
+        let smithy_level: u8 = self.attacker.smithy[6];
+        if surviving_rams > 0 && wall_level > 0 {
             let ram_damage = calculate_machine_damage(
                 surviving_rams,
-                context.attacker.armory_levels.get("ram_id").unwrap_or(0), // Upgrade arieti
-                context.stonemason_level,
-                context.base_durability_artifact_multiplier,
+                smithy_level,
+                buildings_durability,
                 power_ratio,
-                1.0 // Morale per arieti è 1.0
+                1.0, // Morale for rams is 1.0
             );
-            final_wall_level = calculate_new_building_level(context.wall_level, ram_damage);
+            wall_level = calculate_new_building_level(wall_level, ram_damage);
         }
 
-        // 3.2: Danno Catapulte
-        let surviving_catapults = calculate_surviving_units(&context.attacker, "catapults", attacker_loss_percentage);
-        if surviving_catapults > 0 {
-            let catapult_morale_bonus = (context.attacker.population as f64 / total_defender_population as f64).powf(0.3).clamp(1.0, 3.0);
+        // 3.2: Catapults damage
+        let surviving_catapults = attacker_survivors[7];
+        let smithy_level: u8 = self.attacker.smithy[7];
+        let mut buildings_levels: [u8; 2] = [0; 2];
 
-            // ... logica per distribuire le catapulte sui bersagli ...
+        if self.attack_type == AttackType::Normal && surviving_catapults > 0 {
+            let catapult_morale_bonus = (self.attacker_village.population as f64
+                / total_defender_population as f64)
+                .powf(0.3)
+                .clamp(1.0, 3.0);
+
+            // TODO: fix catapult targets (none, random, 1 or 2)
+            let catapults_targets_quantity: u32 = match self.catapult_targets.len() as u32 {
+                0 => 1,
+                len => len,
+            };
+
             let catapult_damage = calculate_machine_damage(
-                surviving_catapults, // Quantità per questo target
-                context.attacker.armory_levels.get("catapult_id").unwrap_or(0), // Upgrade catapulte
-                context.stonemason_level,
-                context.base_durability_artifact_multiplier,
+                surviving_catapults / catapults_targets_quantity, // Quantità per questo target
+                smithy_level,
+                buildings_durability,
                 power_ratio,
-                catapult_morale_bonus
+                catapult_morale_bonus,
             );
-            // ... calcola il nuovo livello per l'edificio target
+
+            buildings_levels = self
+                .catapult_targets
+                .clone()
+                .map(|target| calculate_new_building_level(target.level, catapult_damage));
         }
 
         // ====================================================================
-        // FASE 4: Finalizzazione dei Risultati
+        // FASE 4: Final result
         // ====================================================================
 
-        // Calcola le perdite effettive per ogni tipo di unità e assembla la struttura BattleResult
+        // Calculate losses on armies
         // ...
 
-        // Restituisci il risultato completo
-        return BattleResult { ... };
+        BattleResult {
+            attacker_loss_percentage,
+            defender_loss_percentage,
+            wall_level,
+            buildings_damages: buildings_levels,
+            bounty: 0,
+        }
     }
 
-    pub fn calculate_scout_battle(context: &BattleContext) -> ScoutBattleResult {
-
+    pub fn calculate_scout_battle(&self) -> ScoutBattleResult {
         // ====================================================================
         // FASE 1: Calcolo Punti Attacco e Difesa degli Scout
         // ====================================================================
 
-        let mut total_scout_attack_power: f64 = 0.0;
-        let mut total_attacker_scouts: u32 = 0;
-
         // 1.1: Calcola la forza degli scout attaccanti
-        for (unit_id, count) in &context.attacker.units {
-            let unit_data = get_unit_data(*unit_id);
-            if unit_data.is_scout {
-                total_attacker_scouts += *count;
-                let upgrade_level = context.attacker.armory_levels.get(unit_id).unwrap_or(0);
+        let total_scout_attack_power = self.attacker.scouting_attack_points();
+        let total_attack_scouts = self.attacker.unit_amount(3);
 
-                // Formula specifica per scout: base 35
-                let single_unit_power = 35.0 +
-                    (35.0 + 300.0 * unit_data.population / 7.0) * (1.007_f64.powi(upgrade_level) - 1.0);
-
-                total_scout_attack_power += single_unit_power * (*count as f64);
-            }
-        }
-
-        let mut total_scout_defense_power: f64 = 0.0;
-        let mut defender_has_scouts = false;
-        let mut total_defender_scouts: u32 = 0;
+        let mut total_scout_defense_power = self.defender_village.army.scouting_defense_points();
+        let mut total_defense_scouts = 0;
 
         // 1.2: Calcola la forza degli scout difensori (truppe proprie + rinforzi)
-        let all_defenders = [&context.defender_village_owner]
-            .into_iter()
-            .chain(context.defender_reinforcements.iter());
-
-        for defender_army in all_defenders {
-            for (unit_id, count) in &defender_army.units {
-                let unit_data = get_unit_data(*unit_id);
-                if unit_data.is_scout && *count > 0 {
-                    defender_has_scouts = true;
-                    total_defender_scouts += *count;
-                    let upgrade_level = defender_army.armory_levels.get(unit_id).unwrap_or(0);
-
-                    // Formula specifica per scout: base 20
-                    let single_unit_power = 20.0 +
-                        (20.0 + 300.0 * unit_data.population / 7.0) * (1.007_f64.powi(upgrade_level) - 1.0);
-
-                    total_scout_defense_power += single_unit_power * (*count as f64);
-                }
-            }
+        for reinforcement in self.defender_village.reinforcements.iter() {
+            total_scout_defense_power += reinforcement.scouting_defense_points();
+            total_defense_scouts += reinforcement.unit_amount(3);
         }
+
+        let defender_has_scouts = total_scout_defense_power > 0;
 
         // ====================================================================
         // FASE 2: Applica Bonus e Calcola Perdite
         // ====================================================================
 
+        let wall_level = match self.defender_village.get_wall() {
+            Some(wall) => wall.level,
+            _ => 0,
+        };
+
         // 2.1: Applica il bonus delle mura (se ci sono difensori)
-        if defender_has_scouts && context.wall_level > 0 {
-            let wall_factor = match context.defender_village_owner.tribe {
-                1 => 1.030, // Romani
-                2 => 1.020, // Germani
-                3 => 1.025, // Galli
+        if defender_has_scouts && wall_level > 0 {
+            let wall_factor: f64 = match self.defender_village.tribe {
+                Tribe::Roman => 1.030,  // Romani
+                Tribe::Teuton => 1.020, // Germani
+                Tribe::Gaul => 1.025,   // Galli
                 _ => 1.020,
             };
-            let wall_multiplier = wall_factor.powi(context.wall_level as i32);
-            total_scout_defense_power *= wall_multiplier;
-            total_scout_defense_power += 10.0; // Bonus fisso
+            let wall_multiplier = wall_factor.powf(wall_level as f64);
+            total_scout_defense_power =
+                (total_scout_defense_power as f64 * wall_multiplier) as u32 + 10;
         }
 
         let mut attacker_loss_percentage = 0.0;
 
         // 2.2: Controlla le condizioni per le perdite
         // La tribù 5 sono gli Egiziani nel codice originale di TravianZ
-        let attacker_is_immune = context.attacker.tribe == 5;
+        // let attacker_is_immune = self.attacker.tribe == 5;
 
-        if !attacker_is_immune && defender_has_scouts && total_scout_attack_power > 0.0 {
+        if defender_has_scouts && total_scout_attack_power > 0 {
             // Se ci sono difensori e l'attaccante non è immune, calcola le perdite
-            let total_units_involved = total_attacker_scouts + total_defender_scouts;
+            let total_units_involved = total_attack_scouts + total_defense_scouts;
             let m_factor = if total_units_involved >= 1000 {
                 (2.0 * (1.8592 - (total_units_involved as f64).powf(0.015))).clamp(1.2578, 1.5)
             } else {
@@ -329,7 +310,7 @@ impl BattleEngine {
 
             // Il morale si applica anche qui, anche se nel codice PHP è un po' nascosto
             // Omettiamolo per semplicità, ma andrebbe calcolato come prima
-            let power_ratio = total_scout_defense_power / total_scout_attack_power;
+            let power_ratio = total_scout_defense_power as f64 / total_scout_attack_power as f64;
 
             // La formula è `min(1, (difesa/attacco)^M)`.
             attacker_loss_percentage = power_ratio.powf(m_factor).min(1.0);
@@ -339,54 +320,116 @@ impl BattleEngine {
         // FASE 3: Finalizzazione del Risultato
         // ====================================================================
 
-        let mut final_casualties = HashMap::new();
-
         // Calcola le perdite effettive per le unità scout attaccanti
-        for (unit_id, count) in &context.attacker.units {
-             if get_unit_data(*unit_id).is_scout {
-                 let losses = (*count as f64 * attacker_loss_percentage).round() as u32;
-                 final_casualties.insert(*unit_id, losses);
-             }
-        }
+        let (_attacker_survivors, _attacker_losses) =
+            self.attacker.calculate_losses(attacker_loss_percentage);
 
         return ScoutBattleResult {
             was_detected: defender_has_scouts,
-            attacker_casualties: final_casualties,
+            attacker_loss_percentage,
         };
     }
 
-    // Funzione sigma per il calcolo del danno delle catapulte
-    // $this->sigma = function($x) { return ($x > 1 ? 2 - $x ** -1.5 : $x ** 1.5) / 2; };
-    fn sigma(x: f64) -> f64 {
-        if x > 1.0 {
-            (2.0 - x.powf(-1.5)) / 2.0
+    fn calculate_losses(
+        &self,
+
+        attack_power: u32,
+        defense_power: u32,
+        immensity: u32,
+    ) -> (f64, f64) {
+        // Massive battles factor (Mfactor)
+        let m_factor = if immensity >= 1000 {
+            (2.0 * (1.8592 - (immensity as f64).powf(0.015))).clamp(1.2578, 1.5)
         } else {
-            x.powf(1.5) / 2.0
+            1.5
+        };
+
+        let attacker_loss_percentage: f64;
+        let defender_loss_percentage: f64;
+
+        if attack_power > defense_power {
+            // Attacker wins
+            (attacker_loss_percentage, defender_loss_percentage) = self
+                .calculate_losses_by_attack_type(
+                    attack_power as f64,
+                    defense_power as f64,
+                    m_factor,
+                );
+        } else {
+            // Defender wins (or draw)
+            (defender_loss_percentage, attacker_loss_percentage) = self
+                .calculate_losses_by_attack_type(
+                    defense_power as f64,
+                    attack_power as f64,
+                    m_factor,
+                );
         }
+
+        (attacker_loss_percentage, defender_loss_percentage)
     }
 
-    // Helper per calcolare il danno di catapulte/arieti
-    fn calculate_machine_damage(quantity: u32, upgrade_level: u8, stonemason: u8, artifact_mult: f64, ad_ratio: f64, morale: f64) -> f64 {
-        let upgrades = 1.0 + (upgrade_level as f64 * 0.0205); // Formula semplificata, l'originale usa pow(1.0205, level)
-        let durability = (1.0 + stonemason as f64 * 0.1) * artifact_mult;
+    fn calculate_losses_by_attack_type(
+        &self,
+        winner: f64,
+        loser: f64,
+        m_factor: f64,
+    ) -> (f64, f64) {
+        let loss_factor = (loser / winner).powf(m_factor);
+        let winner_losses: f64;
+        let loser_losses: f64;
 
-        let efficiency = (quantity as f64 / durability).floor();
+        match self.attack_type {
+            AttackType::Raid => {
+                winner_losses = loss_factor / (1.0 + loss_factor);
+                loser_losses = 1.0 / (1.0 + loss_factor);
+            }
 
-        return 4.0 * Self::sigma(ad_ratio) * efficiency * upgrades / morale;
-    }
-
-    // Helper per calcolare il nuovo livello di un edificio
-    fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
-        let mut current_level = old_level;
-        damage -= 0.5;
-        if damage < 0.0 { return current_level; }
-
-        while damage >= current_level as f64 && current_level > 0 {
-            damage -= current_level as f64;
-            current_level -= 1;
+            AttackType::Normal => {
+                winner_losses = loss_factor;
+                loser_losses = 1.0;
+            }
         }
+
+        (winner_losses, loser_losses)
+    }
+}
+
+// sigma function from Kirilloid to calculate damages
+// $this->sigma = function($x) { return ($x > 1 ? 2 - $x ** -1.5 : $x ** 1.5) / 2; };
+fn sigma(x: f64) -> f64 {
+    if x > 1.0 {
+        (2.0 - x.powf(-1.5)) / 2.0
+    } else {
+        x.powf(1.5) / 2.0
+    }
+}
+
+// Calculates damage for catapults/rams
+fn calculate_machine_damage(
+    quantity: u32,
+    smithy_level: u8,
+    durability: f64,
+    ad_ratio: f64,
+    morale: f64,
+) -> f64 {
+    let upgrades = 1.0 + (smithy_level as f64 * 0.0205); // Formula semplificata, l'originale usa pow(1.0205, level)
+
+    let efficiency = (quantity as f64 / durability).floor();
+
+    return 4.0 * sigma(ad_ratio) * efficiency * upgrades / morale;
+}
+
+// Calculates new building level after damages
+fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
+    let mut current_level = old_level;
+    damage -= 0.5;
+    if damage < 0.0 {
         return current_level;
     }
 
-
+    while damage >= current_level as f64 && current_level > 0 {
+        damage -= current_level as f64;
+        current_level -= 1;
+    }
+    return current_level;
 }

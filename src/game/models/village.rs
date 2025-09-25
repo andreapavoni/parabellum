@@ -172,10 +172,10 @@ impl Village {
         }
     }
 
-    pub fn get_buildings_durability(&self) -> u16 {
+    pub fn get_buildings_durability(&self) -> f64 {
         match self.get_building_by_name(BuildingName::StonemansionLodge) {
-            Some(b) => b.value as u16,
-            None => 1,
+            Some(b) => 1.0 + b.level as f64 * 0.1,
+            None => 1.0,
         }
     }
 
@@ -219,9 +219,7 @@ impl Village {
 
         // armies upkeep
         self.production.upkeep += self.army.upkeep();
-        for a in self.reinforcements.clone() {
-            // println!("army {:?}", self.production.upkeep);
-
+        for a in self.reinforcements.iter() {
             self.production.upkeep += a.upkeep();
         }
 
