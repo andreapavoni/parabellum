@@ -172,6 +172,19 @@ impl Village {
         }
     }
 
+    pub fn get_wall_defense_bonus(&self) -> f64 {
+        if let Some(wall) = self.get_wall() {
+            let tribe_factor: f64 = match self.tribe {
+                Tribe::Roman => 1.030,
+                Tribe::Teuton => 1.020,
+                Tribe::Gaul => 1.025,
+                _ => 1.020,
+            };
+            return tribe_factor.powf(wall.level as f64);
+        }
+        1.0
+    }
+
     pub fn get_buildings_durability(&self) -> f64 {
         match self.get_building_by_name(BuildingName::StonemansionLodge) {
             Some(b) => 1.0 + b.level as f64 * 0.1,
