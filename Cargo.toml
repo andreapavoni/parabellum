@@ -8,7 +8,7 @@ license = "MIT"
 keywords = ["travian", "MMORPG", "game", "browsergame"]
 readme = "README.md"
 publish = false
-rust-version = "1.63"
+rust-version = "1.86"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,21 +17,16 @@ tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 async-trait = "0.1"
 
-# Db ORM
-bson = { version = "2", features = [
-  "serde_with-3",
-  "hashable",
-  "chrono-0_4",
-  "uuid-1",
-] }
-polodb_core = "5.1.4"
-
 # JSON handling
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde = { version = "1.0", features = ["derive"] }
 # Date and time
 chrono = { version = "0.4", features = ["serde"] }
 time = { version = "0.3", features = ["serde"] }
+
+# Database
+diesel = { version = "2.3", features = ["postgres", "r2d2", "uuid", "chrono"] }
+diesel-derive-enum = { version = "2.1", features = ["postgres"] }
 
 # Uuid
 uuid = { version = "1.1", features = ["serde", "v4"] }
@@ -46,3 +41,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Random number generator
 rand = "0.8.5"
+
+# Utils
+dotenvy = "0.15"
