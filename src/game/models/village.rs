@@ -27,6 +27,7 @@ pub struct Village {
     pub population: u32,
     pub army: Army,
     pub reinforcements: Vec<Army>,
+    pub deployed_armies: Vec<Army>,
     pub loyalty: u8,
     pub production: VillageProduction,
     pub is_capital: bool,
@@ -41,6 +42,7 @@ impl Village {
         let village_id = position.to_id(WORLD_MAX_SIZE);
         let army = Army::new(
             village_id,
+            None,
             player.id.clone(),
             player.tribe.clone(),
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -61,6 +63,7 @@ impl Village {
             population: 2,
             army,
             reinforcements: vec![],
+            deployed_armies: vec![],
             loyalty: 100,
             production,
             is_capital,
