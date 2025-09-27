@@ -25,7 +25,7 @@ chrono = { version = "0.4", features = ["serde"] }
 time = { version = "0.3", features = ["serde"] }
 
 # Database
-diesel = { version = "2.3", features = ["postgres", "r2d2", "uuid", "chrono"] }
+diesel = { version = "2.3", features = ["postgres", "r2d2", "uuid", "chrono", "serde_json"] }
 diesel-derive-enum = { version = "2.1", features = ["postgres"] }
 
 # Uuid

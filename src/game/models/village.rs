@@ -1,7 +1,6 @@
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::{
@@ -10,6 +9,12 @@ use super::{
     map::{Oasis, Position, Valley, WORLD_MAX_SIZE},
     Player, SmithyUpgrades, Tribe,
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VillageBuilding {
+    pub slot_id: u8,
+    pub building: Building,
+}
 
 // TODO: add standalone rally point? Not yet
 // TODO: add standalone wall? Not yet
@@ -21,8 +26,7 @@ pub struct Village {
     pub player_id: Uuid,
     pub position: Position,
     pub tribe: Tribe,
-    /// K: slot_id (1 to 40), V: building struct
-    pub buildings: HashMap<u8, Building>,
+    pub buildings: Vec<VillageBuilding>,
     pub oases: Vec<Oasis>,
     pub population: u32,
     pub army: Army,
@@ -58,7 +62,7 @@ impl Village {
             position,
             player_id: player.id.clone(),
             tribe: player.tribe.clone(),
-            buildings: HashMap::new(),
+            buildings: vec![],
             oases: vec![],
             population: 2,
             army,
@@ -92,7 +96,11 @@ impl Village {
         let building = Building::new(name);
 
         building.validate_build(&self.tribe, &self.buildings, self.is_capital)?;
-        self.buildings.insert(slot_id, building);
+
+        self.buildings.append(&mut vec![VillageBuilding {
+            slot_id,
+            building: building.clone(),
+        }]);
         self.update_state();
 
         Ok(())
@@ -103,7 +111,10 @@ impl Village {
             Some(b) => match b.validate_upgrade() {
                 Ok(_) => {
                     let next = b.next_level().unwrap();
-                    self.buildings.insert(slot_id, next);
+                    self.buildings.append(&mut vec![VillageBuilding {
+                        slot_id,
+                        building: next,
+                    }]);
                     self.update_state();
                 }
                 Err(msg) => return Err(Error::msg(msg)),
@@ -117,7 +128,8 @@ impl Village {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => {
                 let building = b.at_level(level)?;
-                self.buildings.insert(slot_id, building);
+                self.buildings
+                    .append(&mut vec![VillageBuilding { slot_id, building }]);
                 self.update_state();
             }
             None => return Err(Error::msg("No buildings found on this slot")),
@@ -132,7 +144,17 @@ impl Village {
                     b.at_level(0)?;
                     self.update_state();
                 } else {
-                    self.buildings.remove(&slot_id);
+                    let _ = self
+                        .buildings
+                        .iter()
+                        .filter_map(|vb| {
+                            if vb.slot_id != slot_id {
+                                Some(vb)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
                 }
             }
             None => return Err(Error::msg("No buildings found on this slot")),
@@ -141,18 +163,24 @@ impl Village {
     }
 
     pub fn get_building_by_slot_id(&self, slot_id: u8) -> Option<Building> {
-        self.buildings.get(&slot_id).cloned()
+        self.buildings
+            .iter()
+            .find(|&x| x.slot_id == slot_id)
+            .map(|x| x.building.clone())
     }
 
     // Returns a building in the village. Returns None if not present. In case of multiple buildings of same type, it returns the highest level one.
     pub fn get_building_by_name(&self, name: BuildingName) -> Option<Building> {
-        self.buildings
-            .clone()
-            .values()
-            .into_iter()
-            .filter(|&x| x.name == name)
+        if let Some(village_building) = self
+            .buildings
+            .iter()
+            .filter(|&x| x.building.name == name)
             .cloned()
-            .max_by(|x, y| x.level.cmp(&y.level))
+            .max_by(|x, y| x.building.level.cmp(&y.building.level))
+        {
+            return Some(village_building.building);
+        }
+        None
     }
 
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
@@ -206,21 +234,21 @@ impl Village {
         self.stocks = Default::default();
 
         // data from infrastructures
-        for (_, b) in self.buildings.clone() {
-            self.population += b.cost().upkeep;
+        for b in self.buildings.iter() {
+            self.population += b.building.cost().upkeep;
 
-            match b.name {
-                BuildingName::Woodcutter => self.production.lumber += b.value,
-                BuildingName::ClayPit => self.production.clay += b.value,
-                BuildingName::IronMine => self.production.iron += b.value,
-                BuildingName::Cropland => self.production.crop += b.value,
-                BuildingName::Sawmill => self.production.bonus.lumber += b.value as u8,
-                BuildingName::Brickyard => self.production.bonus.clay += b.value as u8,
-                BuildingName::IronFoundry => self.production.bonus.iron += b.value as u8,
-                BuildingName::GrainMill => self.production.bonus.crop += b.value as u8,
-                BuildingName::Bakery => self.production.bonus.crop += b.value as u8,
-                BuildingName::Warehouse => self.stocks.warehouse += b.value,
-                BuildingName::Granary => self.stocks.granary += b.value,
+            match b.building.name {
+                BuildingName::Woodcutter => self.production.lumber += b.building.value,
+                BuildingName::ClayPit => self.production.clay += b.building.value,
+                BuildingName::IronMine => self.production.iron += b.building.value,
+                BuildingName::Cropland => self.production.crop += b.building.value,
+                BuildingName::Sawmill => self.production.bonus.lumber += b.building.value as u8,
+                BuildingName::Brickyard => self.production.bonus.clay += b.building.value as u8,
+                BuildingName::IronFoundry => self.production.bonus.iron += b.building.value as u8,
+                BuildingName::GrainMill => self.production.bonus.crop += b.building.value as u8,
+                BuildingName::Bakery => self.production.bonus.crop += b.building.value as u8,
+                BuildingName::Warehouse => self.stocks.warehouse += b.building.value,
+                BuildingName::Granary => self.stocks.granary += b.building.value,
                 _ => continue,
             }
         }
@@ -248,33 +276,40 @@ impl Village {
 
         // Default resources level 0
         for _ in 0..topology.lumber() {
-            let slot_id = self.buildings.len() + 1;
+            let slot_id = self.buildings.len() as u8 + 1;
             let building = Building::new(BuildingName::Woodcutter).at_level(0)?;
-            self.buildings.insert(slot_id as u8, building);
+            self.buildings
+                .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.clay() {
-            let slot_id = self.buildings.len() + 1;
+            let slot_id = self.buildings.len() as u8 + 1;
             let building = Building::new(BuildingName::ClayPit).at_level(0)?;
-            self.buildings.insert(slot_id as u8, building);
+            self.buildings
+                .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.iron() {
-            let slot_id = self.buildings.len() + 1;
+            let slot_id = self.buildings.len() as u8 + 1;
             let building = Building::new(BuildingName::IronMine).at_level(0)?;
-            self.buildings.insert(slot_id as u8, building);
+            self.buildings
+                .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.crop() {
-            let slot_id = self.buildings.len() + 1;
+            let slot_id = self.buildings.len() as u8 + 1;
             let building = Building::new(BuildingName::Cropland).at_level(0)?;
-            self.buildings.insert(slot_id as u8, building);
+            self.buildings
+                .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         // Main building level 1
         let main_building = Building::new(BuildingName::MainBuilding);
-        self.buildings
-            .insert(self.buildings.values().len() as u8 + 1, main_building);
+        let slot_id: u8 = self.buildings.len() as u8 + 1;
+        self.buildings.append(&mut vec![VillageBuilding {
+            slot_id,
+            building: main_building,
+        }]);
 
         Ok(())
     }
@@ -333,7 +368,7 @@ impl ProductionBonus {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct StockCapacity {
     warehouse: u32,
     granary: u32,
@@ -383,13 +418,13 @@ mod tests {
         assert_eq!(v.id, valley.id, "different from id of the valley");
 
         // resource fields and main building
-        assert_eq!(v.buildings.values().len(), 19, "number of total buildings");
+        assert_eq!(v.buildings.len(), 19, "number of total buildings");
         let mut woodcutter = 0;
         let mut clay_pit = 0;
         let mut iron_mine = 0;
         let mut cropland = 0;
-        for b in v.buildings.values() {
-            match b.name {
+        for b in v.buildings {
+            match b.building.name {
                 BuildingName::Woodcutter => woodcutter += 1,
                 BuildingName::ClayPit => clay_pit += 1,
                 BuildingName::IronMine => iron_mine += 1,
