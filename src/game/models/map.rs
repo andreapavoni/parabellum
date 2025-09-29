@@ -62,21 +62,6 @@ impl ValleyTopology {
     }
 }
 
-// impl Into<Bson> for ValleyTopology {
-//     fn into(self) -> Bson {
-//         let lumber = self.0 as u32;
-//         let clay = self.1 as u32;
-//         let iron = self.2 as u32;
-//         let crop = self.3 as u32;
-//         bson!({
-//             "lumber": lumber,
-//             "clay": clay,
-//             "iron": iron,
-//             "crop": crop,
-//         })
-//     }
-// }
-
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Position {
     pub x: i32,
@@ -116,37 +101,6 @@ pub enum OasisTopology {
     Crop,
     Crop50,
 }
-
-// impl Into<Bson> for OasisTopology {
-//     fn into(self) -> Bson {
-//         match self {
-//             Self::Lumber => {
-//                 bson!("Lumber")
-//             }
-//             Self::LumberCrop => {
-//                 bson!("LumberCrop")
-//             }
-//             Self::Clay => {
-//                 bson!("Clay")
-//             }
-//             Self::ClayCrop => {
-//                 bson!("ClayCrop")
-//             }
-//             Self::Iron => {
-//                 bson!("Iron")
-//             }
-//             Self::IronCrop => {
-//                 bson!("IronCrop")
-//             }
-//             Self::Crop => {
-//                 bson!("Crop")
-//             }
-//             Self::Crop50 => {
-//                 bson!("Crop50")
-//             }
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Oasis {
@@ -217,19 +171,6 @@ pub enum MapFieldTopology {
     Oasis(OasisTopology),
     Valley(ValleyTopology),
 }
-
-// impl Into<Bson> for MapFieldTopology {
-//     fn into(self) -> Bson {
-//         match self {
-//             Self::Oasis(topology) => {
-//                 bson!(topology)
-//             }
-//             Self::Valley(topology) => {
-//                 bson!(topology)
-//             }
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MapField {
