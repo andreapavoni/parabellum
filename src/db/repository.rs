@@ -16,21 +16,21 @@
 // use diesel::prelude::*;
 // use uuid::Uuid;
 
-use super::connection::DbPool;
+// use super::connection::DbPool;
 // use super::models::{NewPlayer, Player as DbPlayer, Tribe};
 // use super::schema::players::dsl::*;
 // use crate::game::models::Player as DomainPlayer; // Rinomina per chiarezza
 // use crate::repository::Repository;
 
-pub struct DbRepository {
-    pool: DbPool,
-}
+// pub struct DbRepository {
+//     pool: DbPool,
+// }
 
-impl DbRepository {
-    pub fn new(pool: DbPool) -> Self {
-        Self { pool }
-    }
-}
+// impl DbRepository {
+//     pub fn new(pool: DbPool) -> Self {
+//         Self { pool }
+//     }
+// }
 
 // #[async_trait::async_trait]
 // impl Repository for DbRepository {
