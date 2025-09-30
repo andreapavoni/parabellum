@@ -63,8 +63,7 @@ diesel::table! {
         player_id -> Uuid,
         #[max_length = 255]
         name -> Varchar,
-        pos_x -> Int4,
-        pos_y -> Int4,
+        position -> Jsonb,
         buildings -> Jsonb,
         production -> Jsonb,
         stocks -> Jsonb,

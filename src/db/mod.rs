@@ -1,8 +1,11 @@
-pub mod connection;
 pub mod models;
 pub mod repository;
-pub mod schema;
+
+mod connection;
+mod schema;
 mod utils;
 
 #[cfg(test)]
-pub mod test_helpers;
+pub mod test_factories;
+
+pub use connection::{establish_connection_pool, DbPool};

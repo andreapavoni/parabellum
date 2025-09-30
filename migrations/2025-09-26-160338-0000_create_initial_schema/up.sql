@@ -16,8 +16,7 @@ CREATE TABLE villages (
     id SERIAL PRIMARY KEY,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    pos_x INTEGER NOT NULL,
-    pos_y INTEGER NOT NULL,
+    position JSONB NOT NULL,
 
     buildings JSONB NOT NULL,
     production JSONB NOT NULL,
@@ -31,7 +30,7 @@ CREATE TABLE villages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    UNIQUE(pos_x, pos_y)
+    UNIQUE(position)
 );
 
 -- Heroes
