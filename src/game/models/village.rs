@@ -386,36 +386,13 @@ impl Default for StockCapacity {
 
 #[cfg(test)]
 mod tests {
-    use uuid::Uuid;
-
-    use crate::game::models::{
-        buildings::BuildingName,
-        map::{Position, Valley, ValleyTopology},
-        Player, Tribe,
-    };
-
-    use super::Village;
+    use crate::game::{models::buildings::BuildingName, test_factories::*};
 
     #[test]
     fn test_new_village() {
-        let position = Position { x: 10, y: 20 };
-        let valley: Valley = Valley {
-            id: position.to_id(100),
-            position,
-            topology: ValleyTopology(4, 4, 4, 6),
-            player_id: None,
-            village_id: None,
-        };
-
-        let player = Player {
-            id: Uuid::new_v4(),
-            username: "pavonz".to_string(),
-            tribe: Tribe::Roman,
-        };
-        let v = Village::new("Gino".to_string(), &valley, &player, true);
-
-        // has same id of the valley
-        assert_eq!(v.id, valley.id, "different from id of the valley");
+        let v = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
 
         // resource fields and main building
         assert_eq!(v.buildings.len(), 19, "number of total buildings");
@@ -423,12 +400,15 @@ mod tests {
         let mut clay_pit = 0;
         let mut iron_mine = 0;
         let mut cropland = 0;
+        let mut main_building = false;
+
         for b in v.buildings {
             match b.building.name {
                 BuildingName::Woodcutter => woodcutter += 1,
                 BuildingName::ClayPit => clay_pit += 1,
                 BuildingName::IronMine => iron_mine += 1,
                 BuildingName::Cropland => cropland += 1,
+                BuildingName::MainBuilding => main_building = true,
                 _ => (),
             }
         }
@@ -436,6 +416,7 @@ mod tests {
         assert_eq!(clay_pit, 4, "clay pit fields");
         assert_eq!(iron_mine, 4, "iron mine fields");
         assert_eq!(cropland, 6, "cropland fields");
+        assert!(main_building, "main building is not present");
 
         // production
         assert_eq!(v.production.lumber, 8, "lumber production");
