@@ -1,17 +1,18 @@
-use std::sync::Arc;
-
-use anyhow::{Error, Result};
-
 use crate::{
-    command::Command,
-    game::models::{map::Position, village::Village, Player},
-    repository::Repository,
+    game::models::{
+        map::{Position, Valley},
+        village::Village,
+        Player,
+    },
+    repository::{MapRepository, VillageRepository},
 };
+use anyhow::{anyhow, Result};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct FoundVillage {
-    player: Player,
-    position: Position,
+    pub player: Player,
+    pub position: Position,
 }
 
 impl FoundVillage {
@@ -20,18 +21,30 @@ impl FoundVillage {
     }
 }
 
-#[async_trait::async_trait]
-impl Command for FoundVillage {
-    type Output = Village;
+pub struct FoundVillageHandler {
+    village_repo: Arc<dyn VillageRepository>,
+    map_repo: Arc<dyn MapRepository>,
+}
 
-    async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error> {
-        // TODO: get world size from some global config
-        let world_size = 100;
-        let valley = repo
-            .get_valley_by_id(self.position.to_id(world_size))
-            .await?;
+impl FoundVillageHandler {
+    pub fn new(village_repo: Arc<dyn VillageRepository>, map_repo: Arc<dyn MapRepository>) -> Self {
+        Self {
+            village_repo,
+            map_repo,
+        }
+    }
 
-        let village = Village::new("New Village".to_string(), &valley, &self.player, false);
+    pub async fn handle(&self, command: FoundVillage) -> Result<Village> {
+        let village_id: i32 = command.position.to_id(100) as i32;
+
+        let valley = match self.map_repo.get_field_by_id(village_id).await? {
+            Some(map_field) => Valley::try_from(map_field)?,
+            None => return Err(anyhow!("The number of available units is not enough")),
+        };
+
+        let village = Village::new("New Village".to_string(), &valley, &command.player, false);
+
+        // self.repo.save_village(&village).await?;
 
         Ok(village)
     }

@@ -1,18 +1,14 @@
-use std::sync::Arc;
-
-use anyhow::{Error, Result};
-
 use crate::{
-    app::queries::GetUnoccupiedValley,
-    command::Command,
+    app::queries::{GetUnoccupiedValley, GetUnoccupiedValleyHandler},
     game::models::{village::Village, Player},
-    query::Query,
-    repository::Repository,
+    repository::{MapRepository, VillageRepository},
 };
+use anyhow::Result;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct RegisterVillage {
-    player: Player,
+    pub player: Player,
 }
 
 impl RegisterVillage {
@@ -21,13 +17,27 @@ impl RegisterVillage {
     }
 }
 
-#[async_trait::async_trait]
-impl Command for RegisterVillage {
-    type Output = Village;
+pub struct RegisterVillageHandler {
+    village_repo: Arc<dyn VillageRepository>,
+    map_repo: Arc<dyn MapRepository>,
+}
 
-    async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error> {
-        let valley = GetUnoccupiedValley::new(None).run(repo.clone()).await?;
-        let village = Village::new("New Village".to_string(), &valley, &self.player, true);
+impl RegisterVillageHandler {
+    pub fn new(village_repo: Arc<dyn VillageRepository>, map_repo: Arc<dyn MapRepository>) -> Self {
+        Self {
+            village_repo,
+            map_repo,
+        }
+    }
+
+    pub async fn handle(&self, command: RegisterVillage) -> Result<Village> {
+        let query_valley = GetUnoccupiedValley::new(None);
+        let handler_vallery = GetUnoccupiedValleyHandler::new(self.map_repo.clone());
+
+        let valley = handler_vallery.handle(query_valley).await?;
+        let village = Village::new("New Village".to_string(), &valley, &command.player, true);
+
+        // self.repo.save_village(&village).await?;
 
         Ok(village)
     }

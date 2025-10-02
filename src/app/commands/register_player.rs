@@ -1,17 +1,14 @@
-use std::sync::Arc;
-
-use anyhow::{Error, Result};
-
 use crate::{
-    command::Command,
     game::models::{Player, Tribe},
-    repository::Repository,
+    repository::PlayerRepository,
 };
+use anyhow::Result;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct RegisterPlayer {
-    username: String,
-    tribe: Tribe,
+    pub username: String,
+    pub tribe: Tribe,
 }
 
 impl RegisterPlayer {
@@ -20,12 +17,16 @@ impl RegisterPlayer {
     }
 }
 
-#[async_trait::async_trait]
-impl Command for RegisterPlayer {
-    type Output = Player;
+pub struct RegisterPlayerHandler {
+    repo: Arc<dyn PlayerRepository>,
+}
 
-    async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error> {
-        repo.register_player(self.username.clone(), self.tribe.clone())
-            .await
+impl RegisterPlayerHandler {
+    pub fn new(repo: Arc<dyn PlayerRepository>) -> Self {
+        Self { repo }
+    }
+
+    pub async fn handle(&self, command: RegisterPlayer) -> Result<Player> {
+        self.repo.create(command.username, command.tribe).await
     }
 }

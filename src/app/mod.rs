@@ -1,12 +1,3 @@
-pub mod commands;
-pub mod jobs;
-pub mod queries;
-
-use anyhow::{Error, Result};
-use std::sync::Arc;
-
-use crate::{command::Command, query::Query, repository::Repository};
-
 // RegisterPlayer
 // Attack
 // Raid
@@ -27,28 +18,51 @@ use crate::{command::Command, query::Query, repository::Repository};
 // StartTownHallCelebration
 // StartBreweryCelebration
 
+pub mod commands;
+pub mod jobs;
+pub mod queries;
+
+use anyhow::Result;
+use std::sync::Arc;
+
+use crate::{
+    game::models::{map::Valley, village::Village, Player},
+    repository::*,
+};
+use commands::*;
+use queries::*;
+
 pub struct App {
-    repo: Arc<dyn Repository>,
+    player_repo: Arc<dyn PlayerRepository>,
+    village_repo: Arc<dyn VillageRepository>,
+    map_repo: Arc<dyn MapRepository>,
 }
 
 impl App {
-    pub fn new(repo: Arc<dyn Repository>) -> Self {
-        Self { repo }
+    pub fn new(
+        player_repo: Arc<dyn PlayerRepository>,
+        village_repo: Arc<dyn VillageRepository>,
+        map_repo: Arc<dyn MapRepository>,
+    ) -> Self {
+        Self {
+            player_repo,
+            village_repo,
+            map_repo,
+        }
     }
 
-    pub async fn command<C>(&self, cmd: C) -> Result<C::Output, Error>
-    where
-        C: Command + Send + Sync,
-    {
-        cmd.validate()?;
-        cmd.run(self.repo.clone()).await
+    pub async fn register_player(&self, command: RegisterPlayer) -> Result<Player> {
+        let handler = RegisterPlayerHandler::new(self.player_repo.clone());
+        handler.handle(command).await
     }
 
-    pub async fn query<Q>(&self, query: Q) -> Result<Q::Output, Error>
-    where
-        Q: Query + Send + Sync,
-    {
-        query.validate()?;
-        query.run(self.repo.clone()).await
+    pub async fn found_village(&self, command: FoundVillage) -> Result<Village> {
+        let handler = FoundVillageHandler::new(self.village_repo.clone(), self.map_repo.clone());
+        handler.handle(command).await
+    }
+
+    pub async fn get_unoccupied_valley(&self, query: GetUnoccupiedValley) -> Result<Valley> {
+        let handler = GetUnoccupiedValleyHandler::new(self.map_repo.clone());
+        handler.handle(query).await
     }
 }
