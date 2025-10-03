@@ -5,7 +5,7 @@ use parabellum::{
         queries::GetUnoccupiedValley,
         App,
     },
-    db::{establish_connection_pool, PostgresRepository},
+    db::{establish_connection_pool, repository::PostgresRepository},
     game::models::Tribe,
 };
 use std::sync::Arc;

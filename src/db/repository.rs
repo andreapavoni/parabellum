@@ -33,14 +33,22 @@ impl PostgresRepository {
 
 #[async_trait::async_trait]
 impl PlayerRepository for PostgresRepository {
-    async fn create(&self, username: String, tribe: Tribe) -> Result<Player> {}
-    async fn get_by_id(&self, player_id: Uuid) -> Result<Option<Player>> {}
-    async fn get_by_username(&self, username: &str) -> Result<Option<Player>> {}
+    async fn create(&self, _username: String, _tribe: Tribe) -> Result<Player> {
+        unimplemented!()
+    }
+    async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>> {
+        unimplemented!()
+    }
+    async fn get_by_username(&self, _username: &str) -> Result<Option<Player>> {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]
 impl VillageRepository for PostgresRepository {
-    async fn create(&self, village: &Village) -> Result<()> {}
+    async fn create(&self, _village: &Village) -> Result<()> {
+        unimplemented!()
+    }
 
     async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>> {
         let pool = self.pool.clone();
@@ -134,14 +142,22 @@ impl VillageRepository for PostgresRepository {
         Ok(village)
     }
 
-    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>> {}
-    async fn save(&self, village: &Village) -> Result<()> {}
+    async fn list_by_player_id(&self, _player_id: Uuid) -> Result<Vec<Village>> {
+        unimplemented!()
+    }
+    async fn save(&self, _village: &Village) -> Result<()> {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]
 impl MapRepository for PostgresRepository {
-    async fn find_unoccupied_valley(&self, quadrant: &MapQuadrant) -> Result<Valley> {}
-    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>> {}
+    async fn find_unoccupied_valley(&self, _quadrant: &MapQuadrant) -> Result<Valley> {
+        unimplemented!()
+    }
+    async fn get_field_by_id(&self, _id: i32) -> Result<Option<MapField>> {
+        unimplemented!()
+    }
 }
 
 #[async_trait::async_trait]
