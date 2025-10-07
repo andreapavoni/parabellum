@@ -183,6 +183,25 @@ impl Village {
         None
     }
 
+    pub fn get_random_buildings(&self, count: usize) -> Vec<Building> {
+        use rand::seq::SliceRandom;
+        use rand::thread_rng;
+
+        let mut rng = thread_rng();
+        let buildings: Vec<Building> = self
+            .buildings
+            .iter()
+            .map(|vb| vb.building.clone())
+            .collect();
+
+        let sampled_buildings = buildings
+            .choose_multiple(&mut rng, count)
+            .cloned()
+            .collect::<Vec<Building>>();
+
+        sampled_buildings
+    }
+
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
         if let Some(palace) = self.get_building_by_name(BuildingName::Palace) {
             return Some((palace, BuildingName::Palace));

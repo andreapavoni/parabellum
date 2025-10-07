@@ -17,7 +17,7 @@ pub struct Cost {
     pub build_time: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct ResourceGroup(u32, u32, u32, u32);
 

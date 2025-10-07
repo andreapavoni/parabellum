@@ -25,7 +25,7 @@ pub enum UnitGroup {
     Expansion,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum UnitName {
     // --- Romans ---
     Legionnaire,

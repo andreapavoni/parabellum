@@ -4,13 +4,15 @@ use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models as game_models;
-
-use crate::db::models as db_models;
+use crate::{
+    db::{models as db_models, schema::jobs},
+    game::models as game_models,
+    impl_jsonb_for,
+    jobs::JobTask,
+};
 
 use super::schema::{armies, map_fields, players, villages};
 use super::utils::JsonbWrapper;
-use crate::impl_jsonb_for;
 
 impl_jsonb_for!(game_models::map::MapFieldTopology);
 impl_jsonb_for!(game_models::map::Position);
@@ -18,6 +20,7 @@ impl_jsonb_for!(game_models::SmithyUpgrades);
 impl_jsonb_for!(game_models::village::StockCapacity);
 impl_jsonb_for!(Vec<game_models::village::VillageBuilding>);
 impl_jsonb_for!(game_models::village::VillageProduction);
+impl_jsonb_for!(JobTask);
 
 #[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[ExistingTypePath = "crate::db::schema::sql_types::Tribe"]
@@ -104,8 +107,8 @@ pub struct NewVillage<'a> {
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Queryable, Selectable, Identifiable)]
@@ -186,15 +189,75 @@ pub struct NewMapField<'a> {
     pub topology: &'a JsonbWrapper<game_models::map::MapFieldTopology>,
 }
 
+#[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[ExistingTypePath = "crate::db::schema::sql_types::JobStatus"]
+pub enum JobStatus {
+    #[db_rename = "Pending"]
+    Pending,
+    #[db_rename = "Processing"]
+    Processing,
+    #[db_rename = "Completed"]
+    Completed,
+    #[db_rename = "Failed"]
+    Failed,
+}
+
+#[derive(Queryable, QueryableByName, Selectable, Identifiable, Debug, Clone)]
+#[diesel(table_name = jobs)]
+pub struct Job {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub task: JsonbWrapper<JobTask>,
+    pub status: JobStatus,
+    pub completed_at: chrono::DateTime<Utc>,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+impl From<Job> for crate::jobs::Job {
+    fn from(job: Job) -> Self {
+        crate::jobs::Job {
+            id: job.id,
+            player_id: job.player_id,
+            village_id: job.village_id,
+            task: job.task.into(),
+            status: match job.status {
+                JobStatus::Pending => crate::jobs::JobStatus::Pending,
+                JobStatus::Processing => crate::jobs::JobStatus::Processing,
+                JobStatus::Completed => crate::jobs::JobStatus::Completed,
+                JobStatus::Failed => crate::jobs::JobStatus::Failed,
+            },
+            completed_at: job.completed_at,
+            created_at: job.created_at,
+            updated_at: job.updated_at,
+        }
+    }
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = jobs)]
+pub struct NewJob {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub task: JsonbWrapper<JobTask>,
+    pub status: JobStatus,
+    pub completed_at: chrono::DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use rand::Rng;
 
     use super::*;
-    use crate::db::connection::run_test_with_transaction;
-    use crate::db::test_factories::*;
-    use crate::game::models::army::TroopSet;
-    use crate::game::models::map::{MapFieldTopology, OasisTopology, Position};
+    use crate::{
+        db::{connection::run_test_with_transaction, test_factories::*},
+        game::models::{
+            army::TroopSet,
+            map::{MapFieldTopology, OasisTopology, Position},
+        },
+    };
 
     #[test]
     fn test_factories_with_defaults() {

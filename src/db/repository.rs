@@ -1,15 +1,17 @@
 use anyhow::{anyhow, Error, Result};
-use diesel::prelude::*;
+use chrono::{DateTime, Utc};
+use diesel::{prelude::*, sql_types::BigInt};
 use tokio::task;
 use uuid::Uuid;
 
 use crate::{
     db::{
-        models as db_models,
+        models::{self as db_models, JobStatus, NewJob},
         schema::{
             armies::{self},
-            map_fields, players, villages,
+            jobs, map_fields, players, villages,
         },
+        utils::JsonbWrapper,
         DbPool,
     },
     game::models::{
@@ -18,6 +20,7 @@ use crate::{
         village::Village,
         Player, Tribe,
     },
+    jobs::{Job, JobTask},
     repository::*,
 };
 
@@ -54,11 +57,9 @@ impl VillageRepository for PostgresRepository {
         let pool = self.pool.clone();
         let village_id_i32 = village_id_u32 as i32;
 
-        // Eseguiamo il codice sincrono di Diesel in un thread separato
         let village = task::spawn_blocking(move || {
             let mut conn = pool.get()?;
 
-            // --- 1. Carica il Villaggio Base ---
             let db_village: db_models::Village = match villages::table
                 .find(village_id_i32)
                 .first::<db_models::Village>(&mut conn)
@@ -68,7 +69,6 @@ impl VillageRepository for PostgresRepository {
                 None => return Ok::<Option<Village>, Error>(None),
             };
 
-            // --- 2. Carica le Relazioni ---
             let db_player: db_models::Player =
                 players::table.find(db_village.player_id).first(&mut conn)?;
 
@@ -81,7 +81,6 @@ impl VillageRepository for PostgresRepository {
                 .filter(map_fields::village_id.eq(village_id_i32))
                 .load(&mut conn)?;
 
-            // --- 3. Assembla l'Oggetto di Dominio ---
             let tribe: Tribe = db_player.tribe.into();
 
             let mut home_army: Option<Army> = None;
@@ -89,7 +88,7 @@ impl VillageRepository for PostgresRepository {
             let mut deployed_armies = Vec::new();
 
             for db_army in all_armies {
-                let game_army: Army = db_army.into(); // Assumendo impl From<db_models::Army>
+                let game_army: Army = db_army.into();
 
                 if game_army.village_id == village_id_u32
                     && game_army.current_map_field_id == Some(village_id_u32)
@@ -137,7 +136,7 @@ impl VillageRepository for PostgresRepository {
 
             Ok(Some(domain_village))
         })
-        .await??; // Il doppio '?' gestisce l'errore di `spawn_blocking` e quello interno di Diesel
+        .await??;
 
         Ok(village)
     }
@@ -161,7 +160,97 @@ impl MapRepository for PostgresRepository {
 }
 
 #[async_trait::async_trait]
-impl ArmyRepository for PostgresRepository {}
+impl ArmyRepository for PostgresRepository {
+    async fn get_by_id(&self, _army_id: Uuid) -> Result<Option<Army>> {
+        unimplemented!()
+    }
+}
 
 #[async_trait::async_trait]
-impl JobRepository for PostgresRepository {}
+impl JobRepository for PostgresRepository {
+    async fn create(
+        &self,
+        id: Uuid,
+        player_id: Uuid,
+        village_id: i32,
+        task: JobTask,
+        completed_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        let new_job = NewJob {
+            id,
+            player_id,
+            village_id,
+            task: JsonbWrapper(task),
+            status: JobStatus::Pending,
+            completed_at,
+        };
+
+        task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            diesel::insert_into(jobs::table)
+                .values(&new_job)
+                .execute(&mut conn)?;
+            Ok::<(), Error>(())
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>> {
+        let pool = self.pool.clone();
+        let jobs = task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+
+            let raw_sql = r#"
+                UPDATE jobs
+                SET status = 'Processing', updated_at = NOW()
+                WHERE id IN (
+                    SELECT id
+                    FROM jobs
+                    WHERE status = 'Pending' AND completed_at <= NOW()
+                    ORDER BY completed_at
+                    LIMIT $1
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING *;
+            "#;
+
+            let due_jobs = diesel::sql_query(raw_sql)
+                .bind::<BigInt, _>(limit)
+                .load::<crate::db::models::Job>(&mut conn)?;
+
+            Ok::<Vec<crate::db::models::Job>, Error>(due_jobs)
+        })
+        .await??;
+
+        Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
+    }
+
+    async fn mark_as_completed(&self, job_id: Uuid) -> Result<()> {
+        let pool = self.pool.clone();
+        task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            diesel::update(jobs::table.find(job_id))
+                .set(jobs::status.eq(JobStatus::Completed))
+                .execute(&mut conn)?;
+            Ok::<(), Error>(())
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn mark_as_failed(&self, job_id: Uuid, _error_message: &str) -> Result<()> {
+        // Potresti voler aggiungere una colonna `error` alla tabella jobs
+        let pool = self.pool.clone();
+        task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            diesel::update(jobs::table.find(job_id))
+                .set(jobs::status.eq(JobStatus::Failed))
+                .execute(&mut conn)?;
+            Ok::<(), Error>(())
+        })
+        .await??;
+        Ok(())
+    }
+}
