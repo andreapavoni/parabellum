@@ -1,72 +1,79 @@
-use std::sync::Arc;
-
-use anyhow::Result;
-
-use super::Command;
 use crate::{
-    app::events::GameEvent,
-    app::jobs::{Job, JobTask},
-    game::{battle::CataTargets, models::army::Army},
-    repository::Repository,
+    game::models::buildings::BuildingName,
+    jobs::{tasks::AttackTask, Job, JobTask},
+    repository::{JobRepository, VillageRepository},
 };
+use anyhow::{anyhow, Result};
+use std::sync::Arc;
+use uuid::Uuid;
 
+#[derive(Debug, Clone)]
 pub struct AttackCommand {
-    repo: Arc<dyn Repository>,
-    village_id: u32,
-    army: Army,
-    cata_targets: CataTargets,
-    defender_village_id: u32,
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+    pub target_village_id: u32,
+    pub catapult_targets: [BuildingName; 2],
 }
 
-impl AttackCommand {
-    pub fn new(
-        repo: Arc<dyn Repository>,
-        village_id: u32,
-        army: Army,
-        cata_targets: CataTargets,
-        defender_village_id: u32,
-    ) -> Self {
+pub struct AttackCommandHandler {
+    job_repo: Arc<dyn JobRepository>,
+    village_repo: Arc<dyn VillageRepository>,
+}
+
+impl AttackCommandHandler {
+    pub fn new(job_repo: Arc<dyn JobRepository>, village_repo: Arc<dyn VillageRepository>) -> Self {
         Self {
-            repo: repo.clone(),
-            village_id,
-            army,
-            cata_targets,
-            defender_village_id,
+            job_repo,
+            village_repo,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl Command for AttackCommand {
-    async fn run(&self) -> Result<Vec<GameEvent>> {
-        let attacker_village = self.repo.get_village_by_id(self.village_id).await?;
+    pub async fn handle(&self, command: AttackCommand) -> Result<()> {
+        let attacker_village = self
+            .village_repo
+            .get_by_id(command.village_id)
+            .await?
+            .ok_or_else(|| anyhow!("Attacker village not found"))?;
+
+        // TODO: validate attacker army (amount, owner, etc...)
+
         let defender_village = self
-            .repo
-            .get_village_by_id(self.defender_village_id)
-            .await?;
+            .village_repo
+            .get_by_id(command.target_village_id)
+            .await?
+            .ok_or_else(|| anyhow!("Defender village not found"))?;
 
-        let speed = self.army.clone().speed();
-        let time_secs =
-            attacker_village.calculate_travel_time_secs(defender_village.position, speed) as u64;
+        // TODO: fix army speed
+        let speed = 10; // placeholder
+        let travel_time_secs = attacker_village
+            .calculate_travel_time_secs(defender_village.position.clone(), speed)
+            as i64;
 
-        let job = Job::new(
-            attacker_village.player_id.clone(),
-            self.village_id.clone(),
-            time_secs,
-            JobTask::Attack {
-                army: self.army.clone(),
-                cata_targets: self.cata_targets.clone(),
-                village_id: self.defender_village_id.clone(),
-                player_id: defender_village.player_id.clone(),
-            },
+        let attack_payload = AttackTask {
+            army_id: command.army_id,
+            target_village_id: command.target_village_id as i32,
+            target_player_id: defender_village.player_id,
+            catapult_targets: command.catapult_targets,
+        };
+
+        let new_job = Job::new(
+            command.player_id,
+            command.village_id as i32,
+            travel_time_secs,
+            JobTask::Attack(attack_payload),
         );
 
-        Ok(vec![
-            GameEvent::JobEnqueued(job),
-            GameEvent::ArmyDeployed {
-                army: self.army.clone(),
-                village_id: self.village_id.clone(),
-            },
-        ])
+        self.job_repo.add(&new_job).await?;
+
+        println!(
+            "attack job {} will be executed at {}.",
+            new_job.id, new_job.completed_at
+        );
+
+        // TODO: update travelling army status
+        // self.army_repo.set_status(command.army_id, ArmyStatus::Travelling).await?;
+
+        Ok(())
     }
 }

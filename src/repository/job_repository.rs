@@ -1,19 +1,11 @@
-use crate::jobs::{Job, JobTask};
+use crate::jobs::Job;
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait JobRepository: Send + Sync {
     /// Creates a new job on the db.
-    async fn create(
-        &self,
-        id: Uuid,
-        player_id: Uuid,
-        village_id: i32,
-        task: JobTask,
-        completed_at: DateTime<Utc>,
-    ) -> Result<()>;
+    async fn add(&self, job: &Job) -> Result<()>;
 
     /// Finds and locks atomically overdue jobs, setting the status to "Processing".
     /// This prevents several workers getting the  same job.
