@@ -49,6 +49,18 @@ impl From<Tribe> for game_models::Tribe {
     }
 }
 
+impl From<game_models::Tribe> for Tribe {
+    fn from(game_tribe: game_models::Tribe) -> Self {
+        match game_tribe {
+            game_models::Tribe::Roman => Tribe::Roman,
+            game_models::Tribe::Gaul => Tribe::Gaul,
+            game_models::Tribe::Teuton => Tribe::Teuton,
+            game_models::Tribe::Natar => Tribe::Natar,
+            game_models::Tribe::Nature => Tribe::Nature,
+        }
+    }
+}
+
 #[derive(Debug, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = players)]
 pub struct Player {
@@ -259,101 +271,110 @@ mod tests {
         },
     };
 
-    #[test]
-    fn test_factories_with_defaults() {
+    #[tokio::test]
+    async fn test_factories_with_defaults() {
         run_test_with_transaction(|conn| {
-            let player = player_factory(conn, Default::default());
-            assert!(player.username.starts_with("user_"));
-            assert_eq!(player.tribe, Tribe::Roman);
+            // Wrap the async block in Box::pin()
+            Box::pin(async move {
+                let player = player_factory(conn, Default::default()).await;
+                assert!(player.username.starts_with("user_"));
+                assert_eq!(player.tribe, Tribe::Roman);
 
-            let village = village_factory(conn, Default::default());
-            assert_eq!(village.name, "Factory Village");
+                let village = village_factory(conn, Default::default()).await;
+                assert_eq!(village.name, "Factory Village");
 
-            let army = army_factory(conn, Default::default());
-            assert_eq!(army.units.0[0], 10);
+                let army = army_factory(conn, Default::default()).await;
+                assert_eq!(army.units.0[0], 10);
 
-            let field_default = map_field_factory(conn, Default::default());
-            assert!(field_default.id != 0);
+                let field_default = map_field_factory(conn, Default::default()).await;
+                assert!(field_default.id != 0);
 
-            Ok(())
-        });
+                Ok(())
+            })
+        })
+        .await;
     }
 
     #[test]
     fn test_factories_with_overrides() {
-        run_test_with_transaction(|conn| {
-            let player_id = Uuid::new_v4();
+        let _ = run_test_with_transaction(|conn| {
+            Box::pin(async move {
+                let player_id = Uuid::new_v4();
 
-            let player = player_factory(
-                conn,
-                PlayerFactoryOptions {
-                    id: Some(player_id),
-                    username: Some("Dino"),
-                    tribe: Some(Tribe::Gaul),
-                },
-            );
-            assert_eq!(player.id, player_id);
-            assert_eq!(player.username, "Dino");
-            assert_eq!(player.tribe, Tribe::Gaul);
+                let player = player_factory(
+                    conn,
+                    PlayerFactoryOptions {
+                        id: Some(player_id),
+                        username: Some("Dino"),
+                        tribe: Some(Tribe::Gaul),
+                    },
+                )
+                .await;
+                assert_eq!(player.id, player_id);
+                assert_eq!(player.username, "Dino");
+                assert_eq!(player.tribe, Tribe::Gaul);
 
-            let world_size = 100;
-            let position = &Position {
-                x: rand::thread_rng().gen_range(-world_size..world_size),
-                y: rand::thread_rng().gen_range(-world_size..world_size),
-            };
+                let world_size = 100;
+                let position = &Position {
+                    x: rand::thread_rng().gen_range(-world_size..world_size),
+                    y: rand::thread_rng().gen_range(-world_size..world_size),
+                };
 
-            let village = village_factory(
-                conn,
-                VillageFactoryOptions {
-                    player_id: Some(player.id),
-                    name: Some("Dino's Village"),
-                    position: Some(position),
-                    buildings: Some(vec![]),
-                    production: Some(Default::default()),
-                    stocks: Some(Default::default()),
-                    smithy_upgrades: Some(Default::default()),
-                    population: 2,
-                    loyalty: 100,
-                    is_capital: true,
-                },
-            );
-            assert_eq!(village.player_id, player.id);
-            assert_eq!(village.name, "Dino's Village");
+                let village = village_factory(
+                    conn,
+                    VillageFactoryOptions {
+                        player_id: Some(player.id),
+                        name: Some("Dino's Village"),
+                        position: Some(position),
+                        buildings: Some(vec![]),
+                        production: Some(Default::default()),
+                        stocks: Some(Default::default()),
+                        smithy_upgrades: Some(Default::default()),
+                        population: 2,
+                        loyalty: 100,
+                        is_capital: true,
+                    },
+                )
+                .await;
+                assert_eq!(village.player_id, player.id);
+                assert_eq!(village.name, "Dino's Village");
 
-            let units: TroopSet = [100, 100, 0, 0, 0, 0, 0, 0, 0, 0];
-            let army = army_factory(
-                conn,
-                ArmyFactoryOptions {
-                    id: Some(Uuid::new_v4()),
-                    player_id: Some(player.id),
-                    village_id: Some(village.id),
-                    current_map_field_id: Some(village.id),
-                    units: Some(units),
-                    hero_id: None,
-                    smithy: Some(Default::default()),
-                    tribe: Some(player.tribe),
-                },
-            );
-            assert_eq!(army.player_id, player.id);
-            assert_eq!(army.village_id, village.id);
-            assert_eq!(army.units.0, units);
+                let units: TroopSet = [100, 100, 0, 0, 0, 0, 0, 0, 0, 0];
+                let army = army_factory(
+                    conn,
+                    ArmyFactoryOptions {
+                        id: Some(Uuid::new_v4()),
+                        player_id: Some(player.id),
+                        village_id: Some(village.id),
+                        current_map_field_id: Some(village.id),
+                        units: Some(units),
+                        hero_id: None,
+                        smithy: Some(Default::default()),
+                        tribe: Some(player.tribe),
+                    },
+                )
+                .await;
+                assert_eq!(army.player_id, player.id);
+                assert_eq!(army.village_id, village.id);
+                assert_eq!(army.units.0, units);
 
-            let topology = MapFieldTopology::Oasis(OasisTopology::Crop50);
+                let topology = MapFieldTopology::Oasis(OasisTopology::Crop50);
 
-            let field_custom = map_field_factory(
-                conn,
-                MapFieldFactoryOptions {
-                    position: Some(position.clone()),
-                    topology: Some(topology.clone()),
-                    village_id: Some(village.id),
-                    player_id: Some(player.id),
-                },
-            );
+                let field_custom = map_field_factory(
+                    conn,
+                    MapFieldFactoryOptions {
+                        position: Some(position.clone()),
+                        topology: Some(topology.clone()),
+                        village_id: Some(village.id),
+                        player_id: Some(player.id),
+                    },
+                )
+                .await;
+                assert_eq!(field_custom.position.0, *position);
+                assert_eq!(field_custom.topology.0, topology);
 
-            assert_eq!(field_custom.position.0, *position);
-            assert_eq!(field_custom.topology.0, topology);
-
-            Ok(())
+                Ok(())
+            })
         });
     }
 }
