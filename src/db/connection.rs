@@ -1,7 +1,10 @@
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
-    AsyncConnection, AsyncPgConnection,
+    AsyncPgConnection,
 };
+
+#[allow(unused_imports)]
+use diesel_async::AsyncConnection;
 use dotenvy::dotenv;
 use std::env;
 #[cfg(test)]
