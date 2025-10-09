@@ -131,7 +131,7 @@ impl Battle {
         // ====================================================================
 
         // 2.1 Total attack power
-        let total_attack_power = total_attacker_infantry_points + total_attacker_cavalry_points;
+        let total_attack_power = 1 + total_attacker_infantry_points + total_attacker_cavalry_points;
 
         // 2.2: Total defense power
         let infantry_ratio = total_attacker_infantry_points / total_attack_power;

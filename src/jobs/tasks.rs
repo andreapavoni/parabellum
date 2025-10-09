@@ -7,11 +7,16 @@ use crate::game::models::{army::UnitName, buildings::BuildingName, ResourceGroup
 pub struct ArmyReturnTask {
     pub army_id: Uuid,
     pub resources: ResourceGroup,
+    pub destination_village_id: i32,
+    pub destination_player_id: Uuid,
+    pub from_village_id: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttackTask {
     pub army_id: Uuid,
+    pub attacker_village_id: i32,
+    pub attacker_player_id: Uuid,
     pub target_village_id: i32,
     pub target_player_id: Uuid,
     pub catapult_targets: [BuildingName; 2],

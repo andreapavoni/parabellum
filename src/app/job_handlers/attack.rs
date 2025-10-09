@@ -84,15 +84,22 @@ impl JobHandler for AttackJobHandler {
             as i64;
 
         // Creates army return payload
+        let player_id = attacker_village.clone().player_id;
+        let village_id = attacker_village.id as i32;
+        let defender_village_id = defender_village.id as i32;
+
         let return_payload = ArmyReturnTask {
             army_id: self.payload.army_id,
             // TODO: fix loot from battle
             resources: ResourceGroup::new(0, 0, 0, 0),
+            destination_player_id: player_id,
+            destination_village_id: village_id,
+            from_village_id: defender_village_id,
         };
 
         let return_job = Job::new(
-            attacker_village.clone().player_id,
-            attacker_village.id as i32,
+            player_id,
+            village_id,
             return_travel_time,
             JobTask::ArmyReturn(return_payload),
         );

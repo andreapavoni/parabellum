@@ -61,7 +61,7 @@ impl From<game_models::Tribe> for Tribe {
     }
 }
 
-#[derive(Debug, Queryable, Selectable, Identifiable)]
+#[derive(Debug, Queryable, Selectable, Identifiable, Clone)]
 #[diesel(table_name = players)]
 pub struct Player {
     pub id: Uuid,

@@ -52,6 +52,8 @@ impl AttackCommandHandler {
 
         let attack_payload = AttackTask {
             army_id: command.army_id,
+            attacker_village_id: attacker_village.id as i32,
+            attacker_player_id: command.player_id,
             target_village_id: command.target_village_id as i32,
             target_player_id: defender_village.player_id,
             catapult_targets: command.catapult_targets,
@@ -63,7 +65,6 @@ impl AttackCommandHandler {
             travel_time_secs,
             JobTask::Attack(attack_payload),
         );
-
         self.job_repo.add(&new_job).await?;
 
         println!(

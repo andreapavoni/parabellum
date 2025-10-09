@@ -27,6 +27,18 @@ pub struct Valley {
     pub village_id: Option<u32>,
 }
 
+impl Valley {
+    pub fn new(position: Position, topology: ValleyTopology) -> Self {
+        Self {
+            id: position.to_id(100),
+            position,
+            topology,
+            player_id: None,
+            village_id: None,
+        }
+    }
+}
+
 impl TryFrom<MapField> for Valley {
     type Error = anyhow::Error;
 

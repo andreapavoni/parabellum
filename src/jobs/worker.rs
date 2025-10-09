@@ -7,7 +7,7 @@ use crate::{
     app::job_handlers::attack::AttackJobHandler,
     jobs::{
         handler::{JobHandler, JobHandlerContext},
-        JobTask,
+        Job, JobTask,
     },
     repository::{ArmyRepository, JobRepository, VillageRepository},
 };
@@ -46,18 +46,24 @@ impl JobWorker {
         });
     }
 
-    async fn process_due_jobs(&self) -> Result<()> {
+    pub async fn process_due_jobs(&self) -> Result<()> {
         let due_jobs = self.context.job_repo.find_and_lock_due_jobs(10).await?;
-        if due_jobs.is_empty() {
+        self.process_jobs(&due_jobs).await
+    }
+
+    pub async fn process_jobs(&self, jobs: &Vec<Job>) -> Result<()> {
+        println!("Got {} jobs to be executed.", jobs.len());
+
+        if jobs.is_empty() {
+            println!("No jobs to process");
             return Ok(());
         }
-        println!("Found {} jobs to be executed.", due_jobs.len());
 
-        for job in due_jobs {
+        for job in jobs {
             let job_id = job.id;
 
             // --- Dispatch ---
-            let handler: Box<dyn JobHandler> = match job.task {
+            let handler: Box<dyn JobHandler> = match job.task.clone() {
                 JobTask::Attack(payload) => Box::new(AttackJobHandler::new(payload)),
                 // JobTask::BuildingUpgrade { ... } => Box::new(BuildingUpgradeHandler::new(...)),
                 _ => {

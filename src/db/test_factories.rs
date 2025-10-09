@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::game::models::{
     army::TroopSet,
-    map::{MapFieldTopology, Position, ValleyTopology},
-    village::{StockCapacity, VillageBuilding, VillageProduction},
+    map::{MapFieldTopology, Position, Valley, ValleyTopology},
+    village::{self, StockCapacity, VillageBuilding, VillageProduction},
     SmithyUpgrades,
 };
 
@@ -52,19 +52,6 @@ pub struct MapFieldFactoryOptions {
     pub topology: Option<MapFieldTopology>,
 }
 
-// pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) -> Player {
-//     let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
-//     let new_player = NewPlayer {
-//         id: options.id.unwrap_or(Uuid::new_v4()),
-//         username: options.username.unwrap_or(&default_username),
-//         tribe: options.tribe.unwrap_or(Tribe::Roman),
-//     };
-
-//     diesel::insert_into(players::table)
-//         .values(&new_player)
-//         .get_result(conn)
-//         .expect("Failed to create player with factory")
-// }
 pub async fn player_factory(
     conn: &mut AsyncPgConnection,
     options: PlayerFactoryOptions<'_>,
@@ -88,13 +75,11 @@ pub async fn village_factory(
     options: VillageFactoryOptions<'_>,
 ) -> Village {
     let world_size = 100;
+    let tmp_player = player_factory(conn, Default::default()).await;
 
-    let owner_id = match options.player_id {
+    let player_id = match options.player_id {
         Some(id) => id,
-        None => {
-            let player = player_factory(conn, Default::default()).await;
-            player.id
-        }
+        None => tmp_player.id,
     };
 
     let position = match options.position {
@@ -105,23 +90,28 @@ pub async fn village_factory(
         },
     };
 
-    let village_id = position.clone().to_id(world_size) as i32;
+    let valley = Valley::new(position.clone(), ValleyTopology(4, 4, 4, 6));
+    let village = village::Village::new(
+        options.name.unwrap_or("Factory Village").to_string(),
+        &valley,
+        &tmp_player.clone().into(),
+        true,
+    );
 
     let new_village = NewVillage {
-        id: village_id,
-        player_id: owner_id,
-        name: options.name.unwrap_or("Factory Village"),
+        id: village.id as i32,
+        player_id: player_id,
+        name: village.name.as_str(),
         position: JsonbWrapper(position.clone()),
-
-        buildings: JsonbWrapper(vec![]),
-        production: JsonbWrapper(Default::default()),
-        stocks: JsonbWrapper(Default::default()),
-        smithy_upgrades: JsonbWrapper([0; 10]),
-        population: 10,
-        loyalty: 100,
-        is_capital: false,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        buildings: JsonbWrapper(village.buildings),
+        production: JsonbWrapper(village.production),
+        stocks: JsonbWrapper(village.stocks),
+        smithy_upgrades: JsonbWrapper(village.smithy),
+        population: village.population as i32,
+        loyalty: village.loyalty as i16,
+        is_capital: village.is_capital,
+        created_at: village.updated_at,
+        updated_at: village.updated_at,
     };
 
     diesel::insert_into(villages::table)
