@@ -5,14 +5,14 @@ CREATE TYPE tribe AS ENUM ('Roman', 'Gaul', 'Teuton', 'Natar', 'Nature');
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Players
-CREATE TABLE IF NOT EXISTS players (
+CREATE TABLE players (
     id UUID PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     tribe tribe NOT NULL
 );
 
 -- Villages
-CREATE TABLE IF NOT EXISTS villages (
+CREATE TABLE villages (
     id SERIAL PRIMARY KEY,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -57,6 +57,17 @@ CREATE TABLE armies (
     smithy JSONB NOT NULL,
     tribe Tribe NOT NULL,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE
+);
+
+-- Armies
+CREATE TABLE map_fields (
+    id INTEGER PRIMARY KEY,
+    village_id INTEGER REFERENCES villages(id),
+    player_id UUID REFERENCES players(id),
+    position JSONB NOT NULL,
+    topology JSONB NOT NULL,
+
+    UNIQUE(position)
 );
 
 -- Trigger to automatically update `updated_at`

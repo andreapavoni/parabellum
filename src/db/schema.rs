@@ -36,6 +36,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    map_fields (id) {
+        id -> Int4,
+        village_id -> Nullable<Int4>,
+        player_id -> Nullable<Uuid>,
+        position -> Jsonb,
+        topology -> Jsonb,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::Tribe;
 
@@ -71,6 +81,8 @@ diesel::joinable!(armies -> heroes (hero_id));
 diesel::joinable!(armies -> players (player_id));
 diesel::joinable!(armies -> villages (village_id));
 diesel::joinable!(heroes -> players (player_id));
+diesel::joinable!(map_fields -> players (player_id));
+diesel::joinable!(map_fields -> villages (village_id));
 diesel::joinable!(villages -> players (player_id));
 
-diesel::allow_tables_to_appear_in_same_query!(armies, heroes, players, villages,);
+diesel::allow_tables_to_appear_in_same_query!(armies, heroes, map_fields, players, villages,);
