@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::{Error, Result};
 use parabellum::{
-    app::{commands::register_player::RegisterPlayer, App},
+    app::{commands::RegisterPlayer, App},
     db::repository::Repository,
     game::models::Tribe,
 };
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Error> {
 
     let app = App::new(db.clone());
 
-    app.command(RegisterPlayer::new("zio".to_string(), Tribe::Gaul))
+    app.command(RegisterPlayer::new("pavonz".to_string(), Tribe::Roman))
         .await?;
 
     Ok(())
