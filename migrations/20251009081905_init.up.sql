@@ -1,3 +1,4 @@
+-- Add up migration script here
 -- ENUM for tribes
 CREATE TYPE tribe AS ENUM ('Roman', 'Gaul', 'Teuton', 'Natar', 'Nature');
 
@@ -54,7 +55,7 @@ CREATE TABLE armies (
     hero_id UUID REFERENCES heroes(id) ON DELETE SET NULL,
     units JSONB NOT NULL,
     smithy JSONB NOT NULL,
-    tribe Tribe NOT NULL,
+    tribe tribe NOT NULL,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE
 );
 

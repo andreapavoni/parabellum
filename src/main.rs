@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let db_pool = establish_connection_pool();
+    let db_pool = establish_connection_pool().await?;
     let repo = Arc::new(PostgresRepository::new(db_pool));
     let config = Arc::new(parabellum::config::Config::from_env());
 
@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
 
     println!("App initialized. Executing a use case");
 
-    let register_player_cmd = RegisterPlayer::new("pavonz".to_string(), Tribe::Roman);
+    let register_player_cmd = RegisterPlayer::new(None, "pavonz".to_string(), Tribe::Roman);
     let player = match app.register_player(register_player_cmd).await {
         Ok(p) => {
             println!("Player  '{}' successfully registered!", p.username);

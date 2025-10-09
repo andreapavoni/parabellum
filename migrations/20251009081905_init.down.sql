@@ -1,3 +1,4 @@
+-- Add down migration script here
 -- This file should undo anything in `up.sql`
 DROP TRIGGER IF EXISTS set_timestamp ON villages;
 DROP FUNCTION IF EXISTS trigger_set_timestamp();

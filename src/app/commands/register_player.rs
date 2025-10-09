@@ -4,16 +4,22 @@ use crate::{
 };
 use anyhow::Result;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct RegisterPlayer {
+    pub id: Uuid,
     pub username: String,
     pub tribe: Tribe,
 }
 
 impl RegisterPlayer {
-    pub fn new(username: String, tribe: Tribe) -> Self {
-        Self { username, tribe }
+    pub fn new(id: Option<Uuid>, username: String, tribe: Tribe) -> Self {
+        Self {
+            id: id.unwrap_or(Uuid::new_v4()),
+            username,
+            tribe,
+        }
     }
 }
 
@@ -27,7 +33,9 @@ impl RegisterPlayerHandler {
     }
 
     pub async fn handle(&self, command: RegisterPlayer) -> Result<Player> {
-        self.repo.create(command.username, command.tribe).await
+        self.repo
+            .create(command.id, command.username, command.tribe)
+            .await
     }
 }
 
@@ -48,9 +56,9 @@ mod tests {
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {
-        async fn create(&self, username: String, tribe: Tribe) -> Result<Player> {
+        async fn create(&self, id: Uuid, username: String, tribe: Tribe) -> Result<Player> {
             let player = Player {
-                id: Uuid::new_v4(),
+                id: id,
                 username,
                 tribe,
             };
@@ -70,7 +78,7 @@ mod tests {
     async fn test_register_player_handler() {
         let mock_repo = Arc::new(MockPlayerRepository::default());
         let handler = RegisterPlayerHandler::new(mock_repo.clone());
-        let command = RegisterPlayer::new("test_user".to_string(), Tribe::Roman);
+        let command = RegisterPlayer::new(None, "test_user".to_string(), Tribe::Roman);
 
         let result = handler.handle(command).await.unwrap();
         let created_player = mock_repo.created_player.lock().unwrap();

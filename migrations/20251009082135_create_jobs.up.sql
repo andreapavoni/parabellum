@@ -1,3 +1,4 @@
+-- Add up migration script here
 -- Enum for job status
 CREATE TYPE job_status AS ENUM ('Pending', 'Processing', 'Completed', 'Failed');
 

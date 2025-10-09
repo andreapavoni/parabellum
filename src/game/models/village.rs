@@ -405,7 +405,10 @@ impl Default for StockCapacity {
 
 #[cfg(test)]
 mod tests {
-    use crate::game::{models::buildings::BuildingName, test_factories::*};
+    use crate::game::{
+        models::buildings::BuildingName,
+        test_factories::{village_factory, VillageFactoryOptions},
+    };
 
     #[test]
     fn test_new_village() {
