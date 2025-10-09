@@ -14,7 +14,7 @@ use super::{
 // TODO: add standalone rally point? Not yet
 // TODO: add standalone wall? Not yet
 // TODO: track reinforcements to other villages? -> better to have a table for armies
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Village {
     pub id: u32,
     pub name: String,

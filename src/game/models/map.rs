@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+use bson::{bson, Bson};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -15,7 +17,7 @@ pub enum Quadrant {
     WestNorth,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Valley {
     pub id: u32,
     pub position: Position,
@@ -25,7 +27,7 @@ pub struct Valley {
 }
 
 impl TryFrom<MapField> for Valley {
-    type Error = &'static str;
+    type Error = anyhow::Error;
 
     fn try_from(value: MapField) -> Result<Self, Self::Error> {
         match value.topology {
@@ -36,7 +38,7 @@ impl TryFrom<MapField> for Valley {
                 position: value.position,
                 topology,
             }),
-            _ => Err("This map field is not a Valley"),
+            _ => Err(anyhow!("This map field is not a Valley")),
         }
     }
 }
@@ -56,6 +58,21 @@ impl ValleyTopology {
     }
     pub fn crop(&self) -> u8 {
         self.3
+    }
+}
+
+impl Into<Bson> for ValleyTopology {
+    fn into(self) -> Bson {
+        let lumber = self.0 as u32;
+        let clay = self.1 as u32;
+        let iron = self.2 as u32;
+        let crop = self.3 as u32;
+        bson!({
+            "lumber": lumber,
+            "clay": clay,
+            "iron": iron,
+            "crop": crop,
+        })
     }
 }
 
@@ -97,6 +114,37 @@ pub enum OasisTopology {
     IronCrop,
     Crop,
     Crop50,
+}
+
+impl Into<Bson> for OasisTopology {
+    fn into(self) -> Bson {
+        match self {
+            Self::Lumber => {
+                bson!("Lumber")
+            }
+            Self::LumberCrop => {
+                bson!("LumberCrop")
+            }
+            Self::Clay => {
+                bson!("Clay")
+            }
+            Self::ClayCrop => {
+                bson!("ClayCrop")
+            }
+            Self::Iron => {
+                bson!("Iron")
+            }
+            Self::IronCrop => {
+                bson!("IronCrop")
+            }
+            Self::Crop => {
+                bson!("Crop")
+            }
+            Self::Crop50 => {
+                bson!("Crop50")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -145,7 +193,7 @@ impl Oasis {
 }
 
 impl TryFrom<MapField> for Oasis {
-    type Error = &'static str;
+    type Error = anyhow::Error;
 
     fn try_from(value: MapField) -> Result<Self, Self::Error> {
         match value.topology {
@@ -156,7 +204,7 @@ impl TryFrom<MapField> for Oasis {
                 position: value.position,
                 topology,
             }),
-            _ => Err("This map field is not an Oasis"),
+            _ => Err(anyhow!("This map field is not an Oasis")),
         }
     }
 }
@@ -165,6 +213,19 @@ impl TryFrom<MapField> for Oasis {
 pub enum MapFieldTopology {
     Oasis(OasisTopology),
     Valley(ValleyTopology),
+}
+
+impl Into<Bson> for MapFieldTopology {
+    fn into(self) -> Bson {
+        match self {
+            Self::Oasis(topology) => {
+                bson!(topology)
+            }
+            Self::Valley(topology) => {
+                bson!(topology)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

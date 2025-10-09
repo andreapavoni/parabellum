@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use uuid::Uuid;
 
 use crate::game::{
@@ -28,7 +28,7 @@ impl Job {
     pub fn new(player_id: Uuid, village_id: u32, duration: u64, task: JobTask) -> Self {
         let id = Uuid::new_v4();
 
-        let completed_at = NaiveDateTime::now() + Duration::new(duration, 0);
+        let completed_at = Utc::now().naive_utc() + Duration::new(duration, 0);
 
         Self {
             id,
