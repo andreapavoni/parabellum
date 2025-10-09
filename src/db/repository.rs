@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use diesel::{
     dsl::sql,
     prelude::*,
@@ -131,13 +131,19 @@ impl VillageRepository for PostgresRepository {
             name: db_village.name,
             player_id: db_village.player_id,
             position: db_village.position.into(),
-            tribe,
+            tribe: tribe.clone(),
             buildings: db_village.buildings.into(),
             oases,
             population: db_village.population as u32,
-            army: home_army.ok_or_else(|| {
-                anyhow!("Il villaggio {} non ha un'armata di casa", village_id_i32)
-            })?,
+            army: home_army.unwrap_or(Army::new(
+                db_village.id as u32,
+                Some(db_village.id as u32),
+                db_village.player_id,
+                tribe,
+                [0; 10],
+                db_village.smithy_upgrades.clone().into(),
+                None,
+            )),
             reinforcements,
             deployed_armies,
             loyalty: db_village.loyalty as u8,
@@ -238,6 +244,32 @@ impl JobRepository for PostgresRepository {
         Ok(())
     }
 
+    async fn get_by_id(&self, job_id: Uuid) -> Result<Option<Job>> {
+        let mut conn = self.pool.get().await?;
+
+        let job = jobs::table
+            .find(job_id)
+            .first::<db_models::Job>(&mut conn)
+            .await?;
+
+        Ok(Some(job.into()))
+    }
+
+    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>> {
+        let mut conn = self.pool.get().await?;
+
+        let jobs = jobs::table
+            .filter(jobs::player_id.eq(player_id))
+            .filter(jobs::status.eq_any(vec![JobStatus::Pending, JobStatus::Processing]))
+            .order(jobs::completed_at.asc())
+            .load::<db_models::Job>(&mut conn)
+            .await?;
+
+        println!("--------------> JOBS BY PLAYER ID: {:?}", jobs);
+
+        Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
+    }
+
     async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>> {
         let mut conn = self.pool.get().await?;
 
@@ -257,7 +289,7 @@ impl JobRepository for PostgresRepository {
 
         let due_jobs = diesel::sql_query(raw_sql)
             .bind::<BigInt, _>(limit)
-            .load::<crate::db::models::Job>(&mut conn)
+            .load::<db_models::Job>(&mut conn)
             .await?;
 
         Ok(due_jobs.into_iter().map(|db_job| db_job.into()).collect())

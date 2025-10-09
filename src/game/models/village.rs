@@ -244,7 +244,7 @@ impl Village {
 
     pub fn calculate_travel_time_secs(&self, position: Position, speed: u8) -> u32 {
         let distance = self.position.distance(&position, 100);
-        (distance as f64 / speed as f64).floor() as u32
+        (distance as f64 / speed as f64 / 3600.0).floor() as u32
     }
     // Updates the village stats (population, production, bonuses from buildings and oases, etc).
     fn update_state(&mut self) {

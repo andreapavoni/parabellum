@@ -16,7 +16,6 @@ pub fn establish_connection_pool() -> DbPool {
     init_connection_pool("DATABASE_URL")
 }
 
-#[cfg(test)]
 pub fn establish_test_connection_pool() -> DbPool {
     init_connection_pool("TEST_DATABASE_URL")
 }

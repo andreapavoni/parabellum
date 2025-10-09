@@ -34,7 +34,7 @@ impl Job {
         }
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobStatus {
     Pending,
     Processing,
