@@ -13,9 +13,9 @@ pub const WORLD_MAX_SIZE: i32 = 100;
 #[derive(Debug, Clone)]
 pub enum MapQuadrant {
     NorthEast,
-    EastSouth,
+    SouthEast,
     SouthWest,
-    WestNorth,
+    NorthWest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use diesel::{
     dsl::sql,
     prelude::*,
-    sql_types::{BigInt, Bool, Jsonb, Text},
+    sql_types::{BigInt, Bool, Text},
 };
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
@@ -162,20 +162,35 @@ impl VillageRepository for PostgresRepository {
 
 #[async_trait::async_trait]
 impl MapRepository for PostgresRepository {
-    async fn find_unoccupied_valley(&self, _quadrant: &MapQuadrant) -> Result<Valley> {
+    async fn find_unoccupied_valley(&self, quadrant: &MapQuadrant) -> Result<Valley> {
         let mut conn = self.pool.get().await?;
 
-        // This query is simplified. We are just picking a random valley
-        // that is not occupied. A real implementation would consider quadrants.
-        let random_unoccupied_field: db_models::MapField = map_fields::table
+        // Start building the query
+        let mut query = map_fields::table
             .filter(map_fields::village_id.is_null())
-            // Specify the return type of the sql fragment as Bool
             .filter(sql::<Bool>(r#"topology ? 'Valley'"#))
             .order_by(sql::<Text>("RANDOM()"))
             .limit(1)
-            .get_result(&mut conn)
-            .await?;
+            .into_boxed(); // Use into_boxed() to allow modifying the query
 
+        // Add filters based on the quadrant
+        // We query the JSONB field, cast the value to integer, and then compare.
+        query = match quadrant {
+            MapQuadrant::NorthEast => query
+                .filter(sql::<Bool>("(position->>'x')::int > 0"))
+                .filter(sql::<Bool>("(position->>'y')::int > 0")),
+            MapQuadrant::SouthEast => query
+                .filter(sql::<Bool>("(position->>'x')::int > 0"))
+                .filter(sql::<Bool>("(position->>'y')::int < 0")),
+            MapQuadrant::SouthWest => query
+                .filter(sql::<Bool>("(position->>'x')::int < 0"))
+                .filter(sql::<Bool>("(position->>'y')::int < 0")),
+            MapQuadrant::NorthWest => query
+                .filter(sql::<Bool>("(position->>'x')::int < 0"))
+                .filter(sql::<Bool>("(position->>'y')::int > 0")),
+        };
+
+        let random_unoccupied_field: db_models::MapField = query.get_result(&mut conn).await?;
         let game_map_field: MapField = random_unoccupied_field.into();
         let valley = Valley::try_from(game_map_field)?;
 
