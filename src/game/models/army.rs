@@ -109,9 +109,10 @@ type TribeUnits = [Unit; 10];
 
 pub type TroopSet = [u32; 10];
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Army {
     pub village_id: u32,
+    pub current_map_field_id: Option<u32>, // this army could have been deployed in some other Village or Oasis
     pub player_id: Uuid,
     pub tribe: Tribe,
     pub units: TroopSet,
@@ -123,6 +124,7 @@ pub struct Army {
 impl Army {
     pub fn new(
         village_id: u32,
+        current_map_field_id: Option<u32>,
         player_id: Uuid,
         tribe: Tribe,
         units: TroopSet,
@@ -136,6 +138,7 @@ impl Army {
             units,
             smithy,
             hero,
+            current_map_field_id,
         }
     }
 

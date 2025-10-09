@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Hero {
     pub player_id: Uuid,
-    pub health: f32,
+    pub health: u16,
     pub experience: u32,
     /// Punti abilità investiti in attacco.
     pub attack_points: u32,
     /// Punti abilità investiti in difesa.
     pub defense_points: u32,
     /// Bonus offensivo percentuale (es. 0.1 per 10%).
-    pub off_bonus: f64,
+    pub off_bonus: u16,
     /// Bonus difensivo percentuale (es. 0.1 per 10%).
-    pub def_bonus: f64,
+    pub def_bonus: u16,
 }
 
 impl Hero {

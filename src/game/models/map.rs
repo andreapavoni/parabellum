@@ -4,6 +4,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::game::models::army::Army;
+
 use super::village::ProductionBonus;
 
 // FIXME: use config
@@ -154,6 +156,7 @@ pub struct Oasis {
     pub village_id: Option<u32>,
     pub position: Position,
     pub topology: OasisTopology,
+    pub reinforcements: Vec<Army>,
 }
 
 impl Oasis {
@@ -203,6 +206,7 @@ impl TryFrom<MapField> for Oasis {
                 village_id: value.village_id,
                 position: value.position,
                 topology,
+                reinforcements: vec![],
             }),
             _ => Err(anyhow!("This map field is not an Oasis")),
         }

@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::f64;
 
-use crate::game::models::{army::Army, buildings::Building, village::Village, Tribe};
+use crate::game::models::{army::Army, buildings::Building, village::Village};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum AttackType {
@@ -13,17 +13,18 @@ pub enum AttackType {
 // Represents the outcome of a battle
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BattleResult {
-    // ... altri dati come salute eroe persa, etc.
+    // ... more data like hero health, etc.
     pub attacker_loss_percentage: f64,
     pub defender_loss_percentage: f64,
     pub wall_level: u8,
-    pub buildings_damages: [u8; 2], // Danni agli edifici
+    pub buildings_damages: [u8; 2], // damaged buildings
     pub bounty: u32,
+    pub loyalty: u16,
 }
 
 pub struct ScoutBattleResult {
-    // Indica se la presenza di scout difensori ha "rilevato" l'attacco.
-    // Se true, il difensore riceve un report dell'attacco.
+    // Indicates if defenders has detected the attack.
+    // If true, defender will see a report as well.
     pub was_detected: bool,
     pub attacker_loss_percentage: f64,
 }
@@ -132,7 +133,7 @@ impl Battle {
         // 2.1 Total attack power
         let total_attack_power = total_attacker_infantry_points + total_attacker_cavalry_points;
 
-        // 2.2: Total defence power
+        // 2.2: Total defense power
         let infantry_ratio = total_attacker_infantry_points / total_attack_power;
         let cavalry_ratio = total_attacker_cavalry_points / total_attack_power;
         let total_defense_power = (total_defender_infantry_points * infantry_ratio)
@@ -150,7 +151,7 @@ impl Battle {
 
         if self.attacker_village.population > total_defender_population {
             let ratio = total_defender_population as f64 / self.attacker_village.population as f64;
-            morale_bonus = ratio.powf(0.2); // TODO: Semplificato, la formula originale è più complessa
+            morale_bonus = ratio.powf(0.2); // TODO: simplified, original formula is more complex
         }
 
         let effective_attack_power = (total_attack_power as f64 / morale_bonus) as u32;
@@ -160,7 +161,8 @@ impl Battle {
         // Immensity
         let total_units_involved = self.attacker.immensity() + total_defender_immensity;
 
-        let (attacker_loss_percentage, defender_loss_percentage) = self.calculate_losses(
+        let (attacker_loss_percentage, defender_loss_percentage) = calculate_losses_percentages(
+            &self.attack_type,
             effective_attack_power,
             total_defense_power,
             total_units_involved,
@@ -229,15 +231,13 @@ impl Battle {
         // STEP 4: Final result
         // ====================================================================
 
-        // Calculate losses on armies
-        // ...
-
         BattleResult {
             attacker_loss_percentage,
             defender_loss_percentage,
             wall_level,
             buildings_damages: buildings_levels,
             bounty: 0,
+            loyalty: 100,
         }
     }
 
@@ -268,32 +268,28 @@ impl Battle {
 
         let mut attacker_loss_percentage = 0.0;
 
-        // 2.2: Controlla le condizioni per le perdite
-        // La tribù 5 sono gli Egiziani nel codice originale di TravianZ
+        // 2.2: Check conditions for attacker casualties
+        // Egiptian tribe is immune to getting detected when scouting
         // let attacker_is_immune = self.attacker.tribe == 5;
 
         if defender_has_scouts && total_scout_attack_power > 0 {
-            // Se ci sono difensori e l'attaccante non è immune, calcola le perdite
+            // If there are defenders and attacker isn't immune, calculate casualties
             let total_units_involved = total_attack_scouts + total_defense_scouts;
-            let m_factor = if total_units_involved >= 1000 {
-                (2.0 * (1.8592 - (total_units_involved as f64).powf(0.015))).clamp(1.2578, 1.5)
-            } else {
-                1.5
-            };
+            let m_factor = calculate_m_factor(total_units_involved);
 
-            // Il morale si applica anche qui, anche se nel codice PHP è un po' nascosto
-            // Omettiamolo per semplicità, ma andrebbe calcolato come prima
+            // Morale factor should be applies here as well, but in the original PHP is hidden
+            // Skip this for simiplicity, but sit should be calculated before
             let power_ratio = total_scout_defense_power as f64 / total_scout_attack_power as f64;
 
-            // La formula è `min(1, (difesa/attacco)^M)`.
+            // Original formula is `min(1, (defense/attack)^M)`.
             attacker_loss_percentage = power_ratio.powf(m_factor).min(1.0);
         }
 
         // ====================================================================
-        // STEP 3: Finalizzazione del Risultato
+        // STEP 3: Final result
         // ====================================================================
 
-        // Calcola le perdite effettive per le unità scout attaccanti
+        // Calculate casualties in attacker scouts
         let (_attacker_survivors, _attacker_losses) =
             self.attacker.calculate_losses(attacker_loss_percentage);
 
@@ -302,72 +298,77 @@ impl Battle {
             attacker_loss_percentage,
         };
     }
+}
 
-    fn calculate_losses(
-        &self,
-
-        attack_power: u32,
-        defense_power: u32,
-        immensity: u32,
-    ) -> (f64, f64) {
-        // Massive battles factor (Mfactor)
-        let m_factor = if immensity >= 1000 {
-            (2.0 * (1.8592 - (immensity as f64).powf(0.015))).clamp(1.2578, 1.5)
-        } else {
-            1.5
-        };
-
-        let attacker_loss_percentage: f64;
-        let defender_loss_percentage: f64;
-
-        if attack_power > defense_power {
-            // Attacker wins
-            (attacker_loss_percentage, defender_loss_percentage) = self
-                .calculate_losses_by_attack_type(
-                    attack_power as f64,
-                    defense_power as f64,
-                    m_factor,
-                );
-        } else {
-            // Defender wins (or draw)
-            (defender_loss_percentage, attacker_loss_percentage) = self
-                .calculate_losses_by_attack_type(
-                    defense_power as f64,
-                    attack_power as f64,
-                    m_factor,
-                );
-        }
-
-        (attacker_loss_percentage, defender_loss_percentage)
-    }
-
-    fn calculate_losses_by_attack_type(
-        &self,
-        winner: f64,
-        loser: f64,
-        m_factor: f64,
-    ) -> (f64, f64) {
-        let loss_factor = (loser / winner).powf(m_factor);
-        let winner_losses: f64;
-        let loser_losses: f64;
-
-        match self.attack_type {
-            AttackType::Raid => {
-                winner_losses = loss_factor / (1.0 + loss_factor);
-                loser_losses = 1.0 / (1.0 + loss_factor);
-            }
-
-            AttackType::Normal => {
-                winner_losses = loss_factor;
-                loser_losses = 1.0;
-            }
-        }
-
-        (winner_losses, loser_losses)
+// Massive battles factor (Mfactor)
+fn calculate_m_factor(immensity: u32) -> f64 {
+    if immensity >= 1000 {
+        (2.0 * (1.8592 - (immensity as f64).powf(0.015))).clamp(1.2578, 1.5)
+    } else {
+        1.5
     }
 }
 
-// sigma function from Kirilloid to calculate damages
+// Losses are calculated in percentages and applied to all armies involved, according to a winner/loser logic
+fn calculate_losses_percentages(
+    attack_type: &AttackType,
+    attack_power: u32,
+    defense_power: u32,
+    immensity: u32,
+) -> (f64, f64) {
+    let m_factor = calculate_m_factor(immensity);
+
+    let attacker_loss_percentage: f64;
+    let defender_loss_percentage: f64;
+
+    if attack_power > defense_power {
+        // Attacker wins
+        (attacker_loss_percentage, defender_loss_percentage) = calculate_loss_factor_by_attack_type(
+            attack_type,
+            attack_power as f64,
+            defense_power as f64,
+            m_factor,
+        );
+    } else {
+        // Defender wins (or draw)
+        (defender_loss_percentage, attacker_loss_percentage) = calculate_loss_factor_by_attack_type(
+            attack_type,
+            defense_power as f64,
+            attack_power as f64,
+            m_factor,
+        );
+    }
+
+    (attacker_loss_percentage, defender_loss_percentage)
+}
+
+// Loss factor is calculated based on the attack type
+fn calculate_loss_factor_by_attack_type(
+    attack_type: &AttackType,
+    winner: f64,
+    loser: f64,
+    m_factor: f64,
+) -> (f64, f64) {
+    let loss_factor = (loser / winner).powf(m_factor);
+    let winner_losses: f64;
+    let loser_losses: f64;
+
+    match attack_type {
+        AttackType::Raid => {
+            winner_losses = loss_factor / (1.0 + loss_factor);
+            loser_losses = 1.0 / (1.0 + loss_factor);
+        }
+
+        AttackType::Normal => {
+            winner_losses = loss_factor;
+            loser_losses = 1.0;
+        }
+    }
+
+    (winner_losses, loser_losses)
+}
+
+// sigma function from Kirilloid to calculate damages to buildings (catapults) and wall (rams)
 // $this->sigma = function($x) { return ($x > 1 ? 2 - $x ** -1.5 : $x ** 1.5) / 2; };
 fn sigma(x: f64) -> f64 {
     if x > 1.0 {
@@ -385,8 +386,7 @@ fn calculate_machine_damage(
     ad_ratio: f64,
     morale: f64,
 ) -> f64 {
-    let upgrades = 1.0 + (smithy_level as f64 * 0.0205); // Formula semplificata, l'originale usa pow(1.0205, level)
-
+    let upgrades = 1.0205f64.powf(smithy_level as f64); // original formula is pow(1.0205, level)
     let efficiency = (quantity as f64 / durability).floor();
 
     return 4.0 * sigma(ad_ratio) * efficiency * upgrades / morale;
