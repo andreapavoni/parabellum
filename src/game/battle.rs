@@ -8,6 +8,25 @@ use super::models::{
 };
 
 #[derive(Debug, Clone, Default)]
+pub struct CataTargets(pub Option<BuildingName>, pub Option<BuildingName>);
+
+impl CataTargets {
+    pub fn targets(&self) -> Vec<BuildingName> {
+        let mut targets: Vec<BuildingName> = vec![];
+
+        if let Some(t) = self.0.clone() {
+            targets.push(t);
+        }
+
+        if let Some(t) = self.1.clone() {
+            targets.push(t);
+        }
+
+        targets
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 struct BattleState {
     atk_won: bool,
     atk_points: u64,
@@ -27,7 +46,7 @@ pub struct Battle {
     pub defender_village: Village,
     pub is_normal: bool,
     pub is_scouting: bool,
-    pub cata_targets: Vec<BuildingName>,
+    pub cata_targets: CataTargets,
     state: BattleState,
 }
 
@@ -38,7 +57,7 @@ impl Battle {
         defender_village: Village,
         is_normal: bool,
         is_scouting: bool,
-        cata_targets: Vec<BuildingName>,
+        cata_targets: CataTargets,
     ) -> Self {
         Self {
             attacker_army,
@@ -277,27 +296,26 @@ impl Battle {
         // To hit 2 targets we need at least 20 catapults, 1 target otherwise
         // To choose 1 target we needRallyPoint lvl 10 or above
         // To choose 2 targets we needRallyPoint lvl 20
-        let cata_targets = match (atk_rally_point, working_catas) {
-            (20, 20..) => self.cata_targets.clone(),
+        match (atk_rally_point, working_catas) {
+            (20, 20..) => (),
+            (10..=19, 20..) => self.cata_targets.1 = Some(self.get_random_defender_building().name),
             (_, 20..) => {
-                self.cata_targets[0] = self.get_random_defender_building().name;
-                self.cata_targets[1] = self.get_random_defender_building().name;
-                self.cata_targets.clone()
+                self.cata_targets.0 = Some(self.get_random_defender_building().name);
+                self.cata_targets.1 = Some(self.get_random_defender_building().name)
             }
             (_, _) => {
-                self.cata_targets[1] = self.get_random_defender_building().name;
-                self.cata_targets.clone()
+                self.cata_targets.1 = None;
             }
         };
 
         // FIXME: use real slot id!
         let slot_id: u8 = 1;
-        for building_name in cata_targets {
+        for building_name in self.cata_targets.targets() {
             if let Some(b) = self.defender_village.get_building_by_name(building_name) {
                 let cata_needed =
                     self.get_siege_units_needed(morale, b.level, cata_smithy, buildings_durability);
 
-                if working_catas / self.cata_targets.len() as u64 >= cata_needed {
+                if working_catas / self.cata_targets.targets().len() as u64 >= cata_needed {
                     // Destroy building
                     let _ = self.defender_village.destroy_building(slot_id);
                 } else {
