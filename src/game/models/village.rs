@@ -21,6 +21,7 @@ pub struct Village {
     pub player_id: Uuid,
     pub position: Position,
     pub tribe: Tribe,
+    /// K: slot_id (1 to 40), V: building struct
     pub buildings: HashMap<u8, Building>,
     pub oases: Vec<Oasis>,
     pub population: u32,
@@ -76,10 +77,8 @@ impl Village {
 
     pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<()> {
         // can't build on existing buildings
-        for (b_slot_id, _) in self.buildings.clone() {
-            if b_slot_id == slot_id {
-                return Err(Error::msg("can't build on existing slot"));
-            }
+        if let Some(_) = self.get_building_by_slot_id(slot_id) {
+            return Err(Error::msg("can't build on existing slot"));
         }
 
         // village slots limit is 40: 18 resources + 21 infrastructures + 1 wall
