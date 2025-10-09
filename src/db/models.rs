@@ -1,39 +1,17 @@
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
-use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::{
-    db::{models as db_models, schema::jobs},
-    game::models as game_models,
-    impl_jsonb_for,
-    jobs::JobTask,
-};
+use crate::game::models as game_models;
 
-use super::schema::{armies, map_fields, players, villages};
-use super::utils::JsonbWrapper;
-
-impl_jsonb_for!(game_models::map::MapFieldTopology);
-impl_jsonb_for!(game_models::map::Position);
-impl_jsonb_for!(game_models::SmithyUpgrades);
-impl_jsonb_for!(game_models::village::StockCapacity);
-impl_jsonb_for!(Vec<game_models::village::VillageBuilding>);
-impl_jsonb_for!(game_models::village::VillageProduction);
-impl_jsonb_for!(JobTask);
-
-#[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[ExistingTypePath = "crate::db::schema::sql_types::Tribe"]
+#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[sqlx(type_name = "tribe", rename_all = "PascalCase")]
 pub enum Tribe {
-    #[db_rename = "Roman"]
     Roman,
-    #[db_rename = "Gaul"]
     Gaul,
-    #[db_rename = "Teuton"]
     Teuton,
-    #[db_rename = "Natar"]
     Natar,
-    #[db_rename = "Nature"]
     Nature,
 }
 
@@ -61,8 +39,7 @@ impl From<game_models::Tribe> for Tribe {
     }
 }
 
-#[derive(Debug, Queryable, Selectable, Identifiable, Clone)]
-#[diesel(table_name = players)]
+#[derive(Debug, FromRow, Clone)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,
@@ -73,31 +50,21 @@ impl From<Player> for game_models::Player {
         game_models::Player {
             id: player.id,
             username: player.username,
-            // The enum conversion is required because they're defined in two different places
             tribe: player.tribe.into(),
         }
     }
 }
 
-#[derive(Insertable)]
-#[diesel(table_name = players)]
-pub struct NewPlayer<'a> {
-    pub id: Uuid,
-    pub username: &'a str,
-    pub tribe: Tribe,
-}
-
-#[derive(Debug, Queryable, Selectable, Identifiable)]
-#[diesel(table_name = villages)]
+#[derive(Debug, FromRow)]
 pub struct Village {
     pub id: i32,
     pub player_id: Uuid,
     pub name: String,
-    pub position: JsonbWrapper<game_models::map::Position>,
-    pub buildings: JsonbWrapper<Vec<game_models::village::VillageBuilding>>,
-    pub production: JsonbWrapper<game_models::village::VillageProduction>,
-    pub stocks: JsonbWrapper<game_models::village::StockCapacity>,
-    pub smithy_upgrades: JsonbWrapper<game_models::SmithyUpgrades>,
+    pub position: serde_json::Value,
+    pub buildings: serde_json::Value,
+    pub production: serde_json::Value,
+    pub stocks: serde_json::Value,
+    pub smithy_upgrades: serde_json::Value,
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,
@@ -105,126 +72,110 @@ pub struct Village {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Insertable)]
-#[diesel(table_name = villages)]
-pub struct NewVillage<'a> {
-    pub id: i32,
-    pub player_id: Uuid,
-    pub name: &'a str,
-    pub position: JsonbWrapper<game_models::map::Position>,
-    pub buildings: JsonbWrapper<Vec<game_models::village::VillageBuilding>>,
-    pub production: JsonbWrapper<game_models::village::VillageProduction>,
-    pub stocks: JsonbWrapper<game_models::village::StockCapacity>,
-    pub smithy_upgrades: JsonbWrapper<game_models::SmithyUpgrades>,
-    pub population: i32,
-    pub loyalty: i16,
-    pub is_capital: bool,
-    pub created_at: chrono::DateTime<Utc>,
-    pub updated_at: chrono::DateTime<Utc>,
-}
+// impl From<Village> for game_models::village::Village {
+//     fn from(db_village: Village) -> Self {
+//         game_models::village::Village {
+//             id: db_village.id as u32,
+//             player_id: db_village.player_id,
+//             name: db_village.name,
+//             position: db_village.position,
+//             buildings: db_village.buildings,
+//             production: db_village.production,
+//             stocks: db_village.stocks,
+//             smithy: db_village.smithy_upgrades,
+//             population: db_village.population as u32,
+//             loyalty: db_village.loyalty as u8,
+//             is_capital: db_village.is_capital,
+//             updated_at: db_village.updated_at,
+//         }
+//     }
+// }
 
-#[derive(Debug, Queryable, Selectable, Identifiable)]
-#[diesel(table_name = armies)]
+// impl From<game_models::village::Village> for Village {
+//     fn from(game_village: game_models::village::Village) -> Self {
+//         Village {
+//             id: game_village.id as i32,
+//             player_id: game_village.player_id,
+//             name: game_village.name,
+//             position: game_village.position,
+//             buildings: game_village.buildings,
+//             production: game_village.production,
+//             stocks: game_village.stocks,
+//             smithy_upgrades: game_village.smithy.into(),
+//             population: game_village.population as i32,
+//             loyalty: game_village.loyalty as i16,
+//             is_capital: game_village.is_capital,
+//             created_at: game_village.updated_at,
+//             updated_at: game_village.updated_at,
+//         }
+//     }
+// }
+
+#[derive(Debug, FromRow)]
 pub struct Army {
     pub id: Uuid,
     pub village_id: i32,
-    pub current_map_field_id: i32, // Oasis or village
+    pub current_map_field_id: i32,
     pub hero_id: Option<Uuid>,
-    pub units: JsonbWrapper<game_models::army::TroopSet>,
-    pub smithy: JsonbWrapper<game_models::SmithyUpgrades>,
+    pub units: serde_json::Value,
+    pub smithy: serde_json::Value,
     pub tribe: Tribe,
     pub player_id: Uuid,
 }
 
-impl From<db_models::Army> for game_models::army::Army {
-    fn from(army: db_models::Army) -> Self {
+impl From<Army> for game_models::army::Army {
+    fn from(army: Army) -> Self {
         game_models::army::Army {
             village_id: army.village_id as u32,
             current_map_field_id: Some(army.current_map_field_id as u32),
             player_id: army.player_id,
-            units: Default::default(),
-            smithy: Default::default(),
-            // TODO: load hero through join
-            hero: None,
-            // The enum conversion is required because they're defined in two different places
+            units: serde_json::from_value(army.units).unwrap_or_default(),
+            smithy: serde_json::from_value(army.smithy).unwrap_or_default(),
+            hero: None, // TODO: load hero through join
             tribe: army.tribe.into(),
         }
     }
 }
 
-#[derive(Insertable)]
-#[diesel(table_name = armies)]
-pub struct NewArmy<'a> {
-    pub id: Uuid,
-    pub village_id: i32,
-    pub current_map_field_id: i32, // Oasis or village
-    pub hero_id: Option<Uuid>,
-    pub units: &'a JsonbWrapper<game_models::army::TroopSet>,
-    pub smithy: &'a JsonbWrapper<game_models::SmithyUpgrades>,
-    pub tribe: Tribe,
-    pub player_id: Uuid,
-}
-
-#[derive(Debug, Queryable, Selectable, Identifiable)]
-#[diesel(table_name = map_fields)]
+#[derive(Debug, FromRow)]
 pub struct MapField {
     pub id: i32,
     pub village_id: Option<i32>,
     pub player_id: Option<Uuid>,
-    pub position: JsonbWrapper<game_models::map::Position>,
-    pub topology: JsonbWrapper<game_models::map::MapFieldTopology>,
+    pub position: serde_json::Value,
+    pub topology: serde_json::Value,
 }
 
-impl From<db_models::MapField> for game_models::map::MapField {
-    fn from(map_field: db_models::MapField) -> Self {
-        let village_id = match map_field.village_id {
-            Some(id) => Some(id as u32),
-            None => None,
-        };
+impl From<MapField> for game_models::map::MapField {
+    fn from(map_field: MapField) -> Self {
         game_models::map::MapField {
             id: map_field.id as u32,
-            village_id: village_id,
+            village_id: map_field.village_id.map(|id| id as u32),
             player_id: map_field.player_id,
-            position: map_field.position.into(),
-            topology: map_field.topology.into(),
+            position: serde_json::from_value(map_field.position).unwrap(),
+            topology: serde_json::from_value(map_field.topology).unwrap(),
         }
     }
 }
-
-#[derive(Insertable)]
-#[diesel(table_name = map_fields)]
-pub struct NewMapField<'a> {
-    pub id: i32,
-    pub village_id: Option<i32>,
-    pub player_id: Option<Uuid>,
-    pub position: &'a JsonbWrapper<game_models::map::Position>,
-    pub topology: &'a JsonbWrapper<game_models::map::MapFieldTopology>,
-}
-
-#[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[ExistingTypePath = "crate::db::schema::sql_types::JobStatus"]
+#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[sqlx(type_name = "job_status", rename_all = "PascalCase")]
 pub enum JobStatus {
-    #[db_rename = "Pending"]
     Pending,
-    #[db_rename = "Processing"]
     Processing,
-    #[db_rename = "Completed"]
     Completed,
-    #[db_rename = "Failed"]
     Failed,
 }
 
-#[derive(Queryable, QueryableByName, Selectable, Identifiable, Debug, Clone)]
-#[diesel(table_name = jobs)]
+#[derive(FromRow, Debug, Clone)]
 pub struct Job {
     pub id: Uuid,
     pub player_id: Uuid,
     pub village_id: i32,
-    pub task: JsonbWrapper<JobTask>,
+    pub task: serde_json::Value,
     pub status: JobStatus,
-    pub completed_at: chrono::DateTime<Utc>,
-    pub created_at: chrono::DateTime<Utc>,
-    pub updated_at: chrono::DateTime<Utc>,
+    pub completed_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl From<Job> for crate::jobs::Job {
@@ -233,7 +184,7 @@ impl From<Job> for crate::jobs::Job {
             id: job.id,
             player_id: job.player_id,
             village_id: job.village_id,
-            task: job.task.into(),
+            task: serde_json::from_value(job.task).unwrap(),
             status: match job.status {
                 JobStatus::Pending => crate::jobs::JobStatus::Pending,
                 JobStatus::Processing => crate::jobs::JobStatus::Processing,
@@ -244,137 +195,5 @@ impl From<Job> for crate::jobs::Job {
             created_at: job.created_at,
             updated_at: job.updated_at,
         }
-    }
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = jobs)]
-pub struct NewJob {
-    pub id: Uuid,
-    pub player_id: Uuid,
-    pub village_id: i32,
-    pub task: JsonbWrapper<JobTask>,
-    pub status: JobStatus,
-    pub completed_at: chrono::DateTime<Utc>,
-}
-
-#[cfg(test)]
-mod tests {
-    use rand::Rng;
-
-    use super::*;
-    use crate::{
-        db::{connection::run_test_with_transaction, test_factories::*},
-        game::models::{
-            army::TroopSet,
-            map::{MapFieldTopology, OasisTopology, Position},
-        },
-    };
-
-    #[tokio::test]
-    async fn test_factories_with_defaults() {
-        run_test_with_transaction(|conn| {
-            // Wrap the async block in Box::pin()
-            Box::pin(async move {
-                let player = player_factory(conn, Default::default()).await;
-                assert!(player.username.starts_with("user_"));
-                assert_eq!(player.tribe, Tribe::Roman);
-
-                let village = village_factory(conn, Default::default()).await;
-                assert_eq!(village.name, "Factory Village");
-
-                let army = army_factory(conn, Default::default()).await;
-                assert_eq!(army.units.0[0], 10);
-
-                let field_default = map_field_factory(conn, Default::default()).await;
-                assert!(field_default.id != 0);
-
-                Ok(())
-            })
-        })
-        .await;
-    }
-
-    #[test]
-    fn test_factories_with_overrides() {
-        let _ = run_test_with_transaction(|conn| {
-            Box::pin(async move {
-                let player_id = Uuid::new_v4();
-
-                let player = player_factory(
-                    conn,
-                    PlayerFactoryOptions {
-                        id: Some(player_id),
-                        username: Some("Dino"),
-                        tribe: Some(Tribe::Gaul),
-                    },
-                )
-                .await;
-                assert_eq!(player.id, player_id);
-                assert_eq!(player.username, "Dino");
-                assert_eq!(player.tribe, Tribe::Gaul);
-
-                let world_size = 100;
-                let position = &Position {
-                    x: rand::thread_rng().gen_range(-world_size..world_size),
-                    y: rand::thread_rng().gen_range(-world_size..world_size),
-                };
-
-                let village = village_factory(
-                    conn,
-                    VillageFactoryOptions {
-                        player_id: Some(player.id),
-                        name: Some("Dino's Village"),
-                        position: Some(position),
-                        buildings: Some(vec![]),
-                        production: Some(Default::default()),
-                        stocks: Some(Default::default()),
-                        smithy_upgrades: Some(Default::default()),
-                        population: 2,
-                        loyalty: 100,
-                        is_capital: true,
-                    },
-                )
-                .await;
-                assert_eq!(village.player_id, player.id);
-                assert_eq!(village.name, "Dino's Village");
-
-                let units: TroopSet = [100, 100, 0, 0, 0, 0, 0, 0, 0, 0];
-                let army = army_factory(
-                    conn,
-                    ArmyFactoryOptions {
-                        id: Some(Uuid::new_v4()),
-                        player_id: Some(player.id),
-                        village_id: Some(village.id),
-                        current_map_field_id: Some(village.id),
-                        units: Some(units),
-                        hero_id: None,
-                        smithy: Some(Default::default()),
-                        tribe: Some(player.tribe),
-                    },
-                )
-                .await;
-                assert_eq!(army.player_id, player.id);
-                assert_eq!(army.village_id, village.id);
-                assert_eq!(army.units.0, units);
-
-                let topology = MapFieldTopology::Oasis(OasisTopology::Crop50);
-
-                let field_custom = map_field_factory(
-                    conn,
-                    MapFieldFactoryOptions {
-                        position: Some(position.clone()),
-                        topology: Some(topology.clone()),
-                        village_id: Some(village.id),
-                        player_id: Some(player.id),
-                    },
-                )
-                .await;
-                assert_eq!(field_custom.position.0, *position);
-                assert_eq!(field_custom.topology.0, topology);
-
-                Ok(())
-            })
-        });
     }
 }
