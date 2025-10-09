@@ -4,7 +4,7 @@ use chrono::{NaiveDateTime, Utc};
 use uuid::Uuid;
 
 use crate::game::{
-    battle::CataTargets,
+    // battle::CataTargets,
     models::{
         army::{Army, UnitName},
         buildings::BuildingName,
@@ -47,7 +47,7 @@ impl Job {
 pub enum JobTask {
     Attack {
         army: Army,
-        cata_targets: Option<CataTargets>,
+        // cata_targets: Option<CataTargets>,
         village_id: u32,
         player_id: Uuid,
     },
