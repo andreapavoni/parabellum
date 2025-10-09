@@ -1,6 +1,7 @@
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+use crate::game::models::village::VillageBuilding;
 
 use super::{Cost, ResourceGroup, Tribe};
 
@@ -127,7 +128,7 @@ impl Building {
     pub fn validate_build(
         &self,
         tribe: &Tribe,
-        village_buildings: &HashMap<u8, Building>,
+        village_buildings: &Vec<VillageBuilding>,
         is_capital: bool,
     ) -> Result<()> {
         let data = get_building_data(self.name.clone()).unwrap();
@@ -158,23 +159,23 @@ impl Building {
             return Err(Error::msg("can be built only in capital"));
         }
 
-        for (_, vb) in village_buildings {
+        for vb in village_buildings {
             // building requirements (if any) - Part 2
 
             for req in data.rules.requirements {
-                if vb.name == req.0 && vb.level == req.1 {
+                if vb.building.name == req.0 && vb.building.level == req.1 {
                     return Err(Error::msg("missing building requirements"));
                 }
             }
 
             for conflict in data.rules.conflicts {
-                if vb.name == conflict.0 {
+                if vb.building.name == conflict.0 {
                     return Err(Error::msg("conflicts with X"));
                 }
             }
 
             // also, let's check if there's already a building like that
-            if self.name == vb.name {
+            if self.name == vb.building.name {
                 // and allows multiple
                 if !data.rules.allow_multiple {
                     return Err(Error::msg("can be built only once"));
@@ -225,6 +226,7 @@ impl Building {
 
 // lumber, clay, iron, crop, upkeep, culture_points, value, time
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct BuildingValueData(u32, u32, u32, u32, u32, u16, u32, u32);
 
 #[derive(Debug, Clone, Eq, PartialEq)]

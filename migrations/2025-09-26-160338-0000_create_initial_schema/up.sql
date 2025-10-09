@@ -1,18 +1,18 @@
 -- ENUM for tribes
-CREATE TYPE tribe_enum AS ENUM ('Roman', 'Gaul', 'Teuton', 'Natar', 'Nature');
+CREATE TYPE tribe AS ENUM ('Roman', 'Gaul', 'Teuton', 'Natar', 'Nature');
 
 -- Extension to use UUID as primary key
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Players
-CREATE TABLE players (
+CREATE TABLE IF NOT EXISTS players (
     id UUID PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
-    tribe tribe_enum NOT NULL
+    tribe tribe NOT NULL
 );
 
 -- Villages
-CREATE TABLE villages (
+CREATE TABLE IF NOT EXISTS villages (
     id SERIAL PRIMARY KEY,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -50,14 +50,16 @@ CREATE TABLE heroes (
 -- Armies
 CREATE TABLE armies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    owner_village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
-    current_village_id INTEGER REFERENCES villages(id) ON DELETE SET NULL,
+    village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
+    current_map_field_id INTEGER NOT NULL,
     hero_id UUID REFERENCES heroes(id) ON DELETE SET NULL,
-
-    units JSONB NOT NULL
+    units JSONB NOT NULL,
+    smithy JSONB NOT NULL,
+    tribe Tribe NOT NULL,
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE
 );
 
--- Trigger per aggiornare automaticamente il timestamp `updated_at`
+-- Trigger to automatically update `updated_at`
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN

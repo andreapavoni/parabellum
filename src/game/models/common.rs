@@ -18,6 +18,7 @@ pub struct Cost {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ResourceGroup(u32, u32, u32, u32);
 
 impl ResourceGroup {

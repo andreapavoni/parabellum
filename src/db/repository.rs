@@ -12,15 +12,15 @@
 
 // src/db/repository.rs
 
-use anyhow::Result;
-use diesel::prelude::*;
-use uuid::Uuid;
+// use anyhow::Result;
+// use diesel::prelude::*;
+// use uuid::Uuid;
 
 use super::connection::DbPool;
-use super::models::{NewPlayer, Player as DbPlayer, TribeEnum};
-use super::schema::players::dsl::*;
-use crate::game::models::{Player as DomainPlayer, Tribe}; // Rinomina per chiarezza
-use crate::repository::Repository;
+// use super::models::{NewPlayer, Player as DbPlayer, Tribe};
+// use super::schema::players::dsl::*;
+// use crate::game::models::Player as DomainPlayer; // Rinomina per chiarezza
+// use crate::repository::Repository;
 
 pub struct DbRepository {
     pool: DbPool,
@@ -32,21 +32,21 @@ impl DbRepository {
     }
 }
 
-#[async_trait::async_trait]
-impl Repository for DbRepository {
-    async fn register_player(&self, uname: String, t: Tribe) -> Result<DomainPlayer> {
-        let mut conn = self.pool.get()?;
+// #[async_trait::async_trait]
+// impl Repository for DbRepository {
+//     async fn register_player(&self, uname: String, t: Tribe) -> Result<DomainPlayer> {
+//         let mut conn = self.pool.get()?;
 
-        let new_player = NewPlayer {
-            id: Uuid::new_v4(),
-            username: &uname,
-            tribe: t.into(), // Implementa From<Tribe> for TribeEnum
-        };
+//         let new_player = NewPlayer {
+//             id: Uuid::new_v4(),
+//             username: &uname,
+//             tribe: t.into(), // Implementa From<Tribe> for TribeEnum
+//         };
 
-        let db_player = diesel::insert_into(players)
-            .values(&new_player)
-            .get_result::<DbPlayer>(&mut conn)?;
+//         let db_player = diesel::insert_into(players)
+//             .values(&new_player)
+//             .get_result::<DbPlayer>(&mut conn)?;
 
-        Ok(db_player.into()) // Implementa From<DbPlayer> for DomainPlayer
-    }
-}
+//         Ok(db_player.into()) // Implementa From<DbPlayer> for DomainPlayer
+//     }
+// }
