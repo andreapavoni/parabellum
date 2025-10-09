@@ -2,7 +2,7 @@ use std::env;
 
 use anyhow::Result;
 use ormlite::{sqlite::SqlitePoolOptions, Model, Pool};
-use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
+use sqlx::{pool::PoolConnection, Sqlite, SqlitePool, Transaction};
 
 use super::models::{map::MapField, village::Village};
 use crate::game::models::{
@@ -29,13 +29,18 @@ impl Repository {
         Ok(Self { pool })
     }
 
-    pub fn with_poolection(pool: SqlitePool) -> Self {
+    pub fn with_connection_pool(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
     pub async fn get_pool_connection(&self) -> Result<PoolConnection<Sqlite>> {
         let conn = self.pool.acquire().await?;
         Ok(conn)
+    }
+
+    pub async fn begin_transaction(&self) -> Result<Transaction<Sqlite>> {
+        let tx = self.pool.begin().await?;
+        Ok(tx)
     }
 
     async fn new_connection_pool(url: &str) -> Result<Pool<Sqlite>> {
@@ -49,14 +54,15 @@ impl Repository {
 impl crate::repository::Repository for Repository {
     async fn bootstrap_new_map(&self, size: u32) -> Result<()> {
         let map = generate_new_map(size as i32);
-        let mut conn = self.pool.acquire().await?;
+        let mut tx = self.begin_transaction().await?;
 
-        println!("Generating a map of {} fields", size * size * 4);
+        print!("Generating a map of {} fields... ", size * size * 4);
         for f in map {
             let fm: MapField = f.into();
-            fm.insert(&mut conn).await?;
+            fm.insert(&mut tx).await?;
         }
-        println!("Map generated");
+        tx.commit().await?;
+        println!("done!");
 
         Ok(())
     }
