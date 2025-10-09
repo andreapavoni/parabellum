@@ -28,13 +28,13 @@ rocket = { version = "0.5.1", features = [
 rocket_dyn_templates = { version = "0.2.0", features = ["tera"] }
 
 # Db ORM
-bson = { version = "2.13", features = ["serde_with-3", "hashtable"] }
+bson = { version = "2", features = ["serde_with-3", "hashable", "chrono-0_4"] }
 polodb_core = "5.1.3"
 
 # CQRS-ES
 # mini_cqrs_es = "0.7.0"
 # mini_cqrs_es = { path = "../mini_cqrs_es" }
-mini_cqrs_es = { git = "https://github.com/andreapavoni/mini_cqrs_es.git" }
+# mini_cqrs_es = { git = "https://github.com/andreapavoni/mini_cqrs_es.git" }
 
 # JSON handling
 serde_json = { version = "1.0", features = ["raw_value"] }
