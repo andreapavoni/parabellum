@@ -139,8 +139,12 @@ impl Army {
         }
     }
 
-    pub fn get_unit(&self, idx: u8) -> Result<Unit> {
-        Ok(get_tribe_units(self.tribe.clone())[idx as usize].clone())
+    pub fn get_unit(&self, idx: u8) -> Option<Unit> {
+        if idx.ge(&0) && idx.lt(&10) {
+            Some(get_tribe_units(&self.tribe)[idx as usize].clone())
+        } else {
+            None
+        }
     }
 
     pub fn unit_amount(&self, idx: u8) -> u32 {
@@ -153,10 +157,10 @@ impl Army {
     }
 
     pub fn upkeep(&self) -> u32 {
-        let units = get_tribe_units(self.tribe.clone());
+        let units = get_tribe_units(&self.tribe);
         let mut total: u32 = 0;
 
-        for (idx, quantity) in self.units.into_iter().enumerate() {
+        for (idx, quantity) in self.units.iter().enumerate() {
             total += units[idx].cost.upkeep * quantity;
         }
 
@@ -167,10 +171,10 @@ impl Army {
         let mut infantry_points: u32 = 0;
         let mut cavalry_points: u32 = 0;
 
-        for (idx, quantity) in self.units.into_iter().enumerate() {
+        for (idx, quantity) in self.units.iter().enumerate() {
             let u = self.get_unit(idx as u8).unwrap();
 
-            let smithy_improvement = self.apply_smithy_upgrade(u.clone(), idx, u.attack);
+            let smithy_improvement = self.apply_smithy_upgrade(&u, idx, u.attack);
 
             match u.role {
                 UnitRole::Cavalry => cavalry_points += smithy_improvement * quantity,
@@ -187,8 +191,8 @@ impl Army {
         for (idx, quantity) in self.units.into_iter().enumerate() {
             let u = self.get_unit(idx as u8).unwrap();
 
-            let smithy_infantry = self.apply_smithy_upgrade(u.clone(), idx, u.defense_infantry);
-            let smithy_cavalry = self.apply_smithy_upgrade(u.clone(), idx, u.defense_cavalry);
+            let smithy_infantry = self.apply_smithy_upgrade(&u, idx, u.defense_infantry);
+            let smithy_cavalry = self.apply_smithy_upgrade(&u, idx, u.defense_cavalry);
 
             infantry_points += smithy_infantry * quantity;
             cavalry_points += smithy_cavalry * quantity;
@@ -208,6 +212,19 @@ impl Army {
         for (idx, quantity) in self.units.into_iter().enumerate() {
             self.units[idx] = quantity - ((quantity as f64) * percent / 100.0).floor() as u32;
         }
+    }
+
+    pub fn calculate_losses(&self, percent: f64) -> (TroopSet, TroopSet) {
+        let mut survivors: TroopSet = [0; 10];
+        let mut losses: TroopSet = [0; 10];
+
+        for (idx, quantity) in self.units.into_iter().enumerate() {
+            let lost = ((quantity as f64) * percent / 100.0).floor() as u32;
+            survivors[idx] = quantity - lost;
+            losses[idx] = lost;
+        }
+
+        (survivors, losses)
     }
 
     // Returns a new Army which has been extracted from the current one.
@@ -255,11 +272,11 @@ impl Army {
         let idx: usize = 3;
         let quantity = self.units[idx];
         let unit = self.get_unit(idx as u8).unwrap();
-        let smithy_improvement = self.apply_smithy_upgrade(unit.clone(), idx, base_points as u32);
+        let smithy_improvement = self.apply_smithy_upgrade(&unit, idx, base_points as u32);
         smithy_improvement * quantity
     }
 
-    fn apply_smithy_upgrade(&self, unit: Unit, idx: usize, combat_value: u32) -> u32 {
+    fn apply_smithy_upgrade(&self, unit: &Unit, idx: usize, combat_value: u32) -> u32 {
         let level: i32 = self.smithy[idx as usize].into();
         ((combat_value as f64)
             + ((combat_value + 300 * unit.cost.upkeep) as f64 / 7.0)
@@ -1053,12 +1070,12 @@ static NATAR_UNITS: TribeUnits = [
     },
 ];
 
-fn get_tribe_units(tribe: Tribe) -> TribeUnits {
+fn get_tribe_units(tribe: &Tribe) -> &TribeUnits {
     match tribe {
-        Tribe::Roman => ROMAN_UNITS.clone(),
-        Tribe::Gaul => GAUL_UNITS.clone(),
-        Tribe::Teuton => TEUTON_UNITS.clone(),
-        Tribe::Nature => NATURE_UNITS.clone(),
-        Tribe::Natar => NATAR_UNITS.clone(),
+        Tribe::Roman => &ROMAN_UNITS,
+        Tribe::Gaul => &GAUL_UNITS,
+        Tribe::Teuton => &TEUTON_UNITS,
+        Tribe::Nature => &NATURE_UNITS,
+        Tribe::Natar => &NATAR_UNITS,
     }
 }
