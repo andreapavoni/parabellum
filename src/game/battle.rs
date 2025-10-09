@@ -33,7 +33,7 @@ pub struct Battle {
     attacker: Army,
     attacker_village: Village,
     defender_village: Village,
-    catapult_targets: [Building; 2], // Lista di edifici target
+    catapult_targets: [Building; 2],
 }
 
 impl Battle {
@@ -56,9 +56,8 @@ impl Battle {
     // Main function to calculate the battle
     pub fn calculate_battle(&self) -> BattleResult {
         // ====================================================================
-        // FASE 1: Calculate total attack and defense points
+        // STEP 1: Calculate total attack and defense points
         // ====================================================================
-
         let mut total_attacker_infantry_points: u32;
         let mut total_attacker_cavalry_points: u32;
 
@@ -120,22 +119,14 @@ impl Battle {
         }
 
         // Wall
-        if let Some(defender_wall) = self.defender_village.get_wall() {
-            let wall_factor: f64 = match self.defender_village.tribe {
-                Tribe::Roman => 1.030,  // Romani
-                Tribe::Teuton => 1.020, // Germani
-                Tribe::Gaul => 1.025,   // Galli
-                _ => 1.020,             // Default
-            };
-            let wall_multiplier = wall_factor.powf(defender_wall.level as f64);
-            total_defender_infantry_points =
-                (total_defender_infantry_points as f64 * wall_multiplier) as u32;
-            total_defender_cavalry_points =
-                (total_defender_cavalry_points as f64 * wall_multiplier) as u32;
-        }
+        let wall_bonus = self.defender_village.get_wall_defense_bonus();
+
+        total_defender_infantry_points =
+            (total_defender_infantry_points as f64 * wall_bonus) as u32;
+        total_defender_cavalry_points = (total_defender_cavalry_points as f64 * wall_bonus) as u32;
 
         // ====================================================================
-        // FASE 2: Calculate total power and casualties
+        // STEP 2: Calculate total power and casualties
         // ====================================================================
 
         // 2.1 Total attack power
@@ -179,9 +170,8 @@ impl Battle {
             self.attacker.calculate_losses(attacker_loss_percentage);
 
         // ====================================================================
-        // FASE 3: Calculate damages to wall and buildings
+        // STEP 3: Calculate damages to wall and buildings
         // ====================================================================
-
         let mut wall_level = match self.defender_village.get_wall() {
             Some(wall) => wall.level,
             _ => 0,
@@ -236,7 +226,7 @@ impl Battle {
         }
 
         // ====================================================================
-        // FASE 4: Final result
+        // STEP 4: Final result
         // ====================================================================
 
         // Calculate losses on armies
@@ -253,17 +243,14 @@ impl Battle {
 
     pub fn calculate_scout_battle(&self) -> ScoutBattleResult {
         // ====================================================================
-        // FASE 1: Calcolo Punti Attacco e Difesa degli Scout
+        // STEP 1: Calculates attack and defense points for scouts
         // ====================================================================
 
-        // 1.1: Calcola la forza degli scout attaccanti
         let total_scout_attack_power = self.attacker.scouting_attack_points();
         let total_attack_scouts = self.attacker.unit_amount(3);
 
         let mut total_scout_defense_power = self.defender_village.army.scouting_defense_points();
         let mut total_defense_scouts = 0;
-
-        // 1.2: Calcola la forza degli scout difensori (truppe proprie + rinforzi)
         for reinforcement in self.defender_village.reinforcements.iter() {
             total_scout_defense_power += reinforcement.scouting_defense_points();
             total_defense_scouts += reinforcement.unit_amount(3);
@@ -272,26 +259,12 @@ impl Battle {
         let defender_has_scouts = total_scout_defense_power > 0;
 
         // ====================================================================
-        // FASE 2: Applica Bonus e Calcola Perdite
+        // STEP 2: Apply bonuses and casualties
         // ====================================================================
+        let wall_bonus = self.defender_village.get_wall_defense_bonus();
 
-        let wall_level = match self.defender_village.get_wall() {
-            Some(wall) => wall.level,
-            _ => 0,
-        };
-
-        // 2.1: Applica il bonus delle mura (se ci sono difensori)
-        if defender_has_scouts && wall_level > 0 {
-            let wall_factor: f64 = match self.defender_village.tribe {
-                Tribe::Roman => 1.030,  // Romani
-                Tribe::Teuton => 1.020, // Germani
-                Tribe::Gaul => 1.025,   // Galli
-                _ => 1.020,
-            };
-            let wall_multiplier = wall_factor.powf(wall_level as f64);
-            total_scout_defense_power =
-                (total_scout_defense_power as f64 * wall_multiplier) as u32 + 10;
-        }
+        // 2.1: Apply wall defense bonus
+        total_scout_defense_power = (total_scout_defense_power as f64 * wall_bonus) as u32 + 10;
 
         let mut attacker_loss_percentage = 0.0;
 
@@ -317,7 +290,7 @@ impl Battle {
         }
 
         // ====================================================================
-        // FASE 3: Finalizzazione del Risultato
+        // STEP 3: Finalizzazione del Risultato
         // ====================================================================
 
         // Calcola le perdite effettive per le unità scout attaccanti
