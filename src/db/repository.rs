@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{types::Json, PgPool};
+use sqlx::{types::Json, PgExecutor, PgPool};
 use uuid::Uuid;
 
 use crate::{
@@ -14,18 +14,22 @@ use crate::{
     repository::*,
 };
 
-pub struct PostgresRepository {
-    pool: PgPool,
+pub struct PostgresRepository<E = PgPool> {
+    pool: E,
 }
 
-impl PostgresRepository {
-    pub fn new(pool: PgPool) -> Self {
+impl<E> PostgresRepository<E> {
+    pub fn new(pool: E) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait::async_trait]
-impl PlayerRepository for PostgresRepository {
+impl<E> PlayerRepository for PostgresRepository<E>
+where
+    for<'a> &'a E: PgExecutor<'a> + Send,
+    E: Send + Sync,
+{
     async fn create(&self, id: Uuid, username: String, tribe: Tribe) -> Result<Player> {
         let tribe: db_models::Tribe = tribe.into();
         let new_player = sqlx::query_as!(
@@ -54,21 +58,17 @@ impl PlayerRepository for PostgresRepository {
 }
 
 #[async_trait::async_trait]
-impl VillageRepository for PostgresRepository {
+impl<E> VillageRepository for PostgresRepository<E>
+where
+    for<'a> &'a E: PgExecutor<'a> + Send,
+    E: Send + Sync,
+{
     async fn create(&self, _village: &Village) -> Result<()> {
         unimplemented!()
     }
 
     async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>> {
         let village_id_i32 = village_id_u32 as i32;
-
-        let db_village = sqlx::query_as!(
-            db_models::Village,
-            "SELECT * FROM villages WHERE id = $1",
-            village_id_i32
-        )
-        .fetch_all(&self.pool)
-        .await?;
 
         let db_village = sqlx::query_as!(
             db_models::Village,
@@ -172,7 +172,11 @@ impl VillageRepository for PostgresRepository {
 }
 
 #[async_trait::async_trait]
-impl MapRepository for PostgresRepository {
+impl<E> MapRepository for PostgresRepository<E>
+where
+    for<'a> &'a E: PgExecutor<'a> + Send,
+    E: Send + Sync,
+{
     async fn find_unoccupied_valley(&self, quadrant: &MapQuadrant) -> Result<Valley> {
         let query = match quadrant {
             MapQuadrant::NorthEast => "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1",
@@ -196,7 +200,11 @@ impl MapRepository for PostgresRepository {
 }
 
 #[async_trait::async_trait]
-impl ArmyRepository for PostgresRepository {
+impl<E> ArmyRepository for PostgresRepository<E>
+where
+    for<'a> &'a E: PgExecutor<'a> + Send,
+    E: Send + Sync,
+{
     async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>> {
         let army = sqlx::query_as!(
             db_models::Army,
@@ -211,7 +219,11 @@ impl ArmyRepository for PostgresRepository {
 }
 
 #[async_trait::async_trait]
-impl JobRepository for PostgresRepository {
+impl<E> JobRepository for PostgresRepository<E>
+where
+    for<'a> &'a E: PgExecutor<'a> + Send,
+    E: Send + Sync,
+{
     async fn add(&self, job: &Job) -> Result<()> {
         sqlx::query!(
             r#"

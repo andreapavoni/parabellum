@@ -5,7 +5,7 @@ use parabellum::{
         queries::GetUnoccupiedValley,
         App,
     },
-    db::{establish_connection_pool, repository::PostgresRepository},
+    db::{establish_connection_pool, repository::PostgresRepository, DbPool},
     game::models::Tribe,
     jobs::worker::JobWorker,
 };
@@ -14,7 +14,8 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     let db_pool = establish_connection_pool().await?;
-    let repo = Arc::new(PostgresRepository::new(db_pool));
+    let repo = Arc::new(PostgresRepository::<DbPool>::new(db_pool));
+
     let config = Arc::new(parabellum::config::Config::from_env());
 
     let app = App::new(
