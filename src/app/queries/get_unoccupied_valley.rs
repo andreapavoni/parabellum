@@ -1,31 +1,35 @@
 use std::sync::Arc;
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 
 use crate::{
     game::models::map::{MapQuadrant, Valley},
-    query::Query,
-    repository::Repository,
+    repository::MapRepository,
 };
 
 #[derive(Clone)]
 pub struct GetUnoccupiedValley {
-    quadrant: Option<MapQuadrant>,
+    pub quadrant: MapQuadrant,
 }
 
 impl GetUnoccupiedValley {
     pub fn new(quadrant: Option<MapQuadrant>) -> Self {
-        Self { quadrant }
+        Self {
+            quadrant: quadrant.unwrap_or(MapQuadrant::NorthEast),
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl Query for GetUnoccupiedValley {
-    type Output = Valley;
+pub struct GetUnoccupiedValleyHandler {
+    repo: Arc<dyn MapRepository>,
+}
 
-    async fn run(&self, repo: Arc<dyn Repository>) -> Result<Self::Output, Error> {
-        let valley = repo.get_unoccupied_valley(self.quadrant.clone()).await?;
+impl GetUnoccupiedValleyHandler {
+    pub fn new(repo: Arc<dyn MapRepository>) -> Self {
+        Self { repo }
+    }
 
-        Ok(valley)
+    pub async fn handle(&self, query: GetUnoccupiedValley) -> Result<Valley> {
+        self.repo.find_unoccupied_valley(&query.quadrant).await
     }
 }
