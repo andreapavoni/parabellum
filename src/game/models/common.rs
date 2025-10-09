@@ -28,6 +28,6 @@ pub type SmithyUpgrades = [u8; 10];
 #[derive(Debug, Clone)]
 pub struct Player {
     pub id: String,
-    pub user_id: String,
+    pub username: String,
     pub tribe: Tribe,
 }
