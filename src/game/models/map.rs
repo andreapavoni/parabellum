@@ -10,7 +10,7 @@ use super::village::ProductionBonus;
 pub const WORLD_MAX_SIZE: i32 = 100;
 
 #[derive(Debug, Clone)]
-pub enum Quadrant {
+pub enum MapQuadrant {
     NorthEast,
     EastSouth,
     SouthWest,

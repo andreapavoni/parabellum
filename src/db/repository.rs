@@ -6,7 +6,9 @@ use polodb_core::{bson::doc, CollectionT, Database};
 use uuid::Uuid;
 
 use crate::game::models::{
-    map::{generate_new_map, MapField, MapFieldTopology, Oasis, Quadrant, Valley, ValleyTopology},
+    map::{
+        generate_new_map, MapField, MapFieldTopology, MapQuadrant, Oasis, Valley, ValleyTopology,
+    },
     village::Village,
     Player, Tribe,
 };
@@ -49,11 +51,11 @@ impl crate::repository::Repository for Repository {
         Ok(())
     }
 
-    async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley, Error> {
+    async fn get_unoccupied_valley(&self, quadrant: Option<MapQuadrant>) -> Result<Valley, Error> {
         let map_fields = self.db.collection::<MapField>("map_fields");
 
         let query = match quadrant {
-            Some(Quadrant::NorthEast) => {
+            Some(MapQuadrant::NorthEast) => {
                 map_fields.find(doc! {
                    "player_id": Bson::Null,
                    "village_id": Bson::Null,
@@ -62,7 +64,7 @@ impl crate::repository::Repository for Repository {
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
                 }) // TODO: order by random
             }
-            Some(Quadrant::EastSouth) => {
+            Some(MapQuadrant::EastSouth) => {
                 map_fields.find(doc! {
                    "player_id": Bson::Null,
                    "village_id": Bson::Null,
@@ -71,7 +73,7 @@ impl crate::repository::Repository for Repository {
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
                 }) // TODO: order by random
             }
-            Some(Quadrant::SouthWest) => {
+            Some(MapQuadrant::SouthWest) => {
                 map_fields.find(doc! {
                    "player_id": Bson::Null,
                    "village_id": Bson::Null,
@@ -80,7 +82,7 @@ impl crate::repository::Repository for Repository {
                    "topology": {"$eq": MapFieldTopology::Valley(ValleyTopology(4,4,4,6))},
                 }) // TODO: order by random
             }
-            Some(Quadrant::WestNorth) => {
+            Some(MapQuadrant::WestNorth) => {
                 map_fields.find(doc! {
                    "player_id": Bson::Null,
                    "village_id": Bson::Null,
@@ -104,9 +106,11 @@ impl crate::repository::Repository for Repository {
         let tx = self.db.start_transaction()?;
         let collection = tx.collection::<Player>("players");
 
-        if let Ok(_) = collection
+        if collection
             .find(doc! { "username": { "$eq": username.clone() }, })
-            .run()
+            .run()?
+            .count()
+            >= 1
         {
             return Err(Error::msg("Username already used."));
         }

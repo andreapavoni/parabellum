@@ -4,12 +4,10 @@ pub mod jobs;
 use anyhow::{Error, Result};
 use std::sync::Arc;
 
-use commands::Command;
+use crate::{command::Command, repository::Repository};
 
-use crate::repository::Repository;
-
-// RegisterPlaye
-// Attac
+// RegisterPlayer
+// Attack
 // Raid
 // Reinforce
 // ReturnArmy
