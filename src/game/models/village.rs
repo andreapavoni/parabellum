@@ -8,7 +8,7 @@ use super::{
     army::Army,
     buildings::{Building, BuildingGroup, BuildingName},
     map::{Oasis, Position, Valley, WORLD_MAX_SIZE},
-    {Player, SmithyUpgrades, Tribe},
+    Player, SmithyUpgrades, Tribe,
 };
 
 // TODO: add standalone rally point? Not yet

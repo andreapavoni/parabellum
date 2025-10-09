@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Tribe {
@@ -27,9 +28,9 @@ impl ResourceGroup {
 
 pub type SmithyUpgrades = [u8; 10];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
-    pub id: String,
+    pub id: Uuid,
     pub username: String,
     pub tribe: Tribe,
 }

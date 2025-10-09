@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod jobs;
+pub mod queries;
 
 use anyhow::{Error, Result};
 use std::sync::Arc;
