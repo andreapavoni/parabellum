@@ -7,6 +7,7 @@ use parabellum::{
     },
     db::{establish_connection_pool, repository::PostgresRepository},
     game::models::Tribe,
+    jobs::worker::JobWorker,
 };
 use std::sync::Arc;
 
@@ -14,8 +15,19 @@ use std::sync::Arc;
 async fn main() -> Result<()> {
     let db_pool = establish_connection_pool();
     let repo = Arc::new(PostgresRepository::new(db_pool));
+    let config = Arc::new(parabellum::config::Config::from_env());
 
-    let app = App::new(repo.clone(), repo.clone(), repo.clone());
+    let app = App::new(
+        config,
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+        repo.clone(),
+    );
+
+    let worker = Arc::new(JobWorker::new(repo.clone(), repo.clone(), repo.clone()));
+    worker.run();
 
     println!("App initialized. Executing a use case");
 
@@ -43,6 +55,8 @@ async fn main() -> Result<()> {
     println!("Village '{}' has been successfully founded!", village.name);
 
     println!("Done.");
+
+    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
 
     Ok(())
 }

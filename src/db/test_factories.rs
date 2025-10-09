@@ -95,8 +95,8 @@ pub fn village_factory(conn: &mut PgConnection, options: VillageFactoryOptions) 
         population: 10,
         loyalty: 100,
         is_capital: false,
-        created_at: chrono::Utc::now().naive_utc(),
-        updated_at: chrono::Utc::now().naive_utc(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
     };
 
     diesel::insert_into(villages::table)

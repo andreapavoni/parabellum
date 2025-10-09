@@ -2,6 +2,10 @@
 
 pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "job_status"))]
+    pub struct JobStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "tribe"))]
     pub struct Tribe;
 }
@@ -32,6 +36,22 @@ diesel::table! {
         defense_points -> Int4,
         off_bonus -> Int2,
         def_bonus -> Int2,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::JobStatus;
+
+    jobs (id) {
+        id -> Uuid,
+        player_id -> Uuid,
+        village_id -> Int4,
+        task -> Jsonb,
+        status -> JobStatus,
+        completed_at -> Timestamptz,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -80,8 +100,10 @@ diesel::joinable!(armies -> heroes (hero_id));
 diesel::joinable!(armies -> players (player_id));
 diesel::joinable!(armies -> villages (village_id));
 diesel::joinable!(heroes -> players (player_id));
+diesel::joinable!(jobs -> players (player_id));
+diesel::joinable!(jobs -> villages (village_id));
 diesel::joinable!(map_fields -> players (player_id));
 diesel::joinable!(map_fields -> villages (village_id));
 diesel::joinable!(villages -> players (player_id));
 
-diesel::allow_tables_to_appear_in_same_query!(armies, heroes, map_fields, players, villages,);
+diesel::allow_tables_to_appear_in_same_query!(armies, heroes, jobs, map_fields, players, villages,);
