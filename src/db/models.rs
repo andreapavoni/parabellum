@@ -56,8 +56,7 @@ pub struct Village {
     pub id: i32,
     pub player_id: Uuid,
     pub name: String,
-    pub pos_x: i32,
-    pub pos_y: i32,
+    pub position: JsonbWrapper<Position>,
     pub buildings: JsonbWrapper<Vec<VillageBuilding>>,
     pub production: JsonbWrapper<VillageProduction>,
     pub stocks: JsonbWrapper<StockCapacity>,
@@ -75,8 +74,7 @@ pub struct NewVillage<'a> {
     pub id: i32,
     pub player_id: Uuid,
     pub name: &'a str,
-    pub pos_x: i32,
-    pub pos_y: i32,
+    pub position: JsonbWrapper<Position>,
     pub buildings: JsonbWrapper<Vec<VillageBuilding>>,
     pub production: JsonbWrapper<VillageProduction>,
     pub stocks: JsonbWrapper<StockCapacity>,
@@ -136,9 +134,11 @@ pub struct NewMapField<'a> {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
+
     use super::*;
     use crate::db::connection::run_test_with_transaction;
-    use crate::db::test_helpers::*;
+    use crate::db::test_factories::*;
     use crate::game::models::map::OasisTopology;
 
     #[test]
@@ -164,52 +164,76 @@ mod tests {
     #[test]
     fn test_factories_with_overrides() {
         run_test_with_transaction(|conn| {
+            let player_id = Uuid::new_v4();
+
             let player = player_factory(
                 conn,
                 PlayerFactoryOptions {
+                    id: Some(player_id),
                     username: Some("Dino"),
                     tribe: Some(Tribe::Gaul),
                 },
             );
+            assert_eq!(player.id, player_id);
             assert_eq!(player.username, "Dino");
             assert_eq!(player.tribe, Tribe::Gaul);
+
+            let world_size = 100;
+            let position = &Position {
+                x: rand::thread_rng().gen_range(-world_size..world_size),
+                y: rand::thread_rng().gen_range(-world_size..world_size),
+            };
 
             let village = village_factory(
                 conn,
                 VillageFactoryOptions {
                     player_id: Some(player.id),
                     name: Some("Dino's Village"),
+                    position: Some(position),
+                    buildings: Some(vec![]),
+                    production: Some(Default::default()),
+                    stocks: Some(Default::default()),
+                    smithy_upgrades: Some(Default::default()),
+                    population: 2,
+                    loyalty: 100,
+                    is_capital: true,
                 },
             );
             assert_eq!(village.player_id, player.id);
             assert_eq!(village.name, "Dino's Village");
 
-            let custom_units: TroopSet = [100, 100, 0, 0, 0, 0, 0, 0, 0, 0];
+            let units: TroopSet = [100, 100, 0, 0, 0, 0, 0, 0, 0, 0];
             let army = army_factory(
                 conn,
                 ArmyFactoryOptions {
+                    id: Some(Uuid::new_v4()),
                     player_id: Some(player.id),
                     village_id: Some(village.id),
-                    units: Some(custom_units),
+                    current_map_field_id: Some(village.id),
+                    units: Some(units),
+                    hero_id: None,
+                    smithy: Some(Default::default()),
+                    tribe: Some(player.tribe),
                 },
             );
             assert_eq!(army.player_id, player.id);
             assert_eq!(army.village_id, village.id);
-            assert_eq!(army.units.0, custom_units);
+            assert_eq!(army.units.0, units);
 
-            let custom_pos = Position { x: 123, y: -45 };
-            let custom_topo = MapFieldTopology::Oasis(OasisTopology::Crop50);
+            let topology = MapFieldTopology::Oasis(OasisTopology::Crop50);
 
             let field_custom = map_field_factory(
                 conn,
                 MapFieldFactoryOptions {
-                    position: Some(custom_pos.clone()),
-                    topology: Some(custom_topo.clone()),
+                    position: Some(position.clone()),
+                    topology: Some(topology.clone()),
+                    village_id: Some(village.id),
+                    player_id: Some(player.id),
                 },
             );
 
-            assert_eq!(field_custom.position.0, custom_pos);
-            assert_eq!(field_custom.topology.0, custom_topo);
+            assert_eq!(field_custom.position.0, *position);
+            assert_eq!(field_custom.topology.0, topology);
 
             Ok(())
         });

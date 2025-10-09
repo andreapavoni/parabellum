@@ -5,18 +5,15 @@ use uuid::Uuid;
 use crate::game::models::{
     army::TroopSet,
     map::{MapFieldTopology, Position, ValleyTopology},
+    village::{StockCapacity, VillageBuilding, VillageProduction},
     SmithyUpgrades,
 };
 
-use super::models::{
-    Army, MapField, NewArmy, NewMapField, NewPlayer, NewVillage, Player, Tribe, Village,
-};
-use super::schema::map_fields;
-use super::schema::{armies, players, villages};
-use super::utils::JsonbWrapper;
+use super::{models::*, schema::*, utils::JsonbWrapper};
 
 #[derive(Default)]
 pub struct PlayerFactoryOptions<'a> {
+    pub id: Option<Uuid>,
     pub username: Option<&'a str>,
     pub tribe: Option<Tribe>,
 }
@@ -25,17 +22,32 @@ pub struct PlayerFactoryOptions<'a> {
 pub struct VillageFactoryOptions<'a> {
     pub player_id: Option<Uuid>,
     pub name: Option<&'a str>,
+    pub position: Option<&'a Position>,
+    pub buildings: Option<Vec<VillageBuilding>>,
+    pub production: Option<VillageProduction>,
+    pub stocks: Option<StockCapacity>,
+    pub smithy_upgrades: Option<SmithyUpgrades>,
+    pub population: i32,
+    pub loyalty: i16,
+    pub is_capital: bool,
 }
 
 #[derive(Default)]
 pub struct ArmyFactoryOptions {
-    pub player_id: Option<Uuid>,
+    pub id: Option<Uuid>,
     pub village_id: Option<i32>,
+    pub current_map_field_id: Option<i32>, // Oasis or village
+    pub hero_id: Option<Uuid>,
     pub units: Option<TroopSet>,
+    pub smithy: Option<SmithyUpgrades>,
+    pub tribe: Option<Tribe>,
+    pub player_id: Option<Uuid>,
 }
 
 #[derive(Default, Clone)]
 pub struct MapFieldFactoryOptions {
+    pub village_id: Option<i32>,
+    pub player_id: Option<Uuid>,
     pub position: Option<Position>,
     pub topology: Option<MapFieldTopology>,
 }
@@ -43,7 +55,7 @@ pub struct MapFieldFactoryOptions {
 pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) -> Player {
     let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
     let new_player = NewPlayer {
-        id: Uuid::new_v4(),
+        id: options.id.unwrap_or(Uuid::new_v4()),
         username: options.username.unwrap_or(&default_username),
         tribe: options.tribe.unwrap_or(Tribe::Roman),
     };
@@ -55,16 +67,27 @@ pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) ->
 }
 
 pub fn village_factory(conn: &mut PgConnection, options: VillageFactoryOptions) -> Village {
+    let world_size = 100;
     let owner_id = options
         .player_id
         .unwrap_or_else(|| player_factory(conn, Default::default()).id);
 
+    let position = match options.position {
+        Some(position) => position.clone(),
+        None => Position {
+            x: rand::thread_rng().gen_range(-world_size..world_size),
+            y: rand::thread_rng().gen_range(-world_size..world_size),
+        },
+    };
+
+    let village_id = position.clone().to_id(world_size) as i32;
+
     let new_village = NewVillage {
-        id: rand::thread_rng().gen(),
+        id: village_id,
         player_id: owner_id,
         name: options.name.unwrap_or("Factory Village"),
-        pos_x: rand::thread_rng().gen_range(-100..100),
-        pos_y: rand::thread_rng().gen_range(-100..100),
+        position: JsonbWrapper(position.clone()),
+
         buildings: JsonbWrapper(vec![]),
         production: JsonbWrapper(Default::default()),
         stocks: JsonbWrapper(Default::default()),
@@ -102,7 +125,7 @@ pub fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Arm
     };
 
     let units_data = options.units.unwrap_or([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]);
-    let smithy_data: SmithyUpgrades = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+    let smithy_data: SmithyUpgrades = options.smithy.unwrap_or([1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
 
     let new_army = NewArmy {
         id: Uuid::new_v4(),
@@ -110,7 +133,7 @@ pub fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Arm
         current_map_field_id: home_village_id,
         hero_id: None,
         units: &JsonbWrapper(units_data),
-        smithy: &JsonbWrapper(smithy_data),
+        smithy: &JsonbWrapper(smithy_data.clone()),
         tribe: Tribe::Teuton,
         player_id: owner_id,
     };

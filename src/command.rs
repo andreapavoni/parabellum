@@ -7,6 +7,7 @@ use crate::repository::Repository;
 #[async_trait::async_trait]
 pub trait Command {
     type Output;
+
     fn validate(&self) -> Result<(), Error> {
         Ok(())
     }
