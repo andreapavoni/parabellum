@@ -1,4 +1,4 @@
-use diesel::prelude::*;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use rand::Rng;
 use uuid::Uuid;
 
@@ -52,10 +52,26 @@ pub struct MapFieldFactoryOptions {
     pub topology: Option<MapFieldTopology>,
 }
 
-pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) -> Player {
+// pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) -> Player {
+//     let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
+//     let new_player = NewPlayer {
+//         id: options.id.unwrap_or(Uuid::new_v4()),
+//         username: options.username.unwrap_or(&default_username),
+//         tribe: options.tribe.unwrap_or(Tribe::Roman),
+//     };
+
+//     diesel::insert_into(players::table)
+//         .values(&new_player)
+//         .get_result(conn)
+//         .expect("Failed to create player with factory")
+// }
+pub async fn player_factory(
+    conn: &mut AsyncPgConnection,
+    options: PlayerFactoryOptions<'_>,
+) -> Player {
     let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
     let new_player = NewPlayer {
-        id: options.id.unwrap_or(Uuid::new_v4()),
+        id: options.id.unwrap_or_else(Uuid::new_v4),
         username: options.username.unwrap_or(&default_username),
         tribe: options.tribe.unwrap_or(Tribe::Roman),
     };
@@ -63,14 +79,23 @@ pub fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions) ->
     diesel::insert_into(players::table)
         .values(&new_player)
         .get_result(conn)
+        .await
         .expect("Failed to create player with factory")
 }
 
-pub fn village_factory(conn: &mut PgConnection, options: VillageFactoryOptions) -> Village {
+pub async fn village_factory(
+    conn: &mut AsyncPgConnection,
+    options: VillageFactoryOptions<'_>,
+) -> Village {
     let world_size = 100;
-    let owner_id = options
-        .player_id
-        .unwrap_or_else(|| player_factory(conn, Default::default()).id);
+
+    let owner_id = match options.player_id {
+        Some(id) => id,
+        None => {
+            let player = player_factory(conn, Default::default()).await;
+            player.id
+        }
+    };
 
     let position = match options.position {
         Some(position) => position.clone(),
@@ -102,10 +127,11 @@ pub fn village_factory(conn: &mut PgConnection, options: VillageFactoryOptions) 
     diesel::insert_into(villages::table)
         .values(&new_village)
         .get_result(conn)
+        .await
         .expect("Failed to create village with factory")
 }
 
-pub fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Army {
+pub async fn army_factory(conn: &mut AsyncPgConnection, options: ArmyFactoryOptions) -> Army {
     let (owner_id, home_village_id) = match (options.player_id, options.village_id) {
         (Some(p_id), Some(v_id)) => (p_id, v_id),
         (Some(p_id), None) => {
@@ -115,11 +141,12 @@ pub fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Arm
                     player_id: Some(p_id),
                     ..Default::default()
                 },
-            );
+            )
+            .await;
             (village.player_id, village.id)
         }
         _ => {
-            let village = village_factory(conn, Default::default());
+            let village = village_factory(conn, Default::default()).await;
             (village.player_id, village.id)
         }
     };
@@ -141,10 +168,14 @@ pub fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Arm
     diesel::insert_into(armies::table)
         .values(&new_army)
         .get_result(conn)
+        .await
         .expect("Failed to create army with factory")
 }
 
-pub fn map_field_factory(conn: &mut PgConnection, options: MapFieldFactoryOptions) -> MapField {
+pub async fn map_field_factory(
+    conn: &mut AsyncPgConnection,
+    options: MapFieldFactoryOptions,
+) -> MapField {
     let default_pos = Position {
         x: rand::thread_rng().gen(),
         y: rand::thread_rng().gen(),
@@ -162,5 +193,6 @@ pub fn map_field_factory(conn: &mut PgConnection, options: MapFieldFactoryOption
     diesel::insert_into(map_fields::table)
         .values(&new_map_field)
         .get_result(conn)
+        .await
         .expect("Failed to create map_field with factory")
 }
