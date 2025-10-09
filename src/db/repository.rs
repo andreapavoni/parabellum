@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Utc};
 use diesel::{
     dsl::sql,
     prelude::*,
@@ -24,7 +23,7 @@ use crate::{
         village::Village,
         Player, Tribe,
     },
-    jobs::{Job, JobTask},
+    jobs::Job,
     repository::*,
 };
 
@@ -204,29 +203,29 @@ impl MapRepository for PostgresRepository {
 
 #[async_trait::async_trait]
 impl ArmyRepository for PostgresRepository {
-    async fn get_by_id(&self, _army_id: Uuid) -> Result<Option<Army>> {
-        unimplemented!()
+    async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>> {
+        let mut conn = self.pool.get().await?;
+
+        let army = armies::table
+            .find(army_id)
+            .first::<db_models::Army>(&mut conn)
+            .await?;
+
+        Ok(Some(army.into()))
     }
 }
 
 #[async_trait::async_trait]
 impl JobRepository for PostgresRepository {
-    async fn create(
-        &self,
-        id: Uuid,
-        player_id: Uuid,
-        village_id: i32,
-        task: JobTask,
-        completed_at: DateTime<Utc>,
-    ) -> Result<()> {
+    async fn add(&self, job: &Job) -> Result<()> {
         let pool = self.pool.clone();
         let new_job = NewJob {
-            id,
-            player_id,
-            village_id,
-            task: JsonbWrapper(task),
+            id: job.id,
+            player_id: job.player_id,
+            village_id: job.village_id,
+            task: JsonbWrapper(job.task.clone()),
             status: JobStatus::Pending,
-            completed_at,
+            completed_at: job.completed_at,
         };
 
         let mut conn = pool.get().await?;

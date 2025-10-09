@@ -1,11 +1,12 @@
 use crate::{
     game::{
         battle::{AttackType, Battle},
-        models::buildings::Building,
+        models::{buildings::Building, ResourceGroup},
     },
     jobs::{
         handler::{JobHandler, JobHandlerContext},
-        tasks::AttackTask,
+        tasks::{ArmyReturnTask, AttackTask},
+        Job, JobTask,
     },
 };
 use anyhow::Result;
@@ -64,9 +65,9 @@ impl JobHandler for AttackJobHandler {
 
         let battle = Battle::new(
             AttackType::Normal,
-            attacker_army,
-            attacker_village,
-            defender_village,
+            attacker_army.clone(),
+            attacker_village.clone(),
+            defender_village.clone(),
             catapult_targets,
         );
         let _battle_result = battle.calculate_battle();
@@ -75,6 +76,33 @@ impl JobHandler for AttackJobHandler {
         // ctx.village_repo.apply_damages(..., battle_result.buildings_damages).await?;
         // ctx.army_repo.apply_losses(..., battle_result.attacker_loss_percentage).await?;
         // ctx.job_repo.create(return_army_new_job).await?;
+
+        // --- 4. Army return job ---
+        // Calculate army speed
+        let return_travel_time = attacker_village
+            .calculate_travel_time_secs(defender_village.position, attacker_army.clone().speed())
+            as i64;
+
+        // Creates army return payload
+        let return_payload = ArmyReturnTask {
+            army_id: self.payload.army_id,
+            // TODO: fix loot from battle
+            resources: ResourceGroup::new(0, 0, 0, 0),
+        };
+
+        let return_job = Job::new(
+            attacker_village.clone().player_id,
+            attacker_village.id as i32,
+            return_travel_time,
+            JobTask::ArmyReturn(return_payload),
+        );
+
+        ctx.job_repo.add(&return_job).await?;
+
+        println!(
+            "Army return job {} planned. Will arrive at {}.",
+            return_job.id, return_job.completed_at
+        );
 
         Ok(())
     }
