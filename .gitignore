@@ -3,4 +3,5 @@
 *.db-journal
 *.db-shm
 *.db-wal
+Cargo.lock
 

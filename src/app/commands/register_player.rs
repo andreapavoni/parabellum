@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
+use mini_cqrs_es::{Aggregate, Command, Event};
 
-use super::Command;
 use crate::{
     app::events::GameEvent,
     game::models::{village::Village, Tribe},
@@ -27,7 +27,9 @@ impl RegisterPlayerCommand {
 
 #[async_trait::async_trait]
 impl Command for RegisterPlayerCommand {
-    async fn run(&self) -> Result<Vec<GameEvent>> {
+    type Aggregate = MyAggregate;
+
+    async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<Event>, Error> {
         let player = self
             .repo
             .register_player(self.username.clone(), self.tribe.clone())
