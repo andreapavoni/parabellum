@@ -16,9 +16,11 @@ impl MainConsumer {
     pub fn process_events(events: Vec<GameEvent>) -> Result<()> {
         for e in events.into_iter() {
             match e {
+                GameEvent::VillageFounded(_) => JobConsumer::process(e.clone())?,
+                GameEvent::PlayerRegistered(_) => JobConsumer::process(e.clone())?,
                 GameEvent::JobEnqueued(_) => JobConsumer::process(e.clone())?,
                 GameEvent::ArmyDeployed {
-                    units: _,
+                    army: _,
                     village_id: _,
                 } => todo!(),
                 GameEvent::TargetAttacked => todo!(),

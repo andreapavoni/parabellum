@@ -106,13 +106,10 @@ impl Building {
         }
 
         // check starting levels
-        let mut lvl_idx = level - 1;
-        if level <= 0 {
+        let mut lvl_idx = level;
+        if level > 0 {
             if self.group != BuildingGroup::Resources {
-                lvl_idx = 1;
-                level = 0;
-            } else {
-                lvl_idx = 1;
+                lvl_idx -= 1;
             }
         }
 
@@ -210,11 +207,11 @@ impl Building {
 
         let mut level = self.level;
 
-        level = if self.group == BuildingGroup::Resources {
-            level
-        } else {
-            level - 1
-        };
+        if level > 0 {
+            if self.group != BuildingGroup::Resources {
+                level -= 1;
+            }
+        }
 
         let data = building.data[level as usize].clone();
 
@@ -1754,3 +1751,12 @@ static WONDER_OF_THW_WORLD: BuildingData = BuildingData {
         allow_multiple: false,
     },
 };
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_new_building() {
+        // test level, upkeep and value at level 0, 1, and 2
+        // resources will start at level 0 and upkeep 0, the others will have level 1 and relative upkeep
+    }
+}

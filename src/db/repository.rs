@@ -1,13 +1,15 @@
 use std::env;
 
-use anyhow::Result;
-use ormlite::{sqlite::SqlitePoolOptions, Model, Pool};
+use anyhow::{Error, Result};
+use ormlite::{sqlite::SqlitePoolOptions, types::Json, Model, Pool};
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool, Transaction};
+use uuid::Uuid;
 
-use super::models::{map::MapField, village::Village};
+use super::models::{map::MapField, player::Player, village::Village};
 use crate::game::models::{
-    map::{generate_new_map, Oasis, Valley},
+    map::{generate_new_map, Oasis, Quadrant, Valley},
     village::Village as GameVillage,
+    Player as GamePlayer, Tribe,
 };
 
 // use crate::game::models::village::Village;
@@ -65,6 +67,76 @@ impl crate::repository::Repository for Repository {
         println!("done!");
 
         Ok(())
+    }
+
+    async fn get_unoccupied_valley(&self, quadrant: Option<Quadrant>) -> Result<Valley> {
+        let mut conn = self.get_pool_connection().await?;
+        let query = match quadrant {
+            Some(Quadrant::NorthEast) => {
+                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y >= 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
+	RANDOM()")
+            }
+            Some(Quadrant::EastSouth) => {
+                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
+	RANDOM()" )
+            }
+            Some(Quadrant::SouthWest) => {
+                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x < 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
+	RANDOM()")
+            }
+            Some(Quadrant::WestNorth) => {
+                MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND x >= 0 AND y < 0 AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY
+	RANDOM()")
+            }
+            None => { MapField::query("SELECT * FROM map_fields WHERE player_id IS NULL AND village_id IS NULL AND topology = '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM()") }
+        };
+        let valley = query.fetch_one(&mut conn).await?;
+
+        Ok(valley.try_into()?)
+    }
+
+    async fn register_player(&self, username: String, tribe: Tribe) -> Result<GamePlayer> {
+        let mut tx = self.begin_transaction().await?;
+
+        if let Ok(_) = Player::query("SELECT * FROM players WHERE username = ?")
+            .bind(username.clone())
+            // FIXME this method is better to lookup records by their columns `.fetch_optional(&mut tx)`
+            .fetch_one(&mut tx)
+            .await
+        {
+            return Err(Error::msg("Username already used."));
+        }
+
+        let player = Player {
+            id: Uuid::new_v4(),
+            username,
+            tribe: Json(tribe),
+        };
+        player.clone().insert(&mut tx).await?;
+
+        tx.commit().await?;
+
+        Ok(player.into())
+    }
+
+    async fn get_player_by_id(&self, player_id: Uuid) -> Result<GamePlayer> {
+        let mut conn = self.get_pool_connection().await?;
+        let player = Player::query("SELECT * FROM players WHERE id = ?")
+            .bind(player_id)
+            .fetch_one(&mut conn)
+            .await?;
+
+        Ok(player.into())
+    }
+
+    async fn get_player_by_username(&self, username: String) -> Result<GamePlayer> {
+        let mut conn = self.get_pool_connection().await?;
+        let player = Player::query("SELECT * FROM players WHERE username = ?")
+            .bind(username)
+            .fetch_one(&mut conn)
+            .await?;
+
+        Ok(player.into())
     }
 
     async fn get_village_by_id(&self, village_id: u32) -> Result<GameVillage> {
