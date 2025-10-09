@@ -15,11 +15,12 @@ pub struct Cost {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResourceGroup {
-    pub lumber: u64,
-    pub clay: u64,
-    pub iron: u64,
-    pub crop: u64,
+pub struct ResourceGroup(u64, u64, u64, u64);
+
+impl ResourceGroup {
+    pub const fn new(lumber: u64, clay: u64, iron: u64, crop: u64) -> Self {
+        Self(lumber, clay, iron, crop)
+    }
 }
 
 pub type SmithyUpgrades = [u8; 10];

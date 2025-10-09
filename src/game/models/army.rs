@@ -231,12 +231,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 12,
         capacity: 50,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 120,
-                clay: 100,
-                iron: 150,
-                crop: 30,
-            },
+            resources: ResourceGroup::new(120, 100, 150, 30),
             upkeep: 1,
             build_time: 533,
         },
@@ -250,12 +245,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 10,
         capacity: 20,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 100,
-                clay: 130,
-                iron: 160,
-                crop: 70,
-            },
+            resources: ResourceGroup::new(100, 130, 160, 70),
             upkeep: 1,
             build_time: 597,
         },
@@ -269,12 +259,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 14,
         capacity: 50,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 150,
-                clay: 160,
-                iron: 210,
-                crop: 80,
-            },
+            resources: ResourceGroup::new(150, 160, 210, 80),
             upkeep: 1,
             build_time: 640,
         },
@@ -288,12 +273,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 32,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 140,
-                clay: 160,
-                iron: 20,
-                crop: 40,
-            },
+            resources: ResourceGroup::new(140, 160, 20, 40),
             upkeep: 2,
             build_time: 453,
         },
@@ -307,12 +287,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 28,
         capacity: 100,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 550,
-                clay: 440,
-                iron: 320,
-                crop: 100,
-            },
+            resources: ResourceGroup::new(550, 440, 320, 100),
             upkeep: 3,
             build_time: 880,
         },
@@ -326,12 +301,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 20,
         capacity: 70,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 550,
-                clay: 640,
-                iron: 800,
-                crop: 180,
-            },
+            resources: ResourceGroup::new(550, 640, 800, 180),
             upkeep: 4,
             build_time: 1173,
         },
@@ -345,12 +315,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 8,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 900,
-                clay: 360,
-                iron: 500,
-                crop: 70,
-            },
+            resources: ResourceGroup::new(900, 360, 500, 70),
             upkeep: 3,
             build_time: 1533,
         },
@@ -364,12 +329,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 6,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 950,
-                clay: 1350,
-                iron: 600,
-                crop: 90,
-            },
+            resources: ResourceGroup::new(950, 1350, 600, 90),
             upkeep: 6,
             build_time: 3000,
         },
@@ -383,12 +343,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 8,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 30750,
-                clay: 27200,
-                iron: 45000,
-                crop: 37500,
-            },
+            resources: ResourceGroup::new(30750, 27200, 45000, 37500),
             upkeep: 5,
             build_time: 30233,
         },
@@ -402,12 +357,7 @@ static ROMAN_UNITS: TribeUnits = [
         speed: 10,
         capacity: 3000,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 4600,
-                clay: 4200,
-                iron: 5800,
-                crop: 4400,
-            },
+            resources: ResourceGroup::new(4600, 4200, 5800, 4400),
             upkeep: 1,
             build_time: 8967,
         },
@@ -424,12 +374,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 14,
         capacity: 60,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 95,
-                clay: 75,
-                iron: 40,
-                crop: 40,
-            },
+            resources: ResourceGroup::new(95, 75, 40, 40),
             upkeep: 1,
             build_time: 240,
         },
@@ -443,12 +388,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 14,
         capacity: 40,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 145,
-                clay: 70,
-                iron: 85,
-                crop: 40,
-            },
+            resources: ResourceGroup::new(145, 70, 85, 40),
             upkeep: 1,
             build_time: 73,
         },
@@ -462,12 +402,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 12,
         capacity: 50,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 130,
-                clay: 120,
-                iron: 170,
-                crop: 70,
-            },
+            resources: ResourceGroup::new(130, 120, 170, 70),
             upkeep: 1,
             build_time: 76,
         },
@@ -481,12 +416,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 18,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 160,
-                clay: 100,
-                iron: 50,
-                crop: 50,
-            },
+            resources: ResourceGroup::new(160, 100, 50, 50),
             upkeep: 1,
             build_time: 73,
         },
@@ -500,12 +430,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 20,
         capacity: 110,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 370,
-                clay: 270,
-                iron: 290,
-                crop: 75,
-            },
+            resources: ResourceGroup::new(370, 270, 290, 75),
             upkeep: 2,
             build_time: 800,
         },
@@ -519,12 +444,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 18,
         capacity: 80,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 450,
-                clay: 515,
-                iron: 480,
-                crop: 80,
-            },
+            resources: ResourceGroup::new(450, 515, 480, 80),
             upkeep: 3,
             build_time: 987,
         },
@@ -538,12 +458,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 8,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 1000,
-                clay: 300,
-                iron: 350,
-                crop: 70,
-            },
+            resources: ResourceGroup::new(1000, 300, 350, 70),
             upkeep: 3,
             build_time: 1400,
         },
@@ -557,12 +472,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 6,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 900,
-                clay: 1200,
-                iron: 600,
-                crop: 60,
-            },
+            resources: ResourceGroup::new(900, 1200, 600, 60),
             upkeep: 6,
             build_time: 3000,
         },
@@ -576,12 +486,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 8,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 35500,
-                clay: 26600,
-                iron: 25000,
-                crop: 27200,
-            },
+            resources: ResourceGroup::new(35500, 26600, 25000, 27200),
             upkeep: 4,
             build_time: 23500,
         },
@@ -595,12 +500,7 @@ static TEUTON_UNITS: TribeUnits = [
         speed: 10,
         capacity: 3000,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 5800,
-                clay: 4400,
-                iron: 4600,
-                crop: 5200,
-            },
+            resources: ResourceGroup::new(5800, 4400, 4600, 5200),
             upkeep: 1,
             build_time: 10333,
         },
@@ -617,12 +517,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 14,
         capacity: 35,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 100,
-                clay: 130,
-                iron: 55,
-                crop: 30,
-            },
+            resources: ResourceGroup::new(100, 130, 55, 30),
             upkeep: 1,
             build_time: 347,
         },
@@ -636,12 +531,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 12,
         capacity: 45,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 140,
-                clay: 150,
-                iron: 185,
-                crop: 60,
-            },
+            resources: ResourceGroup::new(140, 150, 185, 60),
             upkeep: 1,
             build_time: 480,
         },
@@ -655,12 +545,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 34,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 170,
-                clay: 150,
-                iron: 20,
-                crop: 40,
-            },
+            resources: ResourceGroup::new(170, 150, 20, 40),
             upkeep: 2,
             build_time: 75,
         },
@@ -674,12 +559,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 38,
         capacity: 75,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 350,
-                clay: 450,
-                iron: 230,
-                crop: 60,
-            },
+            resources: ResourceGroup::new(350, 450, 230, 60),
             upkeep: 2,
             build_time: 827,
         },
@@ -693,12 +573,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 32,
         capacity: 35,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 360,
-                clay: 330,
-                iron: 280,
-                crop: 120,
-            },
+            resources: ResourceGroup::new(360, 330, 280, 120),
             upkeep: 2,
             build_time: 853,
         },
@@ -712,12 +587,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 26,
         capacity: 65,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 500,
-                clay: 620,
-                iron: 675,
-                crop: 170,
-            },
+            resources: ResourceGroup::new(500, 620, 675, 170),
             upkeep: 3,
             build_time: 1040,
         },
@@ -731,12 +601,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 8,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 950,
-                clay: 555,
-                iron: 330,
-                crop: 75,
-            },
+            resources: ResourceGroup::new(950, 555, 330, 75),
             upkeep: 3,
             build_time: 1667,
         },
@@ -750,12 +615,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 6,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 960,
-                clay: 1450,
-                iron: 630,
-                crop: 90,
-            },
+            resources: ResourceGroup::new(960, 1450, 630, 90),
             upkeep: 6,
             build_time: 3000,
         },
@@ -769,12 +629,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 10,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 30750,
-                clay: 45400,
-                iron: 31000,
-                crop: 37500,
-            },
+            resources: ResourceGroup::new(30750, 45400, 31000, 37500),
             upkeep: 4,
             build_time: 30233,
         },
@@ -788,12 +643,7 @@ static GAUL_UNITS: TribeUnits = [
         speed: 10,
         capacity: 3000,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 4400,
-                clay: 5600,
-                iron: 4200,
-                crop: 3900,
-            },
+            resources: ResourceGroup::new(4400, 5600, 4200, 3900),
             upkeep: 1,
             build_time: 7567,
         },
@@ -810,12 +660,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 100,
-                crop: 100,
-            },
+            resources: ResourceGroup::new(0, 0, 100, 100),
             upkeep: 1,
             build_time: 0,
         },
@@ -829,12 +674,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -848,12 +688,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -867,12 +702,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -886,12 +716,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
             build_time: 0,
         },
@@ -905,12 +730,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
             build_time: 0,
         },
@@ -924,12 +744,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
             build_time: 0,
         },
@@ -943,12 +758,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
             build_time: 0,
         },
@@ -962,12 +772,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
             build_time: 0,
         },
@@ -981,12 +786,7 @@ static NATURE_UNITS: TribeUnits = [
         speed: 40,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 5,
             build_time: 0,
         },
@@ -1003,12 +803,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 12,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -1022,12 +817,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 14,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -1041,12 +831,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 12,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -1060,12 +845,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 50,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -1079,12 +859,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 28,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
             build_time: 0,
         },
@@ -1098,12 +873,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 24,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
             build_time: 0,
         },
@@ -1117,12 +887,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 10,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 4,
             build_time: 0,
         },
@@ -1136,12 +901,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 6,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 5,
             build_time: 0,
         },
@@ -1155,12 +915,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 10,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
@@ -1174,12 +929,7 @@ static NATAR_UNITS: TribeUnits = [
         speed: 10,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup {
-                lumber: 0,
-                clay: 0,
-                iron: 0,
-                crop: 0,
-            },
+            resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
             build_time: 0,
         },
