@@ -1,23 +1,23 @@
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models::{
-    army::TroopSet,
-    map::{MapFieldTopology, Position},
-    village::{StockCapacity, VillageBuilding, VillageProduction},
-    SmithyUpgrades,
-};
+use crate::game::models as game_models;
+
+use crate::db::models as db_models;
 
 use super::schema::{armies, map_fields, players, villages};
 use super::utils::JsonbWrapper;
 use crate::impl_jsonb_for;
 
-impl_jsonb_for!(StockCapacity);
-impl_jsonb_for!(VillageProduction);
-impl_jsonb_for!(SmithyUpgrades);
-impl_jsonb_for!(Vec<VillageBuilding>);
+impl_jsonb_for!(game_models::map::MapFieldTopology);
+impl_jsonb_for!(game_models::map::Position);
+impl_jsonb_for!(game_models::SmithyUpgrades);
+impl_jsonb_for!(game_models::village::StockCapacity);
+impl_jsonb_for!(Vec<game_models::village::VillageBuilding>);
+impl_jsonb_for!(game_models::village::VillageProduction);
 
 #[derive(DbEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[ExistingTypePath = "crate::db::schema::sql_types::Tribe"]
@@ -34,12 +34,34 @@ pub enum Tribe {
     Nature,
 }
 
+impl From<Tribe> for game_models::Tribe {
+    fn from(db_tribe: Tribe) -> Self {
+        match db_tribe {
+            Tribe::Roman => game_models::Tribe::Roman,
+            Tribe::Gaul => game_models::Tribe::Gaul,
+            Tribe::Teuton => game_models::Tribe::Teuton,
+            Tribe::Natar => game_models::Tribe::Natar,
+            Tribe::Nature => game_models::Tribe::Nature,
+        }
+    }
+}
+
 #[derive(Debug, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = players)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,
     pub tribe: Tribe,
+}
+impl From<Player> for game_models::Player {
+    fn from(player: Player) -> Self {
+        game_models::Player {
+            id: player.id,
+            username: player.username,
+            // The enum conversion is required because they're defined in two different places
+            tribe: player.tribe.into(),
+        }
+    }
 }
 
 #[derive(Insertable)]
@@ -56,16 +78,16 @@ pub struct Village {
     pub id: i32,
     pub player_id: Uuid,
     pub name: String,
-    pub position: JsonbWrapper<Position>,
-    pub buildings: JsonbWrapper<Vec<VillageBuilding>>,
-    pub production: JsonbWrapper<VillageProduction>,
-    pub stocks: JsonbWrapper<StockCapacity>,
-    pub smithy_upgrades: JsonbWrapper<SmithyUpgrades>,
+    pub position: JsonbWrapper<game_models::map::Position>,
+    pub buildings: JsonbWrapper<Vec<game_models::village::VillageBuilding>>,
+    pub production: JsonbWrapper<game_models::village::VillageProduction>,
+    pub stocks: JsonbWrapper<game_models::village::StockCapacity>,
+    pub smithy_upgrades: JsonbWrapper<game_models::SmithyUpgrades>,
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable)]
@@ -74,11 +96,11 @@ pub struct NewVillage<'a> {
     pub id: i32,
     pub player_id: Uuid,
     pub name: &'a str,
-    pub position: JsonbWrapper<Position>,
-    pub buildings: JsonbWrapper<Vec<VillageBuilding>>,
-    pub production: JsonbWrapper<VillageProduction>,
-    pub stocks: JsonbWrapper<StockCapacity>,
-    pub smithy_upgrades: JsonbWrapper<SmithyUpgrades>,
+    pub position: JsonbWrapper<game_models::map::Position>,
+    pub buildings: JsonbWrapper<Vec<game_models::village::VillageBuilding>>,
+    pub production: JsonbWrapper<game_models::village::VillageProduction>,
+    pub stocks: JsonbWrapper<game_models::village::StockCapacity>,
+    pub smithy_upgrades: JsonbWrapper<game_models::SmithyUpgrades>,
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,
@@ -93,10 +115,26 @@ pub struct Army {
     pub village_id: i32,
     pub current_map_field_id: i32, // Oasis or village
     pub hero_id: Option<Uuid>,
-    pub units: JsonbWrapper<TroopSet>,
-    pub smithy: JsonbWrapper<SmithyUpgrades>,
+    pub units: JsonbWrapper<game_models::army::TroopSet>,
+    pub smithy: JsonbWrapper<game_models::SmithyUpgrades>,
     pub tribe: Tribe,
     pub player_id: Uuid,
+}
+
+impl From<db_models::Army> for game_models::army::Army {
+    fn from(army: db_models::Army) -> Self {
+        game_models::army::Army {
+            village_id: army.village_id as u32,
+            current_map_field_id: Some(army.current_map_field_id as u32),
+            player_id: army.player_id,
+            units: Default::default(),
+            smithy: Default::default(),
+            // TODO: load hero through join
+            hero: None,
+            // The enum conversion is required because they're defined in two different places
+            tribe: army.tribe.into(),
+        }
+    }
 }
 
 #[derive(Insertable)]
@@ -106,8 +144,8 @@ pub struct NewArmy<'a> {
     pub village_id: i32,
     pub current_map_field_id: i32, // Oasis or village
     pub hero_id: Option<Uuid>,
-    pub units: &'a JsonbWrapper<TroopSet>,
-    pub smithy: &'a JsonbWrapper<SmithyUpgrades>,
+    pub units: &'a JsonbWrapper<game_models::army::TroopSet>,
+    pub smithy: &'a JsonbWrapper<game_models::SmithyUpgrades>,
     pub tribe: Tribe,
     pub player_id: Uuid,
 }
@@ -118,8 +156,24 @@ pub struct MapField {
     pub id: i32,
     pub village_id: Option<i32>,
     pub player_id: Option<Uuid>,
-    pub position: JsonbWrapper<Position>,
-    pub topology: JsonbWrapper<MapFieldTopology>,
+    pub position: JsonbWrapper<game_models::map::Position>,
+    pub topology: JsonbWrapper<game_models::map::MapFieldTopology>,
+}
+
+impl From<db_models::MapField> for game_models::map::MapField {
+    fn from(map_field: db_models::MapField) -> Self {
+        let village_id = match map_field.village_id {
+            Some(id) => Some(id as u32),
+            None => None,
+        };
+        game_models::map::MapField {
+            id: map_field.id as u32,
+            village_id: village_id,
+            player_id: map_field.player_id,
+            position: map_field.position.into(),
+            topology: map_field.topology.into(),
+        }
+    }
 }
 
 #[derive(Insertable)]
@@ -128,8 +182,8 @@ pub struct NewMapField<'a> {
     pub id: i32,
     pub village_id: Option<i32>,
     pub player_id: Option<Uuid>,
-    pub position: &'a JsonbWrapper<Position>,
-    pub topology: &'a JsonbWrapper<MapFieldTopology>,
+    pub position: &'a JsonbWrapper<game_models::map::Position>,
+    pub topology: &'a JsonbWrapper<game_models::map::MapFieldTopology>,
 }
 
 #[cfg(test)]
@@ -139,7 +193,8 @@ mod tests {
     use super::*;
     use crate::db::connection::run_test_with_transaction;
     use crate::db::test_factories::*;
-    use crate::game::models::map::OasisTopology;
+    use crate::game::models::army::TroopSet;
+    use crate::game::models::map::{MapFieldTopology, OasisTopology, Position};
 
     #[test]
     fn test_factories_with_defaults() {
