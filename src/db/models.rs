@@ -72,45 +72,6 @@ pub struct Village {
     pub updated_at: DateTime<Utc>,
 }
 
-// impl From<Village> for game_models::village::Village {
-//     fn from(db_village: Village) -> Self {
-//         game_models::village::Village {
-//             id: db_village.id as u32,
-//             player_id: db_village.player_id,
-//             name: db_village.name,
-//             position: db_village.position,
-//             buildings: db_village.buildings,
-//             production: db_village.production,
-//             stocks: db_village.stocks,
-//             smithy: db_village.smithy_upgrades,
-//             population: db_village.population as u32,
-//             loyalty: db_village.loyalty as u8,
-//             is_capital: db_village.is_capital,
-//             updated_at: db_village.updated_at,
-//         }
-//     }
-// }
-
-// impl From<game_models::village::Village> for Village {
-//     fn from(game_village: game_models::village::Village) -> Self {
-//         Village {
-//             id: game_village.id as i32,
-//             player_id: game_village.player_id,
-//             name: game_village.name,
-//             position: game_village.position,
-//             buildings: game_village.buildings,
-//             production: game_village.production,
-//             stocks: game_village.stocks,
-//             smithy_upgrades: game_village.smithy.into(),
-//             population: game_village.population as i32,
-//             loyalty: game_village.loyalty as i16,
-//             is_capital: game_village.is_capital,
-//             created_at: game_village.updated_at,
-//             updated_at: game_village.updated_at,
-//         }
-//     }
-// }
-
 #[derive(Debug, FromRow)]
 pub struct Army {
     pub id: Uuid,

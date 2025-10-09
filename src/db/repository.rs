@@ -67,14 +67,6 @@ impl VillageRepository for PostgresRepository {
             "SELECT * FROM villages WHERE id = $1",
             village_id_i32
         )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let db_village = sqlx::query_as!(
-            db_models::Village,
-            "SELECT * FROM villages WHERE id = $1",
-            village_id_i32
-        )
         .fetch_one(&self.pool)
         .await?;
 
