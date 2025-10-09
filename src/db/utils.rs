@@ -19,11 +19,13 @@ where
     T: Serialize + std::fmt::Debug,
 {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> serialize::Result {
-        // serializza la struct in JSON (bytes)
-        let bytes = serde_json::to_vec(&self.0)
+        // Writes byte version '1' as required by jsonb format.
+        out.write_all(&[1])?;
+
+        // Serialize to JSON.
+        serde_json::to_writer(out, &self.0)
             .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))?;
 
-        out.write_all(&bytes)?;
         Ok(serialize::IsNull::No)
     }
 }
