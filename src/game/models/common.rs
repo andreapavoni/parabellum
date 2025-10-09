@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Tribe {
     Roman,
     Gaul,
@@ -10,15 +12,15 @@ pub enum Tribe {
 #[derive(Debug, Clone)]
 pub struct Cost {
     pub resources: ResourceGroup,
-    pub upkeep: u64,
-    pub build_time: u64,
+    pub upkeep: u32,
+    pub build_time: u32,
 }
 
 #[derive(Debug, Clone)]
-pub struct ResourceGroup(u64, u64, u64, u64);
+pub struct ResourceGroup(u32, u32, u32, u32);
 
 impl ResourceGroup {
-    pub const fn new(lumber: u64, clay: u64, iron: u64, crop: u64) -> Self {
+    pub const fn new(lumber: u32, clay: u32, iron: u32, crop: u32) -> Self {
         Self(lumber, clay, iron, crop)
     }
 }
