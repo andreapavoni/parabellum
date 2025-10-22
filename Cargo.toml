@@ -43,3 +43,6 @@ rand = "0.8.5"
 
 # Utils
 dotenvy = "0.15"
+
+[dev-dependencies]
+serial_test = "3.2"

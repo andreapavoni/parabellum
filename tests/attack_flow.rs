@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serial_test::serial;
 use std::sync::Arc;
 
 use parabellum::{
@@ -12,8 +13,13 @@ use parabellum::{
     repository::*,
 };
 
+mod common;
+use common::setup;
+
 #[tokio::test]
+#[serial]
 async fn test_full_attack_flow() -> Result<()> {
+    setup().await?;
     let pool = establish_test_connection_pool().await.unwrap();
     let repo = Arc::new(PostgresRepository::new(pool));
 
@@ -125,9 +131,11 @@ async fn test_full_attack_flow() -> Result<()> {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
+    setup().await?;
     // --- 1. SETUP ---
-    let pool = establish_test_connection_pool().await.unwrap();
+    let pool = establish_test_connection_pool().await?;
     let repo = Arc::new(PostgresRepository::new(pool));
 
     let player_repo: Arc<dyn PlayerRepository> = repo.clone();

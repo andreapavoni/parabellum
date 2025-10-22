@@ -15,13 +15,8 @@ fi
 
 DATABASE_NAME=$(echo $TEST_DATABASE_URL | cut -d '/' -f4)
 
-echo "--- Dropping database '$DATABASE_NAME' (if exists) ---"
 docker exec -it parabellum_db dropdb -U parabellum $DATABASE_NAME --if-exists
-
-echo "--- Creating database '$DATABASE_NAME' ---"
 docker exec -it parabellum_db createdb -U parabellum $DATABASE_NAME
-
-echo "--- Running migrations on '$DATABASE_NAME' ---"
 sqlx migrate run --database-url "$TEST_DATABASE_URL"
-
-echo "--- Database setup complete! ---"
+reset
+exit 0
