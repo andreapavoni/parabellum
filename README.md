@@ -12,8 +12,8 @@ a new map of 100x100 (x4) squares with each one a randomly assigned topology (va
 cp .env.sample .env
 docker-compose up -d
 
-cargo install diesel-cli --no-default-features --features postgres
-diesel migration run
+cargo install sqlx-cli --no-default-features --features postgres
+sqlx migrate run
 cargo run
 ```
 

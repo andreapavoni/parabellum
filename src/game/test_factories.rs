@@ -83,6 +83,7 @@ pub fn army_factory(options: ArmyFactoryOptions) -> Army {
     let village_id = options.village_id.unwrap_or(1);
 
     Army::new(
+        Some(Uuid::new_v4()),
         village_id,
         Some(village_id),
         options.player_id.unwrap_or(Uuid::new_v4()),

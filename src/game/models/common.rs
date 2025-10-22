@@ -25,6 +25,10 @@ impl ResourceGroup {
     pub const fn new(lumber: u32, clay: u32, iron: u32, crop: u32) -> Self {
         Self(lumber, clay, iron, crop)
     }
+
+    pub fn total(&self) -> u32 {
+        self.0 + self.1 + self.2 + self.3
+    }
 }
 
 pub type SmithyUpgrades = [u8; 10];

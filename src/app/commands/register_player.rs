@@ -33,9 +33,15 @@ impl RegisterPlayerHandler {
     }
 
     pub async fn handle(&self, command: RegisterPlayer) -> Result<Player> {
-        self.repo
-            .create(command.id, command.username, command.tribe)
-            .await
+        let player = Player {
+            id: command.id,
+            username: command.username,
+            tribe: command.tribe,
+        };
+
+        self.repo.create(&player).await?;
+
+        Ok(player)
     }
 }
 
@@ -56,14 +62,10 @@ mod tests {
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {
-        async fn create(&self, id: Uuid, username: String, tribe: Tribe) -> Result<Player> {
-            let player = Player {
-                id: id,
-                username,
-                tribe,
-            };
+        async fn create(&self, player: &Player) -> Result<()> {
             *self.created_player.lock().unwrap() = Some(player.clone());
-            Ok(player)
+
+            Ok(())
         }
 
         async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>> {

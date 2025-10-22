@@ -3,12 +3,15 @@ use sqlx::{types::Json, PgPool};
 use uuid::Uuid;
 
 use crate::{
-    db::models as db_models,
+    db::{
+        mapping::VillageAggregate,
+        models::{self as db_models, Tribe},
+    },
     game::models::{
         army::Army,
-        map::{MapField, MapQuadrant, Oasis, Valley},
+        map::{MapField, MapQuadrant, Valley},
         village::Village,
-        Player, Tribe,
+        Player,
     },
     jobs::Job,
     repository::*,
@@ -26,49 +29,96 @@ impl PostgresRepository {
 
 #[async_trait::async_trait]
 impl PlayerRepository for PostgresRepository {
-    async fn create(&self, id: Uuid, username: String, tribe: Tribe) -> Result<Player> {
-        let tribe: db_models::Tribe = tribe.into();
-        let new_player = sqlx::query_as!(
+    async fn create(&self, player: &Player) -> Result<()> {
+        let tribe: db_models::Tribe = player.tribe.clone().into();
+        sqlx::query_as!(
             db_models::Player,
             r#"
                 INSERT INTO players (id, username, tribe)
                 VALUES ($1, $2, $3)
                 RETURNING id, username, tribe AS "tribe: _"
                 "#,
-            id,
-            username,
+            player.id,
+            player.username,
             tribe as _
         )
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(new_player.into())
+        Ok(())
     }
 
-    async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>> {
-        unimplemented!()
+    async fn get_by_id(&self, player_id: Uuid) -> Result<Option<Player>> {
+        let player = sqlx::query_as!(
+            db_models::Player,
+            r#"
+                SELECT id, username, tribe AS "tribe: _"
+                FROM players WHERE id = $1
+                "#,
+            player_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(player.map(Into::into))
     }
-    async fn get_by_username(&self, _username: &str) -> Result<Option<Player>> {
-        unimplemented!()
+
+    async fn get_by_username(&self, username: &str) -> Result<Option<Player>> {
+        let player = sqlx::query_as!(
+            db_models::Player,
+            r#"
+                SELECT id, username, tribe AS "tribe: _"
+                FROM players WHERE username = $1
+                "#,
+            username
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(player.map(Into::into))
     }
 }
 
 #[async_trait::async_trait]
 impl VillageRepository for PostgresRepository {
-    async fn create(&self, _village: &Village) -> Result<()> {
-        unimplemented!()
+    async fn create(&self, village: &Village) -> Result<()> {
+        sqlx::query!(
+                r#"
+                INSERT INTO villages (id, player_id, name, position, buildings, production, stocks, smithy_upgrades, population, loyalty, is_capital)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                "#,
+                village.id as i32,
+                village.player_id,
+                village.name,
+                Json(&village.position) as _,
+                Json(&village.buildings) as _,
+                Json(&village.production) as _,
+                Json(&village.stocks) as _,
+                Json(&village.smithy) as _,
+                village.population as i32,
+                village.loyalty as i16,
+                village.is_capital
+            )
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>> {
         let village_id_i32 = village_id_u32 as i32;
 
-        let db_village = sqlx::query_as!(
+        let db_village = match sqlx::query_as!(
             db_models::Village,
             "SELECT * FROM villages WHERE id = $1",
             village_id_i32
         )
-        .fetch_one(&self.pool)
-        .await?;
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            Some(v) => v,
+            None => return Ok(None),
+        };
 
         let db_player = sqlx::query_as!(
             db_models::Player,
@@ -78,15 +128,15 @@ impl VillageRepository for PostgresRepository {
         .fetch_one(&self.pool)
         .await?;
 
-        let all_armies: Vec<db_models::Army> = sqlx::query_as!(
-            db_models::Army,
-            r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _" FROM armies WHERE village_id = $1 OR current_map_field_id = $1"#,
-            village_id_i32
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let all_armies = sqlx::query_as!(
+                    db_models::Army,
+                    r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _" FROM armies WHERE village_id = $1 OR current_map_field_id = $1"#,
+                    village_id_i32
+                )
+                .fetch_all(&self.pool)
+                .await?;
 
-        let db_oases: Vec<db_models::MapField> = sqlx::query_as!(
+        let db_oases = sqlx::query_as!(
             db_models::MapField,
             "SELECT * FROM map_fields WHERE village_id = $1",
             village_id_i32
@@ -94,72 +144,54 @@ impl VillageRepository for PostgresRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let tribe: Tribe = db_player.tribe.into();
-
-        let mut home_army: Option<Army> = None;
-        let mut reinforcements = Vec::new();
-        let mut deployed_armies = Vec::new();
-
-        for db_army in all_armies {
-            let game_army: Army = db_army.into();
-
-            if game_army.village_id == village_id_u32
-                && game_army.current_map_field_id == Some(village_id_u32)
-            {
-                home_army = Some(game_army);
-            } else if game_army.village_id != village_id_u32
-                && game_army.current_map_field_id == Some(village_id_u32)
-            {
-                reinforcements.push(game_army);
-            } else if game_army.village_id == village_id_u32
-                && game_army.current_map_field_id != Some(village_id_u32)
-            {
-                deployed_armies.push(game_army);
-            }
-        }
-        let oases: Vec<Oasis> = db_oases
-            .into_iter()
-            .filter_map(|mf| Oasis::try_from(Into::<MapField>::into(mf)).ok())
-            .collect();
-
-        let village = Village {
-            id: db_village.id as u32,
-            name: db_village.name,
-            player_id: db_village.player_id,
-            position: serde_json::from_value(db_village.position).unwrap(),
-            tribe: tribe.clone(),
-            buildings: serde_json::from_value(db_village.buildings).unwrap(),
-            oases,
-            population: db_village.population as u32,
-            army: home_army.unwrap_or_else(|| {
-                Army::new(
-                    db_village.id as u32,
-                    Some(db_village.id as u32),
-                    db_village.player_id,
-                    tribe,
-                    [0; 10],
-                    serde_json::from_value(db_village.smithy_upgrades.clone()).unwrap(),
-                    None,
-                )
-            }),
-            reinforcements,
-            deployed_armies,
-            loyalty: db_village.loyalty as u8,
-            production: serde_json::from_value(db_village.production).unwrap(),
-            is_capital: db_village.is_capital,
-            smithy: serde_json::from_value(db_village.smithy_upgrades).unwrap(),
-            stocks: serde_json::from_value(db_village.stocks).unwrap(),
-            updated_at: db_village.updated_at,
+        let aggregate = VillageAggregate {
+            village: db_village,
+            player: db_player,
+            armies: all_armies,
+            oases: db_oases,
         };
 
-        Ok(Some(village))
+        let game_village = Village::try_from(aggregate)?;
+        Ok(Some(game_village))
     }
 
-    async fn list_by_player_id(&self, _player_id: Uuid) -> Result<Vec<Village>> {
-        unimplemented!()
+    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>> {
+        let villages_ids = sqlx::query!("SELECT id FROM villages WHERE player_id = $1", player_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut result = Vec::new();
+        for record in villages_ids {
+            if let Some(village) = VillageRepository::get_by_id(self, record.id as u32).await? {
+                result.push(village);
+            }
+        }
+
+        Ok(result)
     }
-    async fn save(&self, _village: &Village) -> Result<()> {
-        unimplemented!()
+
+    async fn save(&self, village: &Village) -> Result<()> {
+        sqlx::query!(
+            r#"
+                UPDATE villages
+                SET
+                    name = $2, buildings = $3, production = $4,
+                    stocks = $5, smithy_upgrades = $6, population = $7,
+                    loyalty = $8, updated_at = NOW()
+                WHERE id = $1
+                "#,
+            village.id as i32,
+            village.name,
+            Json(&village.buildings) as _,
+            Json(&village.production) as _,
+            Json(&village.stocks) as _,
+            Json(&village.smithy) as _,
+            village.population as i32,
+            village.loyalty as i16,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 
@@ -182,8 +214,16 @@ impl MapRepository for PostgresRepository {
         Ok(valley)
     }
 
-    async fn get_field_by_id(&self, _id: i32) -> Result<Option<MapField>> {
-        unimplemented!()
+    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>> {
+        let field = sqlx::query_as!(
+            db_models::MapField,
+            "SELECT * FROM map_fields WHERE id = $1",
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(field.map(Into::into))
     }
 }
 
@@ -199,6 +239,27 @@ impl ArmyRepository for PostgresRepository {
         .await?;
 
         Ok(Some(army.into()))
+    }
+
+    async fn create(&self, army: &Army) -> Result<()> {
+        let db_tribe: Tribe = army.tribe.clone().into();
+        let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
+        let hero_id = match army.clone().hero {
+            Some(hero) => Some(hero.id),
+            _ => None,
+        };
+
+        sqlx::query!(
+                r#"
+                INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                "#,
+                army.id, army.village_id as i32, current_map_field_id as i32, hero_id, Json(&army.units) as _, Json(&army.smithy) as _, db_tribe as _, army.player_id
+            )
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }
 

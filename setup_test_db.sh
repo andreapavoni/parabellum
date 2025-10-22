@@ -1,7 +1,27 @@
 #!/bin/sh
 
 # docker-compose up -d
-docker exec -it parabellum_db dropdb -U parabellum parabellum_test --if-exists
-docker exec -it parabellum_db createdb -U parabellum parabellum_test
 
-DATABASE_URL=$(grep TEST_DATABASE_URL .env | cut -d '=' -f2) sqlx database reset
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Load environment variables from .env file
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | xargs)
+else
+  echo ".env file not found"
+  exit 1
+fi
+
+DATABASE_NAME=$(echo $TEST_DATABASE_URL | cut -d '/' -f4)
+
+echo "--- Dropping database '$DATABASE_NAME' (if exists) ---"
+docker exec -it parabellum_db dropdb -U parabellum $DATABASE_NAME --if-exists
+
+echo "--- Creating database '$DATABASE_NAME' ---"
+docker exec -it parabellum_db createdb -U parabellum $DATABASE_NAME
+
+echo "--- Running migrations on '$DATABASE_NAME' ---"
+sqlx migrate run --database-url "$TEST_DATABASE_URL"
+
+echo "--- Database setup complete! ---"

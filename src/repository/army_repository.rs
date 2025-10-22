@@ -5,5 +5,6 @@ use crate::game::models::army::Army;
 
 #[async_trait::async_trait]
 pub trait ArmyRepository: Send + Sync {
+    async fn create(&self, army: &Army) -> Result<()>;
     async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>>;
 }

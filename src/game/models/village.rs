@@ -29,7 +29,7 @@ pub struct Village {
     pub buildings: Vec<VillageBuilding>,
     pub oases: Vec<Oasis>,
     pub population: u32,
-    pub army: Army,
+    pub army: Option<Army>,
     pub reinforcements: Vec<Army>,
     pub deployed_armies: Vec<Army>,
     pub loyalty: u8,
@@ -44,15 +44,7 @@ impl Village {
     pub fn new(name: String, valley: &Valley, player: &Player, is_capital: bool) -> Self {
         let position = valley.position.clone();
         let village_id = position.to_id(WORLD_MAX_SIZE);
-        let army = Army::new(
-            village_id,
-            None,
-            player.id.clone(),
-            player.tribe.clone(),
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            None,
-        );
+
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -65,7 +57,7 @@ impl Village {
             buildings: vec![],
             oases: vec![],
             population: 2,
-            army,
+            army: None,
             reinforcements: vec![],
             deployed_armies: vec![],
             loyalty: 100,
@@ -281,7 +273,10 @@ impl Village {
         }
 
         // armies upkeep
-        self.production.upkeep += self.army.upkeep();
+        self.production.upkeep += match self.army.clone() {
+            Some(army) => army.upkeep(),
+            None => 0,
+        };
         for a in self.reinforcements.iter() {
             self.production.upkeep += a.upkeep();
         }
@@ -391,6 +386,12 @@ impl ProductionBonus {
 pub struct StockCapacity {
     warehouse: u32,
     granary: u32,
+}
+
+impl StockCapacity {
+    pub fn total(&self) -> u32 {
+        self.warehouse + self.granary
+    }
 }
 
 impl Default for StockCapacity {

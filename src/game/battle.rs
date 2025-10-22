@@ -88,8 +88,15 @@ impl Battle {
         (
             total_defender_infantry_points,
             total_defender_cavalry_points,
-        ) = self.defender_village.army.defense_points();
-        total_defender_immensity += self.defender_village.army.immensity();
+        ) = match self.defender_village.army.clone() {
+            Some(army) => army.defense_points(),
+            None => (0, 0),
+        };
+
+        total_defender_immensity += match self.defender_village.army.clone() {
+            Some(army) => army.immensity(),
+            None => 0,
+        };
 
         for defender_army in self.defender_village.reinforcements.iter() {
             let (defender_infantry_points, defender_cavalry_points) =
@@ -249,7 +256,10 @@ impl Battle {
         let total_scout_attack_power = self.attacker.scouting_attack_points();
         let total_attack_scouts = self.attacker.unit_amount(3);
 
-        let mut total_scout_defense_power = self.defender_village.army.scouting_defense_points();
+        let mut total_scout_defense_power = match self.defender_village.army.clone() {
+            Some(army) => army.scouting_defense_points(),
+            None => 0,
+        };
         let mut total_defense_scouts = 0;
         for reinforcement in self.defender_village.reinforcements.iter() {
             total_scout_defense_power += reinforcement.scouting_defense_points();

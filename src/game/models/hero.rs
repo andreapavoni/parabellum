@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Hero {
+    pub id: Uuid,
     pub player_id: Uuid,
     pub health: u16,
     pub experience: u32,

@@ -111,6 +111,7 @@ pub type TroopSet = [u32; 10];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Army {
+    pub id: Uuid,
     pub village_id: u32,
     pub current_map_field_id: Option<u32>, // this army could have been deployed in some other Village or Oasis
     pub player_id: Uuid,
@@ -123,6 +124,7 @@ pub struct Army {
 
 impl Army {
     pub fn new(
+        id: Option<Uuid>,
         village_id: u32,
         current_map_field_id: Option<u32>,
         player_id: Uuid,
@@ -132,6 +134,7 @@ impl Army {
         hero: Option<Hero>,
     ) -> Self {
         Army {
+            id: id.unwrap_or(Uuid::new_v4()),
             village_id,
             player_id,
             tribe,
