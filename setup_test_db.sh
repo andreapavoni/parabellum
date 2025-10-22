@@ -17,6 +17,5 @@ DATABASE_NAME=$(echo $TEST_DATABASE_URL | cut -d '/' -f4)
 
 docker exec -it parabellum_db dropdb -U parabellum $DATABASE_NAME --if-exists
 docker exec -it parabellum_db createdb -U parabellum $DATABASE_NAME
-sqlx migrate run --database-url "$TEST_DATABASE_URL"
-reset
+sqlx migrate run --database-url "$TEST_DATABASE_URL" 1>/dev/null
 exit 0
