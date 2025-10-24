@@ -159,18 +159,21 @@ impl Building {
             return Err(Error::msg("can be built only in capital"));
         }
 
+        for req in data.rules.requirements {
+            match village_buildings
+                .into_iter()
+                .find(|&vb| vb.building.name == req.0 && vb.building.level == req.1)
+            {
+                Some(_) => (),
+                None => return Err(Error::msg("missing building requirements")),
+            };
+        }
+
         for vb in village_buildings {
-            // building requirements (if any) - Part 2
-
-            for req in data.rules.requirements {
-                if vb.building.name == req.0 && vb.building.level == req.1 {
-                    return Err(Error::msg("missing building requirements"));
-                }
-            }
-
             for conflict in data.rules.conflicts {
                 if vb.building.name == conflict.0 {
-                    return Err(Error::msg("conflicts with X"));
+                    let err = format!("conflicts with {:#?}", conflict.0);
+                    return Err(Error::msg(err));
                 }
             }
 

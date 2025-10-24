@@ -240,7 +240,7 @@ impl Village {
     }
     // Updates the village stats (population, production, bonuses from buildings and oases, etc).
     fn update_state(&mut self) {
-        self.population = 0;
+        self.population = 2;
         self.production = Default::default();
         self.stocks = Default::default();
 

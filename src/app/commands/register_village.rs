@@ -37,7 +37,7 @@ impl RegisterVillageHandler {
         let valley = handler_vallery.handle(query_valley).await?;
         let village = Village::new("New Village".to_string(), &valley, &command.player, true);
 
-        // self.repo.save_village(&village).await?;
+        self.village_repo.create(&village).await?;
 
         Ok(village)
     }

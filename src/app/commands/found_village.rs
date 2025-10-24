@@ -44,7 +44,7 @@ impl FoundVillageHandler {
 
         let village = Village::new("New Village".to_string(), &valley, &command.player, false);
 
-        // self.repo.save_village(&village).await?;
+        self.village_repo.create(&village).await?;
 
         Ok(village)
     }
