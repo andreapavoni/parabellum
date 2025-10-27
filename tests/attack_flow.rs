@@ -80,19 +80,18 @@ async fn test_full_attack_flow() -> Result<()> {
     handler.handle(attack_command).await.unwrap();
 
     // 3. ASSERT (Phase 1): Check if the attack job was created.
-    let jobs = repo.find_and_lock_due_jobs(10).await.unwrap();
-    assert_eq!(
-        jobs.len(),
-        1,
-        "There should be exactly one job in the queue."
-    );
+    let jobs = job_repo
+        .list_by_player_id(attacker_player.id)
+        .await
+        .unwrap();
+    assert_eq!(jobs.len(), 1, "There should be exactly 1 job in the queue.");
     let attack_job = &jobs[0];
 
     assert!(matches!(attack_job.task, JobTask::Attack(_)));
     assert_eq!(
         attack_job.status,
-        parabellum::jobs::JobStatus::Processing,
-        "Expected job status set to processing, got {:?}",
+        parabellum::jobs::JobStatus::Pending,
+        "Expected job status set to Pending, got {:?}",
         attack_job.status
     );
 
@@ -143,7 +142,6 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     let job_repo: Arc<dyn JobRepository> = repo.clone();
     let army_repo: Arc<dyn ArmyRepository> = repo.clone();
 
-    // CREA MODELLI DI DOMINIO con le factories di dominio
     let attacker_player = player_factory(Default::default());
     let attacker_valley = valley_factory(ValleyFactoryOptions {
         position: Some(Position { x: 30, y: 30 }),
@@ -177,18 +175,17 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         player: Some(defender_player.clone()),
         ..Default::default()
     });
-    // Aggiungi un edificio di test direttamente sul modello di dominio
-    // defender_village.add_building(BuildingName::MainBuilding, 9)?;
+    // Add buildings to defender village
+    defender_village.add_building(BuildingName::Granary, 21)?;
     defender_village.add_building(BuildingName::Warehouse, 20)?;
 
-    // SALVA I MODELLI DI DOMINIO nel DB per il test
-    // (Questo richiederà di implementare la conversione inversa per il salvataggio)
+    // Store domain models on db
     player_repo.create(&attacker_player).await?;
     player_repo.create(&defender_player).await?;
     village_repo.create(&attacker_village).await?;
     village_repo.create(&defender_village).await?;
-    // ... e così via per gli eserciti etc.
-    //
+    army_repo.create(&attacker_army).await?;
+    // ... etc
 
     repo.save(&defender_village).await?;
 
@@ -196,29 +193,28 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         .get_building_by_name(BuildingName::Warehouse)
         .unwrap()
         .level;
-    let initial_defender_resources = defender_village.stocks.total_storage();
+    let initial_defender_resources = defender_village.stocks.stored_resources().total();
 
-    // --- 2. ACT (Phase 1): Eseguire il comando di attacco ---
+    // --- 2. ACT (Phase 1): Execute attack command ---
     let attack_command = AttackCommand {
         player_id: attacker_player.id,
         village_id: attacker_village.id as u32,
         army_id: attacker_army.id,
         target_village_id: defender_village.id as u32,
-        catapult_targets: [BuildingName::Warehouse, BuildingName::Granary], // Bersagli
+        catapult_targets: [BuildingName::Warehouse, BuildingName::Granary], // Targets for catapults
     };
 
     let handler =
         AttackCommandHandler::new(job_repo.clone(), village_repo.clone(), army_repo.clone());
     handler.handle(attack_command).await.unwrap();
 
-    // --- 3. ACT (Phase 2): Processare il job di attacco ---
+    // --- 3. ACT (Phase 2): Process attack job ---
     let jobs = repo.find_and_lock_due_jobs(10).await.unwrap();
     let worker = Arc::new(JobWorker::new(repo.clone(), repo.clone(), repo.clone()));
     worker.process_jobs(&jobs).await.unwrap();
 
     // --- 4. ASSERT ---
-    // Ricarichiamo i dati dal DB per verificare gli effetti
-    // let updated_defender_village = repo.get_by_id(defender_village.id as u32).await?.unwrap();
+    // Reload data from db to check results
     let updated_defender_village: Village = village_repo
         .get_by_id(defender_village.id as u32)
         .await?
@@ -232,7 +228,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         .pop()
         .unwrap();
 
-    // Asserzione 1: Danno all'edificio
+    // Buildings damages
     let final_warehouse_level = updated_defender_village
         .get_building_by_name(BuildingName::Warehouse)
         .unwrap()
@@ -242,13 +238,13 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         "Warehouse should have been damaged."
     );
 
-    // Asserzione 2: Bottino
+    // Bounty
     if let JobTask::ArmyReturn(return_payload) = return_job.task {
         let bounty = return_payload.resources.total();
         assert!(bounty > 0, "Attacker should have stolen resources.");
 
-        // Asserzione 3: Risorse del difensore diminuite
-        let final_defender_resources = updated_defender_village.stocks.total_storage();
+        // Defender resources should be reduced
+        let final_defender_resources = updated_defender_village.stocks.stored_resources().total();
         assert!(
             final_defender_resources < initial_defender_resources,
             "Defender resources should have been reduced."

@@ -460,10 +460,12 @@ pub struct VillageStocks {
 }
 
 impl VillageStocks {
-    pub fn total_storage(&self) -> u32 {
+    /// Returns the total storage capacity (warehouse + granary)
+    pub fn total_capacity(&self) -> u32 {
         self.warehouse_capacity + self.granary_capacity
     }
 
+    /// Returns the currently stored resources as ResourceGroup
     pub fn stored_resources(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }

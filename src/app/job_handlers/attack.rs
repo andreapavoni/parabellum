@@ -70,7 +70,7 @@ impl JobHandler for AttackJobHandler {
             defender_village.clone(),
             catapult_targets,
         );
-        let _battle_result = battle.calculate_battle();
+        let battle_report = battle.calculate_battle();
 
         // 3. Store results on db
         // ctx.village_repo.apply_damages(..., battle_result.buildings_damages).await?;

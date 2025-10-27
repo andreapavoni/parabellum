@@ -32,13 +32,6 @@ pub enum ScoutingTargetReport {
 }
 
 // Represents the outcome of a battle
-pub struct ScoutBattleResult {
-    // Indicates if defenders has detected the attack.
-    // If true, defender will see a report as well.
-    pub was_detected: bool,
-    pub attacker_loss_percentage: f64,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ScoutingBattleReport {
     // Indicates if defenders has detected the attack.
@@ -501,7 +494,7 @@ fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> Re
     let total_available = available_lumber + available_clay + available_iron + available_crop;
 
     // If no resources availability, then no bounty.
-    if total_capacity == 0 || total_available <= 0 {
+    if total_capacity == 0 || total_available == 0 {
         return ResourceGroup::new(0, 0, 0, 0);
     }
 
@@ -511,7 +504,7 @@ fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> Re
     // The combination is (capacity / resources).min(1.0)
     let loot_ratio = (total_capacity as f64 / total_available as f64).min(1.0);
 
-    // Calcolo proporzionale iniziale (arrotondato per difetto)
+    // Calculating initial proportional loot (rounded down)
     let mut bounty_lumber = (available_lumber as f64 * loot_ratio).floor() as u32;
     let mut bounty_clay = (available_clay as f64 * loot_ratio).floor() as u32;
     let mut bounty_iron = (available_iron as f64 * loot_ratio).floor() as u32;
@@ -547,7 +540,7 @@ fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> Re
 
     if capacity_left > 0 {
         let can_take_crop = (available_crop - bounty_crop).max(0);
-        // At the last, take all the possible
+        // At last, take all the possible
         let take_crop = capacity_left.min(can_take_crop);
         bounty_crop += take_crop;
     }

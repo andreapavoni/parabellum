@@ -22,13 +22,15 @@ impl Job {
         let id = Uuid::new_v4();
         let now = Utc::now();
 
+        let completed_at = now.checked_add_signed(Duration::seconds(duration)).unwrap();
+
         Self {
             id,
             player_id,
             village_id,
             task,
             status: JobStatus::Pending,
-            completed_at: now + Duration::new(duration, 0).unwrap(),
+            completed_at,
             created_at: now,
             updated_at: now,
         }

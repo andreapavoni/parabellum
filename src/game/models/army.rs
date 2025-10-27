@@ -268,7 +268,7 @@ impl Army {
         for (idx, quantity) in self.units.into_iter().enumerate() {
             if quantity > 0 {
                 let u = self.get_unit(idx as u8).unwrap();
-                if u.speed < speed {
+                if speed == 0 || u.speed < speed {
                     speed = u.speed;
                 }
             }
