@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::game::models::{
     army::TroopSet,
     map::{MapFieldTopology, Position, Valley, ValleyTopology},
-    village::{self, StockCapacity, VillageBuilding, VillageProduction},
+    village::{self, VillageBuilding, VillageProduction, VillageStocks},
     SmithyUpgrades,
 };
 
@@ -25,7 +25,7 @@ pub struct VillageFactoryOptions<'a> {
     pub position: Option<&'a Position>,
     pub buildings: Option<Vec<VillageBuilding>>,
     pub production: Option<VillageProduction>,
-    pub stocks: Option<StockCapacity>,
+    pub stocks: Option<VillageStocks>,
     pub smithy_upgrades: Option<SmithyUpgrades>,
     pub population: i32,
     pub loyalty: i16,

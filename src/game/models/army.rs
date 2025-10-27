@@ -173,6 +173,23 @@ impl Army {
         total
     }
 
+    pub fn bounty_capacity(&self) -> u32 {
+        self.bounty_capacity_troop_set(&self.units)
+    }
+
+    pub fn bounty_capacity_troop_set(&self, troops: &TroopSet) -> u32 {
+        let mut capacity: u32 = 0;
+        let units_data = get_tribe_units(&self.tribe);
+
+        for (idx, &quantity) in troops.iter().enumerate() {
+            if quantity > 0 {
+                capacity += units_data[idx].capacity * quantity;
+            }
+        }
+
+        capacity
+    }
+
     pub fn attack_points(&self) -> (u32, u32) {
         let mut infantry_points: u32 = 0;
         let mut cavalry_points: u32 = 0;

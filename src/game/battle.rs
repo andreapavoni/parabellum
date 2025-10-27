@@ -2,7 +2,12 @@
 use serde::{Deserialize, Serialize};
 use std::f64;
 
-use crate::game::models::{army::Army, buildings::Building, village::Village};
+use crate::game::models::{
+    army::{Army, TroopSet},
+    buildings::{Building, BuildingName},
+    village::{Village, VillageStocks},
+    ResourceGroup,
+};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum AttackType {
@@ -10,23 +15,69 @@ pub enum AttackType {
     Normal, // Attack / Siege / Conquer
 }
 
-// Represents the outcome of a battle
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BattleResult {
-    // ... more data like hero health, etc.
-    pub attacker_loss_percentage: f64,
-    pub defender_loss_percentage: f64,
-    pub wall_level: u8,
-    pub buildings_damages: [u8; 2], // damaged buildings
-    pub bounty: u32,
-    pub loyalty: u16,
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
+pub enum ScoutingTarget {
+    Resources,
+    Defenses,
 }
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
+pub enum ScoutingTargetReport {
+    Resources(ResourceGroup),
+    Defenses {
+        wall: Option<u8>,
+        palace: Option<u8>,
+        residence: Option<u8>,
+    }, // wall level, residence level, palace level
+}
+
+// Represents the outcome of a battle
 pub struct ScoutBattleResult {
     // Indicates if defenders has detected the attack.
     // If true, defender will see a report as well.
     pub was_detected: bool,
     pub attacker_loss_percentage: f64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScoutingBattleReport {
+    // Indicates if defenders has detected the attack.
+    // If true, defender will see a report as well.
+    pub was_detected: bool,
+    pub target: ScoutingTarget,
+    pub target_report: ScoutingTargetReport,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildingDamageReport {
+    pub name: BuildingName,
+    pub level_before: u8,
+    pub level_after: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BattlePartyReport {
+    pub army_before: Army,
+    pub survivors: TroopSet,
+    pub losses: TroopSet,
+    // hero_exp_gained: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BattleReport {
+    pub attack_type: AttackType,
+    pub attacker: BattlePartyReport,
+    pub defender: Option<BattlePartyReport>,
+    pub reinforcements: Vec<BattlePartyReport>, // Rinforzi
+
+    pub scouting: Option<ScoutingBattleReport>,
+    pub bounty: Option<ResourceGroup>,
+
+    pub wall_damage: Option<BuildingDamageReport>,
+    pub catapult_damage: Vec<BuildingDamageReport>,
+
+    pub loyalty_before: u8,
+    pub loyalty_after: u8,
 }
 
 pub struct Battle {
@@ -55,7 +106,7 @@ impl Battle {
     }
 
     // Main function to calculate the battle
-    pub fn calculate_battle(&self) -> BattleResult {
+    pub fn calculate_battle(&self) -> BattleReport {
         // ====================================================================
         // STEP 1: Calculate total attack and defense points
         // ====================================================================
@@ -88,15 +139,17 @@ impl Battle {
         (
             total_defender_infantry_points,
             total_defender_cavalry_points,
-        ) = match self.defender_village.army.clone() {
-            Some(army) => army.defense_points(),
-            None => (0, 0),
-        };
+        ) = self
+            .defender_village
+            .army
+            .clone()
+            .map_or((0, 0), |a| a.defense_points());
 
-        total_defender_immensity += match self.defender_village.army.clone() {
-            Some(army) => army.immensity(),
-            None => 0,
-        };
+        total_defender_immensity += self
+            .defender_village
+            .army
+            .clone()
+            .map_or(0, |a| a.immensity());
 
         for defender_army in self.defender_village.reinforcements.iter() {
             let (defender_infantry_points, defender_cavalry_points) =
@@ -175,16 +228,38 @@ impl Battle {
             total_units_involved,
         );
 
-        let (attacker_survivors, _attacker_losses) =
+        let (attacker_survivors, attacker_losses) =
             self.attacker.calculate_losses(attacker_loss_percentage);
+
+        let (defender_survivors, defender_losses) = self
+            .defender_village
+            .army
+            .clone()
+            .map_or(([0; 10], [0; 10]), |da| {
+                da.calculate_losses(defender_loss_percentage)
+            });
+
+        let reinforcements_report: Vec<BattlePartyReport> = self
+            .defender_village
+            .reinforcements
+            .iter()
+            .map(|reinforcement| {
+                let (survivors, losses) = reinforcement.calculate_losses(defender_loss_percentage);
+
+                BattlePartyReport {
+                    army_before: reinforcement.clone(),
+                    survivors,
+                    losses,
+                }
+            })
+            .collect();
 
         // ====================================================================
         // STEP 3: Calculate damages to wall and buildings
         // ====================================================================
-        let mut wall_level = match self.defender_village.get_wall() {
-            Some(wall) => wall.level,
-            _ => 0,
-        };
+
+        let wall_level = self.defender_village.get_wall().map_or(0, |w| w.level);
+        let mut wall_level_after = wall_level;
 
         // Variables to calculate buildings damages
         let buildings_durability = self.defender_village.get_buildings_durability();
@@ -200,7 +275,7 @@ impl Battle {
                 power_ratio,
                 1.0, // Morale for rams is 1.0
             );
-            wall_level = calculate_new_building_level(wall_level, ram_damage);
+            wall_level_after = calculate_new_building_level(wall_level, ram_damage);
         }
 
         // 3.2: Catapults damage
@@ -238,17 +313,58 @@ impl Battle {
         // STEP 4: Final result
         // ====================================================================
 
-        BattleResult {
-            attacker_loss_percentage,
-            defender_loss_percentage,
-            wall_level,
-            buildings_damages: buildings_levels,
-            bounty: 0,
-            loyalty: 100,
+        let wall_report = BuildingDamageReport {
+            name: self.defender_village.get_wall_name().unwrap(),
+            level_before: wall_level,
+            level_after: wall_level_after,
+        };
+
+        let catapult_reports: Vec<BuildingDamageReport> = self
+            .catapult_targets
+            .iter()
+            .zip(buildings_levels.iter())
+            .map(|(target, &new_level)| BuildingDamageReport {
+                name: target.name.clone(),
+                level_before: target.level,
+                level_after: new_level,
+            })
+            .collect();
+
+        let defender_report = if self.defender_village.army.is_some() {
+            Some(BattlePartyReport {
+                army_before: self.defender_village.army.clone().unwrap(),
+                survivors: defender_survivors,
+                losses: defender_losses,
+            })
+        } else {
+            None
+        };
+
+        // bounty
+        let bounty = calculate_bounty(
+            self.attacker.bounty_capacity_troop_set(&attacker_survivors),
+            &self.defender_village.stocks,
+        );
+
+        BattleReport {
+            attack_type: self.attack_type.clone(),
+            attacker: BattlePartyReport {
+                army_before: self.attacker.clone(),
+                survivors: attacker_survivors,
+                losses: attacker_losses,
+            },
+            defender: defender_report,
+            reinforcements: reinforcements_report,
+            scouting: None, // it's not scouting
+            bounty: Some(bounty),
+            wall_damage: Some(wall_report),
+            catapult_damage: catapult_reports,
+            loyalty_before: 100, // TODO: calculate loyalty
+            loyalty_after: 100,  // TODO: calculate loyalty
         }
     }
 
-    pub fn calculate_scout_battle(&self) -> ScoutBattleResult {
+    pub fn calculate_scout_battle(&self, target: ScoutingTarget) -> BattleReport {
         // ====================================================================
         // STEP 1: Calculates attack and defense points for scouts
         // ====================================================================
@@ -256,10 +372,11 @@ impl Battle {
         let total_scout_attack_power = self.attacker.scouting_attack_points();
         let total_attack_scouts = self.attacker.unit_amount(3);
 
-        let mut total_scout_defense_power = match self.defender_village.army.clone() {
-            Some(army) => army.scouting_defense_points(),
-            None => 0,
-        };
+        let mut total_scout_defense_power = self
+            .defender_village
+            .army
+            .clone()
+            .map_or(0, |a| a.scouting_defense_points());
         let mut total_defense_scouts = 0;
         for reinforcement in self.defender_village.reinforcements.iter() {
             total_scout_defense_power += reinforcement.scouting_defense_points();
@@ -300,14 +417,142 @@ impl Battle {
         // ====================================================================
 
         // Calculate casualties in attacker scouts
-        let (_attacker_survivors, _attacker_losses) =
+        let (attacker_survivors, attacker_losses) =
             self.attacker.calculate_losses(attacker_loss_percentage);
 
-        return ScoutBattleResult {
-            was_detected: defender_has_scouts,
-            attacker_loss_percentage,
+        let reinforcements_report: Vec<BattlePartyReport> = self
+            .defender_village
+            .reinforcements
+            .iter()
+            .map(|reinforcement| {
+                BattlePartyReport {
+                    army_before: reinforcement.clone(),
+                    // No losses for defenders in scouting
+                    survivors: reinforcement.units,
+                    losses: [0; 10],
+                }
+            })
+            .collect();
+
+        // Prepare scouting target report
+        let target_report = match target {
+            ScoutingTarget::Resources => {
+                let resources = self.defender_village.stocks.stored_resources();
+                ScoutingTargetReport::Resources(resources)
+            }
+            ScoutingTarget::Defenses => {
+                let wall = self.defender_village.get_wall().map(|w| w.level);
+
+                let (palace, residence): (Option<u8>, Option<u8>) =
+                    match self.defender_village.get_palace_or_residence() {
+                        Some((b, BuildingName::Palace)) => (None, Some(b.level)),
+                        Some((b, BuildingName::Residence)) => (None, Some(b.level)),
+                        _ => (None, None),
+                    };
+
+                ScoutingTargetReport::Defenses {
+                    wall,
+                    palace,
+                    residence,
+                }
+            }
         };
+
+        BattleReport {
+            attack_type: self.attack_type.clone(),
+            attacker: BattlePartyReport {
+                army_before: self.attacker.clone(),
+                survivors: attacker_survivors,
+                losses: attacker_losses,
+            },
+            defender: None,
+            reinforcements: reinforcements_report,
+            scouting: Some(ScoutingBattleReport {
+                was_detected: defender_has_scouts,
+                target: target,
+                target_report: target_report,
+            }),
+            bounty: None, // No bounty for scouting
+            wall_damage: None,
+            catapult_damage: vec![],
+            loyalty_before: 100, // TODO: calculate loyalty
+            loyalty_after: 100,  // TODO: calculate loyalty
+        }
     }
+}
+
+/// Calculates the bounty (loot) taken from the defender village, given the total
+/// capacity of the surviving troops and the available stocks in the village.
+/// The function distributes the loot proportionally among the resources,
+/// taking into account the total capacity and the available resources,
+///
+/// # Arguments
+/// * `total_capacity` - Total transport capacity from the actual TroopSet.
+/// * `available_stocks` - Actual stocks from the defender village.
+///
+/// # Returns
+/// * `ResourceGroup` - Stolen resources (Lumber, Clay, Iron, Crop).
+fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> ResourceGroup {
+    let available_lumber = available_stocks.lumber;
+    let available_clay = available_stocks.clay;
+    let available_iron = available_stocks.iron;
+    let available_crop = available_stocks.crop.max(0) as u32;
+
+    let total_available = available_lumber + available_clay + available_iron + available_crop;
+
+    // If no resources availability, then no bounty.
+    if total_capacity == 0 || total_available <= 0 {
+        return ResourceGroup::new(0, 0, 0, 0);
+    }
+
+    // Calculates the loot ratio.
+    // Can't be > 1.0 (you can't take more than what's available)
+    // Can't be > 1.0 (you can't take more than your capacity)
+    // The combination is (capacity / resources).min(1.0)
+    let loot_ratio = (total_capacity as f64 / total_available as f64).min(1.0);
+
+    // Calcolo proporzionale iniziale (arrotondato per difetto)
+    let mut bounty_lumber = (available_lumber as f64 * loot_ratio).floor() as u32;
+    let mut bounty_clay = (available_clay as f64 * loot_ratio).floor() as u32;
+    let mut bounty_iron = (available_iron as f64 * loot_ratio).floor() as u32;
+    let mut bounty_crop = (available_crop as f64 * loot_ratio).floor() as u32;
+
+    let total_looted = bounty_lumber + bounty_clay + bounty_iron + bounty_crop;
+
+    // Calculate the "lost" capacity due to rounding
+    let mut capacity_left = total_capacity - total_looted;
+
+    // Distribute the remaining capacity, 1 by 1, in the order Lumber-Clay-Iron-Crop,
+    // ensuring we do not take more than what is available.
+    if capacity_left > 0 {
+        let can_take_lumber = (available_lumber - bounty_lumber).max(0);
+        let take_lumber = capacity_left.min(can_take_lumber).min(1);
+        bounty_lumber += take_lumber;
+        capacity_left -= take_lumber;
+    }
+
+    if capacity_left > 0 {
+        let can_take_clay = (available_clay - bounty_clay).max(0);
+        let take_clay = capacity_left.min(can_take_clay).min(1);
+        bounty_clay += take_clay;
+        capacity_left -= take_clay;
+    }
+
+    if capacity_left > 0 {
+        let can_take_iron = (available_iron - bounty_iron).max(0);
+        let take_iron = capacity_left.min(can_take_iron).min(1);
+        bounty_iron += take_iron;
+        capacity_left -= take_iron;
+    }
+
+    if capacity_left > 0 {
+        let can_take_crop = (available_crop - bounty_crop).max(0);
+        // At the last, take all the possible
+        let take_crop = capacity_left.min(can_take_crop);
+        bounty_crop += take_crop;
+    }
+
+    ResourceGroup::new(bounty_lumber, bounty_clay, bounty_iron, bounty_crop)
 }
 
 // Massive battles factor (Mfactor)

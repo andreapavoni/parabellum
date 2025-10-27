@@ -85,7 +85,7 @@ impl Position {
         ((world_size - self.y) * (world_size * 2 + 1) + (world_size + self.x + 1)) as u32
     }
 
-    // Returns the distance between two points.
+    /// Returns the distance between two points.
     pub fn distance(&self, position: &Position, world_size: i32) -> u32 {
         let mut x_diff = (self.x - position.x).abs();
         let mut y_diff = (self.y - position.y).abs();
@@ -99,6 +99,11 @@ impl Position {
         }
 
         (((x_diff * x_diff) + (y_diff * y_diff)) as f64).sqrt() as u32
+    }
+
+    pub fn calculate_travel_time_secs(&self, position: Position, speed: u8) -> u32 {
+        let distance = self.distance(&position, 100);
+        (distance as f64 / speed as f64 / 3600.0).floor() as u32
     }
 }
 

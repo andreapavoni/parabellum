@@ -76,7 +76,7 @@ async fn test_full_attack_flow() -> Result<()> {
         catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
     };
 
-    let handler = AttackCommandHandler::new(repo.clone(), repo.clone());
+    let handler = AttackCommandHandler::new(repo.clone(), repo.clone(), repo.clone());
     handler.handle(attack_command).await.unwrap();
 
     // 3. ASSERT (Phase 1): Check if the attack job was created.
@@ -141,6 +141,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     let player_repo: Arc<dyn PlayerRepository> = repo.clone();
     let village_repo: Arc<dyn VillageRepository> = repo.clone();
     let job_repo: Arc<dyn JobRepository> = repo.clone();
+    let army_repo: Arc<dyn ArmyRepository> = repo.clone();
 
     // CREA MODELLI DI DOMINIO con le factories di dominio
     let attacker_player = player_factory(Default::default());
@@ -177,7 +178,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         ..Default::default()
     });
     // Aggiungi un edificio di test direttamente sul modello di dominio
-    defender_village.add_building(BuildingName::MainBuilding, 9)?;
+    // defender_village.add_building(BuildingName::MainBuilding, 9)?;
     defender_village.add_building(BuildingName::Warehouse, 20)?;
 
     // SALVA I MODELLI DI DOMINIO nel DB per il test
@@ -188,17 +189,14 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     village_repo.create(&defender_village).await?;
     // ... e così via per gli eserciti etc.
     //
-    // Aggiungiamo un edificio da colpire, ad esempio il Magazzino a livello 5
-    defender_village
-        .add_building(BuildingName::Warehouse, 20)
-        .unwrap();
+
     repo.save(&defender_village).await?;
 
     let initial_warehouse_level = defender_village
         .get_building_by_name(BuildingName::Warehouse)
         .unwrap()
         .level;
-    let initial_defender_resources = defender_village.stocks.total();
+    let initial_defender_resources = defender_village.stocks.total_storage();
 
     // --- 2. ACT (Phase 1): Eseguire il comando di attacco ---
     let attack_command = AttackCommand {
@@ -209,7 +207,8 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         catapult_targets: [BuildingName::Warehouse, BuildingName::Granary], // Bersagli
     };
 
-    let handler = AttackCommandHandler::new(repo.clone(), repo.clone());
+    let handler =
+        AttackCommandHandler::new(job_repo.clone(), village_repo.clone(), army_repo.clone());
     handler.handle(attack_command).await.unwrap();
 
     // --- 3. ACT (Phase 2): Processare il job di attacco ---
@@ -224,6 +223,9 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         .get_by_id(defender_village.id as u32)
         .await?
         .unwrap();
+
+    let jobs = job_repo.find_and_lock_due_jobs(100).await?;
+
     let return_job = job_repo
         .list_by_player_id(attacker_player.id)
         .await?
@@ -237,25 +239,22 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         .level;
     assert!(
         final_warehouse_level < initial_warehouse_level,
-        "Il magazzino avrebbe dovuto subire danni."
+        "Warehouse should have been damaged."
     );
 
     // Asserzione 2: Bottino
     if let JobTask::ArmyReturn(return_payload) = return_job.task {
         let bounty = return_payload.resources.total();
-        assert!(
-            bounty > 0,
-            "L'attaccante avrebbe dovuto saccheggiare delle risorse."
-        );
+        assert!(bounty > 0, "Attacker should have stolen resources.");
 
         // Asserzione 3: Risorse del difensore diminuite
-        let final_defender_resources = updated_defender_village.stocks.total();
+        let final_defender_resources = updated_defender_village.stocks.total_storage();
         assert!(
             final_defender_resources < initial_defender_resources,
-            "Le scorte del difensore sarebbero dovute diminuire."
+            "Defender resources should have been reduced."
         );
     } else {
-        panic!("Il job di ritorno non è corretto.");
+        panic!("Army return job isn't correct.");
     }
 
     Ok(())

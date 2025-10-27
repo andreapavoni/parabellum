@@ -1,7 +1,7 @@
 use crate::{
     game::models::buildings::BuildingName,
     jobs::{tasks::AttackTask, Job, JobTask},
-    repository::{JobRepository, VillageRepository},
+    repository::{ArmyRepository, JobRepository, VillageRepository},
 };
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
@@ -19,13 +19,19 @@ pub struct AttackCommand {
 pub struct AttackCommandHandler {
     job_repo: Arc<dyn JobRepository>,
     village_repo: Arc<dyn VillageRepository>,
+    army_repo: Arc<dyn ArmyRepository>,
 }
 
 impl AttackCommandHandler {
-    pub fn new(job_repo: Arc<dyn JobRepository>, village_repo: Arc<dyn VillageRepository>) -> Self {
+    pub fn new(
+        job_repo: Arc<dyn JobRepository>,
+        village_repo: Arc<dyn VillageRepository>,
+        army_repo: Arc<dyn ArmyRepository>,
+    ) -> Self {
         Self {
             job_repo,
             village_repo,
+            army_repo,
         }
     }
 
@@ -36,7 +42,11 @@ impl AttackCommandHandler {
             .await?
             .ok_or_else(|| anyhow!("Attacker village not found"))?;
 
-        // TODO: validate attacker army (amount, owner, etc...)
+        let attacker_army = self
+            .army_repo
+            .get_by_id(command.army_id)
+            .await?
+            .ok_or_else(|| anyhow!("Attacker army not found"))?;
 
         let defender_village = self
             .village_repo
@@ -44,10 +54,9 @@ impl AttackCommandHandler {
             .await?
             .ok_or_else(|| anyhow!("Defender village not found"))?;
 
-        // TODO: fix army speed
-        let speed = 10; // placeholder
         let travel_time_secs = attacker_village
-            .calculate_travel_time_secs(defender_village.position.clone(), speed)
+            .position
+            .calculate_travel_time_secs(defender_village.position, attacker_army.speed())
             as i64;
 
         let attack_payload = AttackTask {

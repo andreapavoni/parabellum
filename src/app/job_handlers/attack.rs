@@ -78,8 +78,9 @@ impl JobHandler for AttackJobHandler {
         // ctx.job_repo.create(return_army_new_job).await?;
 
         // --- 4. Army return job ---
-        // Calculate army speed
+        // Calculate travel time
         let return_travel_time = attacker_village
+            .position
             .calculate_travel_time_secs(defender_village.position, attacker_army.clone().speed())
             as i64;
 

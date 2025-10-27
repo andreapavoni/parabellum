@@ -17,9 +17,9 @@ pub struct Cost {
     pub build_time: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(dead_code)]
-pub struct ResourceGroup(u32, u32, u32, u32);
+pub struct ResourceGroup(pub u32, pub u32, pub u32, pub u32);
 
 impl ResourceGroup {
     pub const fn new(lumber: u32, clay: u32, iron: u32, crop: u32) -> Self {

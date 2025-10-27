@@ -151,7 +151,8 @@ impl VillageRepository for PostgresRepository {
             oases: db_oases,
         };
 
-        let game_village = Village::try_from(aggregate)?;
+        let mut game_village = Village::try_from(aggregate)?;
+        game_village.update_resources();
         Ok(Some(game_village))
     }
 

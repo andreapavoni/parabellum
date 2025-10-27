@@ -3,6 +3,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::game::models::ResourceGroup;
+
 use super::{
     army::Army,
     buildings::{Building, BuildingGroup, BuildingName},
@@ -36,7 +38,7 @@ pub struct Village {
     pub production: VillageProduction,
     pub is_capital: bool,
     pub smithy: SmithyUpgrades,
-    pub stocks: StockCapacity,
+    pub stocks: VillageStocks,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -214,6 +216,15 @@ impl Village {
         }
     }
 
+    pub fn get_wall_name(&self) -> Option<BuildingName> {
+        match self.tribe {
+            Tribe::Roman => Some(BuildingName::CityWall),
+            Tribe::Teuton => Some(BuildingName::EarthWall),
+            Tribe::Gaul => Some(BuildingName::Palisade),
+            _ => None,
+        }
+    }
+
     pub fn get_wall_defense_bonus(&self) -> f64 {
         if let Some(wall) = self.get_wall() {
             let tribe_factor: f64 = match self.tribe {
@@ -234,15 +245,61 @@ impl Village {
         }
     }
 
-    pub fn calculate_travel_time_secs(&self, position: Position, speed: u8) -> u32 {
-        let distance = self.position.distance(&position, 100);
-        (distance as f64 / speed as f64 / 3600.0).floor() as u32
+    /// Updates the village stocks based on the time elapsed since the last update
+    /// It should be called whenever the village is loaded from the DB.
+    pub fn update_resources(&mut self) {
+        let now = Utc::now();
+        let time_elapsed_secs = (now - self.updated_at).num_seconds();
+
+        if time_elapsed_secs <= 0 {
+            self.updated_at = now;
+            return;
+        }
+
+        // Effective hourly production
+        // update effective production apllying bonuses and upkeep
+        self.production.calculate_effective_production();
+        let effective_prod = &self.production.effective;
+
+        // Calculates per-second production rates
+        // Actual effective production is per hour
+        let lumber_per_sec = (effective_prod.lumber as f64) / 3600.0;
+        let clay_per_sec = (effective_prod.clay as f64) / 3600.0;
+        let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
+        let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
+
+        let elapsed_f64 = time_elapsed_secs as f64;
+
+        // Calculates resources after elapsed time, capping at storage capacity
+        let new_lumber = (self.stocks.lumber as f64 + (elapsed_f64 * lumber_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_clay = (self.stocks.clay as f64 + (elapsed_f64 * clay_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_iron = (self.stocks.iron as f64 + (elapsed_f64 * iron_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_crop = (self.stocks.crop as f64 + (elapsed_f64 * crop_per_sec))
+            .min(self.stocks.granary_capacity as f64);
+
+        // New stocks
+        self.stocks.lumber = new_lumber.max(0.0) as u32;
+        self.stocks.clay = new_clay.max(0.0) as u32;
+        self.stocks.iron = new_iron.max(0.0) as u32;
+        self.stocks.crop = new_crop as i64; // crop can be negative due to upkeep
+
+        self.updated_at = now;
     }
+
     // Updates the village stats (population, production, bonuses from buildings and oases, etc).
     fn update_state(&mut self) {
         self.population = 2;
         self.production = Default::default();
-        self.stocks = Default::default();
+
+        // reset the stocks capacities because we're going to recalculate them
+        self.stocks.warehouse_capacity = 0;
+        self.stocks.granary_capacity = 0;
 
         // data from infrastructures
         for b in self.buildings.iter() {
@@ -258,12 +315,23 @@ impl Village {
                 BuildingName::IronFoundry => self.production.bonus.iron += b.building.value as u8,
                 BuildingName::GrainMill => self.production.bonus.crop += b.building.value as u8,
                 BuildingName::Bakery => self.production.bonus.crop += b.building.value as u8,
-                BuildingName::Warehouse => self.stocks.warehouse += b.building.value,
-                BuildingName::Granary => self.stocks.granary += b.building.value,
+                BuildingName::Warehouse => self.stocks.warehouse_capacity += b.building.value,
+                BuildingName::Granary => self.stocks.granary_capacity += b.building.value,
+                BuildingName::GreatWarehouse => self.stocks.warehouse_capacity += b.building.value,
+                BuildingName::GreatGranary => self.stocks.granary_capacity += b.building.value,
                 _ => continue,
             }
         }
 
+        // set default stocks capacities if no warehouse/granary present
+        if self.stocks.granary_capacity == 0 {
+            self.stocks.granary_capacity = VillageStocks::default().granary_capacity;
+        }
+        if self.stocks.warehouse_capacity == 0 {
+            self.stocks.warehouse_capacity = VillageStocks::default().warehouse_capacity;
+        }
+
+        // population upkeep
         self.production.upkeep += self.population;
 
         // oases production bonuses
@@ -281,8 +349,7 @@ impl Village {
             self.production.upkeep += a.upkeep();
         }
 
-        // update effective production apllying bonuses and upkeep
-        self.production.calculate_effective_production();
+        self.update_resources();
     }
 
     fn init_village_buildings(&mut self, valley: &Valley) -> Result<()> {
@@ -382,24 +449,35 @@ impl ProductionBonus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct StockCapacity {
-    warehouse: u32,
-    granary: u32,
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct VillageStocks {
+    pub warehouse_capacity: u32,
+    pub granary_capacity: u32,
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: i64,
 }
 
-impl StockCapacity {
-    pub fn total(&self) -> u32 {
-        self.warehouse + self.granary
+impl VillageStocks {
+    pub fn total_storage(&self) -> u32 {
+        self.warehouse_capacity + self.granary_capacity
+    }
+
+    pub fn stored_resources(&self) -> ResourceGroup {
+        ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }
 }
 
-impl Default for StockCapacity {
+impl Default for VillageStocks {
     fn default() -> Self {
         Self {
-            // FIXME: use values from config
-            warehouse: 800,
-            granary: 800,
+            warehouse_capacity: 800, // Base capacity
+            granary_capacity: 800,   // Base capacity
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
         }
     }
 }
@@ -446,13 +524,13 @@ mod tests {
         assert_eq!(v.production.clay, 8, "clay production");
         assert_eq!(v.production.iron, 8, "iron production");
         assert_eq!(v.production.crop, 12, "crop production");
-        assert_eq!(v.production.upkeep, 2, "upkeep");
+        assert_eq!(v.production.upkeep, 4, "upkeep");
 
         // population
-        assert_eq!(v.population, 2, "population");
+        assert_eq!(v.population, 4, "population");
 
         // stocks
-        assert_eq!(v.stocks.warehouse, 800, "stock warehouse");
-        assert_eq!(v.stocks.granary, 800, "stock granary");
+        assert_eq!(v.stocks.warehouse_capacity, 800, "stock warehouse");
+        assert_eq!(v.stocks.granary_capacity, 800, "stock granary");
     }
 }
