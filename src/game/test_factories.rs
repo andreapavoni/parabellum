@@ -14,14 +14,14 @@ use uuid::Uuid;
 
 // --- Options Structs (Builders) ---
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PlayerFactoryOptions<'a> {
     pub id: Option<Uuid>,
     pub username: Option<&'a str>,
     pub tribe: Option<Tribe>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ValleyFactoryOptions {
     pub position: Option<Position>,
     pub topology: Option<ValleyTopology>,
@@ -29,7 +29,7 @@ pub struct ValleyFactoryOptions {
     pub village_id: Option<u32>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct VillageFactoryOptions {
     pub name: Option<String>,
     pub player: Option<Player>,

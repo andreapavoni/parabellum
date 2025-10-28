@@ -274,7 +274,7 @@ impl Battle {
         // 3.2: Catapults damage
         let surviving_catapults = attacker_survivors[7];
         let smithy_level: u8 = self.attacker.smithy[7];
-        let mut buildings_levels: [u8; 2] = [0; 2];
+        let mut buildings_levels: Option<[u8; 2]> = None;
 
         if self.attack_type == AttackType::Normal && surviving_catapults > 0 {
             let catapult_morale_bonus = (self.attacker_village.population as f64
@@ -296,32 +296,39 @@ impl Battle {
                 catapult_morale_bonus,
             );
 
-            buildings_levels = self
-                .catapult_targets
-                .clone()
-                .map(|target| calculate_new_building_level(target.level, catapult_damage));
+            buildings_levels = Some(
+                self.catapult_targets
+                    .clone()
+                    .map(|target| calculate_new_building_level(target.level, catapult_damage)),
+            );
         }
 
         // ====================================================================
         // STEP 4: Final result
         // ====================================================================
 
-        let wall_report = BuildingDamageReport {
-            name: self.defender_village.get_wall_name().unwrap(),
-            level_before: wall_level,
-            level_after: wall_level_after,
+        let wall_report = if wall_level > 0 {
+            Some(BuildingDamageReport {
+                name: self.defender_village.get_wall_name().unwrap(),
+                level_before: wall_level,
+                level_after: wall_level_after,
+            })
+        } else {
+            None
         };
 
-        let catapult_reports: Vec<BuildingDamageReport> = self
-            .catapult_targets
-            .iter()
-            .zip(buildings_levels.iter())
-            .map(|(target, &new_level)| BuildingDamageReport {
-                name: target.name.clone(),
-                level_before: target.level,
-                level_after: new_level,
-            })
-            .collect();
+        let catapult_reports: Vec<BuildingDamageReport> = match buildings_levels {
+            None => vec![],
+            Some(levels) => levels
+                .iter()
+                .zip(self.catapult_targets.iter())
+                .map(|(&new_level, target)| BuildingDamageReport {
+                    name: target.name.clone(),
+                    level_before: target.level,
+                    level_after: new_level,
+                })
+                .collect(),
+        };
 
         let defender_report = if self.defender_village.army.is_some() {
             Some(BattlePartyReport {
@@ -350,7 +357,7 @@ impl Battle {
             reinforcements: reinforcements_report,
             scouting: None, // it's not scouting
             bounty: Some(bounty),
-            wall_damage: Some(wall_report),
+            wall_damage: wall_report,
             catapult_damage: catapult_reports,
             loyalty_before: 100, // TODO: calculate loyalty
             loyalty_after: 100,  // TODO: calculate loyalty

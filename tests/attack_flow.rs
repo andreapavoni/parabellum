@@ -6,7 +6,7 @@ use parabellum::{
     app::commands::{AttackCommand, AttackCommandHandler},
     db::{establish_test_connection_pool, repository::*}, // Import the helper
     game::{
-        models::{buildings::BuildingName, map::Position, village::Village},
+        models::{buildings::BuildingName, map::Position, village::Village, ResourceGroup},
         test_factories::*,
     },
     jobs::{worker::JobWorker, JobTask},
@@ -133,6 +133,7 @@ async fn test_full_attack_flow() -> Result<()> {
 #[serial]
 async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     setup().await?;
+
     // --- 1. SETUP ---
     let pool = establish_test_connection_pool().await?;
     let repo = Arc::new(PostgresRepository::new(pool));
@@ -158,7 +159,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         village_id: Some(attacker_village.id),
         player_id: Some(attacker_player.id),
         tribe: Some(attacker_player.tribe.clone()),
-        units: None,
+        units: Some([0, 0, 100, 0, 0, 0, 0, 100, 0, 0]),
         smithy: None,
         hero: None,
     });
@@ -179,19 +180,34 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     defender_village.add_building(BuildingName::Granary, 21)?;
     defender_village.add_building(BuildingName::Warehouse, 20)?;
 
+    // Put some resources in the stocks
+    defender_village
+        .stocks
+        .store_resources(ResourceGroup::new(800, 800, 800, 800));
+
+    let defender_army = army_factory(ArmyFactoryOptions {
+        village_id: Some(defender_village.id),
+        player_id: Some(defender_player.id),
+        tribe: Some(defender_player.tribe.clone()),
+        units: Some([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        smithy: None,
+        hero: None,
+    });
+
     // Store domain models on db
     player_repo.create(&attacker_player).await?;
     player_repo.create(&defender_player).await?;
     village_repo.create(&attacker_village).await?;
     village_repo.create(&defender_village).await?;
     army_repo.create(&attacker_army).await?;
-    // ... etc
+    army_repo.create(&defender_army).await?;
 
-    repo.save(&defender_village).await?;
+    village_repo.save(&defender_village).await?;
 
     let initial_warehouse_level = defender_village
         .get_building_by_name(BuildingName::Warehouse)
         .unwrap()
+        .building
         .level;
     let initial_defender_resources = defender_village.stocks.stored_resources().total();
 
@@ -209,7 +225,11 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     handler.handle(attack_command).await.unwrap();
 
     // --- 3. ACT (Phase 2): Process attack job ---
-    let jobs = repo.find_and_lock_due_jobs(10).await.unwrap();
+    let jobs = job_repo
+        .list_by_player_id(attacker_player.id)
+        .await
+        .unwrap();
+
     let worker = Arc::new(JobWorker::new(repo.clone(), repo.clone(), repo.clone()));
     worker.process_jobs(&jobs).await.unwrap();
 
@@ -220,8 +240,6 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         .await?
         .unwrap();
 
-    let jobs = job_repo.find_and_lock_due_jobs(100).await?;
-
     let return_job = job_repo
         .list_by_player_id(attacker_player.id)
         .await?
@@ -231,8 +249,8 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     // Buildings damages
     let final_warehouse_level = updated_defender_village
         .get_building_by_name(BuildingName::Warehouse)
-        .unwrap()
-        .level;
+        .map_or(0, |b| b.building.level);
+
     assert!(
         final_warehouse_level < initial_warehouse_level,
         "Warehouse should have been damaged."
@@ -245,6 +263,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
 
         // Defender resources should be reduced
         let final_defender_resources = updated_defender_village.stocks.stored_resources().total();
+
         assert!(
             final_defender_resources < initial_defender_resources,
             "Defender resources should have been reduced."

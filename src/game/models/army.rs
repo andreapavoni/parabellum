@@ -291,6 +291,10 @@ impl Army {
             .sum()
     }
 
+    pub fn update_units(&mut self, units: &TroopSet) {
+        self.units = *units;
+    }
+
     fn scouting_points(&self, base_points: u8) -> u32 {
         let idx: usize = 3;
         let quantity = self.units[idx];

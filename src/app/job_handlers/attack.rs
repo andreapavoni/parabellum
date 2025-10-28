@@ -28,7 +28,7 @@ impl JobHandler for AttackJobHandler {
         println!("Execute Attack Job for army {}", self.payload.army_id);
 
         // 1. Hydrate necessary data from db
-        let attacker_army = ctx
+        let mut attacker_army = ctx
             .army_repo
             .get_by_id(self.payload.army_id)
             .await?
@@ -40,7 +40,7 @@ impl JobHandler for AttackJobHandler {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Attacker village not found"))?;
 
-        let defender_village = ctx
+        let mut defender_village = ctx
             .village_repo
             .get_by_id(self.payload.target_village_id as u32)
             .await?
@@ -53,7 +53,7 @@ impl JobHandler for AttackJobHandler {
 
         for ct in &self.payload.catapult_targets {
             match defender_village.get_building_by_name(ct.clone()) {
-                Some(b) => catapult_targets.push(b.clone()),
+                Some(b) => catapult_targets.push(b.building.clone()),
                 None => {
                     let b = defender_village.get_random_buildings(1).pop().unwrap();
                     catapult_targets.push(b.clone())
@@ -73,26 +73,49 @@ impl JobHandler for AttackJobHandler {
         let battle_report = battle.calculate_battle();
 
         // 3. Store results on db
-        // ctx.village_repo.apply_damages(..., battle_result.buildings_damages).await?;
-        // ctx.army_repo.apply_losses(..., battle_result.attacker_loss_percentage).await?;
-        // ctx.job_repo.create(return_army_new_job).await?;
+        attacker_army.update_units(&battle_report.attacker.survivors);
+        ctx.army_repo.save(&attacker_army).await?; // Salva l'esercito attaccante aggiornato
 
-        // --- 4. Army return job ---
-        // Calculate travel time
+        // 3.2 Applies changes to defender village
+        if let Some(bounty) = &battle_report.bounty {
+            defender_village.stocks.remove_resources(bounty);
+        }
+        defender_village.loyalty = battle_report.loyalty_after;
+
+        // Apply damages to buildings
+        defender_village.apply_building_damages(&battle_report)?;
+
+        // Applies combat losses to defender village and its reinforcements
+        defender_village.apply_battle_losses(&battle_report);
+
+        // Update village state
+        defender_village.update_state();
+        ctx.village_repo.save(&defender_village).await?;
+
+        // Update armies
+        if let Some(army) = defender_village.army {
+            ctx.army_repo.save(&army).await?;
+        }
+
+        for reinforcement_army in defender_village.reinforcements {
+            ctx.army_repo.save(&reinforcement_army).await?;
+        }
+
+        // --- 4. Return job ---
         let return_travel_time = attacker_village
             .position
-            .calculate_travel_time_secs(defender_village.position, attacker_army.clone().speed())
+            .calculate_travel_time_secs(defender_village.position, attacker_army.speed())
             as i64;
 
-        // Creates army return payload
-        let player_id = attacker_village.clone().player_id;
+        let player_id = attacker_village.player_id;
         let village_id = attacker_village.id as i32;
         let defender_village_id = defender_village.id as i32;
 
         let return_payload = ArmyReturnTask {
-            army_id: self.payload.army_id,
-            // TODO: fix loot from battle
-            resources: ResourceGroup::new(0, 0, 0, 0),
+            army_id: attacker_army.id, // Attacking army ID
+            resources: battle_report
+                .bounty
+                .unwrap_or(ResourceGroup::new(0, 0, 0, 0)), // Resources to bring back
             destination_player_id: player_id,
             destination_village_id: village_id,
             from_village_id: defender_village_id,

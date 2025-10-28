@@ -7,4 +7,6 @@ use crate::game::models::army::Army;
 pub trait ArmyRepository: Send + Sync {
     async fn create(&self, army: &Army) -> Result<()>;
     async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>>;
+    async fn save(&self, army: &Army) -> Result<()>;
+    async fn remove(&self, army_id: Uuid) -> Result<()>;
 }

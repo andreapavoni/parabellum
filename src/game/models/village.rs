@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models::ResourceGroup;
+use crate::game::{battle::BattleReport, models::ResourceGroup};
 
 use super::{
     army::Army,
@@ -102,9 +102,9 @@ impl Village {
 
     pub fn upgrade_building(&mut self, slot_id: u8) -> Result<()> {
         match self.get_building_by_slot_id(slot_id) {
-            Some(b) => match b.validate_upgrade() {
+            Some(b) => match b.building.validate_upgrade() {
                 Ok(_) => {
-                    let next = b.next_level().unwrap();
+                    let next = b.building.next_level().unwrap();
                     self.buildings.append(&mut vec![VillageBuilding {
                         slot_id,
                         building: next,
@@ -121,7 +121,7 @@ impl Village {
     pub fn downgrade_building_to_level(&mut self, slot_id: u8, level: u8) -> Result<()> {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => {
-                let building = b.at_level(level)?;
+                let building = b.building.at_level(level)?;
                 self.buildings
                     .append(&mut vec![VillageBuilding { slot_id, building }]);
                 self.update_state();
@@ -134,8 +134,8 @@ impl Village {
     pub fn destroy_building(&mut self, slot_id: u8) -> Result<()> {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => {
-                if b.group == BuildingGroup::Resources {
-                    b.at_level(0)?;
+                if b.building.group == BuildingGroup::Resources {
+                    b.building.at_level(0)?;
                     self.update_state();
                 } else {
                     let _ = self
@@ -156,15 +156,15 @@ impl Village {
         Ok(())
     }
 
-    pub fn get_building_by_slot_id(&self, slot_id: u8) -> Option<Building> {
+    pub fn get_building_by_slot_id(&self, slot_id: u8) -> Option<VillageBuilding> {
         self.buildings
             .iter()
             .find(|&x| x.slot_id == slot_id)
-            .map(|x| x.building.clone())
+            .map_or(None, |vb| Some(vb.clone()))
     }
 
     // Returns a building in the village. Returns None if not present. In case of multiple buildings of same type, it returns the highest level one.
-    pub fn get_building_by_name(&self, name: BuildingName) -> Option<Building> {
+    pub fn get_building_by_name(&self, name: BuildingName) -> Option<VillageBuilding> {
         if let Some(village_building) = self
             .buildings
             .iter()
@@ -172,7 +172,7 @@ impl Village {
             .cloned()
             .max_by(|x, y| x.building.level.cmp(&y.building.level))
         {
-            return Some(village_building.building);
+            return Some(village_building);
         }
         None
     }
@@ -198,10 +198,10 @@ impl Village {
 
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
         if let Some(palace) = self.get_building_by_name(BuildingName::Palace) {
-            return Some((palace, BuildingName::Palace));
+            return Some((palace.building, BuildingName::Palace));
         }
         if let Some(residence) = self.get_building_by_name(BuildingName::Residence) {
-            return Some((residence, BuildingName::Residence));
+            return Some((residence.building, BuildingName::Residence));
         }
         None
     }
@@ -214,6 +214,7 @@ impl Village {
             Tribe::Gaul => self.get_building_by_name(BuildingName::Palisade),
             _ => None,
         }
+        .map_or(None, |vb| Some(vb.building))
     }
 
     pub fn get_wall_name(&self) -> Option<BuildingName> {
@@ -240,14 +241,103 @@ impl Village {
 
     pub fn get_buildings_durability(&self) -> f64 {
         match self.get_building_by_name(BuildingName::StonemansionLodge) {
-            Some(b) => 1.0 + b.level as f64 * 0.1,
+            Some(b) => 1.0 + b.building.level as f64 * 0.1,
             None => 1.0,
         }
     }
 
+    /// Applies combat losses to the village's army and reinforcements based on the battle report.
+    pub fn apply_battle_losses(&mut self, report: &BattleReport) {
+        let mut final_home_army = None;
+        if let Some(defender_report) = &report.defender {
+            if let Some(mut home_army) = self.army.take() {
+                home_army.update_units(&defender_report.survivors);
+                if home_army.immensity() > 0 {
+                    final_home_army = Some(home_army);
+                }
+            }
+        } else if self.army.is_some() {
+            // If no defender report but army exists, it means total loss
+            final_home_army = self.army.take();
+        }
+        self.army = final_home_army;
+
+        for report in &report.reinforcements {
+            if let Some(index) = self
+                .reinforcements
+                .iter()
+                .position(|r| r.id == report.army_before.id)
+            {
+                let mut army = self.reinforcements.remove(index);
+                army.update_units(&report.survivors);
+                if army.immensity() > 0 {
+                    self.reinforcements.insert(index, army.clone());
+                }
+            }
+        }
+    }
+
+    /// Applies building damages from the battle report to the village.
+    pub fn apply_building_damages(&mut self, report: &BattleReport) -> Result<()> {
+        // Wall damage
+        if let Some(wall_damage) = &report.wall_damage {
+            if wall_damage.level_after < wall_damage.level_before {
+                if let Some(wall_building) = self.get_building_by_name(wall_damage.name.clone()) {
+                    // Find the VillageBuilding for the wall
+                    if let Some(vb) = self
+                        .buildings
+                        .iter_mut()
+                        .find(|vb| vb.building.name == wall_damage.name)
+                    {
+                        vb.building = wall_building.building.at_level(wall_damage.level_after)?;
+                    }
+                }
+            }
+        }
+
+        // Catapult damages to other buildings
+        for damage_report in &report.catapult_damage {
+            if damage_report.level_after < damage_report.level_before {
+                if let Some(target_building) = self.get_building_by_name(damage_report.name.clone())
+                {
+                    // Trova il VillageBuilding per lo slot_id
+                    // Nota: Questo assume che tu abbia memorizzato lo slot_id
+                    // nel report o che tu possa recuperarlo dal nome.
+                    // Se hai più edifici dello stesso tipo, devi identificare
+                    // quello specifico bersagliato.
+                    // Qui assumo che ci sia uno slot_id fittizio 0 per semplicità.
+                    let slot_id_da_trovare = self
+                        .buildings
+                        .iter()
+                        .find(|vb| vb.building.name == damage_report.name)
+                        .map_or(0, |vb| vb.slot_id); // Trova il vero slot_id
+
+                    if let Some(vb) = self
+                        .buildings
+                        .iter_mut()
+                        .find(|vb| vb.slot_id == slot_id_da_trovare)
+                    {
+                        vb.building = target_building
+                            .building
+                            .at_level(damage_report.level_after)?;
+                        // Se il livello è 0 e non è un campo risorse, rimuovi l'edificio
+                        if damage_report.level_after == 0
+                            && vb.building.group != BuildingGroup::Resources
+                        {
+                            self.buildings.retain(|b| b.slot_id != slot_id_da_trovare);
+                        }
+                    }
+                }
+            }
+        }
+        // Dopo aver modificato gli edifici, ricalcola lo stato (produzione, pop, capacità)
+        self.update_state();
+        Ok(())
+    }
+
     /// Updates the village stocks based on the time elapsed since the last update
     /// It should be called whenever the village is loaded from the DB.
-    pub fn update_resources(&mut self) {
+    fn update_resources(&mut self) {
         let now = Utc::now();
         let time_elapsed_secs = (now - self.updated_at).num_seconds();
 
@@ -257,8 +347,6 @@ impl Village {
         }
 
         // Effective hourly production
-        // update effective production apllying bonuses and upkeep
-        self.production.calculate_effective_production();
         let effective_prod = &self.production.effective;
 
         // Calculates per-second production rates
@@ -292,8 +380,8 @@ impl Village {
         self.updated_at = now;
     }
 
-    // Updates the village stats (population, production, bonuses from buildings and oases, etc).
-    fn update_state(&mut self) {
+    /// Updates the village state (production, upkeep, etc...).
+    pub fn update_state(&mut self) {
         self.population = 2;
         self.production = Default::default();
 
@@ -324,11 +412,12 @@ impl Village {
         }
 
         // set default stocks capacities if no warehouse/granary present
+        let default_socks = VillageStocks::default();
         if self.stocks.granary_capacity == 0 {
-            self.stocks.granary_capacity = VillageStocks::default().granary_capacity;
+            self.stocks.granary_capacity = default_socks.granary_capacity;
         }
         if self.stocks.warehouse_capacity == 0 {
-            self.stocks.warehouse_capacity = VillageStocks::default().warehouse_capacity;
+            self.stocks.warehouse_capacity = default_socks.warehouse_capacity;
         }
 
         // population upkeep
@@ -348,6 +437,9 @@ impl Village {
         for a in self.reinforcements.iter() {
             self.production.upkeep += a.upkeep();
         }
+
+        // update effective production applying bonuses and upkeep
+        self.production.calculate_effective_production();
 
         self.update_resources();
     }
@@ -391,6 +483,8 @@ impl Village {
             slot_id,
             building: main_building,
         }]);
+
+        self.update_state();
 
         Ok(())
     }
@@ -468,6 +562,22 @@ impl VillageStocks {
     /// Returns the currently stored resources as ResourceGroup
     pub fn stored_resources(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
+    }
+
+    /// Stores resources into the village stocks, capping at storage capacity.
+    pub fn store_resources(&mut self, resources: ResourceGroup) {
+        self.lumber = (self.lumber + resources.0).min(self.warehouse_capacity);
+        self.clay = (self.clay + resources.1).min(self.warehouse_capacity);
+        self.iron = (self.iron + resources.2).min(self.warehouse_capacity);
+        self.crop = (self.crop + resources.3 as i64).min(self.granary_capacity as i64);
+    }
+
+    /// Removes resources from the village stocks, ensuring they don't go negative (except for crop).
+    pub fn remove_resources(&mut self, resources: &ResourceGroup) {
+        self.lumber = (self.lumber as i64 - resources.0 as i64).max(0) as u32;
+        self.clay = (self.clay as i64 - resources.1 as i64).max(0) as u32;
+        self.iron = (self.iron as i64 - resources.2 as i64).max(0) as u32;
+        self.crop = self.crop - resources.3 as i64; // crop can go negative
     }
 }
 

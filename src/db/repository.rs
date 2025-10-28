@@ -152,7 +152,7 @@ impl VillageRepository for PostgresRepository {
         };
 
         let mut game_village = Village::try_from(aggregate)?;
-        game_village.update_resources();
+        game_village.update_state();
         Ok(Some(game_village))
     }
 
@@ -257,6 +257,35 @@ impl ArmyRepository for PostgresRepository {
                 "#,
                 army.id, army.village_id as i32, current_map_field_id as i32, hero_id, Json(&army.units) as _, Json(&army.smithy) as _, db_tribe as _, army.player_id
             )
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn save(&self, army: &Army) -> Result<()> {
+        let hero_id = army.hero.as_ref().map(|h| h.id);
+        let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
+
+        sqlx::query!(
+            r#"
+            UPDATE armies
+            SET units = $2, hero_id = $3, current_map_field_id = $4
+            WHERE id = $1
+            "#,
+            army.id,
+            Json(&army.units) as _,
+            hero_id,
+            current_map_field_id as i32
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn remove(&self, army_id: Uuid) -> Result<()> {
+        sqlx::query!(r#"DELETE FROM armies WHERE id = $1"#, army_id)
             .execute(&self.pool)
             .await?;
 
