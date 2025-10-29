@@ -68,7 +68,7 @@ impl JobHandler for AttackJobHandler {
             attacker_army.clone(),
             attacker_village.clone(),
             defender_village.clone(),
-            catapult_targets,
+            Some(catapult_targets),
         );
         let battle_report = battle.calculate_battle();
 

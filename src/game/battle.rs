@@ -78,7 +78,7 @@ pub struct Battle {
     attacker: Army,
     attacker_village: Village,
     defender_village: Village,
-    catapult_targets: [Building; 2],
+    catapult_targets: Option<[Building; 2]>,
 }
 
 impl Battle {
@@ -87,7 +87,7 @@ impl Battle {
         attacker: Army,
         attacker_village: Village,
         defender_village: Village,
-        catapult_targets: [Building; 2],
+        catapult_targets: Option<[Building; 2]>,
     ) -> Self {
         Self {
             attack_type,
@@ -100,18 +100,10 @@ impl Battle {
 
     // Main function to calculate the battle
     pub fn calculate_battle(&self) -> BattleReport {
-        // ====================================================================
         // STEP 1: Calculate total attack and defense points
-        // ====================================================================
-        let mut total_attacker_infantry_points: u32;
-        let mut total_attacker_cavalry_points: u32;
-
-        (
-            total_attacker_infantry_points,
-            total_attacker_cavalry_points,
-        ) = self.attacker.attack_points();
-
         // 1.1: Attack points
+        let (mut total_attacker_infantry_points, mut total_attacker_cavalry_points): (u32, u32) =
+            self.attacker.attack_points();
 
         // 1.2: Hero attack bonus
         if let Some(hero) = &self.attacker.hero {
@@ -125,18 +117,13 @@ impl Battle {
         }
 
         // 1.3: Defense points (village troops + reinforcements)
-        let mut total_defender_infantry_points: u32;
-        let mut total_defender_cavalry_points: u32;
         let mut total_defender_immensity: u32 = 0;
 
-        (
-            total_defender_infantry_points,
-            total_defender_cavalry_points,
-        ) = self
-            .defender_village
-            .army
-            .clone()
-            .map_or((0, 0), |a| a.defense_points());
+        let (mut total_defender_infantry_points, mut total_defender_cavalry_points): (u32, u32) =
+            self.defender_village
+                .army
+                .clone()
+                .map_or((0, 0), |a| a.defense_points());
 
         total_defender_immensity += self
             .defender_village
@@ -179,22 +166,30 @@ impl Battle {
             (total_defender_infantry_points as f64 * wall_bonus) as u32;
         total_defender_cavalry_points = (total_defender_cavalry_points as f64 * wall_bonus) as u32;
 
-        // ====================================================================
         // STEP 2: Calculate total power and casualties
-        // ====================================================================
 
         // 2.1 Total attack power
-        let total_attack_power = 1 + total_attacker_infantry_points + total_attacker_cavalry_points;
+        let total_attack_power_f64 =
+            1.0 + total_attacker_infantry_points as f64 + total_attacker_cavalry_points as f64;
 
         // 2.2: Total defense power
-        let infantry_ratio = total_attacker_infantry_points / total_attack_power;
-        let cavalry_ratio = total_attacker_cavalry_points / total_attack_power;
-        let total_defense_power = (total_defender_infantry_points * infantry_ratio)
-            + (total_defender_cavalry_points * cavalry_ratio);
+        let infantry_ratio_f64 = (total_attacker_infantry_points as f64) / total_attack_power_f64;
+        let cavalry_ratio_f64 = (total_attacker_cavalry_points as f64) / total_attack_power_f64;
+
+        let total_defense_power_f64 = (total_defender_infantry_points as f64 * infantry_ratio_f64)
+            + (total_defender_cavalry_points as f64 * cavalry_ratio_f64);
 
         // 2.3: Morale bonus (if attacker pop > defender pop)
         let mut morale_bonus = 1.0;
+        let total_attacker_population = self.attacker_village.population + self.attacker.upkeep();
+
+        let defender_home_army_upkeep = self
+            .defender_village
+            .army
+            .as_ref()
+            .map_or(0, |a| a.upkeep());
         let total_defender_population = self.defender_village.population
+            + defender_home_army_upkeep
             + self
                 .defender_village
                 .reinforcements
@@ -202,22 +197,22 @@ impl Battle {
                 .map(|a| a.upkeep())
                 .sum::<u32>();
 
-        if self.attacker_village.population > total_defender_population {
-            let ratio = total_defender_population as f64 / self.attacker_village.population as f64;
-            morale_bonus = ratio.powf(0.2); // TODO: simplified, original formula is more complex
+        if total_attacker_population > total_defender_population {
+            let ratio = total_defender_population as f64 / total_attacker_population as f64;
+            morale_bonus = ratio.powf(0.3); // TODO: simplified, original formula is more complex
         }
 
-        let effective_attack_power = (total_attack_power as f64 / morale_bonus) as u32;
+        let effective_attack_power_f64 = total_attack_power_f64 * morale_bonus;
 
         // 2.4: Combat formula
-        let power_ratio: f64 = effective_attack_power as f64 / total_defense_power as f64;
+        let power_ratio: f64 = effective_attack_power_f64 / total_defense_power_f64;
         // Immensity
         let total_units_involved = self.attacker.immensity() + total_defender_immensity;
 
         let (attacker_loss_percentage, defender_loss_percentage) = calculate_losses_percentages(
             &self.attack_type,
-            effective_attack_power,
-            total_defense_power,
+            effective_attack_power_f64,
+            total_defense_power_f64,
             total_units_involved,
         );
 
@@ -247,9 +242,7 @@ impl Battle {
             })
             .collect();
 
-        // ====================================================================
         // STEP 3: Calculate damages to wall and buildings
-        // ====================================================================
 
         let wall_level = self.defender_village.get_wall().map_or(0, |w| w.level);
         let mut wall_level_after = wall_level;
@@ -283,10 +276,11 @@ impl Battle {
                 .clamp(1.0, 3.0);
 
             // TODO: fix catapult targets (none, random, 1 or 2)
-            let catapults_targets_quantity: u32 = match self.catapult_targets.len() as u32 {
-                0 => 1,
-                len => len,
-            };
+            let catapults_targets_quantity: u32 =
+                match self.catapult_targets.clone().map_or(0, |cts| cts.len()) as u32 {
+                    0 => 1,
+                    len => len,
+                };
 
             let catapult_damage = calculate_machine_damage(
                 surviving_catapults / catapults_targets_quantity, // Quantità per questo target
@@ -296,16 +290,15 @@ impl Battle {
                 catapult_morale_bonus,
             );
 
-            buildings_levels = Some(
-                self.catapult_targets
-                    .clone()
-                    .map(|target| calculate_new_building_level(target.level, catapult_damage)),
-            );
+            if let Some(catapult_targets) = self.catapult_targets.clone() {
+                buildings_levels = Some(
+                    catapult_targets
+                        .map(|target| calculate_new_building_level(target.level, catapult_damage)),
+                );
+            }
         }
 
-        // ====================================================================
         // STEP 4: Final result
-        // ====================================================================
 
         let wall_report = if wall_level > 0 {
             Some(BuildingDamageReport {
@@ -322,10 +315,12 @@ impl Battle {
             Some(levels) => levels
                 .iter()
                 .zip(self.catapult_targets.iter())
-                .map(|(&new_level, target)| BuildingDamageReport {
-                    name: target.name.clone(),
-                    level_before: target.level,
-                    level_after: new_level,
+                .flat_map(|(&new_level, targets)| {
+                    targets.clone().map(|target| BuildingDamageReport {
+                        name: target.name.clone(),
+                        level_before: target.level,
+                        level_after: new_level,
+                    })
                 })
                 .collect(),
         };
@@ -365,9 +360,7 @@ impl Battle {
     }
 
     pub fn calculate_scout_battle(&self, target: ScoutingTarget) -> BattleReport {
-        // ====================================================================
         // STEP 1: Calculates attack and defense points for scouts
-        // ====================================================================
 
         let total_scout_attack_power = self.attacker.scouting_attack_points();
         let total_attack_scouts = self.attacker.unit_amount(3);
@@ -385,9 +378,7 @@ impl Battle {
 
         let defender_has_scouts = total_scout_defense_power > 0;
 
-        // ====================================================================
         // STEP 2: Apply bonuses and casualties
-        // ====================================================================
         let wall_bonus = self.defender_village.get_wall_defense_bonus();
 
         // 2.1: Apply wall defense bonus
@@ -412,9 +403,7 @@ impl Battle {
             attacker_loss_percentage = power_ratio.powf(m_factor).min(1.0);
         }
 
-        // ====================================================================
         // STEP 3: Final result
-        // ====================================================================
 
         // Calculate casualties in attacker scouts
         let (attacker_survivors, attacker_losses) =
@@ -567,8 +556,8 @@ fn calculate_m_factor(immensity: u32) -> f64 {
 // Losses are calculated in percentages and applied to all armies involved, according to a winner/loser logic
 fn calculate_losses_percentages(
     attack_type: &AttackType,
-    attack_power: u32,
-    defense_power: u32,
+    attack_power: f64,
+    defense_power: f64,
     immensity: u32,
 ) -> (f64, f64) {
     let m_factor = calculate_m_factor(immensity);
@@ -593,7 +582,6 @@ fn calculate_losses_percentages(
             m_factor,
         );
     }
-
     (attacker_loss_percentage, defender_loss_percentage)
 }
 
@@ -665,13 +653,16 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{models::Tribe, test_factories::*};
+    use crate::game::{
+        models::{Player, Tribe},
+        test_factories::*,
+    };
     use anyhow::Result;
 
     #[test]
     fn test_losses_attacker_wins_normal() {
-        let attack_power = 1000;
-        let defense_power = 100;
+        let attack_power = 1000.0;
+        let defense_power = 100.0;
         let immensity = 1100;
         let (atk_loss_perc, def_loss_perc) = calculate_losses_percentages(
             &AttackType::Normal,
@@ -686,8 +677,8 @@ mod tests {
 
     #[test]
     fn test_losses_defender_wins_normal() {
-        let attack_power = 100;
-        let defense_power = 1000;
+        let attack_power = 100.0;
+        let defense_power = 1000.0;
         let immensity = 1100;
         let (atk_loss_perc, def_loss_perc) = calculate_losses_percentages(
             &AttackType::Normal,
@@ -702,8 +693,8 @@ mod tests {
 
     #[test]
     fn test_losses_equal_fight_raid() {
-        let attack_power = 500;
-        let defense_power = 500;
+        let attack_power = 500.0;
+        let defense_power = 500.0;
         let immensity = 1000;
         let (atk_loss_perc, def_loss_perc) =
             calculate_losses_percentages(&AttackType::Raid, attack_power, defense_power, immensity);
@@ -721,52 +712,22 @@ mod tests {
     #[test]
     fn test_battle_100_legionaires_vs_10_spearmen() -> Result<()> {
         // 1. SETUP
-        let attacker_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
-        let attacker_village = village_factory(VillageFactoryOptions {
-            player: Some(attacker_player.clone()),
-            ..Default::default()
-        });
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(attacker_player.id),
-            village_id: Some(attacker_village.id),
-            tribe: Some(attacker_player.tribe),
-            units: Some([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            ..Default::default()
-        });
+        let (_attacker_player, attacker_village, attacker_army) =
+            setup_party(Tribe::Roman, [100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-        let defender_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Teuton),
-            ..Default::default()
-        });
-        let mut defender_village = village_factory(VillageFactoryOptions {
-            player: Some(defender_player.clone()),
-            ..Default::default()
-        });
-        let defender_home_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(defender_player.id),
-            village_id: Some(defender_village.id),
-            tribe: Some(defender_player.tribe),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            ..Default::default()
-        });
-        defender_village.army = Some(defender_home_army);
+        let (_defender_player, mut defender_village, defender_home_army) =
+            setup_party(Tribe::Teuton, [0, 10, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+        defender_village.army = Some(defender_home_army.clone());
         defender_village.update_state();
-
-        let dummy_targets: [Building; 2] = [
-            Building::new(BuildingName::MainBuilding),
-            Building::new(BuildingName::Warehouse),
-        ];
 
         // 2. ACT
         let battle = Battle::new(
             AttackType::Normal,
-            attacker_army,
+            attacker_army.clone(),
             attacker_village,
             defender_village,
-            dummy_targets,
+            None,
         );
         let report = battle.calculate_battle();
 
@@ -774,10 +735,19 @@ mod tests {
         let defender_report = report.defender.expect("Defender report should exist");
 
         let defender_losses: u32 = defender_report.losses.iter().sum();
-        assert_eq!(defender_losses, 10, "Defender should lose all 10 troops");
+        let initial_defender_troops: u32 = defender_home_army.immensity();
+        assert_eq!(
+            defender_losses, initial_defender_troops,
+            "Defender should lose all {} troops (lost {})",
+            initial_defender_troops, defender_losses
+        );
 
         let defender_survivors: u32 = defender_report.survivors.iter().sum();
-        assert_eq!(defender_survivors, 0, "Defender should not have survivors");
+        assert_eq!(
+            defender_survivors, 0,
+            "Defender should not have survivors (survived {})",
+            defender_survivors
+        );
 
         let attacker_losses: u32 = report.attacker.losses.iter().sum();
         assert!(
@@ -787,12 +757,33 @@ mod tests {
         );
 
         let attacker_survivors: u32 = report.attacker.survivors.iter().sum();
+        let diff = attacker_army.immensity() - attacker_losses;
         assert_eq!(
-            attacker_survivors,
-            100 - attacker_losses,
-            "Attacker survivors should be less than before"
+            attacker_survivors, diff,
+            "Attacker should have {} survivors {}",
+            attacker_survivors, diff
         );
 
         Ok(())
+    }
+
+    fn setup_party(tribe: Tribe, units: TroopSet) -> (Player, Village, Army) {
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(tribe.clone()),
+            ..Default::default()
+        });
+        let village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        let army = army_factory(ArmyFactoryOptions {
+            player_id: Some(player.id),
+            village_id: Some(village.id),
+            tribe: Some(tribe),
+            units: Some(units),
+            ..Default::default()
+        });
+
+        (player, village, army)
     }
 }

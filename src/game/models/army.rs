@@ -242,11 +242,10 @@ impl Army {
         let mut losses: TroopSet = [0; 10];
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
-            let lost = ((quantity as f64) * percent / 100.0).floor() as u32;
+            let lost = (quantity as f64 * percent).floor() as u32;
             survivors[idx] = quantity - lost;
             losses[idx] = lost;
         }
-
         (survivors, losses)
     }
 
