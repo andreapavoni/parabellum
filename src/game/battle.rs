@@ -661,3 +661,138 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
     }
     return current_level;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::{models::Tribe, test_factories::*};
+    use anyhow::Result;
+
+    #[test]
+    fn test_losses_attacker_wins_normal() {
+        let attack_power = 1000;
+        let defense_power = 100;
+        let immensity = 1100;
+        let (atk_loss_perc, def_loss_perc) = calculate_losses_percentages(
+            &AttackType::Normal,
+            attack_power,
+            defense_power,
+            immensity,
+        );
+
+        assert_eq!(def_loss_perc, 1.0, "Defender should be wiped out");
+        assert!(atk_loss_perc < 0.1, "Attacker losses should be minimal");
+    }
+
+    #[test]
+    fn test_losses_defender_wins_normal() {
+        let attack_power = 100;
+        let defense_power = 1000;
+        let immensity = 1100;
+        let (atk_loss_perc, def_loss_perc) = calculate_losses_percentages(
+            &AttackType::Normal,
+            attack_power,
+            defense_power,
+            immensity,
+        );
+
+        assert_eq!(atk_loss_perc, 1.0, "Attacker should be wiped out");
+        assert!(def_loss_perc < 0.1, "Defender losses should be minimal");
+    }
+
+    #[test]
+    fn test_losses_equal_fight_raid() {
+        let attack_power = 500;
+        let defense_power = 500;
+        let immensity = 1000;
+        let (atk_loss_perc, def_loss_perc) =
+            calculate_losses_percentages(&AttackType::Raid, attack_power, defense_power, immensity);
+
+        assert!(
+            (atk_loss_perc - 0.5).abs() < 0.001,
+            "Attacker losses should be ~50%"
+        );
+        assert!(
+            (def_loss_perc - 0.5).abs() < 0.001,
+            "Defender losses should be ~50%"
+        );
+    }
+
+    #[test]
+    fn test_battle_100_legionaires_vs_10_spearmen() -> Result<()> {
+        // 1. SETUP
+        let attacker_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let attacker_village = village_factory(VillageFactoryOptions {
+            player: Some(attacker_player.clone()),
+            ..Default::default()
+        });
+        let attacker_army = army_factory(ArmyFactoryOptions {
+            player_id: Some(attacker_player.id),
+            village_id: Some(attacker_village.id),
+            tribe: Some(attacker_player.tribe),
+            units: Some([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        let defender_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            ..Default::default()
+        });
+        let mut defender_village = village_factory(VillageFactoryOptions {
+            player: Some(defender_player.clone()),
+            ..Default::default()
+        });
+        let defender_home_army = army_factory(ArmyFactoryOptions {
+            player_id: Some(defender_player.id),
+            village_id: Some(defender_village.id),
+            tribe: Some(defender_player.tribe),
+            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+        defender_village.army = Some(defender_home_army);
+        defender_village.update_state();
+
+        let dummy_targets: [Building; 2] = [
+            Building::new(BuildingName::MainBuilding),
+            Building::new(BuildingName::Warehouse),
+        ];
+
+        // 2. ACT
+        let battle = Battle::new(
+            AttackType::Normal,
+            attacker_army,
+            attacker_village,
+            defender_village,
+            dummy_targets,
+        );
+        let report = battle.calculate_battle();
+
+        // 3. ASSERT
+        let defender_report = report.defender.expect("Defender report should exist");
+
+        let defender_losses: u32 = defender_report.losses.iter().sum();
+        assert_eq!(defender_losses, 10, "Defender should lose all 10 troops");
+
+        let defender_survivors: u32 = defender_report.survivors.iter().sum();
+        assert_eq!(defender_survivors, 0, "Defender should not have survivors");
+
+        let attacker_losses: u32 = report.attacker.losses.iter().sum();
+        assert!(
+            attacker_losses < 10 && attacker_losses > 0,
+            "Attacker should lose very few troops (lost {})",
+            attacker_losses
+        );
+
+        let attacker_survivors: u32 = report.attacker.survivors.iter().sum();
+        assert_eq!(
+            attacker_survivors,
+            100 - attacker_losses,
+            "Attacker survivors should be less than before"
+        );
+
+        Ok(())
+    }
+}
