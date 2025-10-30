@@ -17,7 +17,7 @@ use uuid::Uuid;
 pub struct TrainUnitsCommand {
     pub player_id: Uuid,
     pub village_id: u32,
-    pub unit: Unit,
+    pub unit_idx: u8,
     pub quantity: i32,
 }
 
@@ -54,7 +54,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
         // 2. Check building requirements
         // TODO: This logic should be more robust, maybe defined
         // alongside the Unit definitions in army.rs.
-        let required_building = match command.unit.group {
+        let required_building = match command.unit_idx.group {
             UnitGroup::Infantry => BuildingName::Barracks,
             UnitGroup::Cavalry => BuildingName::Stable,
             UnitGroup::Siege => BuildingName::Workshop,
@@ -114,7 +114,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
 
         let payload = TrainUnitsTask {
             slot_id: building.slot_id, // We need the building slot
-            unit: command.unit,
+            unit: command.unit_idx.name,
             quantity: command.quantity, // The *total* quantity to train
             time_per_unit_secs: time_per_unit_secs as i32,
         };
@@ -138,13 +138,14 @@ impl<'a> TrainUnitsCommandHandler<'a> {
 mod tests {
     use super::*;
     use crate::{
+        app::test_utils::tests::{MockJobRepository, MockVillageRepository},
         game::{
             models::{
-                army::Army,
+                army::{Army, UnitName},
                 buildings::Building,
                 map::Position,
                 village::{Village, VillageBuilding},
-                Tribe,
+                Player, Tribe,
             },
             test_factories::{
                 army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
@@ -160,70 +161,6 @@ mod tests {
         sync::{Arc, Mutex},
     };
     use uuid::Uuid;
-
-    // --- Mocks ---
-    #[derive(Default)]
-    struct MockJobRepository {
-        added_jobs: Mutex<Vec<Job>>,
-    }
-
-    #[async_trait]
-    impl JobRepository for MockJobRepository {
-        async fn add(&self, job: &Job) -> Result<()> {
-            self.added_jobs.lock().unwrap().push(job.clone());
-            Ok(())
-        }
-        async fn get_by_id(&self, _id: Uuid) -> Result<Option<Job>> {
-            Ok(None)
-        }
-        async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>> {
-            Ok(vec![])
-        }
-        async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>> {
-            Ok(vec![])
-        }
-        async fn mark_as_completed(&self, _job_id: Uuid) -> Result<()> {
-            Ok(())
-        }
-        async fn mark_as_failed(&self, _job_id: Uuid, _error_message: &str) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[derive(Default)]
-    struct MockVillageRepository {
-        villages: Mutex<HashMap<u32, Village>>,
-        saved_villages: Mutex<Vec<Village>>,
-    }
-
-    impl MockVillageRepository {
-        fn add_village(&self, village: Village) {
-            self.villages.lock().unwrap().insert(village.id, village);
-        }
-    }
-
-    #[async_trait]
-    impl VillageRepository for MockVillageRepository {
-        async fn create(&self, _village: &Village) -> Result<()> {
-            Ok(())
-        }
-        async fn get_by_id(&self, village_id: u32) -> Result<Option<Village>> {
-            let villages = self.villages.lock().unwrap();
-            Ok(villages.get(&village_id).cloned())
-        }
-        async fn list_by_player_id(&self, _player_id: Uuid) -> Result<Vec<Village>> {
-            Ok(vec![])
-        }
-        async fn save(&self, village: &Village) -> Result<()> {
-            self.saved_villages.lock().unwrap().push(village.clone());
-            // Also update the in-memory village for subsequent gets
-            self.villages
-                .lock()
-                .unwrap()
-                .insert(village.id, village.clone());
-            Ok(())
-        }
-    }
 
     fn setup_village_with_barracks() -> (Player, Village) {
         let player = player_factory(PlayerFactoryOptions {
@@ -271,7 +208,7 @@ mod tests {
         let command = TrainUnitsCommand {
             player_id: player.id,
             village_id: village_id,
-            unit: UnitName::Legionnaire,
+            unit_idx: 0,
             quantity: 5,
         };
 
@@ -309,7 +246,7 @@ mod tests {
         );
 
         // Check if job was created
-        let added_jobs = mock_job_repo.added_jobs.lock().unwrap();
+        let added_jobs = mock_job_repo.get_added_jobs();
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
@@ -341,7 +278,7 @@ mod tests {
         let command = TrainUnitsCommand {
             player_id: player.id,
             village_id: village_id,
-            unit: UnitName::Legionnaire,
+            unit_idx: UnitName::Legionnaire,
             quantity: 1, // Even for 1 (needs 120)
         };
 
@@ -378,7 +315,7 @@ mod tests {
         let command = TrainUnitsCommand {
             player_id: player.id,
             village_id: village_id,
-            unit: UnitName::Legionnaire,
+            unit_idx: UnitName::Legionnaire,
             quantity: 1,
         };
 

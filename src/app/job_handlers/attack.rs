@@ -31,7 +31,11 @@ impl JobHandler for AttackJobHandler {
           attacker_village_id = %self.payload.attacker_village_id,
           target_village_id = %self.payload.target_village_id
       ))]
-    async fn handle<'ctx, 'a>(&'ctx self, ctx: &'ctx JobHandlerContext<'a>) -> Result<()> {
+    async fn handle<'ctx, 'a>(
+        &'ctx self,
+        ctx: &'ctx JobHandlerContext<'a>,
+        _job: &'ctx Job,
+    ) -> Result<()> {
         info!("Execute Attack Job");
 
         let mut attacker_army = ctx

@@ -430,10 +430,7 @@ impl Village {
         }
 
         // armies upkeep
-        self.production.upkeep += match self.army.clone() {
-            Some(army) => army.upkeep(),
-            None => 0,
-        };
+        self.production.upkeep += self.army.clone().map_or(0, |a| a.upkeep());
         for a in self.reinforcements.iter() {
             self.production.upkeep += a.upkeep();
         }
