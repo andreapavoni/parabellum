@@ -64,7 +64,7 @@ impl JobWorker {
             // 4. Handle transaction and job state
             match task_result {
                 Ok(_) => {
-                    // Handler should have marked the job as 'Completed' inside the transaction.
+                    context.uow.jobs().mark_as_completed(job_id).await?;
                     context.uow.commit().await?;
                 }
                 Err(e) => {

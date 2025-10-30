@@ -1,12 +1,11 @@
 use anyhow::Result;
-use serial_test::serial;
-use std::sync::Arc;
-
 use parabellum::{
     app::commands::{AttackCommand, AttackCommandHandler},
     db::{establish_test_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::{
-        models::{buildings::BuildingName, map::Position, village::Village, ResourceGroup},
+        models::{
+            army::Army, buildings::BuildingName, map::Position, village::Village, ResourceGroup,
+        },
         test_factories::{
             army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
@@ -15,6 +14,8 @@ use parabellum::{
     jobs::{worker::JobWorker, JobStatus, JobTask},
     repository::uow::UnitOfWorkProvider,
 };
+use serial_test::serial;
+use std::sync::Arc;
 
 mod common;
 use common::setup;
@@ -24,57 +25,61 @@ use common::setup;
 async fn test_full_attack_flow() -> Result<()> {
     setup().await?;
     let pool = establish_test_connection_pool().await.unwrap();
-    // 1. Crea il provider UoW invece del vecchio repo
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
 
-    // --- 1. SETUP DATI (dentro una transazione) ---
     let (attacker_player, attacker_village, attacker_army, defender_village) = {
         let uow = uow_provider.begin().await?;
-        let player_repo = uow.players();
-        let village_repo = uow.villages();
-        let army_repo = uow.armies();
 
-        let attacker_player = player_factory(PlayerFactoryOptions::default());
-        player_repo.create(&attacker_player).await?;
+        let attacker_player;
+        let attacker_village: Village;
+        let attacker_army: Army;
+        let defender_village: Village;
 
-        let attacker_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 10, y: 10 }),
-            ..Default::default()
-        });
-        // I village_factory ora creano modelli di dominio, che passiamo al repo
-        let attacker_village = village_factory(VillageFactoryOptions {
-            valley: Some(attacker_valley),
-            player: Some(attacker_player.clone()),
-            ..Default::default()
-        });
-        village_repo.create(&attacker_village).await?;
+        {
+            let player_repo = uow.players();
+            let village_repo = uow.villages();
+            let army_repo = uow.armies();
 
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(attacker_player.id),
-            village_id: Some(attacker_village.id),
-            units: Some([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            tribe: Some(attacker_player.tribe.clone()),
-            ..Default::default()
-        });
-        army_repo.create(&attacker_army).await?;
+            attacker_player = player_factory(PlayerFactoryOptions::default());
+            player_repo.create(&attacker_player).await?;
 
-        let defender_player = player_factory(PlayerFactoryOptions::default());
-        player_repo.create(&defender_player).await?;
+            let attacker_valley = valley_factory(ValleyFactoryOptions {
+                position: Some(Position { x: 10, y: 10 }),
+                ..Default::default()
+            });
+            attacker_village = village_factory(VillageFactoryOptions {
+                valley: Some(attacker_valley),
+                player: Some(attacker_player.clone()),
+                ..Default::default()
+            });
+            village_repo.create(&attacker_village).await?;
 
-        let defender_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 20, y: 20 }),
-            ..Default::default()
-        });
-        let defender_village = village_factory(VillageFactoryOptions {
-            player: Some(defender_player),
-            valley: Some(defender_valley),
-            ..Default::default()
-        });
-        village_repo.create(&defender_village).await?;
+            attacker_army = army_factory(ArmyFactoryOptions {
+                player_id: Some(attacker_player.id),
+                village_id: Some(attacker_village.id),
+                units: Some([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                tribe: Some(attacker_player.tribe.clone()),
+                ..Default::default()
+            });
+            army_repo.create(&attacker_army).await?;
+
+            let defender_player = player_factory(PlayerFactoryOptions::default());
+            player_repo.create(&defender_player).await?;
+
+            let defender_valley = valley_factory(ValleyFactoryOptions {
+                position: Some(Position { x: 20, y: 20 }),
+                ..Default::default()
+            });
+            defender_village = village_factory(VillageFactoryOptions {
+                player: Some(defender_player),
+                valley: Some(defender_valley),
+                ..Default::default()
+            });
+            village_repo.create(&defender_village).await?;
+        }
 
         uow.commit().await?;
 
-        // Ritorna i dati necessari per il test
         (
             attacker_player,
             attacker_village,
@@ -83,7 +88,7 @@ async fn test_full_attack_flow() -> Result<()> {
         )
     };
 
-    // --- 2. ACT (Phase 1): Esegui il comando di attacco ---
+    // --- 2. ACT (Phase 1): Attack command ---
     let attack_command = AttackCommand {
         player_id: attacker_player.id,
         village_id: attacker_village.id,
@@ -92,49 +97,59 @@ async fn test_full_attack_flow() -> Result<()> {
         catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
     };
 
-    // Il comando viene eseguito in una nuova transazione
     {
         let uow_attack = uow_provider.begin().await?;
-        let handler = AttackCommandHandler::new(
-            uow_attack.jobs(),
-            uow_attack.villages(),
-            uow_attack.armies(),
-        );
-        handler.handle(attack_command).await.unwrap();
-        uow_attack.commit().await?;
+
+        {
+            let handler = AttackCommandHandler::new(
+                uow_attack.jobs(),
+                uow_attack.villages(),
+                uow_attack.armies(),
+            );
+            handler.handle(attack_command).await.unwrap();
+        }
+
+        uow_attack.commit().await?; // OK
     };
 
-    // --- 3. ASSERT (Phase 1): Controlla che il job sia stato creato ---
+    // --- 3. ASSERT (Phase 1): Check job creation ---
     let attack_job = {
         let uow_assert1 = uow_provider.begin().await?;
-        let job_repo = uow_assert1.jobs();
-        let jobs = job_repo
-            .list_by_player_id(attacker_player.id)
-            .await
-            .unwrap();
+        let cloned_job;
 
-        assert_eq!(jobs.len(), 1, "There should be exactly 1 job in the queue.");
-        let attack_job = &jobs[0];
+        {
+            let job_repo = uow_assert1.jobs();
+            let jobs = job_repo
+                .list_by_player_id(attacker_player.id)
+                .await
+                .unwrap();
 
-        assert!(matches!(attack_job.task, JobTask::Attack(_)));
-        assert_eq!(
-            attack_job.status,
-            JobStatus::Pending,
-            "Expected job status set to Pending, got {:?}",
-            attack_job.status
-        );
-        uow_assert1.rollback().await?; // Solo lettura, rollback
-        attack_job.clone() // Clona il job per usarlo dopo
+            assert_eq!(jobs.len(), 1, "There should be exactly 1 job in the queue.");
+            let attack_job = &jobs[0];
+
+            assert!(matches!(attack_job.task, JobTask::Attack(_)));
+            assert_eq!(
+                attack_job.status,
+                JobStatus::Pending,
+                "Expected job status set to Pending, got {:?}",
+                attack_job.status
+            );
+
+            cloned_job = attack_job.clone();
+        }
+
+        uow_assert1.rollback().await?;
+        cloned_job
     };
 
-    // --- 4. ACT (Phase 2): Simula il worker che processa il job ---
+    // --- 4. ACT (Phase 2): Simulate worker processing job ---
     let worker = Arc::new(JobWorker::new(uow_provider.clone()));
     worker
         .process_jobs(&vec![attack_job.clone()])
         .await
         .unwrap();
 
-    // --- 5. ASSERT (Phase 2): Controlla l'esito del job ---
+    // --- 5. ASSERT (Phase 2): Check job result ---
     {
         let uow_assert2 = uow_provider.begin().await?;
         let job_repo = uow_assert2.jobs();
@@ -143,14 +158,12 @@ async fn test_full_attack_flow() -> Result<()> {
             .await
             .unwrap();
 
-        // Ci aspettiamo 1 solo job PENDING (il ritorno)
         assert_eq!(
             final_jobs.len(),
             1,
             "There should be exactly 1 pending job in the queue (the return)."
         );
 
-        // Controlla che il job originale sia 'Completed'
         if let Ok(Some(original_job)) = job_repo.get_by_id(attack_job.id).await {
             assert_eq!(original_job.status, JobStatus::Completed);
         }
@@ -177,81 +190,62 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     // --- 1. SETUP ---
     let pool = establish_test_connection_pool().await?;
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
-
-    // Dati creati in una transazione
-    let (
-        attacker_player,
-        attacker_village,
-        attacker_army,
-        defender_village,
-        initial_warehouse_level,
-        initial_defender_resources,
-    ) = {
+    let (attacker_player, attacker_village, attacker_army, defender_village) = {
         let uow = uow_provider.begin().await?;
-        let player_repo = uow.players();
-        let village_repo = uow.villages();
-        let army_repo = uow.armies();
 
-        let attacker_player = player_factory(PlayerFactoryOptions::default());
-        let attacker_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 30, y: 30 }),
-            ..Default::default()
-        });
-        let attacker_village = village_factory(VillageFactoryOptions {
-            valley: Some(attacker_valley),
-            player: Some(attacker_player.clone()),
-            ..Default::default()
-        });
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            village_id: Some(attacker_village.id),
-            player_id: Some(attacker_player.id),
-            tribe: Some(attacker_player.tribe.clone()),
-            units: Some([0, 0, 100, 0, 0, 0, 0, 100, 0, 0]),
-            ..Default::default()
-        });
+        let attacker_player;
+        let attacker_village: Village;
+        let attacker_army: Army;
+        let mut defender_village: Village;
 
-        let defender_player = player_factory(PlayerFactoryOptions::default());
-        let defender_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 40, y: 40 }),
-            ..Default::default()
-        });
-        let mut defender_village = village_factory(VillageFactoryOptions {
-            valley: Some(defender_valley),
-            player: Some(defender_player.clone()),
-            ..Default::default()
-        });
-        // Modifica l'oggetto di dominio
-        defender_village.add_building(BuildingName::Granary, 21)?;
-        defender_village.add_building(BuildingName::Warehouse, 20)?;
-        defender_village
-            .stocks
-            .store_resources(ResourceGroup::new(800, 800, 800, 800));
-        // Aggiorna lo stato per ricalcolare la popolazione, etc.
-        defender_village.update_state();
+        {
+            let player_repo = uow.players();
+            let village_repo = uow.villages();
+            let army_repo = uow.armies();
 
-        let defender_army = army_factory(ArmyFactoryOptions {
-            village_id: Some(defender_village.id),
-            player_id: Some(defender_player.id),
-            tribe: Some(defender_player.tribe.clone()),
-            units: Some([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            ..Default::default()
-        });
+            attacker_player = player_factory(PlayerFactoryOptions::default());
+            player_repo.create(&attacker_player).await?;
 
-        // Salva tutto
-        player_repo.create(&attacker_player).await?;
-        player_repo.create(&defender_player).await?;
-        village_repo.create(&attacker_village).await?;
-        village_repo.create(&defender_village).await?; // Crea il villaggio base
-        village_repo.save(&defender_village).await?; // Salva le modifiche (edifici, stock)
-        army_repo.create(&attacker_army).await?;
-        army_repo.create(&defender_army).await?;
+            let attacker_valley = valley_factory(ValleyFactoryOptions {
+                position: Some(Position { x: 10, y: 10 }),
+                ..Default::default()
+            });
+            attacker_village = village_factory(VillageFactoryOptions {
+                valley: Some(attacker_valley),
+                player: Some(attacker_player.clone()),
+                ..Default::default()
+            });
+            village_repo.create(&attacker_village).await?;
 
-        let initial_warehouse_level = defender_village
-            .get_building_by_name(BuildingName::Warehouse)
-            .unwrap()
-            .building
-            .level;
-        let initial_defender_resources = defender_village.stocks.stored_resources().total();
+            attacker_army = army_factory(ArmyFactoryOptions {
+                player_id: Some(attacker_player.id),
+                village_id: Some(attacker_village.id),
+                units: Some([100, 0, 0, 0, 0, 0, 0, 100, 0, 0]),
+                tribe: Some(attacker_player.tribe.clone()),
+                ..Default::default()
+            });
+            army_repo.create(&attacker_army).await?;
+
+            let defender_player = player_factory(PlayerFactoryOptions::default());
+            player_repo.create(&defender_player).await?;
+
+            let defender_valley = valley_factory(ValleyFactoryOptions {
+                position: Some(Position { x: 20, y: 20 }),
+                ..Default::default()
+            });
+            defender_village = village_factory(VillageFactoryOptions {
+                player: Some(defender_player),
+                valley: Some(defender_valley),
+                ..Default::default()
+            });
+            defender_village.add_building(BuildingName::Granary, 21)?;
+            defender_village.add_building(BuildingName::Warehouse, 20)?;
+            defender_village
+                .stocks
+                .store_resources(ResourceGroup::new(800, 800, 800, 800));
+            defender_village.update_state();
+            village_repo.create(&defender_village).await?;
+        }
 
         uow.commit().await?;
 
@@ -260,12 +254,18 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
             attacker_village,
             attacker_army,
             defender_village,
-            initial_warehouse_level,
-            initial_defender_resources,
         )
     };
 
-    // --- 2. ACT (Phase 1): Esegui comando attacco ---
+    let initial_warehouse_level = defender_village
+        .get_building_by_name(BuildingName::Warehouse)
+        .unwrap()
+        .building
+        .level;
+
+    let initial_defender_resources = defender_village.stocks.stored_resources().total();
+
+    // --- 2. ACT (Phase 1): Execute attack command ---
     let attack_command = AttackCommand {
         player_id: attacker_player.id,
         village_id: attacker_village.id,
@@ -276,16 +276,20 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
 
     {
         let uow_attack = uow_provider.begin().await?;
-        let handler = AttackCommandHandler::new(
-            uow_attack.jobs(),
-            uow_attack.villages(),
-            uow_attack.armies(),
-        );
-        handler.handle(attack_command).await.unwrap();
-        uow_attack.commit().await?;
-    }
 
-    // --- 3. ACT (Phase 2): Processa il job ---
+        {
+            let handler = AttackCommandHandler::new(
+                uow_attack.jobs(),
+                uow_attack.villages(),
+                uow_attack.armies(),
+            );
+            handler.handle(attack_command).await.unwrap();
+        }
+
+        uow_attack.commit().await?; // OK
+    };
+
+    // --- 3. ACT (Phase 2): Process job ---
     let jobs = {
         let uow_read_jobs = uow_provider.begin().await?;
         let jobs = uow_read_jobs
@@ -301,7 +305,6 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     worker.process_jobs(&jobs).await.unwrap();
 
     // --- 4. ASSERT ---
-    // Ricarica i dati dal db in una nuova transazione per verificare
     {
         let uow_assert = uow_provider.begin().await?;
         let village_repo = uow_assert.villages();
@@ -316,7 +319,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
             .pop()
             .unwrap();
 
-        // Danni agli edifici
+        // Building damages
         let final_warehouse_level = updated_defender_village
             .get_building_by_name(BuildingName::Warehouse)
             .map_or(0, |b| b.building.level);
@@ -328,7 +331,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
             final_warehouse_level
         );
 
-        // Bottino (Bounty)
+        // Bounty
         if let JobTask::ArmyReturn(return_payload) = return_job.task {
             let bounty = return_payload.resources.total();
             assert!(bounty > 0, "Attacker should have stolen resources.");

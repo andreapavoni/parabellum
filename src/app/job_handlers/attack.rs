@@ -138,11 +138,6 @@ impl JobHandler for AttackJobHandler {
             return_job.id, return_job.completed_at
         );
 
-        // 5. Mark job as completed
-        // For now we do it in the worker above
-        // Or:
-        // ctx.uow.jobs().mark_as_completed(self.job_id).await?;
-
         Ok(())
     }
 }
