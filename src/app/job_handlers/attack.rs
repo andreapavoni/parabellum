@@ -24,24 +24,27 @@ impl AttackJobHandler {
 
 #[async_trait]
 impl JobHandler for AttackJobHandler {
-    async fn handle(&self, ctx: &JobHandlerContext) -> Result<()> {
+    async fn handle<'ctx, 'a>(&'ctx self, ctx: &'ctx JobHandlerContext<'a>) -> Result<()> {
         println!("Execute Attack Job for army {}", self.payload.army_id);
 
         // 1. Hydrate necessary data from db
         let mut attacker_army = ctx
-            .army_repo
+            .uow
+            .armies()
             .get_by_id(self.payload.army_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Attacker army not found"))?;
 
         let attacker_village = ctx
-            .village_repo
+            .uow
+            .villages()
             .get_by_id(attacker_army.village_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Attacker village not found"))?;
 
         let mut defender_village = ctx
-            .village_repo
+            .uow
+            .villages()
             .get_by_id(self.payload.target_village_id as u32)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Defender village not found"))?;
@@ -74,7 +77,7 @@ impl JobHandler for AttackJobHandler {
 
         // 3. Store results on db
         attacker_army.update_units(&battle_report.attacker.survivors);
-        ctx.army_repo.save(&attacker_army).await?; // Salva l'esercito attaccante aggiornato
+        ctx.uow.armies().save(&attacker_army).await?; // Salva l'esercito attaccante aggiornato
 
         // 3.2 Applies changes to defender village
         if let Some(bounty) = &battle_report.bounty {
@@ -90,15 +93,15 @@ impl JobHandler for AttackJobHandler {
 
         // Update village state
         defender_village.update_state();
-        ctx.village_repo.save(&defender_village).await?;
+        ctx.uow.villages().save(&defender_village).await?;
 
         // Update armies
         if let Some(army) = defender_village.army {
-            ctx.army_repo.save(&army).await?;
+            ctx.uow.armies().save(&army).await?;
         }
 
         for reinforcement_army in defender_village.reinforcements {
-            ctx.army_repo.save(&reinforcement_army).await?;
+            ctx.uow.armies().save(&reinforcement_army).await?;
         }
 
         // --- 4. Return job ---
@@ -128,12 +131,17 @@ impl JobHandler for AttackJobHandler {
             JobTask::ArmyReturn(return_payload),
         );
 
-        ctx.job_repo.add(&return_job).await?;
+        ctx.uow.jobs().add(&return_job).await?;
 
         println!(
             "Army return job {} planned. Will arrive at {}.",
             return_job.id, return_job.completed_at
         );
+
+        // 5. Mark job as completed
+        // For now we do it in the worker above
+        // Or:
+        // ctx.uow.jobs().mark_as_completed(self.job_id).await?;
 
         Ok(())
     }

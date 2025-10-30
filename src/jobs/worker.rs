@@ -9,26 +9,17 @@ use crate::{
         handler::{JobHandler, JobHandlerContext},
         Job, JobTask,
     },
-    repository::{ArmyRepository, JobRepository, VillageRepository},
+    repository::uow::UnitOfWorkProvider,
 };
 
 /// Responsible for polling and execute job.
 pub struct JobWorker {
-    context: JobHandlerContext,
+    uow_provider: Arc<dyn UnitOfWorkProvider>,
 }
 
 impl JobWorker {
-    pub fn new(
-        job_repo: Arc<dyn JobRepository>,
-        village_repo: Arc<dyn VillageRepository>,
-        army_repo: Arc<dyn ArmyRepository>,
-    ) -> Self {
-        let context = JobHandlerContext {
-            job_repo,
-            village_repo,
-            army_repo,
-        };
-        Self { context }
+    pub fn new(uow_provider: Arc<dyn UnitOfWorkProvider>) -> Self {
+        Self { uow_provider }
     }
 
     /// Run worker loop inside a tokio task.
@@ -47,42 +38,45 @@ impl JobWorker {
     }
 
     pub async fn process_due_jobs(&self) -> Result<()> {
-        let due_jobs = self.context.job_repo.find_and_lock_due_jobs(10).await?;
+        let uow = self.uow_provider.begin().await?;
+        let due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
         self.process_jobs(&due_jobs).await
     }
 
     pub async fn process_jobs(&self, jobs: &Vec<Job>) -> Result<()> {
-        println!("Got {} jobs to be executed.", jobs.len());
-
-        if jobs.is_empty() {
-            println!("No jobs to process");
-            return Ok(());
-        }
-
         for job in jobs {
+            // Begin UoW for this job
+            let uow = self.uow_provider.begin().await?;
+
+            // 2. Context now includes UoW
+            let context = JobHandlerContext { uow };
             let job_id = job.id;
 
             // --- Dispatch ---
             let handler: Box<dyn JobHandler> = match job.task.clone() {
                 JobTask::Attack(payload) => Box::new(AttackJobHandler::new(payload)),
-                // JobTask::BuildingUpgrade { ... } => Box::new(BuildingUpgradeHandler::new(...)),
-                _ => {
-                    println!("Task not yet implemented for job {}", job_id);
-                    continue;
-                }
+                _ => continue,
             };
 
-            // Execute handler and update the job status
-            let task_result = handler.handle(&self.context).await;
+            // 3. Execute handler
+            let task_result = handler.handle(&context).await;
 
+            // 4. Handle transaction and job state
             match task_result {
-                Ok(_) => self.context.job_repo.mark_as_completed(job_id).await?,
+                Ok(_) => {
+                    // Handler should have marked the job as 'Completed' inside the transaction.
+                    context.uow.commit().await?;
+                }
                 Err(e) => {
                     eprintln!("Job {} has failed: {}", job_id, e);
-                    self.context
-                        .job_repo
+                    context.uow.rollback().await?;
+
+                    let uow_fail = self.uow_provider.begin().await?;
+                    uow_fail
+                        .jobs()
                         .mark_as_failed(job_id, &e.to_string())
-                        .await?
+                        .await?;
+                    uow_fail.commit().await?;
                 }
             }
         }

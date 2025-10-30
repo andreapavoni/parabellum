@@ -16,17 +16,17 @@ pub struct AttackCommand {
     pub catapult_targets: [BuildingName; 2],
 }
 
-pub struct AttackCommandHandler {
-    job_repo: Arc<dyn JobRepository>,
-    village_repo: Arc<dyn VillageRepository>,
-    army_repo: Arc<dyn ArmyRepository>,
+pub struct AttackCommandHandler<'a> {
+    job_repo: Arc<dyn JobRepository + 'a>,
+    village_repo: Arc<dyn VillageRepository + 'a>,
+    army_repo: Arc<dyn ArmyRepository + 'a>,
 }
 
-impl AttackCommandHandler {
+impl<'a> AttackCommandHandler<'a> {
     pub fn new(
-        job_repo: Arc<dyn JobRepository>,
-        village_repo: Arc<dyn VillageRepository>,
-        army_repo: Arc<dyn ArmyRepository>,
+        job_repo: Arc<dyn JobRepository + 'a>,
+        village_repo: Arc<dyn VillageRepository + 'a>,
+        army_repo: Arc<dyn ArmyRepository + 'a>,
     ) -> Self {
         Self {
             job_repo,

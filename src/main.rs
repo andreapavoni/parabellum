@@ -5,7 +5,7 @@ use parabellum::{
         queries::GetUnoccupiedValley,
         App,
     },
-    db::{establish_connection_pool, repository::PostgresRepository},
+    db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::models::Tribe,
     jobs::worker::JobWorker,
 };
@@ -13,20 +13,12 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let db_pool = establish_connection_pool().await?;
-    let repo = Arc::new(PostgresRepository::new(db_pool));
     let config = Arc::new(parabellum::config::Config::from_env());
+    let db_pool = establish_connection_pool().await?;
+    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
+    let app = App::new(config, uow_provider.clone());
+    let worker = Arc::new(JobWorker::new(uow_provider.clone())); // Anche il worker usa il provider
 
-    let app = App::new(
-        config,
-        repo.clone(),
-        repo.clone(),
-        repo.clone(),
-        repo.clone(),
-        repo.clone(),
-    );
-
-    let worker = Arc::new(JobWorker::new(repo.clone(), repo.clone(), repo.clone()));
     worker.run();
 
     println!("App initialized. Executing a use case");

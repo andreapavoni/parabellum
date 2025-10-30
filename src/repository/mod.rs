@@ -4,6 +4,8 @@ mod map_repository;
 mod player_repository;
 mod village_repository;
 
+pub mod uow;
+
 pub use army_repository::ArmyRepository;
 pub use job_repository::JobRepository;
 pub use map_repository::MapRepository;

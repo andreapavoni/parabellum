@@ -23,12 +23,12 @@ impl RegisterPlayer {
     }
 }
 
-pub struct RegisterPlayerHandler {
-    repo: Arc<dyn PlayerRepository>,
+pub struct RegisterPlayerHandler<'a> {
+    repo: Arc<dyn PlayerRepository + 'a>,
 }
 
-impl RegisterPlayerHandler {
-    pub fn new(repo: Arc<dyn PlayerRepository>) -> Self {
+impl<'a> RegisterPlayerHandler<'a> {
+    pub fn new(repo: Arc<dyn PlayerRepository + 'a>) -> Self {
         Self { repo }
     }
 

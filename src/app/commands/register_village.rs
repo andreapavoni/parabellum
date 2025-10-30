@@ -17,13 +17,16 @@ impl RegisterVillage {
     }
 }
 
-pub struct RegisterVillageHandler {
-    village_repo: Arc<dyn VillageRepository>,
-    map_repo: Arc<dyn MapRepository>,
+pub struct RegisterVillageHandler<'a> {
+    village_repo: Arc<dyn VillageRepository + 'a>,
+    map_repo: Arc<dyn MapRepository + 'a>,
 }
 
-impl RegisterVillageHandler {
-    pub fn new(village_repo: Arc<dyn VillageRepository>, map_repo: Arc<dyn MapRepository>) -> Self {
+impl<'a> RegisterVillageHandler<'a> {
+    pub fn new(
+        village_repo: Arc<dyn VillageRepository + 'a>,
+        map_repo: Arc<dyn MapRepository + 'a>,
+    ) -> Self {
         Self {
             village_repo,
             map_repo,

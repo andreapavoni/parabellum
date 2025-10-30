@@ -20,12 +20,12 @@ impl GetUnoccupiedValley {
     }
 }
 
-pub struct GetUnoccupiedValleyHandler {
-    repo: Arc<dyn MapRepository>,
+pub struct GetUnoccupiedValleyHandler<'a> {
+    repo: Arc<dyn MapRepository + 'a>,
 }
 
-impl GetUnoccupiedValleyHandler {
-    pub fn new(repo: Arc<dyn MapRepository>) -> Self {
+impl<'a> GetUnoccupiedValleyHandler<'a> {
+    pub fn new(repo: Arc<dyn MapRepository + 'a>) -> Self {
         Self { repo }
     }
 
