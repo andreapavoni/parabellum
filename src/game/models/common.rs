@@ -39,3 +39,17 @@ pub struct Player {
     pub username: String,
     pub tribe: Tribe,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resource_group_total() {
+        let rg = ResourceGroup::new(100, 200, 300, 400);
+        assert_eq!(rg.total(), 1000);
+
+        let rg_zero = ResourceGroup::new(0, 0, 0, 0);
+        assert_eq!(rg_zero.total(), 0);
+    }
+}

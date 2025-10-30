@@ -1759,9 +1759,46 @@ static WONDER_OF_THW_WORLD: BuildingData = BuildingData {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_new_building() {
-        // test level, upkeep and value at level 0, 1, and 2
-        // resources will start at level 0 and upkeep 0, the others will have level 1 and relative upkeep
+        // Resources start at level 1, but their *data* index is 0
+        let wood = Building::new(BuildingName::Woodcutter);
+        assert_eq!(wood.level, 1);
+        assert_eq!(wood.value, 5); // Production value for level 1
+        assert_eq!(wood.cost().upkeep, 2);
+
+        // Infrastructure start at level 1
+        let mb = Building::new(BuildingName::MainBuilding);
+        assert_eq!(mb.level, 1);
+        assert_eq!(mb.value, 100); // Build time reduction
+        assert_eq!(mb.cost().upkeep, 2);
+    }
+
+    #[test]
+    fn test_at_level() {
+        let wood = Building::new(BuildingName::Woodcutter);
+
+        // Get level 5
+        let wood_5 = wood.at_level(5).unwrap();
+        assert_eq!(wood_5.level, 5);
+        assert_eq!(wood_5.value, 33); // Production value for level 5
+        assert_eq!(wood_5.cost().upkeep, 1);
+
+        // Get level 0
+        let wood_0 = wood.at_level(0).unwrap();
+        assert_eq!(wood_0.level, 0);
+        assert_eq!(wood_0.value, 2); // Production value for level 0
+        assert_eq!(wood_0.cost().upkeep, 0);
+
+        // Get level beyond max (should clamp to max level)
+        let wood_max = wood.at_level(99).unwrap();
+        let max_level = get_building_data(BuildingName::Woodcutter)
+            .unwrap()
+            .rules
+            .max_level;
+        assert_eq!(wood_max.level, max_level);
+        assert_eq!(wood_max.level, 22);
     }
 }

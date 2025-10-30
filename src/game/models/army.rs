@@ -1105,3 +1105,87 @@ fn get_tribe_units(tribe: &Tribe) -> &TribeUnits {
         Tribe::Natar => &NATAR_UNITS,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::test_factories::{army_factory, ArmyFactoryOptions};
+
+    #[test]
+    fn test_army_upkeep() {
+        // 10 Maceman (1 upkeep) + 5 Spearman (1 upkeep) = 15 upkeep
+        let army = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            units: Some([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        assert_eq!(army.upkeep(), 15);
+
+        // 10 Legionnaire (1 upkeep) + 5 Equites Imperatoris (3 upkeep) = 10 + 15 = 25 upkeep
+        let army_roman = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        assert_eq!(army_roman.upkeep(), 25);
+    }
+
+    #[test]
+    fn test_army_attack_points_no_smithy() {
+        // 10 Maceman (40 attack) = 400 infantry
+        // 5 Teutonic Knight (150 attack) = 750 infantry
+        // Total: 1150 infantry, 0 cavalry
+        let army = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            units: Some([10, 0, 0, 0, 0, 5, 0, 0, 0, 0]),
+            smithy: Some([0; 10]), // No smithy upgrades
+            ..Default::default()
+        });
+
+        let (infantry, cavalry) = army.attack_points();
+        assert_eq!(infantry, 1150);
+        assert_eq!(cavalry, 0);
+
+        // 10 Legionnaire (40 attack) = 400 infantry
+        // 5 Equites Imperatoris (120 attack) = 600 cavalry
+        let army_roman = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
+            smithy: Some([0; 10]), // No smithy upgrades
+            ..Default::default()
+        });
+
+        let (infantry, cavalry) = army_roman.attack_points();
+        assert_eq!(infantry, 400);
+        assert_eq!(cavalry, 600);
+    }
+
+    #[test]
+    fn test_army_speed() {
+        // Maceman (speed 14), Spearman (speed 14)
+        let army_fast = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            units: Some([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+        assert_eq!(army_fast.speed(), 14);
+
+        // Maceman (speed 14), Ram (speed 8)
+        let army_slow = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            units: Some([10, 0, 0, 0, 0, 0, 5, 0, 0, 0]),
+            ..Default::default()
+        });
+        assert_eq!(army_slow.speed(), 8); // Speed is limited by the slowest unit (Ram)
+
+        // No units
+        let army_empty = army_factory(ArmyFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            units: Some([0; 10]),
+            ..Default::default()
+        });
+        assert_eq!(army_empty.speed(), 0); // No units, speed is 0
+    }
+}

@@ -47,13 +47,8 @@ impl App {
     }
 
     pub async fn register_player(&self, command: RegisterPlayer) -> Result<Player> {
-        // 1. Begin UoW transaction
         let uow = self.uow_provider.begin().await?;
-
-        // 2. Handler receives *repositories* from UoW
         let handler = RegisterPlayerHandler::new(uow.players());
-
-        // 3. Execute business logic
         match handler.handle(command).await {
             Ok(player) => {
                 uow.commit().await?;

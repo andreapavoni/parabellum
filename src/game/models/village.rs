@@ -597,13 +597,28 @@ impl Default for VillageStocks {
 #[cfg(test)]
 mod tests {
     use crate::game::{
-        models::buildings::BuildingName,
-        test_factories::{village_factory, VillageFactoryOptions},
+        models::{buildings::BuildingName, village::VillageStocks, Tribe},
+        test_factories::{
+            player_factory, valley_factory, village_factory, PlayerFactoryOptions,
+            ValleyFactoryOptions, VillageFactoryOptions,
+        },
     };
+    use chrono::{Duration, Utc};
 
     #[test]
     fn test_new_village() {
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Gaul),
+            ..Default::default()
+        });
+        let valley = valley_factory(ValleyFactoryOptions {
+            topology: Some(crate::game::models::map::ValleyTopology(4, 4, 4, 6)),
+            ..Default::default()
+        });
+
         let v = village_factory(VillageFactoryOptions {
+            player: Some(player),
+            valley: Some(valley),
             ..Default::default()
         });
 
@@ -631,18 +646,98 @@ mod tests {
         assert_eq!(cropland, 6, "cropland fields");
         assert!(main_building, "main building is not present");
 
-        // production
+        // production (level 0 fields + main building level 1)
+        // Level 0 fields produce 2 units/hour each (Travian T3 logic)
+        // 4 * 2 = 8 lumber
+        // 4 * 2 = 8 clay
+        // 4 * 2 = 8 iron
+        // 6 * 2 = 12 crop
         assert_eq!(v.production.lumber, 8, "lumber production");
         assert_eq!(v.production.clay, 8, "clay production");
         assert_eq!(v.production.iron, 8, "iron production");
         assert_eq!(v.production.crop, 12, "crop production");
+
+        // Upkeep: 2 (base) + 2 (main building) = 4
         assert_eq!(v.production.upkeep, 4, "upkeep");
 
-        // population
+        // Population: 2 (base) + 2 (main building) = 4
         assert_eq!(v.population, 4, "population");
 
-        // stocks
+        // Stocks
         assert_eq!(v.stocks.warehouse_capacity, 800, "stock warehouse");
         assert_eq!(v.stocks.granary_capacity, 800, "stock granary");
+
+        // Effective production
+        // 12 crop - 4 upkeep = 8 effective crop
+        assert_eq!(v.production.effective.crop, 8, "effective crop production");
+    }
+
+    #[test]
+    fn test_update_resources() {
+        let mut v = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+
+        // Default production for 4-4-4-6 village (level 0 fields)
+        // Lumber: 8/h -> 0.00222.../s
+        // Clay:   8/h -> 0.00222.../s
+        // Iron:   8/h -> 0.00222.../s
+        // Crop:   12/h - 4 upkeep = 8/h -> 0.00222.../s
+
+        let effective_prod_per_sec = 8.0 / 3600.0;
+
+        // Simulate 1 hour (3600 seconds) passing
+        let one_hour_ago = Utc::now() - Duration::seconds(3600);
+        v.updated_at = one_hour_ago;
+        v.stocks = VillageStocks {
+            // Start with 0 resources
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
+            ..v.stocks
+        };
+
+        v.update_state(); // This calls update_resources internally
+
+        let expected_resources = (effective_prod_per_sec as f64 * 3600.0).floor() as u32; // Should be 8
+
+        assert_eq!(expected_resources, 8);
+        assert_eq!(v.stocks.lumber, 8, "Lumber should be 8 after 1 hour");
+        assert_eq!(v.stocks.clay, 8, "Clay should be 8 after 1 hour");
+        assert_eq!(v.stocks.iron, 8, "Iron should be 8 after 1 hour");
+        assert_eq!(v.stocks.crop, 8, "Crop should be 8 after 1 hour");
+
+        // Simulate 100 hours (over capacity)
+        let long_time_ago = Utc::now() - Duration::hours(100);
+        v.updated_at = long_time_ago;
+        v.stocks = VillageStocks {
+            // Start with 0 resources
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
+            ..v.stocks
+        };
+
+        v.update_state();
+
+        // Resources should be capped at base capacity (800)
+        assert_eq!(
+            v.stocks.lumber, 800,
+            "Lumber should be capped at warehouse capacity"
+        );
+        assert_eq!(
+            v.stocks.clay, 800,
+            "Clay should be capped at warehouse capacity"
+        );
+        assert_eq!(
+            v.stocks.iron, 800,
+            "Iron should be capped at warehouse capacity"
+        );
+        assert_eq!(
+            v.stocks.crop, 800,
+            "Crop should be capped at granary capacity"
+        );
     }
 }
