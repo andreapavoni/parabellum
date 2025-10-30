@@ -90,4 +90,91 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use crate::app::test_utils::tests::MockUnitOfWork;
+    use crate::game::{
+        models::{buildings::BuildingName, map::Position, Tribe},
+        test_factories::{
+            army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
+            PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+        },
+    };
+
+    #[tokio::test]
+    async fn test_attack_village_handler_success() {
+        // 1. Setup
+        let mock_uow = MockUnitOfWork::new();
+
+        let mock_village_repo = mock_uow.mock_villages();
+        let mock_army_repo = mock_uow.mock_armies();
+        let mock_job_repo = mock_uow.mock_jobs();
+
+        let attacker_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            ..Default::default()
+        });
+        let defender_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+
+        let attacker_valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 0, y: 0 }),
+            ..Default::default()
+        });
+        let attacker_village = village_factory(VillageFactoryOptions {
+            player: Some(attacker_player.clone()),
+            valley: Some(attacker_valley),
+            ..Default::default()
+        });
+
+        let defender_valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 10, y: 10 }),
+            ..Default::default()
+        });
+        let defender_village = village_factory(VillageFactoryOptions {
+            player: Some(defender_player.clone()),
+            valley: Some(defender_valley),
+            ..Default::default()
+        });
+
+        let attacker_army = army_factory(ArmyFactoryOptions {
+            player_id: Some(attacker_player.id),
+            village_id: Some(attacker_village.id),
+            tribe: Some(Tribe::Teuton),
+            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        mock_village_repo.add_village(attacker_village.clone());
+        mock_village_repo.add_village(defender_village.clone());
+        mock_army_repo.add_army(attacker_army.clone());
+
+        let handler = AttackVillageHandler::new();
+
+        let command = AttackVillage {
+            player_id: attacker_player.id,
+            village_id: attacker_village.id,
+            army_id: attacker_army.id,
+            target_village_id: defender_village.id,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+        };
+
+        // 2. Act
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
+        let result = handler.handle(command, &mock_uow).await;
+
+        // 3. Assert
+        assert!(result.is_ok(), "Handler should execute successfully");
+
+        // Check if job was created *nel mock repo*
+        let added_jobs = mock_job_repo.get_added_jobs();
+        assert_eq!(added_jobs.len(), 1, "One job should be created");
+
+        let job = &added_jobs[0];
+        assert_eq!(job.player_id, attacker_player.id);
+
+        // ... more job asserts ...
+    }
+}

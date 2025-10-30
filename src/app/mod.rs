@@ -21,3 +21,6 @@
 pub mod commands;
 pub mod job_handlers;
 pub mod queries;
+
+#[cfg(test)]
+pub mod test_utils;
