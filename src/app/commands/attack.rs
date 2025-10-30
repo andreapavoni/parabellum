@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
+use tracing::info;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -76,9 +77,10 @@ impl<'a> AttackCommandHandler<'a> {
         );
         self.job_repo.add(&new_job).await?;
 
-        println!(
-            "attack job {} will be executed at {}.",
-            new_job.id, new_job.completed_at
+        info!(
+            attack_job_id = %new_job.id,
+            arrival_at = %new_job.completed_at,
+            "Attack job planned."
         );
 
         // TODO: update travelling army status

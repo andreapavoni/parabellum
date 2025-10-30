@@ -1,10 +1,11 @@
-use crate::db::repository::*;
-use crate::repository::uow::{UnitOfWork, UnitOfWorkProvider};
-use crate::repository::*;
 use anyhow::Result;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::db::repository::*;
+use crate::repository::uow::{UnitOfWork, UnitOfWorkProvider};
+use crate::repository::*;
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWorkProvider {

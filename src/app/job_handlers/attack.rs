@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use tracing::{info, instrument};
 
 pub struct AttackJobHandler {
     payload: AttackTask,
@@ -24,10 +25,15 @@ impl AttackJobHandler {
 
 #[async_trait]
 impl JobHandler for AttackJobHandler {
+    #[instrument(skip_all, fields(
+          task_type = "Attack",
+          attacker_army_id = %self.payload.army_id,
+          attacker_village_id = %self.payload.attacker_village_id,
+          target_village_id = %self.payload.target_village_id
+      ))]
     async fn handle<'ctx, 'a>(&'ctx self, ctx: &'ctx JobHandlerContext<'a>) -> Result<()> {
-        println!("Execute Attack Job for army {}", self.payload.army_id);
+        info!("Execute Attack Job");
 
-        // 1. Hydrate necessary data from db
         let mut attacker_army = ctx
             .uow
             .armies()
@@ -133,9 +139,10 @@ impl JobHandler for AttackJobHandler {
 
         ctx.uow.jobs().add(&return_job).await?;
 
-        println!(
-            "Army return job {} planned. Will arrive at {}.",
-            return_job.id, return_job.completed_at
+        info!(
+            return_job_id = %return_job.id,
+            arrival_at = %return_job.completed_at,
+            "Army return job planned."
         );
 
         Ok(())

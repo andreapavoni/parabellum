@@ -37,12 +37,14 @@ thiserror = "1.0"
 # Logging & tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # Random number generator
 rand = "0.8.5"
 
 # Utils
 dotenvy = "0.15"
+
 
 [dev-dependencies]
 serial_test = "3.2"

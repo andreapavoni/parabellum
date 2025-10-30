@@ -5,3 +5,4 @@
 *.db-wal
 Cargo.lock
 tmp/
+logs/
