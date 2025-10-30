@@ -4,7 +4,11 @@ use parabellum::{
     db::{establish_test_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::{
         models::{
-            army::Army, buildings::BuildingName, map::Position, village::Village, ResourceGroup,
+            army::{Army, TroopSet},
+            buildings::BuildingName,
+            map::Position,
+            village::Village,
+            Player, ResourceGroup, Tribe,
         },
         test_factories::{
             army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
@@ -27,65 +31,24 @@ async fn test_full_attack_flow() -> Result<()> {
     let pool = establish_test_connection_pool().await.unwrap();
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
 
-    let (attacker_player, attacker_village, attacker_army, defender_village) = {
-        let uow = uow_provider.begin().await?;
-
-        let attacker_player;
-        let attacker_village: Village;
-        let attacker_army: Army;
-        let defender_village: Village;
-
-        {
-            let player_repo = uow.players();
-            let village_repo = uow.villages();
-            let army_repo = uow.armies();
-
-            attacker_player = player_factory(PlayerFactoryOptions::default());
-            player_repo.create(&attacker_player).await?;
-
-            let attacker_valley = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 10, y: 10 }),
-                ..Default::default()
-            });
-            attacker_village = village_factory(VillageFactoryOptions {
-                valley: Some(attacker_valley),
-                player: Some(attacker_player.clone()),
-                ..Default::default()
-            });
-            village_repo.create(&attacker_village).await?;
-
-            attacker_army = army_factory(ArmyFactoryOptions {
-                player_id: Some(attacker_player.id),
-                village_id: Some(attacker_village.id),
-                units: Some([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                tribe: Some(attacker_player.tribe.clone()),
-                ..Default::default()
-            });
-            army_repo.create(&attacker_army).await?;
-
-            let defender_player = player_factory(PlayerFactoryOptions::default());
-            player_repo.create(&defender_player).await?;
-
-            let defender_valley = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 20, y: 20 }),
-                ..Default::default()
-            });
-            defender_village = village_factory(VillageFactoryOptions {
-                player: Some(defender_player),
-                valley: Some(defender_valley),
-                ..Default::default()
-            });
-            village_repo.create(&defender_village).await?;
-        }
-
-        uow.commit().await?;
-
-        (
-            attacker_player,
-            attacker_village,
-            attacker_army,
-            defender_village,
+    let (attacker_player, attacker_village, attacker_army) = {
+        setup_player_party(
+            uow_provider.clone(),
+            Position { x: 10, y: 10 },
+            Tribe::Roman,
+            [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         )
+        .await?
+    };
+
+    let (_defender_player, defender_village, _defender_army) = {
+        setup_player_party(
+            uow_provider.clone(),
+            Position { x: 20, y: 20 },
+            Tribe::Roman,
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        .await?
     };
 
     // --- 2. ACT (Phase 1): Attack command ---
@@ -190,71 +153,48 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     // --- 1. SETUP ---
     let pool = establish_test_connection_pool().await?;
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
-    let (attacker_player, attacker_village, attacker_army, defender_village) = {
-        let uow = uow_provider.begin().await?;
 
-        let attacker_player;
-        let attacker_village: Village;
-        let attacker_army: Army;
-        let mut defender_village: Village;
+    let attacker_player: Player;
+    let attacker_village: Village;
+    let attacker_army: Army;
+    let mut defender_village: Village;
+
+    (attacker_player, attacker_village, attacker_army) = {
+        setup_player_party(
+            uow_provider.clone(),
+            Position { x: 10, y: 10 },
+            Tribe::Roman,
+            [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
+        )
+        .await?
+    };
+
+    (_, defender_village, _) = {
+        setup_player_party(
+            uow_provider.clone(),
+            Position { x: 20, y: 20 },
+            Tribe::Teuton,
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        )
+        .await?
+    };
+
+    {
+        let uow_update = uow_provider.begin().await?;
 
         {
-            let player_repo = uow.players();
-            let village_repo = uow.villages();
-            let army_repo = uow.armies();
-
-            attacker_player = player_factory(PlayerFactoryOptions::default());
-            player_repo.create(&attacker_player).await?;
-
-            let attacker_valley = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 10, y: 10 }),
-                ..Default::default()
-            });
-            attacker_village = village_factory(VillageFactoryOptions {
-                valley: Some(attacker_valley),
-                player: Some(attacker_player.clone()),
-                ..Default::default()
-            });
-            village_repo.create(&attacker_village).await?;
-
-            attacker_army = army_factory(ArmyFactoryOptions {
-                player_id: Some(attacker_player.id),
-                village_id: Some(attacker_village.id),
-                units: Some([100, 0, 0, 0, 0, 0, 0, 100, 0, 0]),
-                tribe: Some(attacker_player.tribe.clone()),
-                ..Default::default()
-            });
-            army_repo.create(&attacker_army).await?;
-
-            let defender_player = player_factory(PlayerFactoryOptions::default());
-            player_repo.create(&defender_player).await?;
-
-            let defender_valley = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 20, y: 20 }),
-                ..Default::default()
-            });
-            defender_village = village_factory(VillageFactoryOptions {
-                player: Some(defender_player),
-                valley: Some(defender_valley),
-                ..Default::default()
-            });
+            let village_repo = uow_update.villages();
             defender_village.add_building(BuildingName::Granary, 21)?;
             defender_village.add_building(BuildingName::Warehouse, 20)?;
             defender_village
                 .stocks
                 .store_resources(ResourceGroup::new(800, 800, 800, 800));
             defender_village.update_state();
-            village_repo.create(&defender_village).await?;
+
+            village_repo.save(&defender_village).await?;
         }
 
-        uow.commit().await?;
-
-        (
-            attacker_player,
-            attacker_village,
-            attacker_army,
-            defender_village,
-        )
+        uow_update.commit().await?;
     };
 
     let initial_warehouse_level = defender_village
@@ -352,4 +292,51 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn setup_player_party(
+    uow_provider: Arc<PostgresUnitOfWorkProvider>,
+    position: Position,
+    tribe: Tribe,
+    units: TroopSet,
+) -> Result<(Player, Village, Army)> {
+    let uow = uow_provider.begin().await?;
+    let player: Player;
+    let village: Village;
+    let army: Army;
+    {
+        let player_repo = uow.players();
+        let village_repo = uow.villages();
+        let army_repo = uow.armies();
+
+        player = player_factory(PlayerFactoryOptions {
+            tribe: Some(tribe.clone()),
+            ..Default::default()
+        });
+        player_repo.create(&player).await?;
+
+        let valley = valley_factory(ValleyFactoryOptions {
+            position: Some(position),
+            ..Default::default()
+        });
+        village = village_factory(VillageFactoryOptions {
+            valley: Some(valley),
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        village_repo.create(&village).await?;
+
+        army = army_factory(ArmyFactoryOptions {
+            player_id: Some(player.id),
+            village_id: Some(village.id),
+            units: Some(units),
+            tribe: Some(tribe.clone()),
+            ..Default::default()
+        });
+        army_repo.create(&army).await?;
+    }
+
+    uow.commit().await?;
+
+    Ok((player, village, army))
 }

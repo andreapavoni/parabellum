@@ -340,7 +340,7 @@ static WOODCUTTER: BuildingData = BuildingData {
         requirements: &[],
         conflicts: &[],
         tribes: &[],
-        max_level: 22,
+        max_level: 20,
         constraints: &[],
         allow_multiple: true,
     },
@@ -375,7 +375,7 @@ static CLAY_PIT: BuildingData = BuildingData {
         requirements: &[],
         conflicts: &[],
         tribes: &[],
-        max_level: 22,
+        max_level: 20,
         constraints: &[],
         allow_multiple: true,
     },
@@ -410,7 +410,7 @@ static IRON_MINE: BuildingData = BuildingData {
         requirements: &[],
         conflicts: &[],
         tribes: &[],
-        max_level: 22,
+        max_level: 20,
         constraints: &[],
         allow_multiple: true,
     },
@@ -447,7 +447,7 @@ static CROPLAND: BuildingData = BuildingData {
         requirements: &[],
         conflicts: &[],
         tribes: &[],
-        max_level: 22,
+        max_level: 20,
         constraints: &[],
         allow_multiple: true,
     },
@@ -469,7 +469,7 @@ static SAWMILL: BuildingData = BuildingData {
         ],
         conflicts: &[],
         tribes: &[],
-        max_level: 22,
+        max_level: 5,
         constraints: &[],
         allow_multiple: false,
     },
@@ -1763,10 +1763,10 @@ mod tests {
 
     #[test]
     fn test_new_building() {
-        // Resources start at level 1, but their *data* index is 0
-        let wood = Building::new(BuildingName::Woodcutter);
+        let wood = Building::new(BuildingName::Woodcutter).at_level(1).unwrap();
+
         assert_eq!(wood.level, 1);
-        assert_eq!(wood.value, 5); // Production value for level 1
+        assert_eq!(wood.value, 5);
         assert_eq!(wood.cost().upkeep, 2);
 
         // Infrastructure start at level 1
@@ -1799,6 +1799,6 @@ mod tests {
             .rules
             .max_level;
         assert_eq!(wood_max.level, max_level);
-        assert_eq!(wood_max.level, 22);
+        assert_eq!(wood_max.level, 20);
     }
 }

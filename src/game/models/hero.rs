@@ -45,7 +45,6 @@ impl Hero {
     }
 }
 
-// --- MODULO TEST AGGIUNTO ---
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,11 +55,22 @@ mod tests {
         assert_eq!(Hero::get_bonus_by_points(0), 0.0);
 
         // 1 point = 1.008^1 - 1 = 0.008
-        assert_eq!(Hero::get_bonus_by_points(1), 0.008);
+        let bonus_1 = Hero::get_bonus_by_points(1);
+        // Use an epsilon for float comparison
+        const EPSILON: f64 = 1e-9;
+        assert!(
+            (bonus_1 - 0.008).abs() < EPSILON,
+            "Bonus was {}, expected ~0.008",
+            bonus_1
+        );
 
         // 10 points = 1.008^10 - 1 = ~0.0828
         let bonus_10 = Hero::get_bonus_by_points(10);
-        assert!(bonus_10 > 0.0828 && bonus_10 < 0.0829);
+        assert!(
+            bonus_10 > 0.0828 && bonus_10 < 0.083,
+            "Bonus was {}, expected ~0.0829",
+            bonus_10
+        );
     }
 
     #[test]
