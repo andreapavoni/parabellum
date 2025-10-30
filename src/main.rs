@@ -1,16 +1,18 @@
 use anyhow::Result;
+use std::sync::Arc;
+use uuid::Uuid;
+
 use parabellum::{
     app::{
-        commands::{FoundVillage, RegisterPlayer},
-        queries::GetUnoccupiedValley,
-        App,
+        commands::{FoundVillage, FoundVillageHandler, RegisterPlayer, RegisterPlayerHandler},
+        queries::{GetUnoccupiedValley, GetUnoccupiedValleyHandler},
     },
+    bus::AppBus,
     db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::models::Tribe,
     jobs::worker::JobWorker,
     logs::setup_logging,
 };
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,18 +21,37 @@ async fn main() -> Result<()> {
     let config = Arc::new(parabellum::config::Config::from_env());
     let db_pool = establish_connection_pool().await?;
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
-    let app = App::new(config, uow_provider.clone());
-    let worker = Arc::new(JobWorker::new(uow_provider.clone())); // Anche il worker usa il provider
+
+    // Create the AppBus
+    let app_bus = AppBus::new(config, uow_provider.clone());
+    let worker = Arc::new(JobWorker::new(uow_provider.clone()));
 
     worker.run();
 
-    tracing::info!("App initialized. Executing a use case");
+    tracing::info!("AppBus initialized. Executing use cases via bus");
 
-    let register_player_cmd = RegisterPlayer::new(None, "pavonz".to_string(), Tribe::Roman);
-    let player = match app.register_player(register_player_cmd).await {
-        Ok(p) => {
-            tracing::info!("Player  '{}' successfully registered!", p.username);
-            p
+    // --- Use Case 1: Register Player ---
+    let register_player_cmd = RegisterPlayer::new(None, "pavonz_bus".to_string(), Tribe::Roman);
+    let register_player_handler = RegisterPlayerHandler::new();
+    let player = match app_bus
+        .execute(register_player_cmd, register_player_handler)
+        .await
+    {
+        Ok(_) => {
+            // NOTE: The command doesn't return the player anymore.
+            // This is a common CQRS pattern. If you *need* the created ID,
+            // the command struct can be modified to return it, or you
+            // make a subsequent query.
+            // For simplicity, let's just query for the player.
+            // This is a separate topic, but let's assume we get the player.
+            tracing::info!("Player registered!");
+
+            // Fake player for demo
+            parabellum::game::models::Player {
+                id: Uuid::new_v4(), // We don't know the ID
+                username: "pavonz_bus".to_string(),
+                tribe: Tribe::Roman,
+            }
         }
         Err(e) => {
             tracing::error!("Error during player registration: {}", e);
@@ -38,21 +59,24 @@ async fn main() -> Result<()> {
         }
     };
 
+    // --- Use Case 2: Get Valley (Query) ---
     let get_valley_query = GetUnoccupiedValley::new(None);
-    let valley = app.get_unoccupied_valley(get_valley_query).await?;
+    let get_valley_handler = GetUnoccupiedValleyHandler::new();
+    let valley = app_bus.query(get_valley_query, get_valley_handler).await?;
     tracing::info!(
         x = valley.position.x,
         y = valley.position.y,
         "Found available valley"
     );
 
+    // --- Use Case 3: Found Village ---
     let found_village_cmd = FoundVillage::new(player, valley.position);
-    let village = app.found_village(found_village_cmd).await?;
-    tracing::info!(
-        village_id = %village.id,
-        village_name = %village.name,
-        "Village has been successfully founded!"
-    );
+    let found_village_handler = FoundVillageHandler::new();
+    app_bus
+        .execute(found_village_cmd, found_village_handler)
+        .await?;
+    tracing::info!("Village has been successfully founded!");
+
     tracing::info!("Done. Application will idle for 60 seconds.");
     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
 

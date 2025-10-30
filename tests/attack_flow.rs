@@ -1,6 +1,7 @@
 use anyhow::Result;
 use parabellum::{
-    app::commands::{AttackCommand, AttackCommandHandler},
+    app::commands::{AttackVillage, AttackVillageHandler},
+    cqrs::CommandHandler,
     db::{establish_test_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::{
         models::{
@@ -52,7 +53,7 @@ async fn test_full_attack_flow() -> Result<()> {
     };
 
     // --- 2. ACT (Phase 1): Attack command ---
-    let attack_command = AttackCommand {
+    let attack_command = AttackVillage {
         player_id: attacker_player.id,
         village_id: attacker_village.id,
         army_id: attacker_army.id,
@@ -64,12 +65,8 @@ async fn test_full_attack_flow() -> Result<()> {
         let uow_attack = uow_provider.begin().await?;
 
         {
-            let handler = AttackCommandHandler::new(
-                uow_attack.jobs(),
-                uow_attack.villages(),
-                uow_attack.armies(),
-            );
-            handler.handle(attack_command).await.unwrap();
+            let handler = AttackVillageHandler::new();
+            handler.handle(attack_command, &uow_attack).await.unwrap();
         }
 
         uow_attack.commit().await?; // OK
@@ -206,7 +203,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     let initial_defender_resources = defender_village.stocks.stored_resources().total();
 
     // --- 2. ACT (Phase 1): Execute attack command ---
-    let attack_command = AttackCommand {
+    let attack_command = AttackVillage {
         player_id: attacker_player.id,
         village_id: attacker_village.id,
         army_id: attacker_army.id,
@@ -218,12 +215,8 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let uow_attack = uow_provider.begin().await?;
 
         {
-            let handler = AttackCommandHandler::new(
-                uow_attack.jobs(),
-                uow_attack.villages(),
-                uow_attack.armies(),
-            );
-            handler.handle(attack_command).await.unwrap();
+            let handler = AttackVillageHandler::new();
+            handler.handle(attack_command, &uow_attack).await.unwrap();
         }
 
         uow_attack.commit().await?; // OK
