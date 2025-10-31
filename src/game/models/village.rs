@@ -403,8 +403,13 @@ impl Village {
         self.update_resources();
     }
 
+    /// Marks a unit name as researched in the academy.
     pub fn research_academy(&mut self, unit: UnitName) -> Result<()> {
-        self.academy_research[unit as usize] = true;
+        // TODO: check prerequisites, resources, time, etc.
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
+            self.academy_research[idx] = true;
+        }
+
         Ok(())
     }
 

@@ -1,14 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
-pub enum Tribe {
-    Roman,
-    Gaul,
-    Teuton,
-    Natar,
-    Nature,
-}
+use crate::game::models::Tribe;
 
 #[derive(Debug, Clone)]
 pub struct Cost {

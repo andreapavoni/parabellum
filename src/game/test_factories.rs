@@ -3,11 +3,11 @@
 
 use super::models::{
     army::{Army, TroopSet},
-    common::{Player, Tribe},
+    common::Player,
     hero::Hero,
     map::{Position, Valley, ValleyTopology},
     village::Village,
-    SmithyUpgrades,
+    SmithyUpgrades, Tribe,
 };
 use rand::Rng;
 use uuid::Uuid;
