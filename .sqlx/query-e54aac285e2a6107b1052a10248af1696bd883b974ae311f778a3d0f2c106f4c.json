@@ -1,0 +1,97 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        RETURNING id, village_id, current_map_field_id, hero_id, units, smithy, tribe as \"tribe: _\", player_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "current_map_field_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "hero_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "units",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "smithy",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "player_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Jsonb",
+        "Jsonb",
+        {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e54aac285e2a6107b1052a10248af1696bd883b974ae311f778a3d0f2c106f4c"
+}

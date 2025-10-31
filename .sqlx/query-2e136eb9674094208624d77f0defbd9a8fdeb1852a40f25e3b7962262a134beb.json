@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO players (id, username, tribe)\n        VALUES ($1, $2, $3)\n        RETURNING id, username, tribe as \"tribe: _\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2e136eb9674094208624d77f0defbd9a8fdeb1852a40f25e3b7962262a134beb"
+}

@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM villages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "buildings",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "production",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "stocks",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "smithy_upgrades",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "population",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "loyalty",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_capital",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "academy_research",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3cd512d17f7401bf4436881295abfaa2afc4685e524c935941a78fe5402c47e8"
+}

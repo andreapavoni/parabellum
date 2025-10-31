@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, username, tribe AS \"tribe: _\" FROM players WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1381aac8f76e21b33cdf4ece1b3333191387c32942078e14fbdc8409f9b1a16f"
+}

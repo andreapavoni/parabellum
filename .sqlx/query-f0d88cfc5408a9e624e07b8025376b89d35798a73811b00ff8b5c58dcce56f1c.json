@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              UPDATE villages\n              SET\n                  name = $2, buildings = $3, production = $4,\n                  stocks = $5, smithy_upgrades = $6, population = $7,\n                  loyalty = $8, updated_at = NOW()\n              WHERE id = $1\n              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Varchar",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Int4",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0d88cfc5408a9e624e07b8025376b89d35798a73811b00ff8b5c58dcce56f1c"
+}
