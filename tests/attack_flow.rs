@@ -5,7 +5,7 @@ use parabellum::{
         job_registry::AppJobRegistry,
     },
     cqrs::CommandHandler,
-    db::{establish_test_connection_pool, uow::PostgresUnitOfWorkProvider},
+    db::establish_test_connection_pool,
     game::{
         models::{
             army::{Army, TroopSet},
@@ -28,17 +28,23 @@ use parabellum::{
 };
 use serial_test::serial;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
-mod common;
-use common::setup;
+mod test_utils;
+use test_utils::TestUnitOfWorkProvider;
 
 #[tokio::test]
 #[serial]
 async fn test_full_attack_flow() -> Result<()> {
-    setup().await?;
+    // setup().await?;
 
     let pool = establish_test_connection_pool().await.unwrap();
-    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
+    let master_tx = pool.begin().await.unwrap();
+    let master_tx_arc = Arc::new(Mutex::new(master_tx));
+    let app_registry = Arc::new(AppJobRegistry::new());
+
+    let uow_provider: Arc<dyn UnitOfWorkProvider> =
+        Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
 
     let (attacker_player, attacker_village, attacker_army) = {
         setup_player_party(
@@ -49,6 +55,11 @@ async fn test_full_attack_flow() -> Result<()> {
         )
         .await?
     };
+
+    println!(
+        "========== Setup complete: Player ID: {}, Village ID: {}, Army ID: {}",
+        attacker_player.id, attacker_village.id, attacker_army.id
+    );
 
     let (_defender_player, defender_village, _defender_army) = {
         setup_player_party(
@@ -77,7 +88,7 @@ async fn test_full_attack_flow() -> Result<()> {
             handler.handle(attack_command, &uow_attack).await.unwrap();
         }
 
-        uow_attack.commit().await?; // OK
+        uow_attack.commit().await?;
     };
 
     // --- 3. ASSERT (Phase 1): Check job creation ---
@@ -116,7 +127,6 @@ async fn test_full_attack_flow() -> Result<()> {
     };
 
     // --- 4. ACT (Phase 2): Simulate worker processing job ---
-    let app_registry = Arc::new(AppJobRegistry::new());
     let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
     worker
         .process_jobs(&vec![attack_job.clone()])
@@ -161,11 +171,16 @@ async fn test_full_attack_flow() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
-    setup().await?;
+    // setup().await?;
 
     // --- 1. SETUP ---
-    let pool = establish_test_connection_pool().await?;
-    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
+    let pool = establish_test_connection_pool().await.unwrap();
+    let master_tx = pool.begin().await.unwrap();
+    let master_tx_arc = Arc::new(Mutex::new(master_tx));
+    let app_registry = Arc::new(AppJobRegistry::new());
+
+    let uow_provider: Arc<dyn UnitOfWorkProvider> =
+        Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
 
     let attacker_player: Player;
     let attacker_village: Village;
@@ -250,7 +265,6 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         jobs
     };
 
-    let app_registry = Arc::new(AppJobRegistry::new());
     let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
     worker.process_jobs(&jobs).await.unwrap();
 
@@ -306,7 +320,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
 }
 
 async fn setup_player_party(
-    uow_provider: Arc<PostgresUnitOfWorkProvider>,
+    uow_provider: Arc<dyn UnitOfWorkProvider>,
     position: Position,
     tribe: Tribe,
     units: TroopSet,
