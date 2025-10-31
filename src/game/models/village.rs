@@ -3,7 +3,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::{battle::BattleReport, models::ResourceGroup};
+use crate::game::{
+    battle::BattleReport,
+    models::{army::UnitName, ResourceGroup},
+};
 
 use super::{
     army::Army,
@@ -18,9 +21,10 @@ pub struct VillageBuilding {
     pub building: Building,
 }
 
+pub type AcademyResearch = [bool; 10];
+
 // TODO: add standalone rally point? Not yet
 // TODO: add standalone wall? Not yet
-// TODO: track reinforcements to other villages? -> better to have a table for armies
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Village {
     pub id: u32,
@@ -39,6 +43,7 @@ pub struct Village {
     pub is_capital: bool,
     pub smithy: SmithyUpgrades,
     pub stocks: VillageStocks,
+    pub academy_research: AcademyResearch,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -49,6 +54,7 @@ impl Village {
 
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let academy_research = [false; 10];
 
         let mut village = Self {
             id: village_id,
@@ -66,6 +72,7 @@ impl Village {
             production,
             is_capital,
             smithy,
+            academy_research,
             stocks: Default::default(),
             updated_at: Utc::now(),
         };
@@ -335,51 +342,6 @@ impl Village {
         Ok(())
     }
 
-    /// Updates the village stocks based on the time elapsed since the last update
-    /// It should be called whenever the village is loaded from the DB.
-    fn update_resources(&mut self) {
-        let now = Utc::now();
-        let time_elapsed_secs = (now - self.updated_at).num_seconds();
-
-        if time_elapsed_secs <= 0 {
-            self.updated_at = now;
-            return;
-        }
-
-        // Effective hourly production
-        let effective_prod = &self.production.effective;
-
-        // Calculates per-second production rates
-        // Actual effective production is per hour
-        let lumber_per_sec = (effective_prod.lumber as f64) / 3600.0;
-        let clay_per_sec = (effective_prod.clay as f64) / 3600.0;
-        let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
-        let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
-
-        let elapsed_f64 = time_elapsed_secs as f64;
-
-        // Calculates resources after elapsed time, capping at storage capacity
-        let new_lumber = (self.stocks.lumber as f64 + (elapsed_f64 * lumber_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
-
-        let new_clay = (self.stocks.clay as f64 + (elapsed_f64 * clay_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
-
-        let new_iron = (self.stocks.iron as f64 + (elapsed_f64 * iron_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
-
-        let new_crop = (self.stocks.crop as f64 + (elapsed_f64 * crop_per_sec))
-            .min(self.stocks.granary_capacity as f64);
-
-        // New stocks
-        self.stocks.lumber = new_lumber.max(0.0) as u32;
-        self.stocks.clay = new_clay.max(0.0) as u32;
-        self.stocks.iron = new_iron.max(0.0) as u32;
-        self.stocks.crop = new_crop as i64; // crop can be negative due to upkeep
-
-        self.updated_at = now;
-    }
-
     /// Updates the village state (production, upkeep, etc...).
     pub fn update_state(&mut self) {
         self.population = 2;
@@ -439,6 +401,56 @@ impl Village {
         self.production.calculate_effective_production();
 
         self.update_resources();
+    }
+
+    pub fn research_academy(&mut self, unit: UnitName) -> Result<()> {
+        self.academy_research[unit as usize] = true;
+        Ok(())
+    }
+
+    /// Updates the village stocks based on the time elapsed since the last update
+    /// It should be called whenever the village is loaded from the DB.
+    fn update_resources(&mut self) {
+        let now = Utc::now();
+        let time_elapsed_secs = (now - self.updated_at).num_seconds();
+
+        if time_elapsed_secs <= 0 {
+            self.updated_at = now;
+            return;
+        }
+
+        // Effective hourly production
+        let effective_prod = &self.production.effective;
+
+        // Calculates per-second production rates
+        // Actual effective production is per hour
+        let lumber_per_sec = (effective_prod.lumber as f64) / 3600.0;
+        let clay_per_sec = (effective_prod.clay as f64) / 3600.0;
+        let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
+        let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
+
+        let elapsed_f64 = time_elapsed_secs as f64;
+
+        // Calculates resources after elapsed time, capping at storage capacity
+        let new_lumber = (self.stocks.lumber as f64 + (elapsed_f64 * lumber_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_clay = (self.stocks.clay as f64 + (elapsed_f64 * clay_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_iron = (self.stocks.iron as f64 + (elapsed_f64 * iron_per_sec))
+            .min(self.stocks.warehouse_capacity as f64);
+
+        let new_crop = (self.stocks.crop as f64 + (elapsed_f64 * crop_per_sec))
+            .min(self.stocks.granary_capacity as f64);
+
+        // New stocks
+        self.stocks.lumber = new_lumber.max(0.0) as u32;
+        self.stocks.clay = new_clay.max(0.0) as u32;
+        self.stocks.iron = new_iron.max(0.0) as u32;
+        self.stocks.crop = new_crop as i64; // crop can be negative due to upkeep
+
+        self.updated_at = now;
     }
 
     fn init_village_buildings(&mut self, valley: &Valley) -> Result<()> {

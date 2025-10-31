@@ -49,6 +49,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             .collect();
 
         let smithy = serde_json::from_value(db_village.smithy_upgrades)?;
+        let academy_research = serde_json::from_value(db_village.academy_research)?;
         let position = serde_json::from_value(db_village.position)?;
 
         let village = game_models::village::Village {
@@ -67,6 +68,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             production: serde_json::from_value(db_village.production)?,
             is_capital: db_village.is_capital,
             smithy,
+            academy_research,
             stocks: serde_json::from_value(db_village.stocks)?,
             updated_at: db_village.updated_at,
         };

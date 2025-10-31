@@ -2,9 +2,8 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models::hero::Hero;
-
 use super::{Cost, ResourceGroup, SmithyUpgrades, Tribe};
+use crate::game::models::{buildings::BuildingName, hero::Hero};
 
 #[derive(Debug, Clone)]
 pub enum UnitRole {
@@ -103,6 +102,12 @@ pub enum UnitName {
     // ElpidaRider,
     // CorinthianCrusher,
     // Ephor,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnitRequirement {
+    pub building: BuildingName,
+    pub level: u8,
 }
 
 type TribeUnits = [Unit; 10];
@@ -380,7 +385,12 @@ pub struct Unit {
     pub defense_cavalry: u32,
     pub speed: u8,
     pub capacity: u32,
+    /// The cost to train.
     pub cost: Cost,
+    /// The cost to research this unit in the Academy.
+    pub research_cost: Cost,
+    /// Building requirements needed to START research.
+    pub requirements: &'static [UnitRequirement],
 }
 
 impl Unit {
@@ -406,6 +416,15 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 533,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[UnitRequirement {
+            building: BuildingName::Barracks,
+            level: 1,
+        }],
     },
     Unit {
         name: UnitName::Praetorian,
@@ -421,6 +440,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 597,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(720, 620, 1480, 580),
+            upkeep: 0,
+            build_time: 8400,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 1,
+            },
+            UnitRequirement {
+                building: BuildingName::Smithy,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::Imperian,
@@ -436,6 +470,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 640,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(1000, 740, 1880, 640),
+            upkeep: 0,
+            build_time: 9000,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Smithy,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::EquitesLegati,
@@ -451,6 +500,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 453,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(940, 740, 360, 400),
+            upkeep: 0,
+            build_time: 6900,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::EquitesImperatoris,
@@ -466,6 +530,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 880,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(3400, 1860, 2760, 760),
+            upkeep: 0,
+            build_time: 11700,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 5,
+            },
+        ],
     },
     Unit {
         name: UnitName::EquitesCaesaris,
@@ -481,6 +560,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 4,
             build_time: 1173,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(3400, 2660, 6600, 1240),
+            upkeep: 0,
+            build_time: 15000,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 5,
+            },
+        ],
     },
     Unit {
         name: UnitName::BatteringRam,
@@ -496,6 +590,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 1533,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(5500, 1540, 4200, 580),
+            upkeep: 0,
+            build_time: 15600,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 10,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::FireCatapult,
@@ -511,6 +620,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 6,
             build_time: 3000,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(5800, 5500, 5000, 700),
+            upkeep: 0,
+            build_time: 28800,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 15,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Senator,
@@ -526,6 +650,21 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 5,
             build_time: 30233,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(15880, 13800, 36400, 22660),
+            upkeep: 0,
+            build_time: 24475,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 20,
+            },
+            UnitRequirement {
+                building: BuildingName::RallyPoint,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Settler,
@@ -541,6 +680,12 @@ static ROMAN_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 8967,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
 ];
 
@@ -559,6 +704,15 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 240,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[UnitRequirement {
+            building: BuildingName::Barracks,
+            level: 1,
+        }],
     },
     Unit {
         name: UnitName::Spearman,
@@ -574,6 +728,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 73,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(970, 380, 880, 400),
+            upkeep: 0,
+            build_time: 5760,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 1,
+            },
+            UnitRequirement {
+                building: BuildingName::Barracks,
+                level: 3,
+            },
+        ],
     },
     Unit {
         name: UnitName::Axeman,
@@ -589,6 +758,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 76,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(880, 580, 1560, 580),
+            upkeep: 0,
+            build_time: 6300,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 3,
+            },
+            UnitRequirement {
+                building: BuildingName::Smithy,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::Scout,
@@ -604,6 +788,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 73,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(1060, 500, 600, 460),
+            upkeep: 0,
+            build_time: 6000,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 1,
+            },
+            UnitRequirement {
+                building: BuildingName::MainBuilding,
+                level: 5,
+            },
+        ],
     },
     Unit {
         name: UnitName::Paladin,
@@ -619,6 +818,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 800,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(2320, 1180, 2520, 610),
+            upkeep: 0,
+            build_time: 10800,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 3,
+            },
+        ],
     },
     Unit {
         name: UnitName::TeutonicKnight,
@@ -634,6 +848,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 987,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(2800, 2160, 4040, 640),
+            upkeep: 0,
+            build_time: 13500,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 15,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Ram,
@@ -649,6 +878,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 1400,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(6100, 1300, 3000, 580),
+            upkeep: 0,
+            build_time: 14400,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 10,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::Catapult,
@@ -664,6 +908,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 6,
             build_time: 3000,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(5500, 4900, 5000, 520),
+            upkeep: 0,
+            build_time: 28800,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 15,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Chief,
@@ -679,6 +938,21 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 4,
             build_time: 23500,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(18250, 13500, 20400, 16480),
+            upkeep: 0,
+            build_time: 19425,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 20,
+            },
+            UnitRequirement {
+                building: BuildingName::RallyPoint,
+                level: 5,
+            },
+        ],
     },
     Unit {
         name: UnitName::Settler,
@@ -694,6 +968,12 @@ static TEUTON_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 10333,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
 ];
 
@@ -712,6 +992,15 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 347,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[UnitRequirement {
+            building: BuildingName::Barracks,
+            level: 1,
+        }],
     },
     Unit {
         name: UnitName::Swordsman,
@@ -727,6 +1016,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 480,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(940, 700, 1689, 520),
+            upkeep: 0,
+            build_time: 7200,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 3,
+            },
+            UnitRequirement {
+                building: BuildingName::Smithy,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::Pathfinder,
@@ -742,6 +1046,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 75,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(1120, 700, 360, 400),
+            upkeep: 0,
+            build_time: 3501,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::TheutatesThunder,
@@ -757,6 +1076,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 827,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(2200, 1900, 2040, 520),
+            upkeep: 0,
+            build_time: 11100,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 3,
+            },
+        ],
     },
     Unit {
         name: UnitName::Druidrider,
@@ -772,6 +1106,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 853,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(2260, 1420, 2440, 880),
+            upkeep: 0,
+            build_time: 11400,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 5,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 5,
+            },
+        ],
     },
     Unit {
         name: UnitName::Haeduan,
@@ -787,6 +1136,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 1040,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(3100, 2580, 5600, 1180),
+            upkeep: 0,
+            build_time: 13500,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 15,
+            },
+            UnitRequirement {
+                building: BuildingName::Stable,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Ram,
@@ -802,6 +1166,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 1667,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(5800, 2320, 2840, 610),
+            upkeep: 0,
+            build_time: 16800,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 10,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 1,
+            },
+        ],
     },
     Unit {
         name: UnitName::Trebuchet,
@@ -817,6 +1196,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 6,
             build_time: 3000,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(5860, 5900, 5240, 700),
+            upkeep: 0,
+            build_time: 28800,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 15,
+            },
+            UnitRequirement {
+                building: BuildingName::Workshop,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Chieftain,
@@ -828,10 +1222,25 @@ static GAUL_UNITS: TribeUnits = [
         speed: 10,
         capacity: 0,
         cost: Cost {
-            resources: ResourceGroup::new(30750, 45400, 31000, 37500),
+            resources: ResourceGroup::new(15880, 22900, 25200, 22660),
             upkeep: 4,
             build_time: 30233,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(1060, 500, 600, 460),
+            upkeep: 0,
+            build_time: 24475,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 20,
+            },
+            UnitRequirement {
+                building: BuildingName::RallyPoint,
+                level: 10,
+            },
+        ],
     },
     Unit {
         name: UnitName::Settler,
@@ -847,6 +1256,21 @@ static GAUL_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 7567,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(1060, 500, 600, 460),
+            upkeep: 0,
+            build_time: 6000,
+        },
+        requirements: &[
+            UnitRequirement {
+                building: BuildingName::Academy,
+                level: 1,
+            },
+            UnitRequirement {
+                building: BuildingName::MainBuilding,
+                level: 5,
+            },
+        ],
     },
 ];
 
@@ -865,6 +1289,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Spider,
@@ -880,6 +1310,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Serpent,
@@ -895,6 +1331,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Bat,
@@ -910,6 +1352,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::WildBoar,
@@ -925,6 +1373,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Wolf,
@@ -940,6 +1394,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Bear,
@@ -955,6 +1415,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Crocodile,
@@ -970,6 +1436,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Tiger,
@@ -985,6 +1457,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Elephant,
@@ -1000,6 +1478,12 @@ static NATURE_UNITS: TribeUnits = [
             upkeep: 5,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
 ];
 
@@ -1018,6 +1502,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::ThornedWarrior,
@@ -1033,6 +1523,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Guardsman,
@@ -1048,6 +1544,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::BirdsOfPrey,
@@ -1063,6 +1565,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Axerider,
@@ -1078,6 +1586,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 2,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::NatarianKnight,
@@ -1093,6 +1607,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 3,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Warelephant,
@@ -1108,6 +1628,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 4,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Ballista,
@@ -1123,6 +1649,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 5,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::NatarianEmperor,
@@ -1138,6 +1670,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
     Unit {
         name: UnitName::Settler,
@@ -1153,6 +1691,12 @@ static NATAR_UNITS: TribeUnits = [
             upkeep: 1,
             build_time: 0,
         },
+        research_cost: Cost {
+            resources: ResourceGroup::new(0, 0, 0, 0),
+            upkeep: 0,
+            build_time: 0,
+        },
+        requirements: &[],
     },
 ];
 

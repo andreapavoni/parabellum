@@ -25,8 +25,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!(
               r#"
-              INSERT INTO villages (id, player_id, name, position, buildings, production, stocks, smithy_upgrades, population, loyalty, is_capital)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              INSERT INTO villages (id, player_id, name, position, buildings, production, stocks, smithy_upgrades, academy_research, population, loyalty, is_capital)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
               "#,
               village.id as i32,
               village.player_id,
@@ -36,6 +36,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
               Json(&village.production) as _,
               Json(&village.stocks) as _,
               Json(&village.smithy) as _,
+              Json(&village.academy_research) as _,
               village.population as i32,
               village.loyalty as i16,
               village.is_capital
@@ -123,8 +124,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
               UPDATE villages
               SET
                   name = $2, buildings = $3, production = $4,
-                  stocks = $5, smithy_upgrades = $6, population = $7,
-                  loyalty = $8, updated_at = NOW()
+                  stocks = $5, smithy_upgrades = $6, academy_research = $7, population = $8,
+                  loyalty = $9, updated_at = NOW()
               WHERE id = $1
               "#,
             village.id as i32,
@@ -133,6 +134,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             Json(&village.production) as _,
             Json(&village.stocks) as _,
             Json(&village.smithy) as _,
+            Json(&village.academy_research) as _,
             village.population as i32,
             village.loyalty as i16,
         )

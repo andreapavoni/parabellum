@@ -30,6 +30,7 @@ pub struct Village {
     pub production: serde_json::Value,
     pub stocks: serde_json::Value,
     pub smithy_upgrades: serde_json::Value,
+    pub academy_research: serde_json::Value,
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,

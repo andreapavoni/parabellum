@@ -32,97 +32,97 @@ pub struct TrainUnitsTask {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaidTask {
-    army_id: Uuid,
-    village_id: i32,
-    player_id: Uuid,
+    pub army_id: Uuid,
+    pub village_id: i32,
+    pub player_id: Uuid,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReinforcementTask {
-    army_id: Uuid,
-    village_id: i32,
-    player_id: Uuid,
+    pub parmy_id: Uuid,
+    pub pvillage_id: i32,
+    pub pplayer_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerchantGoingTask {
-    resources: ResourceGroup,
-    village_id: i32,
-    player_id: Uuid,
+    pub resources: ResourceGroup,
+    pub village_id: i32,
+    pub player_id: Uuid,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerchantReturnTask {
-    village_id: i32,
+    pub village_id: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainBarracks {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainGreatBarracksTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainStableTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainGreatStableTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainWorkshopTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainGreatWorkshopTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainExpansionTask {
-    slot_id: u8,
-    unit: UnitName,
-    quantity: i32,
-    time_per_unit_secs: i32,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit_secs: i32,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingUpgradeTask {
-    slot_id: u8,
-    building_name: BuildingName,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingDowngradeTask {
-    slot_id: u8,
-    building_name: BuildingName,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResearchAcademyTask {
-    unit: UnitName,
+    pub unit: UnitName,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResearchSmithyTask {
-    unit: UnitName,
+    pub unit: UnitName,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CelebrationTownHallTask {
-    big: bool,
+    pub big: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CelebrationBreweryTask {}
