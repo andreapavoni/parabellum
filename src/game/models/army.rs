@@ -395,6 +395,10 @@ impl Unit {
             + ((combat_value + 300 * upkeep) as f64 / 7.0)
                 * ((1.007f64).powi(smithy_level.try_into().unwrap()) - 1.0).floor()) as u32
     }
+
+    pub fn get_requirements(&self) -> &'static [UnitRequirement] {
+        self.requirements
+    }
 }
 
 #[cfg(test)]

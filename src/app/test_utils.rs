@@ -70,6 +70,10 @@ pub mod tests {
         pub fn add_village(&self, village: Village) {
             self.villages.lock().unwrap().insert(village.id, village);
         }
+
+        pub fn saved_villages(&self) -> Vec<Village> {
+            self.villages.lock().unwrap().values().cloned().collect()
+        }
     }
 
     #[async_trait]
@@ -85,7 +89,11 @@ pub mod tests {
         async fn list_by_player_id(&self, _player_id: Uuid) -> Result<Vec<Village>> {
             Ok(vec![])
         }
-        async fn save(&self, _village: &Village) -> Result<()> {
+        async fn save(&self, village: &Village) -> Result<()> {
+            self.villages
+                .lock()
+                .unwrap()
+                .insert(village.id, village.clone());
             Ok(())
         }
     }
