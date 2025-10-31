@@ -1,6 +1,9 @@
 use anyhow::Result;
 use parabellum::{
-    app::commands::{AttackVillage, AttackVillageHandler},
+    app::{
+        commands::{AttackVillage, AttackVillageHandler},
+        job_registry::AppJobRegistry,
+    },
     cqrs::CommandHandler,
     db::{establish_test_connection_pool, uow::PostgresUnitOfWorkProvider},
     game::{
@@ -16,7 +19,11 @@ use parabellum::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
         },
     },
-    jobs::{worker::JobWorker, JobStatus, JobTask},
+    jobs::{
+        tasks::{ArmyReturnTask, AttackTask},
+        worker::JobWorker,
+        JobStatus,
+    },
     repository::uow::UnitOfWorkProvider,
 };
 use serial_test::serial;
@@ -29,6 +36,7 @@ use common::setup;
 #[serial]
 async fn test_full_attack_flow() -> Result<()> {
     setup().await?;
+
     let pool = establish_test_connection_pool().await.unwrap();
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(pool));
 
@@ -87,7 +95,12 @@ async fn test_full_attack_flow() -> Result<()> {
             assert_eq!(jobs.len(), 1, "There should be exactly 1 job in the queue.");
             let attack_job = &jobs[0];
 
-            assert!(matches!(attack_job.task, JobTask::Attack(_)));
+            assert_eq!(attack_job.task.task_type, "Attack");
+            let task_data: Result<AttackTask, _> =
+                serde_json::from_value(attack_job.task.data.clone());
+            assert!(task_data.is_ok(), "Job data should be a valid AttackTask");
+            assert_eq!(task_data.unwrap().army_id, attacker_army.id);
+
             assert_eq!(
                 attack_job.status,
                 JobStatus::Pending,
@@ -103,7 +116,8 @@ async fn test_full_attack_flow() -> Result<()> {
     };
 
     // --- 4. ACT (Phase 2): Simulate worker processing job ---
-    let worker = Arc::new(JobWorker::new(uow_provider.clone()));
+    let app_registry = Arc::new(AppJobRegistry::new());
+    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
     worker
         .process_jobs(&vec![attack_job.clone()])
         .await
@@ -129,10 +143,12 @@ async fn test_full_attack_flow() -> Result<()> {
         }
 
         let return_job = &final_jobs[0];
+        assert_eq!(return_job.task.task_type, "ArmyReturn");
+        let return_task_data: Result<ArmyReturnTask, _> =
+            serde_json::from_value(return_job.task.data.clone());
         assert!(
-            matches!(return_job.task, JobTask::ArmyReturn(_)),
-            "Expected an army return job task, got: {:?}",
-            return_job
+            return_task_data.is_ok(),
+            "Job data should be a valid ArmyReturnTask"
         );
         assert_eq!(return_job.status, JobStatus::Pending);
 
@@ -234,7 +250,8 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         jobs
     };
 
-    let worker = Arc::new(JobWorker::new(uow_provider.clone()));
+    let app_registry = Arc::new(AppJobRegistry::new());
+    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
     worker.process_jobs(&jobs).await.unwrap();
 
     // --- 4. ASSERT ---
@@ -246,11 +263,13 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let updated_defender_village: Village =
             village_repo.get_by_id(defender_village.id).await?.unwrap();
 
-        let return_job = job_repo
-            .list_by_player_id(attacker_player.id)
-            .await?
-            .pop()
-            .unwrap();
+        let return_jobs = job_repo.list_by_player_id(attacker_player.id).await?;
+        assert_eq!(
+            return_jobs.len(),
+            1,
+            "There should be exactly 1 return job after the attack."
+        );
+        let return_job = return_jobs.first().unwrap();
 
         // Building damages
         let final_warehouse_level = updated_defender_village
@@ -265,21 +284,20 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         );
 
         // Bounty
-        if let JobTask::ArmyReturn(return_payload) = return_job.task {
-            let bounty = return_payload.resources.total();
-            assert!(bounty > 0, "Attacker should have stolen resources.");
 
-            let final_defender_resources =
-                updated_defender_village.stocks.stored_resources().total();
-            assert!(
-                final_defender_resources < initial_defender_resources,
-                "Defender resources should have been reduced (Before: {}, After: {}).",
-                initial_defender_resources,
-                final_defender_resources
-            );
-        } else {
-            panic!("Army return job isn't correct.");
-        }
+        assert_eq!(return_job.task.task_type, "ArmyReturn".to_string());
+        let return_payload: ArmyReturnTask = serde_json::from_value(return_job.task.data.clone())?;
+
+        let bounty = return_payload.resources.total();
+        assert!(bounty > 0, "Attacker should have stolen resources.");
+
+        let final_defender_resources = updated_defender_village.stocks.stored_resources().total();
+        assert!(
+            final_defender_resources < initial_defender_resources,
+            "Defender resources should have been reduced (Before: {}, After: {}).",
+            initial_defender_resources,
+            final_defender_resources
+        );
 
         uow_assert.rollback().await?;
     }

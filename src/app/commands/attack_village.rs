@@ -1,7 +1,7 @@
 use crate::{
     cqrs::{Command, CommandHandler},
     game::models::buildings::BuildingName,
-    jobs::{tasks::AttackTask, Job, JobTask},
+    jobs::{tasks::AttackTask, Job, JobPayload},
     repository::{uow::UnitOfWork, ArmyRepository, JobRepository, VillageRepository},
 };
 use anyhow::{anyhow, Result};
@@ -68,11 +68,12 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
             catapult_targets: command.catapult_targets,
         };
 
+        let job_payload = JobPayload::new("Attack", serde_json::to_value(&attack_payload)?);
         let new_job = Job::new(
             command.player_id,
             command.village_id as i32,
             travel_time_secs,
-            JobTask::Attack(attack_payload),
+            job_payload,
         );
         job_repo.add(&new_job).await?;
 

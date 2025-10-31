@@ -1,24 +1,35 @@
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
+
 pub mod handler;
 pub mod tasks;
 pub mod worker;
 
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-use crate::jobs::tasks::*;
-
+/// Represents the data payload for any job.
+/// This struct is what gets serialized into the `task` column in the DB.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum JobTask {
-    Attack(AttackTask),
-    // Raid(RaidPayload), // similar to AttackPayload
-    // Reinforcement(ReinforcementPayload), // similar to AttackPayload
-    ArmyReturn(ArmyReturnTask),
-    TrainUnits(TrainUnitsTask),
+pub struct JobPayload {
+    /// A string key used to find the correct handler registry.
+    /// e.g., "Attack", "TrainUnits", "ArmyReturn"
+    pub task_type: String,
+
+    /// The full JSON data for the task payload (e.g., the serialized AttackTask).
+    pub data: Value,
+}
+
+impl JobPayload {
+    pub fn new(task_type: &str, data: Value) -> Self {
+        Self {
+            task_type: task_type.to_string(),
+            data,
+        }
+    }
 }
 
 impl Job {
-    pub fn new(player_id: Uuid, village_id: i32, duration: i64, task: JobTask) -> Self {
+    pub fn new(player_id: Uuid, village_id: i32, duration: i64, task: JobPayload) -> Self {
         let id = Uuid::new_v4();
         let now = Utc::now();
 
@@ -49,7 +60,7 @@ pub struct Job {
     pub id: Uuid,
     pub player_id: Uuid,
     pub village_id: i32,
-    pub task: JobTask,
+    pub task: JobPayload,
     pub status: JobStatus,
     pub completed_at: DateTime<Utc>,
     pub created_at: chrono::DateTime<Utc>,
@@ -59,20 +70,26 @@ pub struct Job {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::models::buildings::BuildingName;
+    use crate::{game::models::buildings::BuildingName, jobs::tasks::*};
     use chrono::Duration;
+    use serde_json::json;
     use uuid::Uuid;
 
-    // Helper function to create a dummy AttackTask
-    fn create_dummy_attack_task() -> JobTask {
-        JobTask::Attack(AttackTask {
+    // Helper function to create a dummy AttackTask payload
+    fn create_dummy_attack_payload() -> JobPayload {
+        let task_data = AttackTask {
             army_id: Uuid::new_v4(),
             attacker_village_id: 1,
             attacker_player_id: Uuid::new_v4(),
             target_village_id: 2,
             target_player_id: Uuid::new_v4(),
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
-        })
+        };
+
+        JobPayload {
+            task_type: "Attack".to_string(),
+            data: json!(task_data),
+        }
     }
 
     #[test]
@@ -80,7 +97,7 @@ mod tests {
         let player_id = Uuid::new_v4();
         let village_id = 123;
         let duration_secs: i64 = 3600; // 1 hour
-        let task = create_dummy_attack_task();
+        let task = create_dummy_attack_payload();
 
         let before_creation = Utc::now();
         let job = Job::new(player_id, village_id, duration_secs, task);
@@ -90,7 +107,8 @@ mod tests {
         assert_eq!(job.player_id, player_id);
         assert_eq!(job.village_id, village_id);
         assert_eq!(job.status, JobStatus::Pending);
-        assert!(matches!(job.task, JobTask::Attack(_)));
+        assert_eq!(job.task.task_type, "Attack");
+        assert!(job.task.data.is_object());
 
         // Check timestamps
         assert!(job.created_at >= before_creation && job.created_at <= after_creation);
@@ -110,7 +128,7 @@ mod tests {
         let player_id = Uuid::new_v4();
         let village_id = 456;
         let duration_secs: i64 = 0; // Instant job
-        let task = create_dummy_attack_task();
+        let task = create_dummy_attack_payload();
 
         let job = Job::new(player_id, village_id, duration_secs, task);
 

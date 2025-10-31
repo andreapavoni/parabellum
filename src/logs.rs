@@ -23,7 +23,7 @@ pub fn setup_logging() {
     // File layer
     let file_layer = fmt::layer()
         .with_writer(non_blocking_file)
-        .with_ansi(false) // No ANSI colors in file logs
+        .with_ansi(false)
         .with_thread_ids(true)
         .with_target(true);
 
@@ -35,8 +35,8 @@ pub fn setup_logging() {
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(console_layer)
         .with(file_layer)
+        .with(console_layer)
         .init();
 
     // We need to keep the guard alive for the file appender to work

@@ -323,6 +323,19 @@ impl Army {
         ))
     }
 
+    /// Merges another army into the current one.
+    pub fn merge(&mut self, other: &Army) -> Result<()> {
+        if self.tribe != other.tribe {
+            return Err(anyhow!("Cannot merge armies of different tribes"));
+        }
+
+        for (idx, quantity) in other.units.iter().enumerate() {
+            self.units[idx] += quantity;
+        }
+
+        Ok(())
+    }
+
     // Returns the data information for a given unit in the army.
     fn get_unit_by_idx(&self, idx: u8) -> Option<Unit> {
         if idx.ge(&0) && idx.lt(&10) {

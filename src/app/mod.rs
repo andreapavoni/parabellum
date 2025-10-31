@@ -20,6 +20,7 @@
 
 pub mod commands;
 pub mod job_handlers;
+pub mod job_registry;
 pub mod queries;
 
 #[cfg(test)]

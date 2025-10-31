@@ -5,10 +5,9 @@ use tokio::time;
 use tracing::{error, info, instrument};
 
 use crate::{
-    app::job_handlers::attack::AttackJobHandler,
     jobs::{
-        handler::{JobHandler, JobHandlerContext},
-        Job, JobTask,
+        handler::{JobHandler, JobHandlerContext, JobRegistry},
+        Job,
     },
     repository::uow::UnitOfWorkProvider,
 };
@@ -16,11 +15,15 @@ use crate::{
 /// Responsible for polling and execute job.
 pub struct JobWorker {
     uow_provider: Arc<dyn UnitOfWorkProvider>,
+    registry: Arc<dyn JobRegistry>,
 }
 
 impl JobWorker {
-    pub fn new(uow_provider: Arc<dyn UnitOfWorkProvider>) -> Self {
-        Self { uow_provider }
+    pub fn new(uow_provider: Arc<dyn UnitOfWorkProvider>, registry: Arc<dyn JobRegistry>) -> Self {
+        Self {
+            uow_provider,
+            registry,
+        }
     }
 
     /// Run worker loop inside a tokio task.
@@ -54,7 +57,7 @@ impl JobWorker {
             let uow = self.uow_provider.begin().await?;
             let context = JobHandlerContext { uow };
             let job_id = job.id;
-            let job_type = std::any::type_name_of_val(&job.task);
+            let job_type = job.task.task_type.clone();
 
             let span = tracing::info_span!(
                 "process_job",
@@ -66,13 +69,24 @@ impl JobWorker {
             let _enter = span.enter();
             info!("Processing job");
 
-            let handler: Box<dyn JobHandler> = match job.task.clone() {
-                JobTask::Attack(payload) => Box::new(AttackJobHandler::new(payload)),
-                _ => {
-                    error!("No handler found for job type");
-                    continue;
-                }
-            };
+            let handler: Box<dyn JobHandler> =
+                match self.registry.get_handler(&job_type, &job.task.data) {
+                    Ok(handler) => handler,
+                    Err(e) => {
+                        error!(error = ?e, "Failed to create handler for job");
+                        // This error could be due to deserialization
+                        // or an unregistered task_type.
+                        // Mark the job as failed and continue.
+                        context.uow.rollback().await?;
+                        let uow_fail = self.uow_provider.begin().await?;
+                        uow_fail
+                            .jobs()
+                            .mark_as_failed(job_id, &e.to_string())
+                            .await?;
+                        uow_fail.commit().await?;
+                        continue; // Go to the next job
+                    }
+                };
 
             // 3. Execute handler
             let task_result = handler.handle(&context, &job).await;

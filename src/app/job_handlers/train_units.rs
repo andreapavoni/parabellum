@@ -3,7 +3,7 @@ use crate::{
     jobs::{
         handler::{JobHandler, JobHandlerContext},
         tasks::TrainUnitsTask,
-        Job, JobTask,
+        Job, JobPayload,
     },
 };
 use anyhow::Result;
@@ -75,11 +75,13 @@ impl JobHandler for TrainUnitsJobHandler {
                 ..self.payload.clone()
             };
 
+            let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&next_payload)?);
+
             let next_job = Job::new(
                 player_id,
                 village_id as i32,
                 self.payload.time_per_unit_secs as i64, // Schedule for one unit's time
-                JobTask::TrainUnits(next_payload),
+                job_payload,
             );
 
             ctx.uow.jobs().add(&next_job).await?;

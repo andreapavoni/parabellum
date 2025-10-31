@@ -5,6 +5,7 @@ use uuid::Uuid;
 use parabellum::{
     app::{
         commands::{FoundVillage, FoundVillageHandler, RegisterPlayer, RegisterPlayerHandler},
+        job_registry::AppJobRegistry,
         queries::{GetUnoccupiedValley, GetUnoccupiedValleyHandler},
     },
     bus::AppBus,
@@ -24,8 +25,8 @@ async fn main() -> Result<()> {
 
     // Create the AppBus
     let app_bus = AppBus::new(config, uow_provider.clone());
-    let worker = Arc::new(JobWorker::new(uow_provider.clone()));
-
+    let app_registry = Arc::new(AppJobRegistry::new());
+    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
     worker.run();
 
     tracing::info!("AppBus initialized. Executing use cases via bus");

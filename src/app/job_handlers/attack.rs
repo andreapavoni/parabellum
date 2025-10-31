@@ -6,7 +6,7 @@ use crate::{
     jobs::{
         handler::{JobHandler, JobHandlerContext},
         tasks::{ArmyReturnTask, AttackTask},
-        Job, JobTask,
+        Job, JobPayload,
     },
 };
 use anyhow::Result;
@@ -134,12 +134,8 @@ impl JobHandler for AttackJobHandler {
             from_village_id: defender_village_id,
         };
 
-        let return_job = Job::new(
-            player_id,
-            village_id,
-            return_travel_time,
-            JobTask::ArmyReturn(return_payload),
-        );
+        let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
+        let return_job = Job::new(player_id, village_id, return_travel_time, job_payload);
 
         ctx.uow.jobs().add(&return_job).await?;
 
