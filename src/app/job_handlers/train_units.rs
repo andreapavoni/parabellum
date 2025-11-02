@@ -1,9 +1,9 @@
 use crate::{
     game::models::army::Army, // Assicurati di avere un modello Army
     jobs::{
+        Job, JobPayload,
         handler::{JobHandler, JobHandlerContext},
         tasks::TrainUnitsTask,
-        Job, JobPayload,
     },
 };
 use anyhow::Result;
@@ -80,7 +80,7 @@ impl JobHandler for TrainUnitsJobHandler {
             let next_job = Job::new(
                 player_id,
                 village_id as i32,
-                self.payload.time_per_unit_secs as i64, // Schedule for one unit's time
+                self.payload.time_per_unit as i64, // Schedule for one unit's time
                 job_payload,
             );
 

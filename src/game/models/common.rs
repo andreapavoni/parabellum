@@ -7,7 +7,13 @@ use crate::game::models::Tribe;
 pub struct Cost {
     pub resources: ResourceGroup,
     pub upkeep: u32,
-    pub build_time: u32,
+    pub time: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResearchCost {
+    pub resources: ResourceGroup,
+    pub time: u64,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,8 +29,6 @@ impl ResourceGroup {
         self.0 + self.1 + self.2 + self.3
     }
 }
-
-pub type SmithyUpgrades = [u8; 10];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {

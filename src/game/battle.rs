@@ -458,8 +458,8 @@ impl Battle {
             reinforcements: reinforcements_report,
             scouting: Some(ScoutingBattleReport {
                 was_detected: defender_has_scouts,
-                target: target,
-                target_report: target_report,
+                target,
+                target_report,
             }),
             bounty: None, // No bounty for scouting
             wall_damage: None,
@@ -514,28 +514,28 @@ fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> Re
     // Distribute the remaining capacity, 1 by 1, in the order Lumber-Clay-Iron-Crop,
     // ensuring we do not take more than what is available.
     if capacity_left > 0 {
-        let can_take_lumber = (available_lumber - bounty_lumber).max(0);
+        let can_take_lumber = available_lumber - bounty_lumber;
         let take_lumber = capacity_left.min(can_take_lumber).min(1);
         bounty_lumber += take_lumber;
         capacity_left -= take_lumber;
     }
 
     if capacity_left > 0 {
-        let can_take_clay = (available_clay - bounty_clay).max(0);
+        let can_take_clay = available_clay - bounty_clay;
         let take_clay = capacity_left.min(can_take_clay).min(1);
         bounty_clay += take_clay;
         capacity_left -= take_clay;
     }
 
     if capacity_left > 0 {
-        let can_take_iron = (available_iron - bounty_iron).max(0);
+        let can_take_iron = available_iron - bounty_iron;
         let take_iron = capacity_left.min(can_take_iron).min(1);
         bounty_iron += take_iron;
         capacity_left -= take_iron;
     }
 
     if capacity_left > 0 {
-        let can_take_crop = (available_crop - bounty_crop).max(0);
+        let can_take_crop = available_crop - bounty_crop;
         // At last, take all the possible
         let take_crop = capacity_left.min(can_take_crop);
         bounty_crop += take_crop;
@@ -569,16 +569,16 @@ fn calculate_losses_percentages(
         // Attacker wins
         (attacker_loss_percentage, defender_loss_percentage) = calculate_loss_factor_by_attack_type(
             attack_type,
-            attack_power as f64,
-            defense_power as f64,
+            attack_power,
+            defense_power,
             m_factor,
         );
     } else {
         // Defender wins (or draw)
         (defender_loss_percentage, attacker_loss_percentage) = calculate_loss_factor_by_attack_type(
             attack_type,
-            defense_power as f64,
-            attack_power as f64,
+            defense_power,
+            attack_power,
             m_factor,
         );
     }
@@ -632,7 +632,7 @@ fn calculate_machine_damage(
     let upgrades = 1.0205f64.powf(smithy_level as f64); // original formula is pow(1.0205, level)
     let efficiency = (quantity as f64 / durability).floor();
 
-    return 4.0 * sigma(ad_ratio) * efficiency * upgrades / morale;
+    4.0 * sigma(ad_ratio) * efficiency * upgrades / morale
 }
 
 // Calculates new building level after damages
@@ -647,7 +647,7 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
         damage -= current_level as f64;
         current_level -= 1;
     }
-    return current_level;
+    current_level
 }
 
 #[cfg(test)]

@@ -26,6 +26,12 @@ impl Query for GetUnoccupiedValley {
 
 pub struct GetUnoccupiedValleyHandler {}
 
+impl Default for GetUnoccupiedValleyHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GetUnoccupiedValleyHandler {
     pub fn new() -> Self {
         Self {}

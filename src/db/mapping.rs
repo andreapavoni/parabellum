@@ -56,7 +56,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             id: village_id_u32,
             name: db_village.name,
             player_id: db_village.player_id,
-            position: position,
+            position,
             tribe: tribe.clone(),
             buildings: serde_json::from_value(db_village.buildings)?,
             oases,

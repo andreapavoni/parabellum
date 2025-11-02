@@ -5,7 +5,8 @@ use serde_json::Value;
 use crate::{
     app::job_handlers::{
         army_return::ArmyReturnJobHandler, attack::AttackJobHandler,
-        research_academy::ResearchAcademyJobHandler, train_units::TrainUnitsJobHandler,
+        research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
+        train_units::TrainUnitsJobHandler,
     },
     jobs::{
         handler::{JobHandler, JobRegistry},
@@ -20,6 +21,7 @@ enum AppTaskType {
     TrainUnits,
     ArmyReturn,
     ResearchAcademy,
+    ResearchSmithy,
 }
 
 impl AppTaskType {
@@ -30,6 +32,7 @@ impl AppTaskType {
             "TrainUnits" => Some(Self::TrainUnits),
             "ArmyReturn" => Some(Self::ArmyReturn),
             "ResearchAcademy" => Some(Self::ResearchAcademy),
+            "ResearchSmithy" => Some(Self::ResearchSmithy),
             _ => None,
         }
     }
@@ -68,6 +71,10 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::ResearchAcademy => {
                 let payload: ResearchAcademyTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(ResearchAcademyJobHandler::new(payload)))
+            }
+            AppTaskType::ResearchSmithy => {
+                let payload: ResearchSmithyTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(ResearchSmithyJobHandler::new(payload)))
             }
         }
     }

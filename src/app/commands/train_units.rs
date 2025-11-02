@@ -1,9 +1,9 @@
 use crate::{
-    game::models::{buildings::BuildingName, ResourceGroup},
-    jobs::{tasks::TrainUnitsTask, Job, JobPayload},
+    game::models::{ResourceGroup, buildings::BuildingName},
+    jobs::{Job, JobPayload, tasks::TrainUnitsTask},
     repository::{JobRepository, VillageRepository},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -38,26 +38,20 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             .await?
             .ok_or_else(|| anyhow!("Village not found"))?;
 
-        // --- Validation ---
-
-        // 1. Check ownership
         if village.player_id != command.player_id {
             return Err(anyhow!("Player does not own this village"));
         }
 
-        // 2. Check requirements
-        if !village.academy_research[command.unit_idx as usize] {
-            return Err(anyhow!("Unit not researched in Academy"));
-        }
-
         let tribe_units = village.tribe.get_units();
-        let unit_data = tribe_units
+        let unit = tribe_units
             .get(command.unit_idx as usize)
             .ok_or_else(|| anyhow!("Invalid unit index"))?;
 
-        // 3. Check resources
-        // TODO: Get cost from unit data
-        let cost_per_unit = &unit_data.cost; // Usa `cost`, non `research_cost`
+        if !village.academy_research[command.unit_idx as usize] {
+            return Err(anyhow!("Unit {:?} not researched in Academy", unit.name));
+        }
+
+        let cost_per_unit = &unit.cost;
         let total_cost = ResourceGroup::new(
             cost_per_unit.resources.0 * command.quantity as u32,
             cost_per_unit.resources.1 * command.quantity as u32,
@@ -65,31 +59,16 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             cost_per_unit.resources.3 * command.quantity as u32,
         );
 
-        // This checks current stocks (which are updated on load)
-        let stocks = village.stocks.stored_resources();
-        if stocks.0 < total_cost.0
-            || stocks.1 < total_cost.1
-            || stocks.2 < total_cost.2
-            || stocks.3 < total_cost.3
-        {
+        if !village.stocks.check_resources(&total_cost) {
             return Err(anyhow!("Not enough resources"));
         }
 
-        // --- Logic & Side Effects ---
-
         // 1. Deduct resources
-        village.stocks.remove_resources(&total_cost);
+        village.stocks.withdraw_resources(&total_cost)?;
         self.village_repo.save(&village).await?;
 
         // 2. Create Job
-        // For simplicity, we create one job for the *entire batch*.
-        // A more complex (and correct) approach would be to create one job
-        // per unit, or one job for the batch that, when complete,
-        // queues the next job if the queue is not empty.
-
-        // Let's use the 1-job-per-batch-which-queues-the-next logic.
-        // The first job will be for the first unit.
-        let time_per_unit_secs = cost_per_unit.build_time;
+        let time_per_unit = cost_per_unit.time;
 
         let building = village
             .get_building_by_name(BuildingName::Barracks)
@@ -97,9 +76,9 @@ impl<'a> TrainUnitsCommandHandler<'a> {
 
         let payload = TrainUnitsTask {
             slot_id: building.slot_id,
-            unit: unit_data.clone().name,
+            unit: unit.clone().name,
             quantity: command.quantity,
-            time_per_unit_secs: time_per_unit_secs as i32,
+            time_per_unit: time_per_unit as i32,
         };
 
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
@@ -107,7 +86,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
         let new_job = Job::new(
             command.player_id,
             command.village_id as i32,
-            time_per_unit_secs as i64,
+            time_per_unit as i64,
             job_payload,
         );
 
@@ -125,14 +104,14 @@ mod tests {
         app::test_utils::tests::{MockJobRepository, MockVillageRepository},
         game::{
             models::{
+                Player, Tribe,
                 army::UnitName,
                 buildings::Building,
                 village::{Village, VillageBuilding},
-                Player, Tribe,
             },
             test_factories::{
-                player_factory, valley_factory, village_factory, PlayerFactoryOptions,
-                VillageFactoryOptions,
+                PlayerFactoryOptions, VillageFactoryOptions, player_factory, valley_factory,
+                village_factory,
             },
         },
     };
@@ -162,11 +141,10 @@ mod tests {
         village.buildings.push(barracks);
 
         // Add resources
-        village.stocks.lumber = 1000;
-        village.stocks.clay = 1000;
-        village.stocks.iron = 1000;
-        village.stocks.crop = 1000;
-        village.update_state(); // Recalculate
+        village
+            .stocks
+            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.update_state();
 
         (player, village)
     }
@@ -202,25 +180,24 @@ mod tests {
         assert_eq!(saved_villages.len(), 1, "Village should be saved once");
         let saved_village = &saved_villages[0];
 
-        // Cost for 5 Legionnaires (5 * 120 = 600)
         assert_eq!(
             saved_village.stocks.lumber,
-            1000 - (120 * 5),
+            800 - (120 * 5),
             "Lumber not deducted correctly"
         );
         assert_eq!(
             saved_village.stocks.clay,
-            1000 - (100 * 5),
+            800 - (100 * 5),
             "Clay not deducted correctly"
         );
         assert_eq!(
             saved_village.stocks.iron,
-            1000 - (150 * 5),
+            800 - (150 * 5),
             "Iron not deducted correctly"
         );
         assert_eq!(
             saved_village.stocks.crop,
-            1000 - (30 * 5) as i64,
+            800 - (30 * 5) as i64,
             "Crop not deducted correctly"
         );
 
@@ -261,7 +238,7 @@ mod tests {
             player_id: player.id,
             village_id: village_id,
             unit_idx: 0,
-            quantity: 1,
+            quantity: 10,
         };
 
         let result = handler.handle(command).await;
@@ -283,7 +260,40 @@ mod tests {
             .buildings
             .retain(|vb| vb.building.name != BuildingName::Barracks);
 
-        let _ = village.research_academy(UnitName::Praetorian);
+        let village_id = village.id;
+        mock_village_repo.add_village(village);
+
+        let handler =
+            TrainUnitsCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+
+        let command = TrainUnitsCommand {
+            player_id: player.id,
+            village_id: village_id,
+            unit_idx: 0,
+            quantity: 1,
+        };
+
+        let result = handler.handle(command).await;
+
+        assert!(result.is_err(), "Handler should return an error");
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Required building not found: Barracks"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_missing_research() {
+        // 1. Setup
+        let mock_job_repo = Arc::new(MockJobRepository::default());
+        let mock_village_repo = Arc::new(MockVillageRepository::default());
+
+        let (player, mut village) = setup_village_with_barracks();
+
+        village
+            .buildings
+            .retain(|vb| vb.building.name != BuildingName::Barracks);
+
         let village_id = village.id;
         mock_village_repo.add_village(village);
 
@@ -304,7 +314,7 @@ mod tests {
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Required building not found: Barracks"
+            "Unit Praetorian not researched in Academy"
         );
     }
 }

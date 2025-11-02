@@ -23,6 +23,12 @@ pub struct RegisterVillageHandler {}
 
 impl Command for RegisterVillage {}
 
+impl Default for RegisterVillageHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegisterVillageHandler {
     pub fn new() -> Self {
         Self {}

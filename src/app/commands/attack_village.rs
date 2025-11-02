@@ -22,6 +22,12 @@ impl Command for AttackVillage {}
 
 pub struct AttackVillageHandler {}
 
+impl Default for AttackVillageHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AttackVillageHandler {
     pub fn new() -> Self {
         Self {}

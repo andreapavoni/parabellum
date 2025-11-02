@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models::{army::UnitName, buildings::BuildingName, ResourceGroup};
+use crate::game::models::{ResourceGroup, army::UnitName, buildings::BuildingName};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArmyReturnTask {
@@ -27,7 +27,7 @@ pub struct TrainUnitsTask {
     pub slot_id: u8,
     pub unit: UnitName,
     pub quantity: i32,
-    pub time_per_unit_secs: i32,
+    pub time_per_unit: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

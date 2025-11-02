@@ -82,12 +82,25 @@ pub mod tests {
             let villages = self.villages.lock().unwrap();
             Ok(villages.get(&village_id).cloned())
         }
-        // ... (implement other methods)
-        async fn create(&self, _village: &Village) -> Result<()> {
+
+        async fn create(&self, village: &Village) -> Result<()> {
+            self.villages
+                .lock()
+                .unwrap()
+                .insert(village.id, village.clone());
+
             Ok(())
         }
-        async fn list_by_player_id(&self, _player_id: Uuid) -> Result<Vec<Village>> {
-            Ok(vec![])
+        async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>> {
+            let mut villages: Vec<Village> = vec![];
+
+            for v in self.villages.lock().unwrap().values().into_iter() {
+                if v.player_id == player_id {
+                    villages.push(v.clone());
+                }
+            }
+
+            Ok(villages)
         }
         async fn save(&self, village: &Village) -> Result<()> {
             self.villages
@@ -129,7 +142,9 @@ pub mod tests {
 
     // Mock per i repo non usati in questo test
     #[derive(Default, Clone)]
-    pub struct MockPlayerRepository;
+    pub struct MockPlayerRepository {
+        players: Arc<Mutex<HashMap<Uuid, Player>>>,
+    }
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {

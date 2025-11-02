@@ -26,6 +26,12 @@ impl Command for FoundVillage {}
 
 pub struct FoundVillageHandler {}
 
+impl Default for FoundVillageHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FoundVillageHandler {
     pub fn new() -> Self {
         Self {}

@@ -89,7 +89,7 @@ impl JobWorker {
                 };
 
             // 3. Execute handler
-            let task_result = handler.handle(&context, &job).await;
+            let task_result = handler.handle(&context, job).await;
 
             // 4. Handle transaction and job state
             match task_result {

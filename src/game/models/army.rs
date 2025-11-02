@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{Cost, SmithyUpgrades, Tribe};
-use crate::game::models::{buildings::BuildingName, hero::Hero};
+use super::{Cost, Tribe, smithy::SmithyUpgrades};
+use crate::game::models::{ResearchCost, buildings::BuildingName, hero::Hero};
 
 #[derive(Debug, Clone)]
 pub enum UnitRole {
@@ -196,6 +196,10 @@ impl Army {
 
         for (idx, quantity) in self.units.iter().enumerate() {
             let u = self.get_unit_by_idx(idx as u8).unwrap();
+            match u.role {
+                UnitRole::Settler | UnitRole::Chief => continue,
+                _ => (),
+            }
 
             let smithy_improvement = self.apply_smithy_upgrade(&u, idx, u.attack);
 
@@ -214,6 +218,11 @@ impl Army {
 
         for (idx, quantity) in self.units.into_iter().enumerate() {
             let u = self.get_unit_by_idx(idx as u8).unwrap();
+
+            match u.role {
+                UnitRole::Settler | UnitRole::Chief => continue,
+                _ => (),
+            }
 
             let smithy_infantry = self.apply_smithy_upgrade(&u, idx, u.defense_infantry);
             let smithy_cavalry = self.apply_smithy_upgrade(&u, idx, u.defense_cavalry);
@@ -272,7 +281,7 @@ impl Army {
             self.player_id,
             self.tribe.clone(),
             set,
-            self.smithy.clone(),
+            self.smithy,
             None,
         );
 
@@ -298,8 +307,8 @@ impl Army {
         self.units
             .iter()
             .enumerate()
-            .filter(|(idx, &quantity)| {
-                if quantity > 0 {
+            .filter(move |(idx, quantity)| {
+                if **quantity > 0 {
                     let unit = self.get_unit_by_idx(*idx as u8).unwrap();
                     return std::mem::discriminant(&unit.role) == std::mem::discriminant(&role);
                 }
@@ -357,15 +366,15 @@ impl Army {
         smithy_improvement * quantity
     }
 
-    // Applies the smithy upgrade to a given combat value.
+    /// Applies the smithy upgrade to a given combat value.
     fn apply_smithy_upgrade(&self, unit: &Unit, idx: usize, combat_value: u32) -> u32 {
-        let level: i32 = self.smithy[idx as usize].into();
+        let level: i32 = self.smithy[idx].into();
         ((combat_value as f64)
             + ((combat_value + 300 * unit.cost.upkeep) as f64 / 7.0)
                 * ((1.007f64).powi(level.try_into().unwrap()) - 1.0).floor()) as u32
     }
 
-    // Returns the unit idx for a given unit name.
+    /// Returns the unit idx for a given unit name.
     fn get_unit_idx_by_name(&self, name: &UnitName) -> Option<usize> {
         self.tribe.get_units().iter().position(|u| u.name == *name)
     }
@@ -381,11 +390,8 @@ pub struct Unit {
     pub defense_cavalry: u32,
     pub speed: u8,
     pub capacity: u32,
-    /// The cost to train.
     pub cost: Cost,
-    /// The cost to research this unit in the Academy.
-    pub research_cost: Cost,
-    /// Building requirements needed to START research.
+    pub research_cost: ResearchCost,
     pub requirements: &'static [UnitRequirement],
 }
 
@@ -404,7 +410,7 @@ impl Unit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::test_factories::{army_factory, ArmyFactoryOptions};
+    use crate::game::test_factories::{ArmyFactoryOptions, army_factory};
 
     #[test]
     fn test_army_upkeep() {
@@ -435,7 +441,7 @@ mod tests {
         let army = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
             units: Some([10, 0, 0, 0, 0, 5, 0, 0, 0, 0]),
-            smithy: Some([0; 10]), // No smithy upgrades
+            smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
         });
 
@@ -448,7 +454,7 @@ mod tests {
         let army_roman = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Roman),
             units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
-            smithy: Some([0; 10]), // No smithy upgrades
+            smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
         });
 

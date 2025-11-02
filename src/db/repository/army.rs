@@ -39,10 +39,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let db_tribe: Tribe = army.tribe.clone().into();
         let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
-        let hero_id = match army.clone().hero {
-            Some(hero) => Some(hero.id),
-            _ => None,
-        };
+        let hero_id = army.clone().hero.map(|hero| hero.id);
 
         sqlx::query!(
               r#"

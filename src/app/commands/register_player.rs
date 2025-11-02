@@ -28,6 +28,12 @@ impl Command for RegisterPlayer {}
 
 pub struct RegisterPlayerHandler {}
 
+impl Default for RegisterPlayerHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegisterPlayerHandler {
     pub fn new() -> Self {
         Self {}

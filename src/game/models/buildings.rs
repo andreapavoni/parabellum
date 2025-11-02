@@ -1,9 +1,8 @@
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::game::models::village::VillageBuilding;
-
 use super::{Cost, ResourceGroup, Tribe};
+use crate::game::models::village::VillageBuilding;
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingGroup {
@@ -83,7 +82,7 @@ impl Building {
         let building = get_building_data(self.name.clone()).unwrap();
 
         if self.level == building.rules.max_level {
-            return Err(Error::msg("error"));
+            return Err(anyhow!("Already reached max level {}", self.level));
         }
 
         let level = self.level + 1;
@@ -92,9 +91,9 @@ impl Building {
         Ok(Self {
             name: self.name.clone(),
             group: building.group.clone(),
-            culture_points: data.5.clone(),
-            level: level.clone(),
-            value: data.6.clone(),
+            culture_points: data.5,
+            level,
+            value: data.6,
         })
     }
 
@@ -108,20 +107,19 @@ impl Building {
 
         // check starting levels
         let mut lvl_idx = level;
-        if level > 0 {
-            if self.group != BuildingGroup::Resources {
+        if level > 0
+            && self.group != BuildingGroup::Resources {
                 lvl_idx -= 1;
             }
-        }
 
         let data = building.data[lvl_idx as usize].clone();
 
         Ok(Self {
             name: self.name.clone(),
             group: building.group.clone(),
-            culture_points: data.5.clone(),
-            level: level.clone(),
-            value: data.6.clone(),
+            culture_points: data.5,
+            level,
+            value: data.6,
         })
     }
 
@@ -135,7 +133,7 @@ impl Building {
 
         // tribe constraint (if any)?
         if !data.rules.tribes.is_empty() {
-            let ok = data.rules.tribes.contains(&tribe);
+            let ok = data.rules.tribes.contains(tribe);
             if !ok {
                 return Err(Error::msg("not compatible with village tribe"));
             }
@@ -161,11 +159,17 @@ impl Building {
 
         for req in data.rules.requirements {
             match village_buildings
-                .into_iter()
-                .find(|&vb| vb.building.name == req.0 && vb.building.level == req.1)
+                .iter()
+                .find(|&vb| vb.building.name == req.0 && vb.building.level >= req.1)
             {
                 Some(_) => (),
-                None => return Err(Error::msg("missing building requirements")),
+                None => {
+                    return Err(anyhow!(
+                        "Missing building requirements: {:?} at level {}",
+                        req.0,
+                        req.1,
+                    ))
+                }
             };
         }
 
@@ -196,7 +200,7 @@ impl Building {
     }
 
     pub fn validate_upgrade(&self) -> Result<()> {
-        let data = get_building_data(self.name.clone()).unwrap();
+        let data = get_building_data(self.name.clone())?;
 
         // max level reached?
         if self.level == data.rules.max_level {
@@ -211,18 +215,17 @@ impl Building {
 
         let mut level = self.level;
 
-        if level > 0 {
-            if self.group != BuildingGroup::Resources {
+        if level > 0
+            && self.group != BuildingGroup::Resources {
                 level -= 1;
             }
-        }
 
         let data = building.data[level as usize].clone();
 
         Cost {
             resources: ResourceGroup::new(data.0, data.1, data.2, data.3),
             upkeep: data.4,
-            build_time: data.6,
+            time: data.6,
         }
     }
 }

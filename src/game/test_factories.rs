@@ -2,12 +2,13 @@
 //! These do not interact with the database.
 
 use super::models::{
+    Tribe,
     army::{Army, TroopSet},
     common::Player,
     hero::Hero,
     map::{Position, Valley, ValleyTopology},
+    smithy::SmithyUpgrades,
     village::Village,
-    SmithyUpgrades, Tribe,
 };
 use rand::Rng;
 use uuid::Uuid;
@@ -50,7 +51,7 @@ pub struct ArmyFactoryOptions {
 // --- Factory Functions ---
 
 pub fn player_factory(options: PlayerFactoryOptions) -> Player {
-    let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
+    let default_username: String = format!("user_{}", rand::thread_rng().r#gen::<u32>());
     Player {
         id: options.id.unwrap_or_else(Uuid::new_v4),
         username: options.username.map_or(default_username, |s| s.to_string()),

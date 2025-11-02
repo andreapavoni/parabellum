@@ -1,12 +1,12 @@
 use rand::Rng;
-use sqlx::{types::Json, PgConnection};
+use sqlx::{PgConnection, types::Json};
 use uuid::Uuid;
 
 use crate::game::models::{
     army::TroopSet,
     map::{MapFieldTopology, Position, Valley, ValleyTopology},
+    smithy::SmithyUpgrades,
     village::{self, VillageBuilding, VillageProduction, VillageStocks},
-    SmithyUpgrades,
 };
 
 use super::models::*;
@@ -53,7 +53,7 @@ pub struct MapFieldFactoryOptions {
 }
 
 pub async fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptions<'_>) -> Player {
-    let default_username: String = format!("user_{}", rand::thread_rng().gen::<u32>());
+    let default_username: String = format!("user_{}", rand::thread_rng().r#gen::<u32>());
     let id = options.id.unwrap_or_else(Uuid::new_v4);
     let username = options.username.unwrap_or(&default_username);
     let tribe = options.tribe.unwrap_or(Tribe::Roman);
@@ -146,7 +146,7 @@ pub async fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) 
     };
 
     let units_data = options.units.unwrap_or([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]);
-    let smithy_data: SmithyUpgrades = options.smithy.unwrap_or([1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let smithy_data: SmithyUpgrades = options.smithy.unwrap_or([1, 1, 0, 0, 0, 0, 0, 0]);
 
     sqlx::query_as!(
         Army,
@@ -174,8 +174,8 @@ pub async fn map_field_factory(
     options: MapFieldFactoryOptions,
 ) -> MapField {
     let default_pos = Position {
-        x: rand::thread_rng().gen(),
-        y: rand::thread_rng().gen(),
+        x: rand::thread_rng().r#gen(),
+        y: rand::thread_rng().r#gen(),
     };
     let default_topo = MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6));
     let position = options.position.unwrap_or(default_pos);

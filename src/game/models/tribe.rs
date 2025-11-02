@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::game::models::{
+    Cost, ResearchCost, ResourceGroup,
     army::{Unit, UnitGroup, UnitName, UnitRequirement, UnitRole},
     buildings::BuildingName,
-    Cost, ResourceGroup,
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
@@ -26,10 +26,10 @@ impl Tribe {
         }
     }
 
-    pub fn get_unit_idx_by_name(&self, unit_name: UnitName) -> Option<usize> {
+    pub fn get_unit_idx_by_name(&self, unit_name: &UnitName) -> Option<usize> {
         self.get_units()
             .iter()
-            .position(|unit| unit.name == unit_name)
+            .position(|unit| unit.name == *unit_name)
     }
 }
 
@@ -48,12 +48,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(120, 100, 150, 30),
             upkeep: 1,
-            build_time: 533,
+            time: 533,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[UnitRequirement {
             building: BuildingName::Barracks,
@@ -72,12 +71,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(100, 130, 160, 70),
             upkeep: 1,
-            build_time: 597,
+            time: 597,
         },
-        research_cost: Cost {
-            resources: ResourceGroup::new(720, 620, 1480, 580),
-            upkeep: 0,
-            build_time: 8400,
+        research_cost: ResearchCost {
+            resources: ResourceGroup::new(700, 620, 1480, 580),
+            time: 8400,
         },
         requirements: &[
             UnitRequirement {
@@ -102,12 +100,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(150, 160, 210, 80),
             upkeep: 1,
-            build_time: 640,
+            time: 640,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(1000, 740, 1880, 640),
-            upkeep: 0,
-            build_time: 9000,
+            time: 9000,
         },
         requirements: &[
             UnitRequirement {
@@ -132,12 +129,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(140, 160, 20, 40),
             upkeep: 2,
-            build_time: 453,
+            time: 453,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(940, 740, 360, 400),
-            upkeep: 0,
-            build_time: 6900,
+            time: 6900,
         },
         requirements: &[
             UnitRequirement {
@@ -162,12 +158,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(550, 440, 320, 100),
             upkeep: 3,
-            build_time: 880,
+            time: 880,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(3400, 1860, 2760, 760),
-            upkeep: 0,
-            build_time: 11700,
+            time: 11700,
         },
         requirements: &[
             UnitRequirement {
@@ -192,12 +187,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(550, 640, 800, 180),
             upkeep: 4,
-            build_time: 1173,
+            time: 1173,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(3400, 2660, 6600, 1240),
-            upkeep: 0,
-            build_time: 15000,
+            time: 15000,
         },
         requirements: &[
             UnitRequirement {
@@ -222,12 +216,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(900, 360, 500, 70),
             upkeep: 3,
-            build_time: 1533,
+            time: 1533,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(5500, 1540, 4200, 580),
-            upkeep: 0,
-            build_time: 15600,
+            time: 15600,
         },
         requirements: &[
             UnitRequirement {
@@ -252,12 +245,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(950, 1350, 600, 90),
             upkeep: 6,
-            build_time: 3000,
+            time: 3000,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(5800, 5500, 5000, 700),
-            upkeep: 0,
-            build_time: 28800,
+            time: 28800,
         },
         requirements: &[
             UnitRequirement {
@@ -282,12 +274,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(30750, 27200, 45000, 37500),
             upkeep: 5,
-            build_time: 30233,
+            time: 30233,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(15880, 13800, 36400, 22660),
-            upkeep: 0,
-            build_time: 24475,
+            time: 24475,
         },
         requirements: &[
             UnitRequirement {
@@ -312,12 +303,11 @@ static ROMAN_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(4600, 4200, 5800, 4400),
             upkeep: 1,
-            build_time: 8967,
+            time: 8967,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -336,12 +326,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(95, 75, 40, 40),
             upkeep: 1,
-            build_time: 240,
+            time: 240,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[UnitRequirement {
             building: BuildingName::Barracks,
@@ -360,12 +349,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(145, 70, 85, 40),
             upkeep: 1,
-            build_time: 73,
+            time: 73,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(970, 380, 880, 400),
-            upkeep: 0,
-            build_time: 5760,
+            time: 5760,
         },
         requirements: &[
             UnitRequirement {
@@ -390,12 +378,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(130, 120, 170, 70),
             upkeep: 1,
-            build_time: 76,
+            time: 76,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(880, 580, 1560, 580),
-            upkeep: 0,
-            build_time: 6300,
+            time: 6300,
         },
         requirements: &[
             UnitRequirement {
@@ -420,12 +407,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(160, 100, 50, 50),
             upkeep: 1,
-            build_time: 73,
+            time: 73,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(1060, 500, 600, 460),
-            upkeep: 0,
-            build_time: 6000,
+            time: 6000,
         },
         requirements: &[
             UnitRequirement {
@@ -450,12 +436,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(370, 270, 290, 75),
             upkeep: 2,
-            build_time: 800,
+            time: 800,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(2320, 1180, 2520, 610),
-            upkeep: 0,
-            build_time: 10800,
+            time: 10800,
         },
         requirements: &[
             UnitRequirement {
@@ -480,12 +465,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(450, 515, 480, 80),
             upkeep: 3,
-            build_time: 987,
+            time: 987,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(2800, 2160, 4040, 640),
-            upkeep: 0,
-            build_time: 13500,
+            time: 13500,
         },
         requirements: &[
             UnitRequirement {
@@ -510,12 +494,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(1000, 300, 350, 70),
             upkeep: 3,
-            build_time: 1400,
+            time: 1400,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(6100, 1300, 3000, 580),
-            upkeep: 0,
-            build_time: 14400,
+            time: 14400,
         },
         requirements: &[
             UnitRequirement {
@@ -540,12 +523,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(900, 1200, 600, 60),
             upkeep: 6,
-            build_time: 3000,
+            time: 3000,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(5500, 4900, 5000, 520),
-            upkeep: 0,
-            build_time: 28800,
+            time: 28800,
         },
         requirements: &[
             UnitRequirement {
@@ -570,12 +552,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(35500, 26600, 25000, 27200),
             upkeep: 4,
-            build_time: 23500,
+            time: 23500,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(18250, 13500, 20400, 16480),
-            upkeep: 0,
-            build_time: 19425,
+            time: 19425,
         },
         requirements: &[
             UnitRequirement {
@@ -600,12 +581,11 @@ static TEUTON_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(5800, 4400, 4600, 5200),
             upkeep: 1,
-            build_time: 10333,
+            time: 10333,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -624,12 +604,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(100, 130, 55, 30),
             upkeep: 1,
-            build_time: 347,
+            time: 347,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[UnitRequirement {
             building: BuildingName::Barracks,
@@ -648,12 +627,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(140, 150, 185, 60),
             upkeep: 1,
-            build_time: 480,
+            time: 480,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(940, 700, 1689, 520),
-            upkeep: 0,
-            build_time: 7200,
+            time: 7200,
         },
         requirements: &[
             UnitRequirement {
@@ -678,12 +656,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(170, 150, 20, 40),
             upkeep: 2,
-            build_time: 75,
+            time: 75,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(1120, 700, 360, 400),
-            upkeep: 0,
-            build_time: 3501,
+            time: 3501,
         },
         requirements: &[
             UnitRequirement {
@@ -708,12 +685,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(350, 450, 230, 60),
             upkeep: 2,
-            build_time: 827,
+            time: 827,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(2200, 1900, 2040, 520),
-            upkeep: 0,
-            build_time: 11100,
+            time: 11100,
         },
         requirements: &[
             UnitRequirement {
@@ -738,12 +714,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(360, 330, 280, 120),
             upkeep: 2,
-            build_time: 853,
+            time: 853,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(2260, 1420, 2440, 880),
-            upkeep: 0,
-            build_time: 11400,
+            time: 11400,
         },
         requirements: &[
             UnitRequirement {
@@ -768,12 +743,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(500, 620, 675, 170),
             upkeep: 3,
-            build_time: 1040,
+            time: 1040,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(3100, 2580, 5600, 1180),
-            upkeep: 0,
-            build_time: 13500,
+            time: 13500,
         },
         requirements: &[
             UnitRequirement {
@@ -798,12 +772,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(950, 555, 330, 75),
             upkeep: 3,
-            build_time: 1667,
+            time: 1667,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(5800, 2320, 2840, 610),
-            upkeep: 0,
-            build_time: 16800,
+            time: 16800,
         },
         requirements: &[
             UnitRequirement {
@@ -828,12 +801,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(960, 1450, 630, 90),
             upkeep: 6,
-            build_time: 3000,
+            time: 3000,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(5860, 5900, 5240, 700),
-            upkeep: 0,
-            build_time: 28800,
+            time: 28800,
         },
         requirements: &[
             UnitRequirement {
@@ -858,12 +830,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(15880, 22900, 25200, 22660),
             upkeep: 4,
-            build_time: 30233,
+            time: 30233,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(1060, 500, 600, 460),
-            upkeep: 0,
-            build_time: 24475,
+            time: 24475,
         },
         requirements: &[
             UnitRequirement {
@@ -888,12 +859,11 @@ static GAUL_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(4400, 5600, 4200, 3900),
             upkeep: 1,
-            build_time: 7567,
+            time: 7567,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(1060, 500, 600, 460),
-            upkeep: 0,
-            build_time: 6000,
+            time: 6000,
         },
         requirements: &[
             UnitRequirement {
@@ -921,12 +891,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 100, 100),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -942,12 +911,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -963,12 +931,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -984,12 +951,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1005,12 +971,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1026,12 +991,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1047,12 +1011,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1068,12 +1031,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1089,12 +1051,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1110,12 +1071,11 @@ static NATURE_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 5,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1134,12 +1094,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1155,12 +1114,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1176,12 +1134,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1197,12 +1154,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1218,12 +1174,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 2,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1239,12 +1194,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 3,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1260,12 +1214,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 4,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1281,12 +1234,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 5,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1302,12 +1254,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },
@@ -1323,12 +1274,11 @@ static NATAR_UNITS: TribeUnits = [
         cost: Cost {
             resources: ResourceGroup::new(0, 0, 0, 0),
             upkeep: 1,
-            build_time: 0,
+            time: 0,
         },
-        research_cost: Cost {
+        research_cost: ResearchCost {
             resources: ResourceGroup::new(0, 0, 0, 0),
-            upkeep: 0,
-            build_time: 0,
+            time: 0,
         },
         requirements: &[],
     },

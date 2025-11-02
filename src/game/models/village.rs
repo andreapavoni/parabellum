@@ -1,18 +1,19 @@
-use anyhow::{Error, Result};
+use anyhow::{Error, Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::game::{
     battle::BattleReport,
-    models::{army::UnitName, ResourceGroup},
+    models::{ResourceGroup, army::UnitName},
 };
 
 use super::{
+    Player, Tribe,
     army::Army,
     buildings::{Building, BuildingGroup, BuildingName},
     map::{Oasis, Position, Valley, WORLD_MAX_SIZE},
-    Player, SmithyUpgrades, Tribe,
+    smithy::SmithyUpgrades,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,14 +54,14 @@ impl Village {
         let village_id = position.to_id(WORLD_MAX_SIZE);
 
         let production: VillageProduction = Default::default();
-        let smithy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let smithy = [0, 0, 0, 0, 0, 0, 0, 0];
         let academy_research = [false; 10];
 
         let mut village = Self {
             id: village_id,
             name,
             position,
-            player_id: player.id.clone(),
+            player_id: player.id,
             tribe: player.tribe.clone(),
             buildings: vec![],
             oases: vec![],
@@ -84,18 +85,17 @@ impl Village {
     }
 
     pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<()> {
-        // can't build on existing buildings
-        if let Some(_) = self.get_building_by_slot_id(slot_id) {
-            return Err(Error::msg("can't build on existing slot"));
-        }
-
         // village slots limit is 40: 18 resources + 21 infrastructures + 1 wall
         if self.buildings.len() == 40 {
             return Err(Error::msg("all village slots have been used"));
         }
 
-        let building = Building::new(name);
+        // can't build on existing buildings
+        if self.get_building_by_slot_id(slot_id).is_some() {
+            return Err(Error::msg("can't build on existing slot"));
+        }
 
+        let building = Building::new(name);
         building.validate_build(&self.tribe, &self.buildings, self.is_capital)?;
 
         self.buildings.append(&mut vec![VillageBuilding {
@@ -111,11 +111,21 @@ impl Village {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => match b.building.validate_upgrade() {
                 Ok(_) => {
-                    let next = b.building.next_level().unwrap();
-                    self.buildings.append(&mut vec![VillageBuilding {
-                        slot_id,
-                        building: next,
-                    }]);
+                    let next = b.building.next_level()?;
+
+                    let idx: usize = self
+                        .buildings
+                        .iter()
+                        .position(|b| b.slot_id == slot_id)
+                        .unwrap();
+
+                    let _ = std::mem::replace(
+                        &mut self.buildings[idx],
+                        VillageBuilding {
+                            slot_id,
+                            building: next,
+                        },
+                    );
                     self.update_state();
                 }
                 Err(msg) => return Err(Error::msg(msg)),
@@ -167,7 +177,7 @@ impl Village {
         self.buildings
             .iter()
             .find(|&x| x.slot_id == slot_id)
-            .map_or(None, |vb| Some(vb.clone()))
+            .cloned()
     }
 
     // Returns a building in the village. Returns None if not present. In case of multiple buildings of same type, it returns the highest level one.
@@ -195,12 +205,10 @@ impl Village {
             .map(|vb| vb.building.clone())
             .collect();
 
-        let sampled_buildings = buildings
+        buildings
             .choose_multiple(&mut rng, count)
             .cloned()
-            .collect::<Vec<Building>>();
-
-        sampled_buildings
+            .collect::<Vec<Building>>()
     }
 
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
@@ -221,7 +229,7 @@ impl Village {
             Tribe::Gaul => self.get_building_by_name(BuildingName::Palisade),
             _ => None,
         }
-        .map_or(None, |vb| Some(vb.building))
+        .map(|vb| vb.building)
     }
 
     pub fn get_wall_name(&self) -> Option<BuildingName> {
@@ -405,9 +413,19 @@ impl Village {
 
     /// Marks a unit name as researched in the academy.
     pub fn research_academy(&mut self, unit: UnitName) -> Result<()> {
-        // TODO: check prerequisites, resources, time, etc.
-        if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
             self.academy_research[idx] = true;
+        }
+
+        Ok(())
+    }
+
+    /// Upgrades smithy level for unit name.
+    pub fn upgrade_smithy(&mut self, unit: UnitName) -> Result<()> {
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
+            if self.smithy[idx] < 20 {
+                self.smithy[idx] += 1;
+            }
         }
 
         Ok(())
@@ -417,9 +435,9 @@ impl Village {
     /// It should be called whenever the village is loaded from the DB.
     fn update_resources(&mut self) {
         let now = Utc::now();
-        let time_elapsed_secs = (now - self.updated_at).num_seconds();
+        let time_elapsed = (now - self.updated_at).num_seconds() as f64;
 
-        if time_elapsed_secs <= 0 {
+        if time_elapsed <= 0.0 {
             self.updated_at = now;
             return;
         }
@@ -434,26 +452,20 @@ impl Village {
         let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
         let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
 
-        let elapsed_f64 = time_elapsed_secs as f64;
-
         // Calculates resources after elapsed time, capping at storage capacity
-        let new_lumber = (self.stocks.lumber as f64 + (elapsed_f64 * lumber_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
+        let lumber = ((time_elapsed * lumber_per_sec) as u32).min(self.stocks.warehouse_capacity);
+        let clay = ((time_elapsed * clay_per_sec) as u32).min(self.stocks.warehouse_capacity);
+        let iron = ((time_elapsed * iron_per_sec) as u32).min(self.stocks.warehouse_capacity);
+        let crop = ((time_elapsed * crop_per_sec) as i64).min(self.stocks.granary_capacity as i64);
 
-        let new_clay = (self.stocks.clay as f64 + (elapsed_f64 * clay_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
-
-        let new_iron = (self.stocks.iron as f64 + (elapsed_f64 * iron_per_sec))
-            .min(self.stocks.warehouse_capacity as f64);
-
-        let new_crop = (self.stocks.crop as f64 + (elapsed_f64 * crop_per_sec))
-            .min(self.stocks.granary_capacity as f64);
+        // TODO: use something to calculate deltas and starve armies
 
         // New stocks
-        self.stocks.lumber = new_lumber.max(0.0) as u32;
-        self.stocks.clay = new_clay.max(0.0) as u32;
-        self.stocks.iron = new_iron.max(0.0) as u32;
-        self.stocks.crop = new_crop as i64; // crop can be negative due to upkeep
+        self.stocks.lumber += lumber.max(0);
+        self.stocks.clay += clay.max(0);
+        self.stocks.iron += iron.max(0);
+        // crop can be negative due to upkeep, but stocks can't go below 0.
+        self.stocks.crop += crop.max(0);
 
         self.updated_at = now;
     }
@@ -586,12 +598,30 @@ impl VillageStocks {
         self.crop = (self.crop + resources.3 as i64).min(self.granary_capacity as i64);
     }
 
-    /// Removes resources from the village stocks, ensuring they don't go negative (except for crop).
+    /// Checks if given resources are present in stocks.
+    pub fn check_resources(&self, resources: &ResourceGroup) -> bool {
+        self.lumber >= resources.0
+            && self.clay >= resources.1
+            && self.iron >= resources.2
+            && self.crop >= resources.3 as i64
+    }
+
+    /// Removes resources from village stocks if they're actually stored.
+    pub fn withdraw_resources(&mut self, resources: &ResourceGroup) -> Result<()> {
+        if self.check_resources(resources) {
+            self.remove_resources(resources);
+            return Ok(());
+        }
+
+        Err(anyhow!("Not enough resources"))
+    }
+
+    /// Removes resources from the village stocks, ensuring they don't go negative.
     pub fn remove_resources(&mut self, resources: &ResourceGroup) {
         self.lumber = (self.lumber as i64 - resources.0 as i64).max(0) as u32;
         self.clay = (self.clay as i64 - resources.1 as i64).max(0) as u32;
         self.iron = (self.iron as i64 - resources.2 as i64).max(0) as u32;
-        self.crop = self.crop - resources.3 as i64; // crop can go negative
+        self.crop -= resources.3 as i64; // crop can go negative
     }
 }
 
@@ -611,10 +641,10 @@ impl Default for VillageStocks {
 #[cfg(test)]
 mod tests {
     use crate::game::{
-        models::{buildings::BuildingName, village::VillageStocks, Tribe},
+        models::{Tribe, buildings::BuildingName, village::VillageStocks},
         test_factories::{
-            player_factory, valley_factory, village_factory, PlayerFactoryOptions,
-            ValleyFactoryOptions, VillageFactoryOptions,
+            PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
+            valley_factory, village_factory,
         },
     };
     use chrono::{Duration, Utc};

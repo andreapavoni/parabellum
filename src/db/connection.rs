@@ -14,7 +14,7 @@ pub async fn establish_test_connection_pool() -> Result<DbPool, sqlx::Error> {
 async fn init_connection_pool(database_env: &'static str) -> Result<DbPool, sqlx::Error> {
     dotenvy::dotenv().ok();
 
-    let database_url = env::var(database_env).expect(&format!("{} must be set", database_env));
+    let database_url = env::var(database_env).unwrap_or_else(|_| panic!("{} must be set", database_env));
 
     PgPoolOptions::new()
         .max_connections(5)
