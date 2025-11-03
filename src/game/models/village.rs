@@ -12,7 +12,7 @@ use super::{
     Player, Tribe,
     army::Army,
     buildings::{Building, BuildingGroup, BuildingName},
-    map::{Oasis, Position, Valley, WORLD_MAX_SIZE},
+    map::{Oasis, Position, Valley},
     smithy::SmithyUpgrades,
 };
 
@@ -49,9 +49,15 @@ pub struct Village {
 }
 
 impl Village {
-    pub fn new(name: String, valley: &Valley, player: &Player, is_capital: bool) -> Self {
+    pub fn new(
+        name: String,
+        valley: &Valley,
+        player: &Player,
+        is_capital: bool,
+        world_size: i32,
+    ) -> Self {
         let position = valley.position.clone();
-        let village_id = position.to_id(WORLD_MAX_SIZE);
+        let village_id = position.to_id(world_size);
 
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0];

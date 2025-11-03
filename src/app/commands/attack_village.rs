@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     Result,
+    config::Config,
     cqrs::{Command, CommandHandler},
     error::ApplicationError,
     game::models::buildings::BuildingName,
@@ -42,6 +43,7 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
         &self,
         command: AttackVillage,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         let job_repo: Arc<dyn JobRepository + '_> = uow.jobs();
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
@@ -53,10 +55,12 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
 
         let defender_village = village_repo.get_by_id(command.target_village_id).await?;
 
-        let travel_time_secs = attacker_village
-            .position
-            .calculate_travel_time_secs(defender_village.position, attacker_army.speed())
-            as i64;
+        let travel_time_secs = attacker_village.position.calculate_travel_time_secs(
+            defender_village.position,
+            attacker_army.speed(),
+            config.world_size as i32,
+            config.speed as u8,
+        ) as i64;
 
         let attack_payload = AttackTask {
             army_id: command.army_id,
@@ -104,10 +108,9 @@ mod tests {
     #[tokio::test]
     async fn test_attack_village_handler_success() {
         let mock_uow = MockUnitOfWork::new();
-
-        let mock_village_repo = mock_uow.mock_villages();
-        let mock_army_repo = mock_uow.mock_armies();
-        let mock_job_repo = mock_uow.mock_jobs();
+        let mock_village_repo = mock_uow.villages();
+        let mock_army_repo = mock_uow.armies();
+        let mock_job_repo = mock_uow.jobs();
 
         let attacker_player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Teuton),
@@ -146,9 +149,11 @@ mod tests {
             ..Default::default()
         });
 
-        mock_village_repo.add_village(attacker_village.clone());
-        mock_village_repo.add_village(defender_village.clone());
-        mock_army_repo.add_army(attacker_army.clone());
+        mock_village_repo.create(&attacker_village).await.unwrap();
+        mock_village_repo.create(&defender_village).await.unwrap();
+        mock_army_repo.create(&attacker_army).await.unwrap();
+
+        let config = Arc::new(Config::from_env());
 
         let handler = AttackVillageHandler::new();
 
@@ -161,12 +166,19 @@ mod tests {
         };
 
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
-        let result = handler.handle(command, &mock_uow).await;
+        let result = handler.handle(command, &mock_uow, &config).await;
 
-        assert!(result.is_ok(), "Handler should execute successfully");
+        assert!(
+            result.is_ok(),
+            "Handler should execute successfully, got: {:?}",
+            result.err().unwrap().to_string()
+        );
 
         // Check if job was created *in mock repo*
-        let added_jobs = mock_job_repo.get_added_jobs();
+        let added_jobs = mock_job_repo
+            .list_by_player_id(attacker_player.id)
+            .await
+            .unwrap();
         assert_eq!(added_jobs.len(), 1, "One job should be created");
 
         let job = &added_jobs[0];

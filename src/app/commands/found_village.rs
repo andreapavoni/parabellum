@@ -1,5 +1,6 @@
 use crate::{
     Result,
+    config::Config,
     cqrs::{Command, CommandHandler},
     game::models::{
         Player,
@@ -44,14 +45,21 @@ impl CommandHandler<FoundVillage> for FoundVillageHandler {
         &self,
         command: FoundVillage,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
     ) -> Result<()> {
-        let village_id: i32 = command.position.to_id(100) as i32;
+        let village_id: i32 = command.position.to_id(config.world_size as i32) as i32;
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
         let map_repo: Arc<dyn MapRepository + '_> = uow.map();
 
         let map_field = map_repo.get_field_by_id(village_id).await?;
         let valley = Valley::try_from(map_field)?;
-        let village = Village::new("New Village".to_string(), &valley, &command.player, false);
+        let village = Village::new(
+            "New Village".to_string(),
+            &valley,
+            &command.player,
+            false,
+            config.world_size as i32,
+        );
 
         village_repo.create(&village).await?;
 

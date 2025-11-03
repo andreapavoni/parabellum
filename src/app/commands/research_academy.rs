@@ -1,36 +1,41 @@
 use std::sync::Arc;
 
 use crate::{
+    config::Config,
+    cqrs::{Command, CommandHandler},
     error::Result,
     game::{GameError, models::army::UnitName},
     jobs::{Job, JobPayload, tasks::ResearchAcademyTask},
-    repository::{JobRepository, VillageRepository},
+    repository::uow::UnitOfWork,
 };
 
 #[derive(Debug, Clone)]
-pub struct ResearchAcademyCommand {
+pub struct ResearchAcademy {
     pub unit: UnitName,
     pub village_id: u32,
 }
 
-pub struct ResearchAcademyCommandHandler<'a> {
-    village_repo: Arc<dyn VillageRepository + 'a>,
-    job_repo: Arc<dyn JobRepository + 'a>,
+impl Command for ResearchAcademy {}
+
+pub struct ResearchAcademyHandler {}
+
+impl ResearchAcademyHandler {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
-impl<'a> ResearchAcademyCommandHandler<'a> {
-    pub fn new(
-        village_repo: Arc<dyn VillageRepository + 'a>,
-        job_repo: Arc<dyn JobRepository + 'a>,
-    ) -> Self {
-        Self {
-            village_repo,
-            job_repo,
-        }
-    }
+#[async_trait::async_trait]
+impl CommandHandler<ResearchAcademy> for ResearchAcademyHandler {
+    async fn handle(
+        &self,
+        command: ResearchAcademy,
+        uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
+    ) -> Result<()> {
+        let village_repo = uow.villages();
 
-    pub async fn handle(&self, command: ResearchAcademyCommand) -> Result<()> {
-        let mut village = self.village_repo.get_by_id(command.village_id).await?;
+        let mut village = village_repo.get_by_id(command.village_id).await?;
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
 
@@ -66,10 +71,9 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
         village
             .stocks
             .withdraw_resources(&research_cost.resources)?;
-        self.village_repo.save(&village).await?;
+        village_repo.save(&village).await?;
 
-        // 2. Create Job
-        let time_per_unit_secs = research_cost.time;
+        let time_per_unit_secs = (research_cost.time as f64 / config.speed as f64).floor() as i64;
 
         let payload = ResearchAcademyTask {
             unit: unit_data.clone().name,
@@ -84,7 +88,8 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
             job_payload,
         );
 
-        self.job_repo.add(&new_job).await?;
+        let job_repo = uow.jobs();
+        job_repo.add(&new_job).await?;
 
         Ok(())
     }
@@ -95,7 +100,7 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
 mod tests {
     use super::*;
     use crate::{
-        app::test_utils::tests::{MockJobRepository, MockVillageRepository},
+        app::test_utils::tests::MockUnitOfWork,
         game::{
             models::{Player, Tribe, army::UnitName, buildings::BuildingName, village::Village},
             test_factories::{
@@ -171,9 +176,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_research_academy_handler_success() {
-        // 1. Setup
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow = MockUnitOfWork::new();
+        let mock_village_repo = mock_uow.villages();
+        let mock_job_repo = mock_uow.jobs();
+        let config = Arc::new(Config::from_env());
+
         let (player, mut village) = setup_village_with_buildings();
         let village_id = village.id;
 
@@ -184,28 +191,27 @@ mod tests {
         village.stocks.crop = 2000;
         village.update_state();
 
-        mock_village_repo.add_village(village);
+        mock_village_repo.create(&village).await.unwrap();
 
-        let handler =
-            ResearchAcademyCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = ResearchAcademyHandler::new();
 
-        let command = ResearchAcademyCommand {
+        let command = ResearchAcademy {
             unit: UnitName::Praetorian,
             village_id: village_id,
         };
 
-        let result = handler.handle(command).await;
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
+
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(
             result.is_ok(),
-            "Command should execute successfully: {:#?}",
-            result.err().unwrap()
+            "Handler should execute successfully, got: {:?}",
+            result.err().unwrap().to_string()
         );
 
         // Check if resources were deducted
-        let saved_villages = mock_village_repo.saved_villages();
-        assert_eq!(saved_villages.len(), 1, "Village should be saved once");
-        let saved_village = &saved_villages[0];
+        let saved_village = mock_village_repo.get_by_id(village.id).await.unwrap();
 
         assert_eq!(
             saved_village.stocks.lumber,
@@ -229,7 +235,7 @@ mod tests {
         );
 
         // Check if job was created
-        let added_jobs = mock_job_repo.get_added_jobs();
+        let added_jobs = mock_job_repo.list_by_player_id(player.id).await.unwrap();
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
@@ -249,10 +255,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_research_academy_handler_not_enough_resources() {
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow = MockUnitOfWork::new();
+        let mock_village_repo = mock_uow.villages();
+        let mock_job_repo = mock_uow.jobs();
+        let config = Arc::new(Config::from_env());
 
-        let (_player, mut village) = setup_village_with_buildings();
+        let (player, mut village) = setup_village_with_buildings();
         village.stocks.lumber = 10; // Not enough lumber
         let village_id = village.id;
 
@@ -263,28 +271,34 @@ mod tests {
         village.stocks.crop = 200;
         village.update_state();
 
-        mock_village_repo.add_village(village);
+        mock_village_repo.create(&village).await.unwrap();
 
-        let handler =
-            ResearchAcademyCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = ResearchAcademyHandler::new();
 
-        let command = ResearchAcademyCommand {
+        let command = ResearchAcademy {
             unit: UnitName::Praetorian,
             village_id: village_id,
         };
-
-        let result = handler.handle(command).await;
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(result.err().unwrap().to_string(), "Not enough resources");
-        assert_eq!(mock_job_repo.get_added_jobs().len(), 0);
+        assert_eq!(
+            mock_job_repo
+                .list_by_player_id(player.id)
+                .await
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[tokio::test]
     async fn test_research_academy_handler_missing_building() {
-        // 1. Setup
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow = MockUnitOfWork::new();
+        let mock_village_repo = mock_uow.villages();
+        let config = Arc::new(Config::from_env());
 
         let (_player, mut village) = setup_village_with_buildings();
 
@@ -294,20 +308,18 @@ mod tests {
 
         let village_id = village.id;
 
-        mock_village_repo.add_village(village.clone());
+        mock_village_repo.create(&village.clone()).await.unwrap();
 
-        let handler =
-            ResearchAcademyCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = ResearchAcademyHandler::new();
 
-        let command = ResearchAcademyCommand {
+        let command = ResearchAcademy {
             village_id: village_id,
             unit: UnitName::Praetorian,
         };
 
-        // 2. Act
-        let result = handler.handle(command).await;
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
+        let result = handler.handle(command, &mock_uow, &config).await;
 
-        // 3. Assert
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),

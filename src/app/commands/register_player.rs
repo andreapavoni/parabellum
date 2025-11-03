@@ -1,7 +1,9 @@
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
     Result,
+    config::Config,
     cqrs::{Command, CommandHandler},
     game::models::{Player, Tribe},
     repository::uow::UnitOfWork,
@@ -46,6 +48,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerHandler {
         &self,
         command: RegisterPlayer,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
+        _config: &Arc<Config>,
     ) -> Result<()> {
         let player = Player {
             id: command.id,

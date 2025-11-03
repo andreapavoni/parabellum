@@ -1,5 +1,6 @@
 use crate::{
     Result,
+    config::Config,
     cqrs::{Command, CommandHandler},
     game::models::{Player, map::MapQuadrant, village::Village},
     repository::{MapRepository, VillageRepository, uow::UnitOfWork},
@@ -37,12 +38,23 @@ impl RegisterVillageHandler {
 
 #[async_trait::async_trait]
 impl CommandHandler<RegisterVillage> for RegisterVillageHandler {
-    async fn handle(&self, cmd: RegisterVillage, uow: &Box<dyn UnitOfWork<'_> + '_>) -> Result<()> {
+    async fn handle(
+        &self,
+        cmd: RegisterVillage,
+        uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
+    ) -> Result<()> {
         let map_repo: Arc<dyn MapRepository + '_> = uow.map();
         let valley = map_repo.find_unoccupied_valley(&cmd.quadrant).await?;
 
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
-        let village = Village::new("New Village".to_string(), &valley, &cmd.player, true);
+        let village = Village::new(
+            "New Village".to_string(),
+            &valley,
+            &cmd.player,
+            true,
+            config.world_size as i32,
+        );
 
         village_repo.create(&village).await?;
 

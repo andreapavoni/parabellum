@@ -108,10 +108,12 @@ impl JobHandler for AttackJobHandler {
         }
 
         // --- 4. Return job ---
-        let return_travel_time = attacker_village
-            .position
-            .calculate_travel_time_secs(defender_village.position, attacker_army.speed())
-            as i64;
+        let return_travel_time = attacker_village.position.calculate_travel_time_secs(
+            defender_village.position,
+            attacker_army.speed(),
+            ctx.config.world_size as i32,
+            ctx.config.speed as u8,
+        ) as i64;
 
         let player_id = attacker_village.player_id;
         let village_id = attacker_village.id as i32;

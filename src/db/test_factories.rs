@@ -77,10 +77,9 @@ pub async fn player_factory(conn: &mut PgConnection, options: PlayerFactoryOptio
 pub async fn village_factory(
     conn: &mut PgConnection,
     options: VillageFactoryOptions<'_>,
+    world_size: i32,
 ) -> Village {
-    let world_size = 100;
     let tmp_player = player_factory(conn, Default::default()).await;
-
     let player_id = options.player_id.unwrap_or(tmp_player.id);
 
     let position = match options.position {
@@ -97,6 +96,7 @@ pub async fn village_factory(
         &valley,
         &tmp_player.clone().into(),
         true,
+        world_size,
     );
 
     sqlx::query_as!(
@@ -125,7 +125,11 @@ pub async fn village_factory(
     .expect("Failed to create village with factory")
 }
 
-pub async fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) -> Army {
+pub async fn army_factory(
+    conn: &mut PgConnection,
+    options: ArmyFactoryOptions,
+    world_size: i32,
+) -> Army {
     let (owner_id, home_village_id) = match (options.player_id, options.village_id) {
         (Some(p_id), Some(v_id)) => (p_id, v_id),
         (Some(p_id), None) => {
@@ -135,12 +139,13 @@ pub async fn army_factory(conn: &mut PgConnection, options: ArmyFactoryOptions) 
                     player_id: Some(p_id),
                     ..Default::default()
                 },
+                world_size,
             )
             .await;
             (village.player_id, village.id)
         }
         _ => {
-            let village = village_factory(conn, Default::default()).await;
+            let village = village_factory(conn, Default::default(), world_size).await;
             (village.player_id, village.id)
         }
     };

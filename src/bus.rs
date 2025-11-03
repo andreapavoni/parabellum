@@ -41,7 +41,7 @@ impl AppBus {
     {
         let uow = self.uow_provider.begin().await?;
 
-        match handler.handle(cmd, &uow).await {
+        match handler.handle(cmd, &uow, &self.config).await {
             Ok(_) => {
                 uow.commit().await?; // Commit on success
                 Ok(())
@@ -64,7 +64,7 @@ impl AppBus {
     {
         let uow = self.uow_provider.begin().await?;
 
-        let result = handler.handle(query, &uow).await;
+        let result = handler.handle(query, &uow, &self.config).await;
 
         // Always rollback a query, as it should never write data.
         uow.rollback().await?;

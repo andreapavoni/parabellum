@@ -5,6 +5,7 @@ use tracing::{error, info, instrument};
 
 use crate::{
     Result,
+    config::Config,
     jobs::{
         Job,
         handler::{JobHandler, JobHandlerContext, JobRegistry},
@@ -16,13 +17,19 @@ use crate::{
 pub struct JobWorker {
     uow_provider: Arc<dyn UnitOfWorkProvider>,
     registry: Arc<dyn JobRegistry>,
+    config: Arc<Config>,
 }
 
 impl JobWorker {
-    pub fn new(uow_provider: Arc<dyn UnitOfWorkProvider>, registry: Arc<dyn JobRegistry>) -> Self {
+    pub fn new(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        registry: Arc<dyn JobRegistry>,
+        config: Arc<Config>,
+    ) -> Self {
         Self {
             uow_provider,
             registry,
+            config,
         }
     }
 
@@ -55,7 +62,10 @@ impl JobWorker {
     pub async fn process_jobs(&self, jobs: &Vec<Job>) -> Result<()> {
         for job in jobs {
             let uow = self.uow_provider.begin().await?;
-            let context = JobHandlerContext { uow };
+            let context = JobHandlerContext {
+                uow,
+                config: self.config.clone(),
+            };
             let job_id = job.id;
             let job_type = job.task.task_type.clone();
 

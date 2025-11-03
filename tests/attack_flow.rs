@@ -4,6 +4,7 @@ use parabellum::{
         commands::{AttackVillage, AttackVillageHandler},
         job_registry::AppJobRegistry,
     },
+    config::Config,
     cqrs::CommandHandler,
     db::establish_test_connection_pool,
     game::{
@@ -40,6 +41,7 @@ async fn test_full_attack_flow() -> Result<()> {
     let master_tx = pool.begin().await.unwrap();
     let master_tx_arc = Arc::new(Mutex::new(master_tx));
     let app_registry = Arc::new(AppJobRegistry::new());
+    let config = Arc::new(Config::from_env());
 
     let uow_provider: Arc<dyn UnitOfWorkProvider> =
         Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
@@ -76,7 +78,10 @@ async fn test_full_attack_flow() -> Result<()> {
         let uow_attack = uow_provider.begin().await?;
         {
             let handler = AttackVillageHandler::new();
-            handler.handle(attack_command, &uow_attack).await.unwrap();
+            handler
+                .handle(attack_command, &uow_attack, &config)
+                .await
+                .unwrap();
         }
 
         uow_attack.commit().await?;
@@ -117,7 +122,11 @@ async fn test_full_attack_flow() -> Result<()> {
     };
 
     // --- 4. ACT (Phase 2): Simulate worker processing job ---
-    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
+    let worker = Arc::new(JobWorker::new(
+        uow_provider.clone(),
+        app_registry,
+        config.clone(),
+    ));
     worker
         .process_jobs(&vec![attack_job.clone()])
         .await
@@ -168,6 +177,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     let master_tx = pool.begin().await.unwrap();
     let master_tx_arc = Arc::new(Mutex::new(master_tx));
     let app_registry = Arc::new(AppJobRegistry::new());
+    let config = Arc::new(Config::from_env());
 
     let uow_provider: Arc<dyn UnitOfWorkProvider> =
         Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
@@ -237,7 +247,10 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
 
         {
             let handler = AttackVillageHandler::new();
-            handler.handle(attack_command, &uow_attack).await.unwrap();
+            handler
+                .handle(attack_command, &uow_attack, &config)
+                .await
+                .unwrap();
         }
 
         uow_attack.commit().await?; // OK
@@ -255,7 +268,11 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         jobs
     };
 
-    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
+    let worker = Arc::new(JobWorker::new(
+        uow_provider.clone(),
+        app_registry,
+        config.clone(),
+    ));
     worker.process_jobs(&jobs).await.unwrap();
 
     // --- 4. ASSERT ---

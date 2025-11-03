@@ -1,7 +1,7 @@
-use crate::{Result, error::ApplicationError, repository::uow::UnitOfWork};
-use async_trait::async_trait;
+use std::sync::Arc;
 
-// --- Core Traits for AppBus ---
+use crate::{Result, config::Config, error::ApplicationError, repository::uow::UnitOfWork};
+use async_trait::async_trait;
 
 /// A marker trait for Command structs.
 /// Commands are operations that change the state of the system.
@@ -17,6 +17,7 @@ pub trait CommandHandler<C: Command> {
         &self,
         cmd: C,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError>;
 }
 
@@ -35,5 +36,6 @@ pub trait QueryHandler<Q: Query> {
         &self,
         query: Q,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
+        config: &Arc<Config>,
     ) -> Result<Q::Output, ApplicationError>;
 }

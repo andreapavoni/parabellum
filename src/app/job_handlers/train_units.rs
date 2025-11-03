@@ -79,10 +79,14 @@ impl JobHandler for TrainUnitsJobHandler {
 
             let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&next_payload)?);
 
+            // Scale time by server speed
+            let time_per_unit =
+                (self.payload.time_per_unit as f64 / ctx.config.speed as f64).floor() as i64;
+
             let next_job = Job::new(
                 player_id,
                 village_id as i32,
-                self.payload.time_per_unit as i64, // Schedule for one unit's time
+                time_per_unit, // Schedule for one unit's time
                 job_payload,
             );
 

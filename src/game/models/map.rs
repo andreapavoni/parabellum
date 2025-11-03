@@ -2,12 +2,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::{GameError, models::army::Army};
-
 use super::village::ProductionBonus;
-
-// FIXME: use config
-pub const WORLD_MAX_SIZE: i32 = 100;
+use crate::game::{GameError, models::army::Army};
 
 #[derive(Debug, Clone)]
 pub enum MapQuadrant {
@@ -100,10 +96,18 @@ impl Position {
         (((x_diff * x_diff) + (y_diff * y_diff)) as f64).sqrt() as u32
     }
 
-    pub fn calculate_travel_time_secs(&self, position: Position, speed: u8) -> u32 {
-        let distance = self.distance(&position, 100);
+    pub fn calculate_travel_time_secs(
+        &self,
+        position: Position,
+        speed: u8,
+        world_size: i32,
+        server_speed: u8,
+    ) -> u32 {
+        let distance = self.distance(&position, world_size);
 
-        (distance as f64 / speed as f64 * 3600.0) as u32
+        let travel_time_secs = distance as f64 / speed as f64 * 3600.0;
+
+        (travel_time_secs / server_speed as f64).floor() as u32
     }
 }
 

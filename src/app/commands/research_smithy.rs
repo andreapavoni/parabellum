@@ -198,8 +198,8 @@ mod tests {
 
         assert!(
             result.is_ok(),
-            "Command should execute successfully: {:#?}",
-            result.err().unwrap()
+            "Handler should execute successfully, got: {:?}",
+            result.err().unwrap().to_string()
         );
 
         // Check if resources were deducted

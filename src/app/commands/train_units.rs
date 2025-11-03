@@ -180,10 +180,11 @@ mod tests {
         // 2. Act
         let result = handler.handle(command).await;
 
-        // 3. Assert
-        assert!(result.is_ok(), "Handler should execute successfully");
-
-        // Check if resources were deducted
+        assert!(
+            result.is_ok(),
+            "Handler should execute successfully, got: {:?}",
+            result.err().unwrap().to_string()
+        );
         let saved_villages = mock_village_repo.saved_villages();
         assert_eq!(saved_villages.len(), 1, "Village should be saved once");
         let saved_village = &saved_villages[0];

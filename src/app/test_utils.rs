@@ -151,13 +151,19 @@ pub mod tests {
                 .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?)
         }
         // ... (implement other methods)
-        async fn create(&self, _army: &Army) -> Result<(), ApplicationError> {
+        async fn create(&self, army: &Army) -> Result<(), ApplicationError> {
+            let mut armies = self.armies.lock().unwrap();
+            armies.insert(army.id, army.clone());
             Ok(())
         }
-        async fn save(&self, _army: &Army) -> Result<(), ApplicationError> {
+        async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
+            let mut armies = self.armies.lock().unwrap();
+            armies.insert(army.id, army.clone());
             Ok(())
         }
-        async fn remove(&self, _army_id: Uuid) -> Result<(), ApplicationError> {
+        async fn remove(&self, army_id: Uuid) -> Result<(), ApplicationError> {
+            let mut armies = self.armies.lock().unwrap();
+            armies.remove(&army_id);
             Ok(())
         }
     }
@@ -225,19 +231,6 @@ pub mod tests {
     impl MockUnitOfWork {
         pub fn new() -> Self {
             Default::default()
-        }
-
-        // Helper methods to get the underlying mocks for setup
-        pub fn mock_villages(&self) -> Arc<MockVillageRepository> {
-            self.villages.clone()
-        }
-
-        pub fn mock_armies(&self) -> Arc<MockArmyRepository> {
-            self.armies.clone()
-        }
-
-        pub fn mock_jobs(&self) -> Arc<MockJobRepository> {
-            self.jobs.clone()
         }
     }
 

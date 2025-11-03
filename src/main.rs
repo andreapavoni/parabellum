@@ -25,9 +25,13 @@ async fn main() -> Result<(), ApplicationError> {
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
 
     // Create the AppBus
-    let app_bus = AppBus::new(config, uow_provider.clone());
+    let app_bus = AppBus::new(config.clone(), uow_provider.clone());
     let app_registry = Arc::new(AppJobRegistry::new());
-    let worker = Arc::new(JobWorker::new(uow_provider.clone(), app_registry));
+    let worker = Arc::new(JobWorker::new(
+        uow_provider.clone(),
+        app_registry,
+        config.clone(),
+    ));
     worker.run();
 
     tracing::info!("AppBus initialized. Executing use cases via bus");
