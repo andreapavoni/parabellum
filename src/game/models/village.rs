@@ -1,11 +1,14 @@
-use anyhow::{Error, Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::{
-    battle::BattleReport,
-    models::{ResourceGroup, army::UnitName},
+use crate::{
+    error::{ApplicationError, Result},
+    game::{
+        GameError,
+        battle::BattleReport,
+        models::{ResourceGroup, army::UnitName},
+    },
 };
 
 use super::{
@@ -87,12 +90,12 @@ impl Village {
     pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<()> {
         // village slots limit is 40: 18 resources + 21 infrastructures + 1 wall
         if self.buildings.len() == 40 {
-            return Err(Error::msg("all village slots have been used"));
+            return Err(GameError::VillageSlotsFull.into());
         }
 
         // can't build on existing buildings
         if self.get_building_by_slot_id(slot_id).is_some() {
-            return Err(Error::msg("can't build on existing slot"));
+            return Err(GameError::SlotOccupied { slot_id }.into());
         }
 
         let building = Building::new(name);
@@ -111,7 +114,10 @@ impl Village {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => match b.building.validate_upgrade() {
                 Ok(_) => {
-                    let next = b.building.next_level()?;
+                    let next = b
+                        .building
+                        .next_level()
+                        .map_err(|_| GameError::BuildingMaxLevelReached)?;
 
                     let idx: usize = self
                         .buildings
@@ -128,9 +134,11 @@ impl Village {
                     );
                     self.update_state();
                 }
-                Err(msg) => return Err(Error::msg(msg)),
+
+                Err(_) => return Err(ApplicationError::Game(GameError::BuildingMaxLevelReached)),
             },
-            None => return Err(Error::msg("No buildings found on this slot")),
+
+            None => return Err(ApplicationError::Game(GameError::SlotOccupied { slot_id })),
         }
         Ok(())
     }
@@ -143,7 +151,8 @@ impl Village {
                     .append(&mut vec![VillageBuilding { slot_id, building }]);
                 self.update_state();
             }
-            None => return Err(Error::msg("No buildings found on this slot")),
+
+            None => return Err(ApplicationError::Game(GameError::SlotOccupied { slot_id })),
         };
         Ok(())
     }
@@ -168,7 +177,7 @@ impl Village {
                         .collect::<Vec<_>>();
                 }
             }
-            None => return Err(Error::msg("No buildings found on this slot")),
+            None => return Err(ApplicationError::Game(GameError::EmptySlot { slot_id })),
         };
         Ok(())
     }
@@ -607,13 +616,13 @@ impl VillageStocks {
     }
 
     /// Removes resources from village stocks if they're actually stored.
-    pub fn withdraw_resources(&mut self, resources: &ResourceGroup) -> Result<()> {
+    pub fn withdraw_resources(&mut self, resources: &ResourceGroup) -> Result<(), GameError> {
         if self.check_resources(resources) {
             self.remove_resources(resources);
             return Ok(());
         }
 
-        Err(anyhow!("Not enough resources"))
+        Err(GameError::NotEnoughResources)
     }
 
     /// Removes resources from the village stocks, ensuring they don't go negative.

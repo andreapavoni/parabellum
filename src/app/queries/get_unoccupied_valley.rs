@@ -1,8 +1,9 @@
-use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::{
+    Result,
     cqrs::{Query, QueryHandler},
+    error::ApplicationError,
     game::models::map::{MapQuadrant, Valley},
     repository::uow::UnitOfWork,
 };
@@ -43,7 +44,7 @@ impl GetUnoccupiedValleyHandler {
         uow: &Box<dyn UnitOfWork<'_>>,
     ) -> Result<Valley> {
         let repo = uow.map();
-        repo.find_unoccupied_valley(&query.quadrant).await
+        Ok(repo.find_unoccupied_valley(&query.quadrant).await?)
     }
 }
 
@@ -53,9 +54,9 @@ impl QueryHandler<GetUnoccupiedValley> for GetUnoccupiedValleyHandler {
         &self,
         query: GetUnoccupiedValley,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-    ) -> Result<<GetUnoccupiedValley as Query>::Output> {
+    ) -> Result<<GetUnoccupiedValley as Query>::Output, ApplicationError> {
         let repo = uow.map();
-        repo.find_unoccupied_valley(&query.quadrant).await
+        Ok(repo.find_unoccupied_valley(&query.quadrant).await?)
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::{
-    db::models as db_models,
+    Result,
+    db::{DbError, models as db_models},
     game::models::{self as game_models},
 };
 
@@ -11,7 +12,7 @@ pub struct VillageAggregate {
 }
 
 impl TryFrom<VillageAggregate> for game_models::village::Village {
-    type Error = anyhow::Error;
+    type Error = DbError;
 
     fn try_from(agg: VillageAggregate) -> Result<Self, Self::Error> {
         let db_village = agg.village;

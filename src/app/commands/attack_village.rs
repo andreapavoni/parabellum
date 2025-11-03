@@ -1,13 +1,15 @@
-use crate::{
-    cqrs::{Command, CommandHandler},
-    game::models::buildings::BuildingName,
-    jobs::{tasks::AttackTask, Job, JobPayload},
-    repository::{uow::UnitOfWork, ArmyRepository, JobRepository, VillageRepository},
-};
-use anyhow::{anyhow, Result};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
+
+use crate::{
+    Result,
+    cqrs::{Command, CommandHandler},
+    db::DbError,
+    game::models::buildings::BuildingName,
+    jobs::{Job, JobPayload, tasks::AttackTask},
+    repository::{ArmyRepository, JobRepository, VillageRepository, uow::UnitOfWork},
+};
 
 #[derive(Debug, Clone)]
 pub struct AttackVillage {
@@ -48,17 +50,17 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
         let attacker_village = village_repo
             .get_by_id(command.village_id)
             .await?
-            .ok_or_else(|| anyhow!("Attacker village not found"))?;
+            .ok_or_else(|| DbError::VillageNotFound(command.village_id))?;
 
         let attacker_army = army_repo
             .get_by_id(command.army_id)
             .await?
-            .ok_or_else(|| anyhow!("Attacker army not found"))?;
+            .ok_or_else(|| DbError::ArmyNotFound(command.army_id))?;
 
         let defender_village = village_repo
             .get_by_id(command.target_village_id)
             .await?
-            .ok_or_else(|| anyhow!("Defender village not found"))?;
+            .ok_or_else(|| DbError::VillageNotFound(command.target_village_id))?;
 
         let travel_time_secs = attacker_village
             .position
@@ -101,10 +103,10 @@ mod tests {
     use super::*;
     use crate::app::test_utils::tests::MockUnitOfWork;
     use crate::game::{
-        models::{buildings::BuildingName, map::Position, Tribe},
+        models::{Tribe, buildings::BuildingName, map::Position},
         test_factories::{
-            army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
-            PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            army_factory, player_factory, valley_factory, village_factory,
         },
     };
 

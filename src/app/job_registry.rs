@@ -1,13 +1,17 @@
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::{
-    app::job_handlers::{
-        army_return::ArmyReturnJobHandler, attack::AttackJobHandler,
-        research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
-        train_units::TrainUnitsJobHandler,
+    Result,
+    app::{
+        AppError,
+        job_handlers::{
+            army_return::ArmyReturnJobHandler, attack::AttackJobHandler,
+            research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
+            train_units::TrainUnitsJobHandler,
+        },
     },
+    error::ApplicationError,
     jobs::{
         handler::{JobHandler, JobRegistry},
         tasks::*,
@@ -25,7 +29,7 @@ enum AppTaskType {
 }
 
 impl AppTaskType {
-    /// A simple lookup function to map a string to our enum.
+    /// Parse &str into enum variant.
     fn from_str(task_type: &str) -> Option<Self> {
         match task_type {
             "Attack" => Some(Self::Attack),
@@ -51,9 +55,13 @@ impl AppJobRegistry {
 
 #[async_trait]
 impl JobRegistry for AppJobRegistry {
-    fn get_handler(&self, task_type: &str, data: &Value) -> Result<Box<dyn JobHandler>> {
+    fn get_handler(
+        &self,
+        task_type: &str,
+        data: &Value,
+    ) -> Result<Box<dyn JobHandler>, ApplicationError> {
         let task = AppTaskType::from_str(task_type)
-            .ok_or_else(|| anyhow!("No handler registered for job type: {}", task_type))?;
+            .ok_or_else(|| ApplicationError::App(AppError::NoJobHandler(task_type.to_string())))?;
 
         match task {
             AppTaskType::Attack => {

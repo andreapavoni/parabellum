@@ -1,8 +1,7 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::{jobs::Job, repository::uow::UnitOfWork};
+use crate::{Result, error::ApplicationError, jobs::Job, repository::uow::UnitOfWork};
 
 /// Context which contains JobHandler dependencies.
 pub struct JobHandlerContext<'a> {
@@ -23,5 +22,9 @@ pub trait JobHandler: Send + Sync {
 #[async_trait]
 pub trait JobRegistry: Send + Sync {
     /// Returns the correct Box<dyn JobHandler> for a given task.
-    fn get_handler(&self, task_type: &str, data: &Value) -> Result<Box<dyn JobHandler>>;
+    fn get_handler(
+        &self,
+        task_type: &str,
+        data: &Value,
+    ) -> Result<Box<dyn JobHandler>, ApplicationError>;
 }

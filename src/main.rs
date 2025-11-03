@@ -1,8 +1,8 @@
-use anyhow::Result;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use parabellum::{
+    Result,
     app::{
         commands::{FoundVillage, FoundVillageHandler, RegisterPlayer, RegisterPlayerHandler},
         job_registry::AppJobRegistry,
@@ -10,13 +10,14 @@ use parabellum::{
     },
     bus::AppBus,
     db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider},
+    error::ApplicationError,
     game::models::Tribe,
     jobs::worker::JobWorker,
     logs::setup_logging,
 };
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), ApplicationError> {
     setup_logging();
 
     let config = Arc::new(parabellum::config::Config::from_env());

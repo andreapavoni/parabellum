@@ -1,9 +1,11 @@
-use anyhow::{anyhow, Result};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::game::models::army::Army;
+use crate::{
+    Result,
+    game::{GameError, models::army::Army},
+};
 
 use super::village::ProductionBonus;
 
@@ -40,7 +42,7 @@ impl Valley {
 }
 
 impl TryFrom<MapField> for Valley {
-    type Error = anyhow::Error;
+    type Error = GameError;
 
     fn try_from(value: MapField) -> Result<Self, Self::Error> {
         match value.topology {
@@ -51,7 +53,7 @@ impl TryFrom<MapField> for Valley {
                 position: value.position,
                 topology,
             }),
-            _ => Err(anyhow!("This map field is not a Valley")),
+            _ => Err(GameError::InvalidValley(value.id)),
         }
     }
 }
@@ -167,7 +169,7 @@ impl Oasis {
 }
 
 impl TryFrom<MapField> for Oasis {
-    type Error = anyhow::Error;
+    type Error = GameError;
 
     fn try_from(value: MapField) -> Result<Self, Self::Error> {
         match value.topology {
@@ -179,7 +181,7 @@ impl TryFrom<MapField> for Oasis {
                 topology,
                 reinforcements: vec![],
             }),
-            _ => Err(anyhow!("This map field is not an Oasis")),
+            _ => Err(GameError::InvalidOasis(value.id)),
         }
     }
 }
@@ -402,7 +404,7 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{generate_new_map, MapFieldTopology, OasisTopology, ValleyTopology};
+    use super::{MapFieldTopology, OasisTopology, ValleyTopology, generate_new_map};
     use crate::game::models::map::Position;
 
     #[test]

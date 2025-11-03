@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::f64;
 
 use crate::game::models::{
+    ResourceGroup,
     army::{Army, TroopSet},
     buildings::{Building, BuildingName},
     village::{Village, VillageStocks},
-    ResourceGroup,
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
@@ -653,11 +653,13 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{
-        models::{Player, Tribe},
-        test_factories::*,
+    use crate::{
+        Result,
+        game::{
+            models::{Player, Tribe},
+            test_factories::*,
+        },
     };
-    use anyhow::Result;
 
     #[test]
     fn test_losses_attacker_wins_normal() {

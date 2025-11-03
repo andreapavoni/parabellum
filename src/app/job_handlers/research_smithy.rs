@@ -1,12 +1,15 @@
 use crate::{
+    Result,
+    db::DbError,
+    error::ApplicationError,
     jobs::{
+        Job,
         handler::{JobHandler, JobHandlerContext},
         tasks::ResearchSmithyTask,
-        Job,
     },
     repository::VillageRepository,
 };
-use anyhow::Result;
+
 use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{info, instrument};
@@ -32,7 +35,7 @@ impl JobHandler for ResearchSmithyJobHandler {
         &'ctx self,
         ctx: &'ctx JobHandlerContext<'a>,
         job: &'ctx Job,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         info!("Executing ResearchSmithy job");
 
         let village_repo: Arc<dyn VillageRepository + '_> = ctx.uow.villages();
@@ -41,7 +44,7 @@ impl JobHandler for ResearchSmithyJobHandler {
         let mut village = village_repo
             .get_by_id(village_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Village not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(village_id)))?;
 
         village.upgrade_smithy(self.payload.unit.clone())?;
         village_repo.save(&village).await?;

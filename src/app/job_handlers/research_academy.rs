@@ -1,15 +1,18 @@
-use crate::{
-    jobs::{
-        handler::{JobHandler, JobHandlerContext},
-        tasks::ResearchAcademyTask,
-        Job,
-    },
-    repository::VillageRepository,
-};
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{info, instrument};
+
+use crate::{
+    Result,
+    db::DbError,
+    error::ApplicationError,
+    jobs::{
+        Job,
+        handler::{JobHandler, JobHandlerContext},
+        tasks::ResearchAcademyTask,
+    },
+    repository::VillageRepository,
+};
 
 pub struct ResearchAcademyJobHandler {
     payload: ResearchAcademyTask,
@@ -25,14 +28,14 @@ impl ResearchAcademyJobHandler {
 impl JobHandler for ResearchAcademyJobHandler {
     #[instrument(skip_all, fields(
         task_type = "ResearchAcademy",
-        // unit = ?self.payload.unit,
+        unit = ?self.payload.unit,
         village_id = job.village_id
     ))]
     async fn handle<'ctx, 'a>(
         &'ctx self,
         ctx: &'ctx JobHandlerContext<'a>,
         job: &'ctx Job,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         info!("Executing ResearchAcademy job");
 
         let village_repo: Arc<dyn VillageRepository + '_> = ctx.uow.villages();
@@ -41,7 +44,7 @@ impl JobHandler for ResearchAcademyJobHandler {
         let mut village = village_repo
             .get_by_id(village_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Village not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(village_id)))?;
 
         village.research_academy(self.payload.unit.clone())?;
         village_repo.save(&village).await?;

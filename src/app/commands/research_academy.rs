@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
-    game::models::army::UnitName,
+    db::DbError,
+    error::Result,
+    game::{GameError, models::army::UnitName},
     jobs::{Job, JobPayload, tasks::ResearchAcademyTask},
     repository::{JobRepository, VillageRepository},
 };
-use anyhow::{Result, anyhow};
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct ResearchAcademyCommand {
@@ -33,19 +35,19 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
             .village_repo
             .get_by_id(command.village_id)
             .await?
-            .ok_or_else(|| anyhow!("Village not found"))?;
+            .ok_or_else(|| DbError::VillageNotFound(command.village_id))?;
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
 
         // Check requirements
         if village.academy_research[unit_idx as usize] {
-            return Err(anyhow!("Unit already researched in Academy"));
+            return Err(GameError::UnitAlreadyResearched(command.unit).into());
         }
 
         let tribe_units = village.tribe.get_units();
         let unit_data = tribe_units
             .get(unit_idx as usize)
-            .ok_or_else(|| anyhow!("Invalid unit index"))?;
+            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
 
         for req in unit_data.requirements.iter() {
             match village
@@ -55,19 +57,17 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
             {
                 Some(_) => (),
                 None => {
-                    return Err(anyhow!(
-                        "Missing building requirements: {:?} at level {}",
-                        req.building,
-                        req.level
-                    ));
+                    return Err(GameError::BuildingRequirementsNotMet {
+                        building: req.building.clone(),
+                        level: req.level,
+                    }
+                    .into());
                 }
             }
         }
 
-        // 3. Check resources
         let research_cost = &unit_data.research_cost;
 
-        // 1. Deduct resources (if enough)
         village
             .stocks
             .withdraw_resources(&research_cost.resources)?;
@@ -316,7 +316,7 @@ mod tests {
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Missing building requirements: Academy at level 1"
+            "Building requirements not met: requires Academy at level 1"
         );
     }
 }

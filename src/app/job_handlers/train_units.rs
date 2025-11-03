@@ -1,12 +1,14 @@
 use crate::{
-    game::models::army::Army, // Assicurati di avere un modello Army
+    Result,
+    error::ApplicationError,
+    game::models::army::Army,
     jobs::{
         Job, JobPayload,
         handler::{JobHandler, JobHandlerContext},
         tasks::TrainUnitsTask,
     },
 };
-use anyhow::Result;
+
 use async_trait::async_trait;
 use tracing::{info, instrument};
 
@@ -32,7 +34,7 @@ impl JobHandler for TrainUnitsJobHandler {
         &'ctx self,
         ctx: &'ctx JobHandlerContext<'a>,
         job: &'ctx Job,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         let village_id = job.village_id as u32;
         let player_id = job.player_id;
 

@@ -1,17 +1,18 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use parabellum::{
+    Result,
     db::{
         PostgresArmyRepository, PostgresJobRepository, PostgresMapRepository,
         PostgresPlayerRepository, PostgresVillageRepository,
     },
+    error::ApplicationError,
     repository::{
-        uow::{UnitOfWork, UnitOfWorkProvider},
         ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
+        uow::{UnitOfWork, UnitOfWorkProvider},
     },
 };
 
@@ -56,11 +57,11 @@ where
         repo_with_a
     }
 
-    async fn commit(self: Box<Self>) -> Result<()> {
+    async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         Ok(())
     }
 
-    async fn rollback(self: Box<Self>) -> Result<()> {
+    async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
         Ok(())
     }
 }
@@ -78,7 +79,7 @@ impl<'a> TestUnitOfWorkProvider<'a> {
 
 #[async_trait]
 impl<'a> UnitOfWorkProvider for TestUnitOfWorkProvider<'a> {
-    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>>
+    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>
     where
         'a: 'p,
     {

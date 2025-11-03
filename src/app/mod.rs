@@ -23,5 +23,9 @@ pub mod job_handlers;
 pub mod job_registry;
 pub mod queries;
 
+mod error;
+
+pub use error::AppError;
+
 #[cfg(test)]
 pub mod test_utils;

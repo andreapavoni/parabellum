@@ -1,11 +1,17 @@
+use std::sync::Arc;
+use uuid::Uuid;
+
 use crate::{
-    game::models::{ResourceGroup, buildings::BuildingName},
+    Result,
+    db::DbError,
+    error::ApplicationError,
+    game::{
+        GameError,
+        models::{ResourceGroup, buildings::BuildingName},
+    },
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
     repository::{JobRepository, VillageRepository},
 };
-use anyhow::{Result, anyhow};
-use std::sync::Arc;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct TrainUnitsCommand {
@@ -31,24 +37,29 @@ impl<'a> TrainUnitsCommandHandler<'a> {
         }
     }
 
-    pub async fn handle(&self, command: TrainUnitsCommand) -> Result<()> {
+    pub async fn handle(&self, command: TrainUnitsCommand) -> Result<(), ApplicationError> {
         let mut village = self
             .village_repo
             .get_by_id(command.village_id)
             .await?
-            .ok_or_else(|| anyhow!("Village not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(command.village_id)))?;
 
         if village.player_id != command.player_id {
-            return Err(anyhow!("Player does not own this village"));
+            return Err(ApplicationError::Game(GameError::VillageNotOwned {
+                village_id: command.village_id,
+                player_id: command.player_id,
+            }));
         }
 
         let tribe_units = village.tribe.get_units();
         let unit = tribe_units
             .get(command.unit_idx as usize)
-            .ok_or_else(|| anyhow!("Invalid unit index"))?;
+            .ok_or_else(|| ApplicationError::Game(GameError::InvalidUnitIndex(command.unit_idx)))?;
 
         if !village.academy_research[command.unit_idx as usize] {
-            return Err(anyhow!("Unit {:?} not researched in Academy", unit.name));
+            return Err(ApplicationError::Game(GameError::UnitNotResearched(
+                unit.name.clone(),
+            )));
         }
 
         let cost_per_unit = &unit.cost;
@@ -60,7 +71,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
         );
 
         if !village.stocks.check_resources(&total_cost) {
-            return Err(anyhow!("Not enough resources"));
+            return Err(ApplicationError::Game(GameError::NotEnoughResources));
         }
 
         // 1. Deduct resources
@@ -72,7 +83,12 @@ impl<'a> TrainUnitsCommandHandler<'a> {
 
         let building = village
             .get_building_by_name(BuildingName::Barracks)
-            .ok_or_else(|| anyhow!("Required building not found: {:?}", BuildingName::Barracks))?;
+            .ok_or_else(|| {
+                ApplicationError::Game(GameError::BuildingRequirementsNotMet {
+                    building: BuildingName::Barracks,
+                    level: 1,
+                })
+            })?;
 
         let payload = TrainUnitsTask {
             slot_id: building.slot_id,
@@ -278,7 +294,7 @@ mod tests {
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Required building not found: Barracks"
+            "Building requirements not met: requires Barracks at level 1"
         );
     }
 
@@ -314,7 +330,7 @@ mod tests {
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Unit Praetorian not researched in Academy"
+            "Unit Praetorian not yet researched in Academy"
         );
     }
 }

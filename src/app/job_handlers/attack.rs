@@ -1,17 +1,20 @@
-use crate::{
-    game::{
-        battle::{AttackType, Battle},
-        models::{buildings::Building, ResourceGroup},
-    },
-    jobs::{
-        handler::{JobHandler, JobHandlerContext},
-        tasks::{ArmyReturnTask, AttackTask},
-        Job, JobPayload,
-    },
-};
-use anyhow::Result;
 use async_trait::async_trait;
 use tracing::{info, instrument};
+
+use crate::{
+    Result,
+    db::DbError,
+    error::ApplicationError,
+    game::{
+        battle::{AttackType, Battle},
+        models::{ResourceGroup, buildings::Building},
+    },
+    jobs::{
+        Job, JobPayload,
+        handler::{JobHandler, JobHandlerContext},
+        tasks::{ArmyReturnTask, AttackTask},
+    },
+};
 
 pub struct AttackJobHandler {
     payload: AttackTask,
@@ -35,7 +38,7 @@ impl JobHandler for AttackJobHandler {
         &'ctx self,
         ctx: &'ctx JobHandlerContext<'a>,
         _job: &'ctx Job,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         info!("Execute Attack Job");
 
         let mut attacker_army = ctx
@@ -43,23 +46,25 @@ impl JobHandler for AttackJobHandler {
             .armies()
             .get_by_id(self.payload.army_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Attacker army not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(self.payload.army_id)))?;
 
         let attacker_village = ctx
             .uow
             .villages()
             .get_by_id(attacker_army.village_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Attacker village not found"))?;
+            .ok_or_else(|| {
+                ApplicationError::Db(DbError::VillageNotFound(attacker_army.village_id))
+            })?;
 
         let mut defender_village = ctx
             .uow
             .villages()
             .get_by_id(self.payload.target_village_id as u32)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Defender village not found"))?;
-
-        // 2. Execute domain logic
+            .ok_or_else(|| {
+                ApplicationError::Db(DbError::VillageNotFound(attacker_army.village_id))
+            })?;
 
         // Find catapult targets on target village by looking for their name, or return random buildings
         let mut catapult_targets: Vec<Building> = Vec::new();
@@ -134,7 +139,10 @@ impl JobHandler for AttackJobHandler {
             from_village_id: defender_village_id,
         };
 
-        let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
+        let job_payload = JobPayload::new(
+            "ArmyReturn",
+            serde_json::to_value(&return_payload).map_err(|e| ApplicationError::Json(e))?,
+        );
         let return_job = Job::new(player_id, village_id, return_travel_time, job_payload);
 
         ctx.uow.jobs().add(&return_job).await?;

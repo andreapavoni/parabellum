@@ -1,12 +1,16 @@
-use anyhow::Result;
 use sqlx::types::Json;
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::error::ApplicationError;
 use crate::repository::JobRepository;
-use crate::{db::models as db_models, jobs::Job};
+use crate::{
+    Result,
+    db::{DbError, models as db_models},
+    jobs::Job,
+};
 
 #[derive(Clone)]
 pub struct PostgresJobRepository<'a> {
@@ -21,7 +25,7 @@ impl<'a> PostgresJobRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> JobRepository for PostgresJobRepository<'a> {
-    async fn add(&self, job: &Job) -> Result<()> {
+    async fn add(&self, job: &Job) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!(
             r#"
@@ -35,12 +39,13 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
             job.completed_at
         )
         .execute(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }
 
-    async fn get_by_id(&self, job_id: Uuid) -> Result<Option<Job>> {
+    async fn get_by_id(&self, job_id: Uuid) -> Result<Option<Job>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let job = sqlx::query_as!(
           db_models::Job,
@@ -48,12 +53,12 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           job_id
       )
       .fetch_one(&mut *tx_guard.as_mut())
-      .await?;
+      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(Some(job.into()))
     }
 
-    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>> {
+    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let jobs = sqlx::query_as!(
           db_models::Job,
@@ -61,12 +66,12 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           player_id
       )
       .fetch_all(&mut *tx_guard.as_mut())
-      .await?;
+      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
 
-    async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>> {
+    async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let due_jobs = sqlx::query_as!(
           db_models::Job,
@@ -86,25 +91,31 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           limit
       )
       .fetch_all(&mut *tx_guard.as_mut())
-      .await?;
+      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(due_jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
 
-    async fn mark_as_completed(&self, job_id: Uuid) -> Result<()> {
+    async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!("UPDATE jobs SET status = 'Completed' WHERE id = $1", job_id)
             .execute(&mut *tx_guard.as_mut())
-            .await?;
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }
 
-    async fn mark_as_failed(&self, job_id: Uuid, _error_message: &str) -> Result<()> {
+    async fn mark_as_failed(
+        &self,
+        job_id: Uuid,
+        _error_message: &str,
+    ) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!("UPDATE jobs SET status = 'Failed' WHERE id = $1", job_id)
             .execute(&mut *tx_guard.as_mut())
-            .await?;
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }

@@ -1,9 +1,14 @@
-use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Cost, Tribe, smithy::SmithyUpgrades};
-use crate::game::models::{ResearchCost, buildings::BuildingName, hero::Hero};
+use crate::{
+    Result,
+    game::{
+        GameError,
+        models::{ResearchCost, buildings::BuildingName, hero::Hero},
+    },
+};
 
 #[derive(Debug, Clone)]
 pub enum UnitRole {
@@ -265,12 +270,12 @@ impl Army {
 
     /// Returns the current Army with reduced quantities,
     /// and a new Army which has been extracted from the current one.
-    pub fn deploy(&mut self, set: TroopSet) -> Result<(Self, Self)> {
+    pub fn deploy(&mut self, set: TroopSet) -> Result<(Self, Self), GameError> {
         for (idx, quantity) in set.into_iter().enumerate() {
             if self.units[idx] > quantity {
                 self.units[idx] -= quantity;
             } else {
-                return Err(anyhow!("The number of available units is not enough"));
+                return Err(GameError::NotEnoughUnits);
             }
         }
 
@@ -323,22 +328,19 @@ impl Army {
         self.units = *units;
     }
 
-    pub fn add_unit(&mut self, name: UnitName, quantity: u32) -> Result<()> {
+    pub fn add_unit(&mut self, name: UnitName, quantity: u32) -> Result<(), GameError> {
         if let Some(idx) = self.get_unit_idx_by_name(&name) {
             self.units[idx] += quantity;
             return Ok(());
         }
 
-        Err(anyhow!(
-            "Unit {} not found in this tribe",
-            format!("{:?}", name)
-        ))
+        Err(GameError::UnitNotFound(name))
     }
 
     /// Merges another army into the current one.
-    pub fn merge(&mut self, other: &Army) -> Result<()> {
+    pub fn merge(&mut self, other: &Army) -> Result<(), GameError> {
         if self.tribe != other.tribe {
-            return Err(anyhow!("Cannot merge armies of different tribes"));
+            return Err(GameError::TribeMismatch);
         }
 
         for (idx, quantity) in other.units.iter().enumerate() {

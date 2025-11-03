@@ -1,5 +1,5 @@
-use anyhow::Result;
 use parabellum::{
+    Result,
     app::{
         commands::{AttackVillage, AttackVillageHandler},
         job_registry::AppJobRegistry,
@@ -8,21 +8,21 @@ use parabellum::{
     db::establish_test_connection_pool,
     game::{
         models::{
+            Player, ResourceGroup, Tribe,
             army::{Army, TroopSet},
             buildings::BuildingName,
             map::Position,
             village::Village,
-            Player, ResourceGroup, Tribe,
         },
         test_factories::{
-            army_factory, player_factory, valley_factory, village_factory, ArmyFactoryOptions,
-            PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            army_factory, player_factory, valley_factory, village_factory,
         },
     },
     jobs::{
+        JobStatus,
         tasks::{ArmyReturnTask, AttackTask},
         worker::JobWorker,
-        JobStatus,
     },
     repository::uow::UnitOfWorkProvider,
 };
@@ -36,8 +36,6 @@ use test_utils::TestUnitOfWorkProvider;
 #[tokio::test]
 #[serial]
 async fn test_full_attack_flow() -> Result<()> {
-    // setup().await?;
-
     let pool = establish_test_connection_pool().await.unwrap();
     let master_tx = pool.begin().await.unwrap();
     let master_tx_arc = Arc::new(Mutex::new(master_tx));
@@ -56,11 +54,6 @@ async fn test_full_attack_flow() -> Result<()> {
         .await?
     };
 
-    println!(
-        "========== Setup complete: Player ID: {}, Village ID: {}, Army ID: {}",
-        attacker_player.id, attacker_village.id, attacker_army.id
-    );
-
     let (_defender_player, defender_village, _defender_army) = {
         setup_player_party(
             uow_provider.clone(),
@@ -71,7 +64,6 @@ async fn test_full_attack_flow() -> Result<()> {
         .await?
     };
 
-    // --- 2. ACT (Phase 1): Attack command ---
     let attack_command = AttackVillage {
         player_id: attacker_player.id,
         village_id: attacker_village.id,
@@ -82,7 +74,6 @@ async fn test_full_attack_flow() -> Result<()> {
 
     {
         let uow_attack = uow_provider.begin().await?;
-
         {
             let handler = AttackVillageHandler::new();
             handler.handle(attack_command, &uow_attack).await.unwrap();
@@ -91,7 +82,6 @@ async fn test_full_attack_flow() -> Result<()> {
         uow_attack.commit().await?;
     };
 
-    // --- 3. ASSERT (Phase 1): Check job creation ---
     let attack_job = {
         let uow_assert1 = uow_provider.begin().await?;
         let cloned_job;

@@ -1,11 +1,13 @@
-use anyhow::Result;
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::game::models::map::{MapQuadrant, Valley};
-use crate::repository::MapRepository;
-use crate::{db::models as db_models, game::models::map::MapField};
+use crate::{
+    db::{DbError, models as db_models},
+    error::ApplicationError,
+    game::models::map::{MapField, MapQuadrant, Valley},
+    repository::MapRepository,
+};
 
 #[derive(Clone)]
 pub struct PostgresMapRepository<'a> {
@@ -20,26 +22,39 @@ impl<'a> PostgresMapRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> MapRepository for PostgresMapRepository<'a> {
-    async fn find_unoccupied_valley(&self, quadrant: &MapQuadrant) -> Result<Valley> {
+    async fn find_unoccupied_valley(
+        &self,
+        quadrant: &MapQuadrant,
+    ) -> Result<Valley, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let query = match quadrant {
-          MapQuadrant::NorthEast => "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1",
-          MapQuadrant::SouthEast => "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1",
-          MapQuadrant::SouthWest => "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1",
-          MapQuadrant::NorthWest => "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1",
-      };
+            MapQuadrant::NorthEast => {
+                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
+            }
+            MapQuadrant::SouthEast => {
+                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
+            }
+            MapQuadrant::SouthWest => {
+                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
+            }
+            MapQuadrant::NorthWest => {
+                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
+            }
+        };
 
         let random_unoccupied_field: db_models::MapField = sqlx::query_as(query)
             .fetch_one(&mut *tx_guard.as_mut())
-            .await?;
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let game_map_field: MapField = random_unoccupied_field.into();
-        let valley = Valley::try_from(game_map_field)?;
+        let valley = Valley::try_from(game_map_field.clone())
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(game_map_field.id)))?;
 
         Ok(valley)
     }
 
-    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>> {
+    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let field = sqlx::query_as!(
             db_models::MapField,
@@ -47,7 +62,8 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
             id
         )
         .fetch_optional(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(field.map(Into::into))
     }

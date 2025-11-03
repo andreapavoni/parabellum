@@ -1,6 +1,4 @@
-use anyhow::{anyhow, Result};
-
-use crate::game::models::{ResearchCost, ResourceGroup, army::UnitName};
+use crate::{Result, game::{GameError, models::{ResearchCost, ResourceGroup, army::UnitName}}};
 
 pub type SmithyUpgrades = [u8; 8];
 
@@ -12,14 +10,14 @@ pub struct SmithyUnitUpgrades {
 }
 
 /// Returns unit smithy upgrade cost for a given level.
-pub fn smithy_upgrade_cost_for_unit(unit_name: &UnitName, level: u8) -> Result<ResearchCost> {
+pub fn smithy_upgrade_cost_for_unit(unit_name: &UnitName, level: u8) -> Result<ResearchCost, GameError> {
   if level > 20 {
-    return Err(anyhow!("smithy upgrade level should go from 1 to 20 (got: {})", level));
+    return Err(GameError::InvalidSmithyLevel(level));
   }
 
   match smithy_upgrades_for_unit(unit_name) {
     Some(upgrades) =>  Ok(upgrades.costs_per_level[level as usize].clone()),
-    None => return Err(anyhow!("unit {:?} not found", unit_name)),
+    None => return Err(GameError::UnitNotFound(unit_name.clone())),
   }
 }
 

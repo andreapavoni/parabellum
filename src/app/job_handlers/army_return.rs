@@ -1,12 +1,15 @@
 use crate::{
-    game::models::army::Army, // Assicurati di avere un modello Army
+    Result,
+    db::DbError,
+    error::ApplicationError,
+    game::models::army::Army,
     jobs::{
+        Job,
         handler::{JobHandler, JobHandlerContext},
         tasks::ArmyReturnTask,
-        Job,
     },
 };
-use anyhow::Result;
+
 use async_trait::async_trait;
 use tracing::{info, instrument};
 
@@ -32,7 +35,7 @@ impl JobHandler for ArmyReturnJobHandler {
         &'ctx self,
         ctx: &'ctx JobHandlerContext<'a>,
         job: &'ctx Job,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         info!("Executing ArmyReturn job");
 
         let village_id = job.village_id as u32;
@@ -59,7 +62,7 @@ impl JobHandler for ArmyReturnJobHandler {
         let returning_army = army_repo
             .get_by_id(self.payload.army_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Returning army not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(self.payload.army_id)))?;
 
         army.merge(&returning_army)?;
         army_repo.save(&army).await?;

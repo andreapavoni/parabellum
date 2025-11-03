@@ -1,13 +1,15 @@
 use crate::{
+    Result,
     cqrs::{Command, CommandHandler},
+    db::DbError,
+    error::ApplicationError,
     game::models::{
+        Player,
         map::{Position, Valley},
         village::Village,
-        Player,
     },
-    repository::{uow::UnitOfWork, MapRepository, VillageRepository},
+    repository::{MapRepository, VillageRepository, uow::UnitOfWork},
 };
-use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -51,7 +53,11 @@ impl CommandHandler<FoundVillage> for FoundVillageHandler {
 
         let valley = match map_repo.get_field_by_id(village_id).await? {
             Some(map_field) => Valley::try_from(map_field)?,
-            None => return Err(anyhow!("The number of available units is not enough")),
+            None => {
+                return Err(ApplicationError::Db(DbError::VillageNotFound(
+                    village_id as u32,
+                )));
+            }
         };
 
         let village = Village::new("New Village".to_string(), &valley, &command.player, false);

@@ -1,5 +1,4 @@
-use crate::repository::uow::UnitOfWork;
-use anyhow::Result;
+use crate::{Result, error::ApplicationError, repository::uow::UnitOfWork};
 use async_trait::async_trait;
 
 // --- Core Traits for AppBus ---
@@ -14,7 +13,11 @@ pub trait Command: Send + Sync {}
 /// that is the job of the AppBus.
 #[async_trait]
 pub trait CommandHandler<C: Command> {
-    async fn handle(&self, cmd: C, uow: &Box<dyn UnitOfWork<'_> + '_>) -> Result<()>;
+    async fn handle(
+        &self,
+        cmd: C,
+        uow: &Box<dyn UnitOfWork<'_> + '_>,
+    ) -> Result<(), ApplicationError>;
 }
 
 /// A marker trait for Query structs.
@@ -28,5 +31,9 @@ pub trait Query: Send + Sync {
 /// It receives the query and a Unit of Work to read data.
 #[async_trait]
 pub trait QueryHandler<Q: Query> {
-    async fn handle(&self, query: Q, uow: &Box<dyn UnitOfWork<'_> + '_>) -> Result<Q::Output>;
+    async fn handle(
+        &self,
+        query: Q,
+        uow: &Box<dyn UnitOfWork<'_> + '_>,
+    ) -> Result<Q::Output, ApplicationError>;
 }

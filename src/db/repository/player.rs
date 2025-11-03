@@ -1,11 +1,15 @@
-use crate::db::models as db_models;
-use crate::game::models::Player;
-use crate::repository::PlayerRepository;
-use anyhow::Result;
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+use crate::{
+    Result,
+    db::{DbError, models as db_models},
+    error::ApplicationError,
+    game::models::Player,
+    repository::PlayerRepository,
+};
 
 // Implements PlayerRepository and operates on transactions.
 #[derive(Clone)]
@@ -21,7 +25,7 @@ impl<'a> PostgresPlayerRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
-    async fn create(&self, player: &Player) -> Result<()> {
+    async fn create(&self, player: &Player) -> Result<(), ApplicationError> {
         let tribe: db_models::Tribe = player.tribe.clone().into();
 
         // Get the lock on the transaction
@@ -39,12 +43,13 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             tribe as _
         )
         .fetch_one(&mut *tx_guard.as_mut()) // Use &mut *tx_guard as Executor
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(()) // release the lock when tx_guard goes out of scope
     }
 
-    async fn get_by_id(&self, player_id: Uuid) -> Result<Option<Player>> {
+    async fn get_by_id(&self, player_id: Uuid) -> Result<Option<Player>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
@@ -52,12 +57,13 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             player_id
         )
         .fetch_optional(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(player.map(Into::into))
     }
 
-    async fn get_by_username(&self, username: &str) -> Result<Option<Player>> {
+    async fn get_by_username(&self, username: &str) -> Result<Option<Player>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
@@ -68,7 +74,8 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             username
         )
         .fetch_optional(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(player.map(Into::into))
     }

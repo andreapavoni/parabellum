@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     cqrs::{Command, CommandHandler},
-    game::models::{map::MapQuadrant, village::Village, Player},
-    repository::{uow::UnitOfWork, MapRepository, VillageRepository},
+    game::models::{Player, map::MapQuadrant, village::Village},
+    repository::{MapRepository, VillageRepository, uow::UnitOfWork},
 };
 
-use anyhow::Result;
 use std::sync::Arc;
 
 #[derive(Clone)]

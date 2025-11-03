@@ -1,9 +1,10 @@
-use anyhow::Result;
 use std::sync::Arc;
 
 use crate::{
+    Result,
     config::Config,
     cqrs::{Command, CommandHandler, Query, QueryHandler},
+    error::ApplicationError,
     repository::uow::UnitOfWorkProvider,
 };
 
@@ -33,7 +34,7 @@ impl AppBus {
     /// - It passes the UoW to the handler.
     /// - If the handler succeeds, it commits the UoW.
     /// - If the handler fails, it rolls back the UoW.
-    pub async fn execute<C, H>(&self, cmd: C, handler: H) -> Result<()>
+    pub async fn execute<C, H>(&self, cmd: C, handler: H) -> Result<(), ApplicationError>
     where
         C: Command,
         H: CommandHandler<C>,
@@ -47,7 +48,7 @@ impl AppBus {
             }
             Err(e) => {
                 uow.rollback().await?; // Rollback on failure
-                Err(e)
+                Err(e.into())
             }
         }
     }
@@ -56,7 +57,7 @@ impl AppBus {
     /// A query is an operation that reads system state and returns data.
     /// It should *never* modify the state.
     /// This method ensures the transaction is *always* rolled back.
-    pub async fn query<Q, H>(&self, query: Q, handler: H) -> Result<Q::Output>
+    pub async fn query<Q, H>(&self, query: Q, handler: H) -> Result<Q::Output, ApplicationError>
     where
         Q: Query,
         H: QueryHandler<Q>,
@@ -68,6 +69,6 @@ impl AppBus {
         // Always rollback a query, as it should never write data.
         uow.rollback().await?;
 
-        result
+        Ok(result?)
     }
 }

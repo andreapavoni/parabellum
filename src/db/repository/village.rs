@@ -1,8 +1,12 @@
-use crate::db::{mapping::VillageAggregate, models as db_models};
-use crate::game::models::village::Village;
-use crate::repository::VillageRepository;
-use anyhow::Result;
-use sqlx::{types::Json, Postgres, Transaction};
+use crate::{
+    Result,
+    db::{DbError, mapping::VillageAggregate, models as db_models},
+    error::ApplicationError,
+    game::models::village::Village,
+    repository::VillageRepository,
+};
+
+use sqlx::{Postgres, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -21,7 +25,7 @@ impl<'a> PostgresVillageRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> VillageRepository for PostgresVillageRepository<'a> {
-    async fn create(&self, village: &Village) -> Result<()> {
+    async fn create(&self, village: &Village) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!(
               r#"
@@ -42,12 +46,12 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
               village.is_capital
           )
           .execute(&mut *tx_guard.as_mut())
-          .await?;
+          .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }
 
-    async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>> {
+    async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
         let village_id_i32 = village_id_u32 as i32;
@@ -58,7 +62,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             village_id_i32
         )
         .fetch_optional(&mut *tx_guard.as_mut())
-        .await?
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
         {
             Some(v) => v,
             None => return Ok(None),
@@ -70,7 +75,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             db_village.player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let all_armies = sqlx::query_as!(
                   db_models::Army,
@@ -78,7 +84,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                   village_id_i32
               )
               .fetch_all(&mut *tx_guard.as_mut())
-              .await?;
+              .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let db_oases = sqlx::query_as!(
             db_models::MapField,
@@ -86,7 +92,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             village_id_i32
         )
         .fetch_all(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let aggregate = VillageAggregate {
             village: db_village,
@@ -100,11 +107,12 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         Ok(Some(game_village))
     }
 
-    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>> {
+    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let villages_ids = sqlx::query!("SELECT id FROM villages WHERE player_id = $1", player_id)
             .fetch_all(&mut *tx_guard.as_mut())
-            .await?;
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let mut result = Vec::new();
         for record in villages_ids {
@@ -116,7 +124,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         Ok(result)
     }
 
-    async fn save(&self, village: &Village) -> Result<()> {
+    async fn save(&self, village: &Village) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
         sqlx::query!(
@@ -139,7 +147,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             village.loyalty as i16,
         )
         .execute(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
         Ok(())
     }
 }

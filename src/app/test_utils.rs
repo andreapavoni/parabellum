@@ -1,6 +1,5 @@
 #[cfg(test)]
 pub mod tests {
-    use anyhow::Result;
     use async_trait::async_trait;
     use std::{
         collections::HashMap,
@@ -9,11 +8,13 @@ pub mod tests {
     use uuid::Uuid;
 
     use crate::{
-        game::models::{army::Army, map::Valley, village::Village, Player},
+        Result,
+        error::ApplicationError,
+        game::models::{Player, army::Army, map::Valley, village::Village},
         jobs::Job,
         repository::{
-            uow::UnitOfWork, ArmyRepository, JobRepository, MapRepository, PlayerRepository,
-            VillageRepository,
+            ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
+            uow::UnitOfWork,
         },
     };
 
@@ -38,25 +39,29 @@ pub mod tests {
 
     #[async_trait]
     impl JobRepository for MockJobRepository {
-        async fn add(&self, job: &Job) -> Result<()> {
+        async fn add(&self, job: &Job) -> Result<(), ApplicationError> {
             self.added_jobs.lock().unwrap().push(job.clone());
             Ok(())
         }
 
         // ... (implement other methods as needed, returning Ok(...) or mock data)
-        async fn get_by_id(&self, _id: Uuid) -> Result<Option<Job>> {
+        async fn get_by_id(&self, _id: Uuid) -> Result<Option<Job>, ApplicationError> {
             Ok(None)
         }
-        async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>> {
+        async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
-        async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>> {
+        async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
-        async fn mark_as_completed(&self, _job_id: Uuid) -> Result<()> {
+        async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
-        async fn mark_as_failed(&self, _job_id: Uuid, _error_message: &str) -> Result<()> {
+        async fn mark_as_failed(
+            &self,
+            _job_id: Uuid,
+            _error_message: &str,
+        ) -> Result<(), ApplicationError> {
             Ok(())
         }
     }
@@ -78,12 +83,12 @@ pub mod tests {
 
     #[async_trait]
     impl VillageRepository for MockVillageRepository {
-        async fn get_by_id(&self, village_id: u32) -> Result<Option<Village>> {
+        async fn get_by_id(&self, village_id: u32) -> Result<Option<Village>, ApplicationError> {
             let villages = self.villages.lock().unwrap();
             Ok(villages.get(&village_id).cloned())
         }
 
-        async fn create(&self, village: &Village) -> Result<()> {
+        async fn create(&self, village: &Village) -> Result<(), ApplicationError> {
             self.villages
                 .lock()
                 .unwrap()
@@ -91,7 +96,10 @@ pub mod tests {
 
             Ok(())
         }
-        async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>> {
+        async fn list_by_player_id(
+            &self,
+            player_id: Uuid,
+        ) -> Result<Vec<Village>, ApplicationError> {
             let mut villages: Vec<Village> = vec![];
 
             for v in self.villages.lock().unwrap().values().into_iter() {
@@ -102,7 +110,7 @@ pub mod tests {
 
             Ok(villages)
         }
-        async fn save(&self, village: &Village) -> Result<()> {
+        async fn save(&self, village: &Village) -> Result<(), ApplicationError> {
             self.villages
                 .lock()
                 .unwrap()
@@ -124,18 +132,18 @@ pub mod tests {
 
     #[async_trait]
     impl ArmyRepository for MockArmyRepository {
-        async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>> {
+        async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>, ApplicationError> {
             let armies = self.armies.lock().unwrap();
             Ok(armies.get(&army_id).cloned())
         }
         // ... (implement other methods)
-        async fn create(&self, _army: &Army) -> Result<()> {
+        async fn create(&self, _army: &Army) -> Result<(), ApplicationError> {
             Ok(())
         }
-        async fn save(&self, _army: &Army) -> Result<()> {
+        async fn save(&self, _army: &Army) -> Result<(), ApplicationError> {
             Ok(())
         }
-        async fn remove(&self, _army_id: Uuid) -> Result<()> {
+        async fn remove(&self, _army_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
     }
@@ -148,13 +156,16 @@ pub mod tests {
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {
-        async fn create(&self, _player: &Player) -> Result<()> {
+        async fn create(&self, _player: &Player) -> Result<(), ApplicationError> {
             Ok(())
         }
-        async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>> {
+        async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>, ApplicationError> {
             Ok(None)
         }
-        async fn get_by_username(&self, _username: &str) -> Result<Option<Player>> {
+        async fn get_by_username(
+            &self,
+            _username: &str,
+        ) -> Result<Option<Player>, ApplicationError> {
             Ok(None)
         }
     }
@@ -167,13 +178,13 @@ pub mod tests {
         async fn find_unoccupied_valley(
             &self,
             _quadrant: &crate::game::models::map::MapQuadrant,
-        ) -> Result<Valley> {
+        ) -> Result<Valley, ApplicationError> {
             panic!("Not mocked")
         }
         async fn get_field_by_id(
             &self,
             _id: i32,
-        ) -> Result<Option<crate::game::models::map::MapField>> {
+        ) -> Result<Option<crate::game::models::map::MapField>, ApplicationError> {
             Ok(None)
         }
     }
@@ -230,12 +241,12 @@ pub mod tests {
         }
 
         // We consume self (Box<Self>) as per the trait definition
-        async fn commit(self: Box<Self>) -> Result<()> {
+        async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
             *self.committed.lock().unwrap() = true;
             Ok(())
         }
 
-        async fn rollback(self: Box<Self>) -> Result<()> {
+        async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
             *self.rolled_back.lock().unwrap() = true;
             Ok(())
         }

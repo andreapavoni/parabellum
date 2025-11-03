@@ -1,8 +1,10 @@
-use anyhow::{anyhow, Error, Result};
 use serde::{Deserialize, Serialize};
 
 use super::{Cost, ResourceGroup, Tribe};
-use crate::game::models::village::VillageBuilding;
+use crate::{
+    Result,
+    game::{GameError, models::village::VillageBuilding},
+};
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingGroup {
@@ -78,11 +80,11 @@ impl Building {
         }
     }
 
-    pub fn next_level(&self) -> Result<Self> {
+    pub fn next_level(&self) -> Result<Self, GameError> {
         let building = get_building_data(self.name.clone()).unwrap();
 
         if self.level == building.rules.max_level {
-            return Err(anyhow!("Already reached max level {}", self.level));
+            return Err(GameError::BuildingMaxLevelReached);
         }
 
         let level = self.level + 1;
@@ -107,10 +109,9 @@ impl Building {
 
         // check starting levels
         let mut lvl_idx = level;
-        if level > 0
-            && self.group != BuildingGroup::Resources {
-                lvl_idx -= 1;
-            }
+        if level > 0 && self.group != BuildingGroup::Resources {
+            lvl_idx -= 1;
+        }
 
         let data = building.data[lvl_idx as usize].clone();
 
@@ -128,14 +129,17 @@ impl Building {
         tribe: &Tribe,
         village_buildings: &Vec<VillageBuilding>,
         is_capital: bool,
-    ) -> Result<()> {
+    ) -> Result<(), GameError> {
         let data = get_building_data(self.name.clone()).unwrap();
 
         // tribe constraint (if any)?
         if !data.rules.tribes.is_empty() {
             let ok = data.rules.tribes.contains(tribe);
             if !ok {
-                return Err(Error::msg("not compatible with village tribe"));
+                return Err(GameError::BuildingTribeMismatch {
+                    building: self.name.clone(),
+                    tribe: tribe.clone(),
+                });
             }
         }
 
@@ -145,7 +149,7 @@ impl Building {
                 .constraints
                 .contains(&BuildingConstraint::NonCapital)
         {
-            return Err(Error::msg("can't build in capital"));
+            return Err(GameError::NonCapitalConstraint(self.name.clone()));
         }
 
         if !is_capital
@@ -154,7 +158,7 @@ impl Building {
                 .constraints
                 .contains(&BuildingConstraint::OnlyCapital)
         {
-            return Err(Error::msg("can be built only in capital"));
+            return Err(GameError::CapitalConstraint(self.name.clone()));
         }
 
         for req in data.rules.requirements {
@@ -164,11 +168,10 @@ impl Building {
             {
                 Some(_) => (),
                 None => {
-                    return Err(anyhow!(
-                        "Missing building requirements: {:?} at level {}",
-                        req.0,
-                        req.1,
-                    ))
+                    return Err(GameError::BuildingRequirementsNotMet {
+                        building: req.0.clone(),
+                        level: req.1,
+                    });
                 }
             };
         }
@@ -176,8 +179,10 @@ impl Building {
         for vb in village_buildings {
             for conflict in data.rules.conflicts {
                 if vb.building.name == conflict.0 {
-                    let err = format!("conflicts with {:#?}", conflict.0);
-                    return Err(Error::msg(err));
+                    return Err(GameError::BuildingConflict(
+                        self.name.clone(),
+                        conflict.0.clone(),
+                    ));
                 }
             }
 
@@ -185,13 +190,11 @@ impl Building {
             if self.name == vb.building.name {
                 // and allows multiple
                 if !data.rules.allow_multiple {
-                    return Err(Error::msg("can be built only once"));
+                    return Err(GameError::NoMultipleBuildingConstraint(self.name.clone()));
                 }
                 // and has reached max level
                 if self.level != data.rules.max_level {
-                    return Err(Error::msg(
-                        "must complete other constructions of same type to max level",
-                    ));
+                    return Err(GameError::MultipleBuildingMaxNotReached(self.name.clone()));
                 }
             }
         }
@@ -199,12 +202,12 @@ impl Building {
         Ok(())
     }
 
-    pub fn validate_upgrade(&self) -> Result<()> {
+    pub fn validate_upgrade(&self) -> Result<(), GameError> {
         let data = get_building_data(self.name.clone())?;
 
         // max level reached?
         if self.level == data.rules.max_level {
-            return Err(Error::msg("already reached max level"));
+            return Err(GameError::BuildingMaxLevelReached);
         }
 
         Ok(())
@@ -215,10 +218,9 @@ impl Building {
 
         let mut level = self.level;
 
-        if level > 0
-            && self.group != BuildingGroup::Resources {
-                level -= 1;
-            }
+        if level > 0 && self.group != BuildingGroup::Resources {
+            level -= 1;
+        }
 
         let data = building.data[level as usize].clone();
 
@@ -264,7 +266,7 @@ struct BuildingData {
     rules: BuildingRules,
 }
 
-fn get_building_data(name: BuildingName) -> Result<BuildingData> {
+fn get_building_data(name: BuildingName) -> Result<BuildingData, GameError> {
     match name {
         BuildingName::Woodcutter => Ok(WOODCUTTER.clone()),
         BuildingName::ClayPit => Ok(CLAY_PIT.clone()),

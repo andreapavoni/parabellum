@@ -1,13 +1,18 @@
-use anyhow::Result;
-use sqlx::types::Json;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Postgres, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::db::models::Tribe;
-use crate::repository::ArmyRepository;
-use crate::{db::models as db_models, game::models::army::Army};
+use crate::{
+    Result,
+    db::{
+        DbError,
+        models::{self as db_models, Tribe},
+    },
+    error::ApplicationError,
+    game::models::army::Army,
+    repository::ArmyRepository,
+};
 
 #[derive(Clone)]
 pub struct PostgresArmyRepository<'a> {
@@ -22,7 +27,7 @@ impl<'a> PostgresArmyRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
-    async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>> {
+    async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let army = sqlx::query_as!(
           db_models::Army,
@@ -30,12 +35,12 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
           army_id
       )
       .fetch_one(&mut *tx_guard.as_mut())
-      .await?;
+      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(Some(army.into()))
     }
 
-    async fn create(&self, army: &Army) -> Result<()> {
+    async fn create(&self, army: &Army) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let db_tribe: Tribe = army.tribe.clone().into();
         let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
@@ -49,12 +54,12 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
               army.id, army.village_id as i32, current_map_field_id as i32, hero_id, Json(&army.units) as _, Json(&army.smithy) as _, db_tribe as _, army.player_id
           )
           .execute(&mut *tx_guard.as_mut())
-          .await?;
+          .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }
 
-    async fn save(&self, army: &Army) -> Result<()> {
+    async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let hero_id = army.hero.as_ref().map(|h| h.id);
         let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
@@ -71,16 +76,18 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
             current_map_field_id as i32
         )
         .execute(&mut *tx_guard.as_mut())
-        .await?;
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }
 
-    async fn remove(&self, army_id: Uuid) -> Result<()> {
+    async fn remove(&self, army_id: Uuid) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!(r#"DELETE FROM armies WHERE id = $1"#, army_id)
             .execute(&mut *tx_guard.as_mut())
-            .await?;
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }

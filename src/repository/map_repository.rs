@@ -1,10 +1,15 @@
-use crate::game::models::map::{MapField, MapQuadrant, Valley};
-use anyhow::Result;
+use crate::{
+    Result,
+    error::ApplicationError,
+    game::models::map::{MapField, MapQuadrant, Valley},
+};
 
 #[async_trait::async_trait]
 pub trait MapRepository: Send + Sync {
-    async fn find_unoccupied_valley(&self, quadrant: &MapQuadrant) -> Result<Valley>;
-    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>>;
-    // Potrebbe avere anche metodi per popolare la mappa all'inizio
+    async fn find_unoccupied_valley(
+        &self,
+        quadrant: &MapQuadrant,
+    ) -> Result<Valley, ApplicationError>;
+    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>, ApplicationError>;
     // async fn bulk_create_fields(&self, fields: Vec<NewMapField>) -> Result<()>;
 }

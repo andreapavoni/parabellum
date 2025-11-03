@@ -1,13 +1,13 @@
-use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use tracing::{error, info, instrument};
 
 use crate::{
+    Result,
     jobs::{
-        handler::{JobHandler, JobHandlerContext, JobRegistry},
         Job,
+        handler::{JobHandler, JobHandlerContext, JobRegistry},
     },
     repository::uow::UnitOfWorkProvider,
 };

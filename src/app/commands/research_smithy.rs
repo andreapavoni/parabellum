@@ -1,9 +1,15 @@
 use crate::{
-    game::models::{army::UnitName, smithy::smithy_upgrade_cost_for_unit},
+    Result,
+    db::DbError,
+    error::ApplicationError,
+    game::{
+        GameError,
+        models::{army::UnitName, smithy::smithy_upgrade_cost_for_unit},
+    },
     jobs::{Job, JobPayload, tasks::ResearchSmithyTask},
     repository::{JobRepository, VillageRepository},
 };
-use anyhow::{Result, anyhow};
+
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -28,12 +34,12 @@ impl<'a> ResearchSmithyCommandHandler<'a> {
         }
     }
 
-    pub async fn handle(&self, command: ResearchSmithyCommand) -> Result<()> {
+    pub async fn handle(&self, command: ResearchSmithyCommand) -> Result<(), ApplicationError> {
         let mut village = self
             .village_repo
             .get_by_id(command.village_id)
             .await?
-            .ok_or_else(|| anyhow!("Village not found"))?;
+            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(command.village_id)))?;
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
         let tribe_units = village.tribe.get_units();
@@ -41,7 +47,7 @@ impl<'a> ResearchSmithyCommandHandler<'a> {
 
         let unit = tribe_units
             .get(unit_idx as usize)
-            .ok_or_else(|| anyhow!("Unit {:?} not found", &command.unit))?;
+            .ok_or_else(|| ApplicationError::Game(GameError::InvalidUnitIndex(unit_idx as u8)))?;
 
         for req in unit.get_requirements() {
             if !village
@@ -49,19 +55,19 @@ impl<'a> ResearchSmithyCommandHandler<'a> {
                 .iter()
                 .any(|b| b.building.name == req.building)
             {
-                return Err(anyhow!(
-                    "Missing building requirements: {:?} at level {}",
-                    req.building,
-                    req.level
+                return Err(ApplicationError::Game(
+                    GameError::BuildingRequirementsNotMet {
+                        building: req.building.clone(),
+                        level: req.level,
+                    },
                 ));
             }
         }
 
         if village.academy_research[unit_idx] {
-            return Err(anyhow!(
-                "Unit {:?} already researched in Academy",
-                &command.unit
-            ));
+            return Err(ApplicationError::Game(GameError::UnitAlreadyResearched(
+                command.unit,
+            )));
         }
 
         // 3. Check resources
@@ -302,7 +308,7 @@ mod tests {
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Missing building requirements: Academy at level 1"
+            "Building requirements not met: requires Academy at level 1"
         );
     }
 }

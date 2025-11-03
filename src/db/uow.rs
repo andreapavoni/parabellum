@@ -1,11 +1,12 @@
-use anyhow::Result;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::db::repository::*;
+use crate::db::DbError;
+use crate::error::ApplicationError;
 use crate::repository::uow::{UnitOfWork, UnitOfWorkProvider};
 use crate::repository::*;
+use crate::{Result, db::repository::*};
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWorkProvider {
@@ -20,8 +21,12 @@ impl PostgresUnitOfWorkProvider {
 
 #[async_trait::async_trait]
 impl UnitOfWorkProvider for PostgresUnitOfWorkProvider {
-    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>> {
-        let tx = self.pool.begin().await?;
+    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+        let tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         // Transaction must be 'static to be stored in Arc.
         let tx_arc = Arc::new(Mutex::new(tx));
@@ -57,21 +62,31 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresMapRepository::new(self.tx.clone()))
     }
 
-    async fn commit(self: Box<Self>) -> Result<()> {
+    async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
         // If this fails, it means there are other references to the Arc,
         // the transaction cannot be committed (logical error) and will rollback on Drop.
         if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex.into_inner().commit().await?;
+            mutex
+                .into_inner()
+                .commit()
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         } else {
-            anyhow::bail!("Cannot commit transaction: Arc still has multiple owners");
+            return Err(ApplicationError::Db(DbError::Transaction(
+                "transaction still has multiple owners".to_string(),
+            )));
         }
         Ok(())
     }
 
-    async fn rollback(self: Box<Self>) -> Result<()> {
+    async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
         if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex.into_inner().rollback().await?;
+            mutex
+                .into_inner()
+                .rollback()
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         }
         Ok(())
     }
