@@ -27,7 +27,7 @@ use parabellum::{
     },
     repository::uow::UnitOfWorkProvider,
 };
-use serial_test::serial;
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -35,7 +35,6 @@ mod test_utils;
 use test_utils::TestUnitOfWorkProvider;
 
 #[tokio::test]
-#[serial]
 async fn test_full_attack_flow() -> Result<()> {
     let pool = establish_test_connection_pool().await.unwrap();
     let master_tx = pool.begin().await.unwrap();
@@ -168,7 +167,6 @@ async fn test_full_attack_flow() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
     // setup().await?;
 

@@ -46,4 +46,3 @@ rand = "0.8.5"
 dotenvy = "0.15"
 
 [dev-dependencies]
-serial_test = "3.2"
