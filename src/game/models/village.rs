@@ -90,56 +90,35 @@ impl Village {
         village
     }
 
-    pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<(), GameError> {
-        // village slots limit is 40: 18 resources + 21 infrastructures + 1 wall
-        if self.buildings.len() == 40 {
-            return Err(GameError::VillageSlotsFull.into());
-        }
-
-        // can't build on existing buildings
-        if self.get_building_by_slot_id(slot_id).is_some() {
-            return Err(GameError::SlotOccupied { slot_id }.into());
-        }
-
-        let building = Building::new(name);
-        building.validate_build(&self.tribe, &self.buildings, self.is_capital)?;
-
-        self.buildings.append(&mut vec![VillageBuilding {
-            slot_id,
-            building: building.clone(),
-        }]);
-        self.update_state();
+    pub fn add_building_at_slot(
+        &mut self,
+        building: Building,
+        slot_id: u8,
+    ) -> Result<(), GameError> {
+        self.buildings.push(VillageBuilding { slot_id, building });
 
         Ok(())
     }
 
-    pub fn upgrade_building(&mut self, slot_id: u8) -> Result<(), GameError> {
-        match self.get_building_by_slot_id(slot_id) {
-            Some(b) => match b.building.validate_upgrade() {
-                Ok(_) => {
-                    let next = b.building.next_level()?;
+    pub fn upgrade_building_at_slot(
+        &mut self,
+        new_building: Building,
+        slot_id: u8,
+    ) -> Result<(), GameError> {
+        let idx = self
+            .buildings
+            .iter()
+            .position(|b| b.slot_id == slot_id)
+            .ok_or_else(|| GameError::EmptySlot { slot_id })?;
 
-                    let idx: usize = self
-                        .buildings
-                        .iter()
-                        .position(|b| b.slot_id == slot_id)
-                        .unwrap();
-
-                    let _ = std::mem::replace(
-                        &mut self.buildings[idx],
-                        VillageBuilding {
-                            slot_id,
-                            building: next,
-                        },
-                    );
-                    self.update_state();
-                }
-
-                Err(_) => return Err(GameError::BuildingMaxLevelReached),
+        let _ = std::mem::replace(
+            &mut self.buildings[idx],
+            VillageBuilding {
+                slot_id,
+                building: new_building,
             },
+        );
 
-            None => return Err(GameError::SlotOccupied { slot_id }),
-        }
         Ok(())
     }
 
@@ -613,16 +592,6 @@ impl VillageStocks {
             && self.clay >= resources.1
             && self.iron >= resources.2
             && self.crop >= resources.3 as i64
-    }
-
-    /// Removes resources from village stocks if they're actually stored.
-    pub fn withdraw_resources(&mut self, resources: &ResourceGroup) -> Result<(), GameError> {
-        if self.check_resources(resources) {
-            self.remove_resources(resources);
-            return Ok(());
-        }
-
-        Err(GameError::NotEnoughResources)
     }
 
     /// Removes resources from the village stocks, ensuring they don't go negative.

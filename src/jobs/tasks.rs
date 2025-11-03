@@ -102,6 +102,14 @@ pub struct TrainExpansionTask {
     pub quantity: i32,
     pub time_per_unit_secs: i32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddBuildingTask {
+    pub slot_id: u8,
+    pub name: BuildingName,
+    pub village_id: i32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingUpgradeTask {
     pub slot_id: u8,

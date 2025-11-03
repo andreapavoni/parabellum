@@ -65,11 +65,10 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             cost_per_unit.resources.3 * command.quantity as u32,
         );
 
-        // if !village.stocks.check_resources(&total_cost) {
-        //     return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        // }
-
-        village.stocks.withdraw_resources(&total_cost)?;
+        if !village.stocks.check_resources(&total_cost) {
+            return Err(ApplicationError::Game(GameError::NotEnoughResources));
+        }
+        village.stocks.remove_resources(&total_cost);
         self.village_repo.save(&village).await?;
 
         let time_per_unit = cost_per_unit.time;

@@ -11,7 +11,7 @@ use parabellum::{
         models::{
             Player, ResourceGroup, Tribe,
             army::{Army, TroopSet},
-            buildings::BuildingName,
+            buildings::{Building, BuildingName},
             map::Position,
             village::Village,
         },
@@ -210,8 +210,11 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
 
         {
             let village_repo = uow_update.villages();
-            defender_village.add_building(BuildingName::Granary, 21)?;
-            defender_village.add_building(BuildingName::Warehouse, 20)?;
+            let granary = Building::new(BuildingName::Granary).at_level(1)?;
+            let warehouse = Building::new(BuildingName::Warehouse).at_level(1)?;
+
+            defender_village.add_building_at_slot(granary, 21)?;
+            defender_village.add_building_at_slot(warehouse, 20)?;
             defender_village
                 .stocks
                 .store_resources(ResourceGroup::new(800, 800, 800, 800));

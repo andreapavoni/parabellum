@@ -6,9 +6,9 @@ use crate::{
     app::{
         AppError,
         job_handlers::{
-            army_return::ArmyReturnJobHandler, attack::AttackJobHandler,
-            research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
-            train_units::TrainUnitsJobHandler,
+            add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
+            attack::AttackJobHandler, research_academy::ResearchAcademyJobHandler,
+            research_smithy::ResearchSmithyJobHandler, train_units::TrainUnitsJobHandler,
         },
     },
     error::ApplicationError,
@@ -26,6 +26,7 @@ enum AppTaskType {
     ArmyReturn,
     ResearchAcademy,
     ResearchSmithy,
+    AddBuilding,
 }
 
 impl AppTaskType {
@@ -37,6 +38,7 @@ impl AppTaskType {
             "ArmyReturn" => Some(Self::ArmyReturn),
             "ResearchAcademy" => Some(Self::ResearchAcademy),
             "ResearchSmithy" => Some(Self::ResearchSmithy),
+            "AddBuilding" => Some(Self::AddBuilding),
             _ => None,
         }
     }
@@ -83,6 +85,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::ResearchSmithy => {
                 let payload: ResearchSmithyTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(ResearchSmithyJobHandler::new(payload)))
+            }
+
+            AppTaskType::AddBuilding => {
+                let payload: AddBuildingTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(AddBuildingJobHandler::new(payload)))
             }
         }
     }

@@ -68,9 +68,11 @@ impl<'a> ResearchSmithyCommandHandler<'a> {
         // 3. Check resources
         let research_cost = smithy_upgrade_cost_for_unit(&command.unit, current_level)?;
 
-        let _ = village
-            .stocks
-            .withdraw_resources(&research_cost.resources)?;
+        if !village.stocks.check_resources(&research_cost.resources) {
+            return Err(ApplicationError::Game(GameError::NotEnoughResources));
+        }
+        village.stocks.remove_resources(&research_cost.resources);
+
         self.village_repo.save(&village).await?;
 
         // 2. Create Job
@@ -97,7 +99,9 @@ mod tests {
         app::test_utils::tests::{MockJobRepository, MockVillageRepository},
         game::{
             models::{
-                Player, ResourceGroup, Tribe, army::UnitName, buildings::BuildingName,
+                Player, ResourceGroup, Tribe,
+                army::UnitName,
+                buildings::{Building, BuildingName},
                 village::Village,
             },
             test_factories::{
@@ -122,41 +126,26 @@ mod tests {
             ..Default::default()
         });
 
-        // Add resources
-        village
-            .stocks
-            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
-        village.update_state();
+        let main_building = Building::new(BuildingName::MainBuilding).at_level(3)?;
+        village.upgrade_building_at_slot(main_building, 19)?;
 
-        village.upgrade_building(19)?;
-        village.upgrade_building(19)?;
-        village.upgrade_building(19)?;
+        let warehouse = Building::new(BuildingName::Warehouse).at_level(2)?;
+        village.add_building_at_slot(warehouse, 20)?;
 
-        let _ = village
-            .get_building_by_name(BuildingName::MainBuilding)
-            .unwrap();
+        let granary = Building::new(BuildingName::Granary).at_level(2)?;
+        village.add_building_at_slot(granary, 25)?;
 
-        village.add_building(BuildingName::Warehouse, 20)?;
-        village.upgrade_building(20)?;
+        let rally_point = Building::new(BuildingName::RallyPoint).at_level(3)?;
+        village.add_building_at_slot(rally_point, 21)?;
 
-        village.add_building(BuildingName::Granary, 25)?;
-        village.upgrade_building(25)?;
+        let barracks = Building::new(BuildingName::Barracks).at_level(3)?;
+        village.add_building_at_slot(barracks, 22)?;
 
-        village.add_building(BuildingName::RallyPoint, 21)?;
-        village.upgrade_building(21)?;
-        village.upgrade_building(21)?;
+        let academy = Building::new(BuildingName::Academy).at_level(3)?;
+        village.add_building_at_slot(academy, 23)?;
 
-        village.add_building(BuildingName::Barracks, 22)?;
-        village.upgrade_building(22)?;
-        village.upgrade_building(22)?;
-
-        village.add_building(BuildingName::Academy, 23)?;
-        village.upgrade_building(23)?;
-        village.upgrade_building(23)?;
-
-        village.add_building(BuildingName::Smithy, 24)?;
-        village.upgrade_building(24)?;
-        village.upgrade_building(24)?;
+        let smithy = Building::new(BuildingName::Smithy).at_level(3)?;
+        village.add_building_at_slot(smithy, 24)?;
 
         village.academy_research[0] = true; // Research Legionnaire
 

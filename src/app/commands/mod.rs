@@ -1,3 +1,4 @@
+mod add_building;
 mod attack_village;
 mod found_village;
 mod register_player;
@@ -6,6 +7,7 @@ mod research_academy;
 mod research_smithy;
 mod train_units;
 
+pub use add_building::*;
 pub use attack_village::*;
 pub use found_village::*;
 pub use register_player::*;

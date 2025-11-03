@@ -129,7 +129,6 @@ impl Building {
     ) -> Result<(), GameError> {
         let data = get_building_data(self.name.clone()).unwrap();
 
-        // tribe constraint (if any)?
         if !data.rules.tribes.is_empty() {
             let ok = data.rules.tribes.contains(tribe);
             if !ok {
@@ -208,6 +207,10 @@ impl Building {
         }
 
         Ok(())
+    }
+
+    pub fn calculate_build_time_secs(&self, server_speed: u8) -> u32 {
+        (self.cost().time as f64 / server_speed as f64).floor() as u32
     }
 
     pub fn cost(&self) -> Cost {

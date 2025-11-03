@@ -1,3 +1,4 @@
+pub mod add_building;
 pub mod army_return;
 pub mod attack;
 pub mod research_academy;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     config::Config,
     cqrs::{Command, CommandHandler},
-    error::Result,
+    error::{ApplicationError, Result},
     game::{GameError, models::army::UnitName},
     jobs::{Job, JobPayload, tasks::ResearchAcademyTask},
     repository::uow::UnitOfWork,
@@ -68,9 +68,10 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyHandler {
 
         let research_cost = &unit_data.research_cost;
 
-        village
-            .stocks
-            .withdraw_resources(&research_cost.resources)?;
+        if !village.stocks.check_resources(&research_cost.resources) {
+            return Err(ApplicationError::Game(GameError::NotEnoughResources));
+        }
+        village.stocks.remove_resources(&research_cost.resources);
         village_repo.save(&village).await?;
 
         let time_per_unit_secs = (research_cost.time as f64 / config.speed as f64).floor() as i64;
@@ -102,7 +103,12 @@ mod tests {
     use crate::{
         app::test_utils::tests::MockUnitOfWork,
         game::{
-            models::{Player, Tribe, army::UnitName, buildings::BuildingName, village::Village},
+            models::{
+                Player, Tribe,
+                army::UnitName,
+                buildings::{Building, BuildingName},
+                village::Village,
+            },
             test_factories::{
                 PlayerFactoryOptions, VillageFactoryOptions, player_factory, valley_factory,
                 village_factory,
@@ -112,7 +118,7 @@ mod tests {
 
     use std::sync::Arc;
 
-    fn setup_village_with_buildings() -> (Player, Village) {
+    fn setup_village_with_buildings() -> Result<(Player, Village), ApplicationError> {
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -132,35 +138,26 @@ mod tests {
         village.stocks.crop = 1000;
         village.update_state();
 
-        let _ = village.upgrade_building(19);
-        let _ = village.upgrade_building(19);
-        let _ = village.upgrade_building(19);
+        let main_building = Building::new(BuildingName::MainBuilding).at_level(3)?;
+        village.upgrade_building_at_slot(main_building, 19)?;
 
-        let _ = village
-            .get_building_by_name(BuildingName::MainBuilding)
-            .unwrap();
+        let warehouse = Building::new(BuildingName::Warehouse).at_level(2)?;
+        village.add_building_at_slot(warehouse, 20)?;
 
-        let _ = village.add_building(BuildingName::Warehouse, 20).unwrap();
-        let _ = village.upgrade_building(20);
+        let granary = Building::new(BuildingName::Granary).at_level(2)?;
+        village.add_building_at_slot(granary, 25)?;
 
-        let _ = village.add_building(BuildingName::Granary, 25).unwrap();
-        let _ = village.upgrade_building(25);
+        let rally_point = Building::new(BuildingName::RallyPoint).at_level(3)?;
+        village.add_building_at_slot(rally_point, 21)?;
 
-        let _ = village.add_building(BuildingName::RallyPoint, 21).unwrap();
-        let _ = village.upgrade_building(21);
-        let _ = village.upgrade_building(21);
+        let barracks = Building::new(BuildingName::Barracks).at_level(3)?;
+        village.add_building_at_slot(barracks, 22)?;
 
-        let _ = village.add_building(BuildingName::Barracks, 22).unwrap();
-        let _ = village.upgrade_building(22);
-        let _ = village.upgrade_building(22);
+        let academy = Building::new(BuildingName::Academy).at_level(3)?;
+        village.add_building_at_slot(academy, 23)?;
 
-        let _ = village.add_building(BuildingName::Academy, 23).unwrap();
-        let _ = village.upgrade_building(23);
-        let _ = village.upgrade_building(23);
-
-        let _ = village.add_building(BuildingName::Smithy, 24).unwrap();
-        let _ = village.upgrade_building(24);
-        let _ = village.upgrade_building(24);
+        let smithy = Building::new(BuildingName::Smithy).at_level(3)?;
+        village.add_building_at_slot(smithy, 24)?;
 
         village.academy_research[0] = true; // Research Legionnaire
 
@@ -171,7 +168,7 @@ mod tests {
         village.stocks.crop = 2000;
         village.update_state();
 
-        (player, village)
+        Ok((player, village))
     }
 
     #[tokio::test]
@@ -181,7 +178,7 @@ mod tests {
         let mock_job_repo = mock_uow.jobs();
         let config = Arc::new(Config::from_env());
 
-        let (player, mut village) = setup_village_with_buildings();
+        let (player, mut village) = setup_village_with_buildings().unwrap();
         let village_id = village.id;
 
         // Add resources
@@ -260,7 +257,7 @@ mod tests {
         let mock_job_repo = mock_uow.jobs();
         let config = Arc::new(Config::from_env());
 
-        let (player, mut village) = setup_village_with_buildings();
+        let (player, mut village) = setup_village_with_buildings().unwrap();
         village.stocks.lumber = 10; // Not enough lumber
         let village_id = village.id;
 
@@ -300,7 +297,7 @@ mod tests {
         let mock_village_repo = mock_uow.villages();
         let config = Arc::new(Config::from_env());
 
-        let (_player, mut village) = setup_village_with_buildings();
+        let (_player, mut village) = setup_village_with_buildings().unwrap();
 
         village
             .buildings
