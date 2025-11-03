@@ -27,7 +27,7 @@ impl<'a> PostgresArmyRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
-    async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>, ApplicationError> {
+    async fn get_by_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let army = sqlx::query_as!(
           db_models::Army,
@@ -37,7 +37,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
       .fetch_one(&mut *tx_guard.as_mut())
       .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(Some(army.into()))
+        Ok(army.into())
     }
 
     async fn create(&self, army: &Army) -> Result<(), ApplicationError> {

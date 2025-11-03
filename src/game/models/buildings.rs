@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{Cost, ResourceGroup, Tribe};
-use crate::{
-    Result,
-    game::{GameError, models::village::VillageBuilding},
-};
+use crate::game::{GameError, models::village::VillageBuilding};
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingGroup {
@@ -99,7 +96,7 @@ impl Building {
         })
     }
 
-    pub fn at_level(&self, mut level: u8) -> Result<Self> {
+    pub fn at_level(&self, mut level: u8) -> Result<Self, GameError> {
         let building = get_building_data(self.name.clone()).unwrap();
 
         // fallback level to the building's max level when it's beyond

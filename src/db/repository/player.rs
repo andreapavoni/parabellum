@@ -49,34 +49,17 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         Ok(()) // release the lock when tx_guard goes out of scope
     }
 
-    async fn get_by_id(&self, player_id: Uuid) -> Result<Option<Player>, ApplicationError> {
+    async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
             r#"SELECT id, username, tribe AS "tribe: _" FROM players WHERE id = $1"#,
             player_id
         )
-        .fetch_optional(&mut *tx_guard.as_mut())
+        .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
 
-        Ok(player.map(Into::into))
-    }
-
-    async fn get_by_username(&self, username: &str) -> Result<Option<Player>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
-        let player = sqlx::query_as!(
-            db_models::Player,
-            r#"
-                SELECT id, username, tribe AS "tribe: _"
-                FROM players WHERE username = $1
-                "#,
-            username
-        )
-        .fetch_optional(&mut *tx_guard.as_mut())
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(player.map(Into::into))
+        Ok(player.into())
     }
 }

@@ -2,12 +2,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Cost, Tribe, smithy::SmithyUpgrades};
-use crate::{
-    Result,
-    game::{
-        GameError,
-        models::{ResearchCost, buildings::BuildingName, hero::Hero},
-    },
+use crate::game::{
+    GameError,
+    models::{ResearchCost, buildings::BuildingName, hero::Hero},
 };
 
 #[derive(Debug, Clone)]

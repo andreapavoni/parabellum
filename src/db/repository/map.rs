@@ -54,17 +54,17 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
         Ok(valley)
     }
 
-    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>, ApplicationError> {
+    async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let field = sqlx::query_as!(
             db_models::MapField,
             "SELECT * FROM map_fields WHERE id = $1",
             id
         )
-        .fetch_optional(&mut *tx_guard.as_mut())
+        .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(field.map(Into::into))
+        Ok(field.into())
     }
 }

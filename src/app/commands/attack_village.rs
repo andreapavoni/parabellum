@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     Result,
     cqrs::{Command, CommandHandler},
-    db::DbError,
+    error::ApplicationError,
     game::models::buildings::BuildingName,
     jobs::{Job, JobPayload, tasks::AttackTask},
     repository::{ArmyRepository, JobRepository, VillageRepository, uow::UnitOfWork},
@@ -42,25 +42,16 @@ impl CommandHandler<AttackVillage> for AttackVillageHandler {
         &self,
         command: AttackVillage,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-    ) -> Result<()> {
+    ) -> Result<(), ApplicationError> {
         let job_repo: Arc<dyn JobRepository + '_> = uow.jobs();
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
         let army_repo: Arc<dyn ArmyRepository + '_> = uow.armies();
 
-        let attacker_village = village_repo
-            .get_by_id(command.village_id)
-            .await?
-            .ok_or_else(|| DbError::VillageNotFound(command.village_id))?;
+        let attacker_village = village_repo.get_by_id(command.village_id).await?;
 
-        let attacker_army = army_repo
-            .get_by_id(command.army_id)
-            .await?
-            .ok_or_else(|| DbError::ArmyNotFound(command.army_id))?;
+        let attacker_army = army_repo.get_by_id(command.army_id).await?;
 
-        let defender_village = village_repo
-            .get_by_id(command.target_village_id)
-            .await?
-            .ok_or_else(|| DbError::VillageNotFound(command.target_village_id))?;
+        let defender_village = village_repo.get_by_id(command.target_village_id).await?;
 
         let travel_time_secs = attacker_village
             .position
@@ -112,7 +103,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_attack_village_handler_success() {
-        // 1. Setup
         let mock_uow = MockUnitOfWork::new();
 
         let mock_village_repo = mock_uow.mock_villages();
@@ -170,20 +160,16 @@ mod tests {
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
         };
 
-        // 2. Act
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
         let result = handler.handle(command, &mock_uow).await;
 
-        // 3. Assert
         assert!(result.is_ok(), "Handler should execute successfully");
 
-        // Check if job was created *nel mock repo*
+        // Check if job was created *in mock repo*
         let added_jobs = mock_job_repo.get_added_jobs();
         assert_eq!(added_jobs.len(), 1, "One job should be created");
 
         let job = &added_jobs[0];
         assert_eq!(job.player_id, attacker_player.id);
-
-        // ... more job asserts ...
     }
 }

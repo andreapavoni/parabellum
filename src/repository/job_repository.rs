@@ -7,7 +7,7 @@ pub trait JobRepository: Send + Sync {
     /// Creates a new job on the db.
     async fn add(&self, job: &Job) -> Result<(), ApplicationError>;
 
-    async fn get_by_id(&self, id: Uuid) -> Result<Option<Job>, ApplicationError>;
+    async fn get_by_id(&self, id: Uuid) -> Result<Job, ApplicationError>;
 
     async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError>;
 

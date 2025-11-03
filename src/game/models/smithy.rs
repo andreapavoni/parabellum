@@ -1,4 +1,4 @@
-use crate::{Result, game::{GameError, models::{ResearchCost, ResourceGroup, army::UnitName}}};
+use crate::{game::{GameError, models::{ResearchCost, ResourceGroup, army::UnitName}}};
 
 pub type SmithyUpgrades = [u8; 8];
 

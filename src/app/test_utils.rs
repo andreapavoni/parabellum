@@ -9,8 +9,14 @@ pub mod tests {
 
     use crate::{
         Result,
+        db::DbError,
         error::ApplicationError,
-        game::models::{Player, army::Army, map::Valley, village::Village},
+        game::models::{
+            Player,
+            army::Army,
+            map::{MapField, MapFieldTopology, Position, Valley, ValleyTopology},
+            village::Village,
+        },
         jobs::Job,
         repository::{
             ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
@@ -45,8 +51,13 @@ pub mod tests {
         }
 
         // ... (implement other methods as needed, returning Ok(...) or mock data)
-        async fn get_by_id(&self, _id: Uuid) -> Result<Option<Job>, ApplicationError> {
-            Ok(None)
+        async fn get_by_id(&self, id: Uuid) -> Result<Job, ApplicationError> {
+            let jobs = self.added_jobs.lock().unwrap().clone();
+
+            Ok(jobs
+                .into_iter()
+                .find(|j| j.id == id)
+                .ok_or_else(|| ApplicationError::Db(DbError::JobNotFound(id)))?)
         }
         async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
@@ -83,9 +94,9 @@ pub mod tests {
 
     #[async_trait]
     impl VillageRepository for MockVillageRepository {
-        async fn get_by_id(&self, village_id: u32) -> Result<Option<Village>, ApplicationError> {
+        async fn get_by_id(&self, village_id: u32) -> Result<Village, ApplicationError> {
             let villages = self.villages.lock().unwrap();
-            Ok(villages.get(&village_id).cloned())
+            Ok(villages.get(&village_id).unwrap().clone())
         }
 
         async fn create(&self, village: &Village) -> Result<(), ApplicationError> {
@@ -132,9 +143,12 @@ pub mod tests {
 
     #[async_trait]
     impl ArmyRepository for MockArmyRepository {
-        async fn get_by_id(&self, army_id: Uuid) -> Result<Option<Army>, ApplicationError> {
+        async fn get_by_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
             let armies = self.armies.lock().unwrap();
-            Ok(armies.get(&army_id).cloned())
+            Ok(armies
+                .get(&army_id)
+                .cloned()
+                .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?)
         }
         // ... (implement other methods)
         async fn create(&self, _army: &Army) -> Result<(), ApplicationError> {
@@ -159,19 +173,19 @@ pub mod tests {
         async fn create(&self, _player: &Player) -> Result<(), ApplicationError> {
             Ok(())
         }
-        async fn get_by_id(&self, _player_id: Uuid) -> Result<Option<Player>, ApplicationError> {
-            Ok(None)
-        }
-        async fn get_by_username(
-            &self,
-            _username: &str,
-        ) -> Result<Option<Player>, ApplicationError> {
-            Ok(None)
+        async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
+            if let Some(player) = self.players.lock().unwrap().get(&player_id) {
+                Ok(player.clone())
+            } else {
+                Err(ApplicationError::Db(DbError::PlayerNotFound(player_id)))
+            }
         }
     }
 
     #[derive(Default, Clone)]
-    pub struct MockMapRepository;
+    pub struct MockMapRepository {
+        fields: HashMap<u32, MapField>,
+    }
 
     #[async_trait]
     impl MapRepository for MockMapRepository {
@@ -179,13 +193,18 @@ pub mod tests {
             &self,
             _quadrant: &crate::game::models::map::MapQuadrant,
         ) -> Result<Valley, ApplicationError> {
-            panic!("Not mocked")
+            Ok(MapField {
+                id: 100,
+                position: Position { x: 10, y: 10 },
+                village_id: None,
+                topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)),
+                player_id: None,
+            }
+            .try_into()
+            .unwrap())
         }
-        async fn get_field_by_id(
-            &self,
-            _id: i32,
-        ) -> Result<Option<crate::game::models::map::MapField>, ApplicationError> {
-            Ok(None)
+        async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
+            Ok(self.fields.get(&(id as u32)).unwrap().clone())
         }
     }
 

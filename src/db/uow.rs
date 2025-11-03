@@ -2,11 +2,15 @@ use sqlx::{PgPool, Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::db::DbError;
-use crate::error::ApplicationError;
-use crate::repository::uow::{UnitOfWork, UnitOfWorkProvider};
-use crate::repository::*;
-use crate::{Result, db::repository::*};
+use crate::{
+    Result,
+    db::{DbError, repository::*},
+    error::ApplicationError,
+    repository::{
+        uow::{UnitOfWork, UnitOfWorkProvider},
+        *,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWorkProvider {

@@ -43,7 +43,7 @@ impl JobHandler for TrainUnitsJobHandler {
         let village_repo = ctx.uow.villages();
 
         // 1. Load village and army
-        let mut village = village_repo.get_by_id(village_id).await?.unwrap();
+        let mut village = village_repo.get_by_id(village_id).await?;
         let mut army = village.army.map_or_else(
             || {
                 Army::new(

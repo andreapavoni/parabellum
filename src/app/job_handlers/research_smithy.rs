@@ -1,6 +1,5 @@
 use crate::{
     Result,
-    db::DbError,
     error::ApplicationError,
     jobs::{
         Job,
@@ -41,10 +40,7 @@ impl JobHandler for ResearchSmithyJobHandler {
         let village_repo: Arc<dyn VillageRepository + '_> = ctx.uow.villages();
         let village_id = job.village_id as u32;
 
-        let mut village = village_repo
-            .get_by_id(village_id)
-            .await?
-            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(village_id)))?;
+        let mut village = village_repo.get_by_id(village_id).await?;
 
         village.upgrade_smithy(self.payload.unit.clone())?;
         village_repo.save(&village).await?;

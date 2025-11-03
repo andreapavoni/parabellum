@@ -2,10 +2,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    Result,
-    game::{GameError, models::army::Army},
-};
+use crate::game::{GameError, models::army::Army};
 
 use super::village::ProductionBonus;
 

@@ -3,7 +3,6 @@ use uuid::Uuid;
 
 use crate::{
     Result,
-    db::DbError,
     error::ApplicationError,
     game::{
         GameError,
@@ -38,11 +37,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
     }
 
     pub async fn handle(&self, command: TrainUnitsCommand) -> Result<(), ApplicationError> {
-        let mut village = self
-            .village_repo
-            .get_by_id(command.village_id)
-            .await?
-            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(command.village_id)))?;
+        let mut village = self.village_repo.get_by_id(command.village_id).await?;
 
         if village.player_id != command.player_id {
             return Err(ApplicationError::Game(GameError::VillageNotOwned {
@@ -70,17 +65,14 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             cost_per_unit.resources.3 * command.quantity as u32,
         );
 
-        if !village.stocks.check_resources(&total_cost) {
-            return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        }
+        // if !village.stocks.check_resources(&total_cost) {
+        //     return Err(ApplicationError::Game(GameError::NotEnoughResources));
+        // }
 
-        // 1. Deduct resources
         village.stocks.withdraw_resources(&total_cost)?;
         self.village_repo.save(&village).await?;
 
-        // 2. Create Job
         let time_per_unit = cost_per_unit.time;
-
         let building = village
             .get_building_by_name(BuildingName::Barracks)
             .ok_or_else(|| {

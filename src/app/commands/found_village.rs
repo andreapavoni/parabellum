@@ -1,8 +1,6 @@
 use crate::{
     Result,
     cqrs::{Command, CommandHandler},
-    db::DbError,
-    error::ApplicationError,
     game::models::{
         Player,
         map::{Position, Valley},
@@ -51,15 +49,8 @@ impl CommandHandler<FoundVillage> for FoundVillageHandler {
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
         let map_repo: Arc<dyn MapRepository + '_> = uow.map();
 
-        let valley = match map_repo.get_field_by_id(village_id).await? {
-            Some(map_field) => Valley::try_from(map_field)?,
-            None => {
-                return Err(ApplicationError::Db(DbError::VillageNotFound(
-                    village_id as u32,
-                )));
-            }
-        };
-
+        let map_field = map_repo.get_field_by_id(village_id).await?;
+        let valley = Valley::try_from(map_field)?;
         let village = Village::new("New Village".to_string(), &valley, &command.player, false);
 
         village_repo.create(&village).await?;

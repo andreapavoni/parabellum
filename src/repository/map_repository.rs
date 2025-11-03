@@ -10,6 +10,6 @@ pub trait MapRepository: Send + Sync {
         &self,
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError>;
-    async fn get_field_by_id(&self, id: i32) -> Result<Option<MapField>, ApplicationError>;
+    async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError>;
     // async fn bulk_create_fields(&self, fields: Vec<NewMapField>) -> Result<()>;
 }

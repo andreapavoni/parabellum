@@ -10,6 +10,15 @@ pub enum DbError {
     #[error("Army with ID {0} not found")]
     ArmyNotFound(Uuid),
 
+    #[error("Player with ID {0} not found")]
+    PlayerNotFound(Uuid),
+
+    #[error("Job with ID {0} not found")]
+    JobNotFound(Uuid),
+
+    #[error("MapField with ID {0} not found")]
+    MapFieldNotFound(u32),
+
     #[error("Player with ID {0} does not own village with ID {1}")]
     PlayerDoesNotOwnVillage(Uuid, u32),
 

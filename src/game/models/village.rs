@@ -2,13 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    error::{ApplicationError, Result},
-    game::{
-        GameError,
-        battle::BattleReport,
-        models::{ResourceGroup, army::UnitName},
-    },
+use crate::game::{
+    GameError,
+    battle::BattleReport,
+    models::{ResourceGroup, army::UnitName},
 };
 
 use super::{
@@ -87,7 +84,7 @@ impl Village {
         village
     }
 
-    pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<()> {
+    pub fn add_building(&mut self, name: BuildingName, slot_id: u8) -> Result<(), GameError> {
         // village slots limit is 40: 18 resources + 21 infrastructures + 1 wall
         if self.buildings.len() == 40 {
             return Err(GameError::VillageSlotsFull.into());
@@ -110,14 +107,11 @@ impl Village {
         Ok(())
     }
 
-    pub fn upgrade_building(&mut self, slot_id: u8) -> Result<()> {
+    pub fn upgrade_building(&mut self, slot_id: u8) -> Result<(), GameError> {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => match b.building.validate_upgrade() {
                 Ok(_) => {
-                    let next = b
-                        .building
-                        .next_level()
-                        .map_err(|_| GameError::BuildingMaxLevelReached)?;
+                    let next = b.building.next_level()?;
 
                     let idx: usize = self
                         .buildings
@@ -135,15 +129,15 @@ impl Village {
                     self.update_state();
                 }
 
-                Err(_) => return Err(ApplicationError::Game(GameError::BuildingMaxLevelReached)),
+                Err(_) => return Err(GameError::BuildingMaxLevelReached),
             },
 
-            None => return Err(ApplicationError::Game(GameError::SlotOccupied { slot_id })),
+            None => return Err(GameError::SlotOccupied { slot_id }),
         }
         Ok(())
     }
 
-    pub fn downgrade_building_to_level(&mut self, slot_id: u8, level: u8) -> Result<()> {
+    pub fn downgrade_building_to_level(&mut self, slot_id: u8, level: u8) -> Result<(), GameError> {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => {
                 let building = b.building.at_level(level)?;
@@ -152,12 +146,12 @@ impl Village {
                 self.update_state();
             }
 
-            None => return Err(ApplicationError::Game(GameError::SlotOccupied { slot_id })),
+            None => return Err(GameError::SlotOccupied { slot_id }),
         };
         Ok(())
     }
 
-    pub fn destroy_building(&mut self, slot_id: u8) -> Result<()> {
+    pub fn destroy_building(&mut self, slot_id: u8) -> Result<(), GameError> {
         match self.get_building_by_slot_id(slot_id) {
             Some(b) => {
                 if b.building.group == BuildingGroup::Resources {
@@ -177,7 +171,7 @@ impl Village {
                         .collect::<Vec<_>>();
                 }
             }
-            None => return Err(ApplicationError::Game(GameError::EmptySlot { slot_id })),
+            None => return Err(GameError::EmptySlot { slot_id }),
         };
         Ok(())
     }
@@ -302,7 +296,7 @@ impl Village {
     }
 
     /// Applies building damages from the battle report to the village.
-    pub fn apply_building_damages(&mut self, report: &BattleReport) -> Result<()> {
+    pub fn apply_building_damages(&mut self, report: &BattleReport) -> Result<(), GameError> {
         // Wall damage
         if let Some(wall_damage) = &report.wall_damage {
             if wall_damage.level_after < wall_damage.level_before {
@@ -421,7 +415,7 @@ impl Village {
     }
 
     /// Marks a unit name as researched in the academy.
-    pub fn research_academy(&mut self, unit: UnitName) -> Result<()> {
+    pub fn research_academy(&mut self, unit: UnitName) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
             self.academy_research[idx] = true;
         }
@@ -430,7 +424,7 @@ impl Village {
     }
 
     /// Upgrades smithy level for unit name.
-    pub fn upgrade_smithy(&mut self, unit: UnitName) -> Result<()> {
+    pub fn upgrade_smithy(&mut self, unit: UnitName) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
             if self.smithy[idx] < 20 {
                 self.smithy[idx] += 1;
@@ -479,7 +473,7 @@ impl Village {
         self.updated_at = now;
     }
 
-    fn init_village_buildings(&mut self, valley: &Valley) -> Result<()> {
+    fn init_village_buildings(&mut self, valley: &Valley) -> Result<(), GameError> {
         let topology = valley.topology.clone();
 
         // Default resources level 0

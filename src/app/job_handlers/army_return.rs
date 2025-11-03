@@ -1,6 +1,5 @@
 use crate::{
     Result,
-    db::DbError,
     error::ApplicationError,
     game::models::army::Army,
     jobs::{
@@ -42,7 +41,7 @@ impl JobHandler for ArmyReturnJobHandler {
         let army_repo = ctx.uow.armies();
         let village_repo = ctx.uow.villages();
 
-        let mut village = village_repo.get_by_id(village_id).await?.unwrap();
+        let mut village = village_repo.get_by_id(village_id).await?;
         let mut army = village.army.map_or_else(
             || {
                 Army::new(
@@ -59,10 +58,7 @@ impl JobHandler for ArmyReturnJobHandler {
             |a| a.clone(),
         );
 
-        let returning_army = army_repo
-            .get_by_id(self.payload.army_id)
-            .await?
-            .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(self.payload.army_id)))?;
+        let returning_army = army_repo.get_by_id(self.payload.army_id).await?;
 
         army.merge(&returning_army)?;
         army_repo.save(&army).await?;

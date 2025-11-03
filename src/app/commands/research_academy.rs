@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::{
-    db::DbError,
     error::Result,
     game::{GameError, models::army::UnitName},
     jobs::{Job, JobPayload, tasks::ResearchAcademyTask},
@@ -31,11 +30,7 @@ impl<'a> ResearchAcademyCommandHandler<'a> {
     }
 
     pub async fn handle(&self, command: ResearchAcademyCommand) -> Result<()> {
-        let mut village = self
-            .village_repo
-            .get_by_id(command.village_id)
-            .await?
-            .ok_or_else(|| DbError::VillageNotFound(command.village_id))?;
+        let mut village = self.village_repo.get_by_id(command.village_id).await?;
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
 

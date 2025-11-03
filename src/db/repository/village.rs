@@ -1,3 +1,8 @@
+use sqlx::{Postgres, Transaction, types::Json};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
 use crate::{
     Result,
     db::{DbError, mapping::VillageAggregate, models as db_models},
@@ -5,11 +10,6 @@ use crate::{
     game::models::village::Village,
     repository::VillageRepository,
 };
-
-use sqlx::{Postgres, Transaction, types::Json};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use uuid::Uuid;
 
 /// Implements VillageRepository and operates on transactions.
 #[derive(Clone)]
@@ -51,23 +51,19 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         Ok(())
     }
 
-    async fn get_by_id(&self, village_id_u32: u32) -> Result<Option<Village>, ApplicationError> {
+    async fn get_by_id(&self, village_id_u32: u32) -> Result<Village, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
         let village_id_i32 = village_id_u32 as i32;
 
-        let db_village = match sqlx::query_as!(
+        let db_village = sqlx::query_as!(
             db_models::Village,
             "SELECT * FROM villages WHERE id = $1",
             village_id_i32
         )
-        .fetch_optional(&mut *tx_guard.as_mut())
+        .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
-        {
-            Some(v) => v,
-            None => return Ok(None),
-        };
+        .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id_u32)))?;
 
         let db_player = sqlx::query_as!(
             db_models::Player,
@@ -104,7 +100,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         let mut game_village = Village::try_from(aggregate)?;
         game_village.update_state();
-        Ok(Some(game_village))
+        Ok(game_village)
     }
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError> {
@@ -116,9 +112,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         let mut result = Vec::new();
         for record in villages_ids {
-            if let Some(village) = self.get_by_id(record.id as u32).await? {
-                result.push(village);
-            }
+            let village = self.get_by_id(record.id as u32).await?;
+            result.push(village);
         }
 
         Ok(result)

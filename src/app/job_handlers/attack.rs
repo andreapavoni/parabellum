@@ -3,7 +3,6 @@ use tracing::{info, instrument};
 
 use crate::{
     Result,
-    db::DbError,
     error::ApplicationError,
     game::{
         battle::{AttackType, Battle},
@@ -41,30 +40,19 @@ impl JobHandler for AttackJobHandler {
     ) -> Result<(), ApplicationError> {
         info!("Execute Attack Job");
 
-        let mut attacker_army = ctx
-            .uow
-            .armies()
-            .get_by_id(self.payload.army_id)
-            .await?
-            .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(self.payload.army_id)))?;
+        let mut attacker_army = ctx.uow.armies().get_by_id(self.payload.army_id).await?;
 
         let attacker_village = ctx
             .uow
             .villages()
             .get_by_id(attacker_army.village_id)
-            .await?
-            .ok_or_else(|| {
-                ApplicationError::Db(DbError::VillageNotFound(attacker_army.village_id))
-            })?;
+            .await?;
 
         let mut defender_village = ctx
             .uow
             .villages()
             .get_by_id(self.payload.target_village_id as u32)
-            .await?
-            .ok_or_else(|| {
-                ApplicationError::Db(DbError::VillageNotFound(attacker_army.village_id))
-            })?;
+            .await?;
 
         // Find catapult targets on target village by looking for their name, or return random buildings
         let mut catapult_targets: Vec<Building> = Vec::new();
@@ -139,10 +127,7 @@ impl JobHandler for AttackJobHandler {
             from_village_id: defender_village_id,
         };
 
-        let job_payload = JobPayload::new(
-            "ArmyReturn",
-            serde_json::to_value(&return_payload).map_err(|e| ApplicationError::Json(e))?,
-        );
+        let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
         let return_job = Job::new(player_id, village_id, return_travel_time, job_payload);
 
         ctx.uow.jobs().add(&return_job).await?;

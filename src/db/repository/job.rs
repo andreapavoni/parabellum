@@ -45,7 +45,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         Ok(())
     }
 
-    async fn get_by_id(&self, job_id: Uuid) -> Result<Option<Job>, ApplicationError> {
+    async fn get_by_id(&self, job_id: Uuid) -> Result<Job, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let job = sqlx::query_as!(
           db_models::Job,
@@ -55,7 +55,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
       .fetch_one(&mut *tx_guard.as_mut())
       .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(Some(job.into()))
+        Ok(job.into())
     }
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>, ApplicationError> {

@@ -1,6 +1,5 @@
 use crate::{
     Result,
-    db::DbError,
     error::ApplicationError,
     game::{
         GameError,
@@ -35,11 +34,7 @@ impl<'a> ResearchSmithyCommandHandler<'a> {
     }
 
     pub async fn handle(&self, command: ResearchSmithyCommand) -> Result<(), ApplicationError> {
-        let mut village = self
-            .village_repo
-            .get_by_id(command.village_id)
-            .await?
-            .ok_or_else(|| ApplicationError::Db(DbError::VillageNotFound(command.village_id)))?;
+        let mut village = self.village_repo.get_by_id(command.village_id).await?;
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
         let tribe_units = village.tribe.get_units();

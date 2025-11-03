@@ -138,7 +138,7 @@ async fn test_full_attack_flow() -> Result<()> {
             "There should be exactly 1 pending job in the queue (the return)."
         );
 
-        if let Ok(Some(original_job)) = job_repo.get_by_id(attack_job.id).await {
+        if let Ok(original_job) = job_repo.get_by_id(attack_job.id).await {
             assert_eq!(original_job.status, JobStatus::Completed);
         }
 
@@ -264,8 +264,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let village_repo = uow_assert.villages();
         let job_repo = uow_assert.jobs();
 
-        let updated_defender_village: Village =
-            village_repo.get_by_id(defender_village.id).await?.unwrap();
+        let updated_defender_village: Village = village_repo.get_by_id(defender_village.id).await?;
 
         let return_jobs = job_repo.list_by_player_id(attacker_player.id).await?;
         assert_eq!(
