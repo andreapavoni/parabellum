@@ -8,7 +8,7 @@ use parabellum::{
         job_registry::AppJobRegistry,
         queries_handlers::GetUnoccupiedValleyHandler,
     },
-    bus::AppBus,
+    app_bus::AppBus,
     cqrs::{
         commands::{FoundVillage, RegisterPlayer},
         queries::GetUnoccupiedValley,

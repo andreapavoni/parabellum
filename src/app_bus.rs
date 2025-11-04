@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     cqrs::{Command, CommandHandler, Query, QueryHandler},
     error::ApplicationError,
-    repository::uow::UnitOfWorkProvider,
+    uow::UnitOfWorkProvider,
 };
 
 /// AppBus (Mediator)

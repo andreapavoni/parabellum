@@ -3,7 +3,8 @@ use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::RegisterVillage},
     game::models::village::Village,
-    repository::{MapRepository, VillageRepository, uow::UnitOfWork},
+    repository::{MapRepository, VillageRepository},
+    uow::UnitOfWork,
 };
 
 use std::sync::Arc;
@@ -42,7 +43,7 @@ impl CommandHandler<RegisterVillage> for RegisterVillageCommandHandler {
             config.world_size as i32,
         );
 
-        village_repo.create(&village).await?;
+        village_repo.save(&village).await?;
 
         Ok(())
     }
@@ -62,7 +63,7 @@ mod tests {
             },
             test_utils::{PlayerFactoryOptions, player_factory},
         },
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use std::sync::Arc;
 
@@ -77,7 +78,7 @@ mod tests {
             ..Default::default()
         });
 
-        mock_uow.players().create(&player).await.unwrap();
+        mock_uow.players().save(&player).await.unwrap();
 
         let command = RegisterVillage::new(player.clone(), MapQuadrant::NorthEast);
 

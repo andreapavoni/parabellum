@@ -14,8 +14,8 @@ pub mod tests {
         error::ApplicationError,
         repository::{
             ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
-            uow::{UnitOfWork, UnitOfWorkProvider},
         },
+        uow::{UnitOfWork, UnitOfWorkProvider},
     };
 
     #[derive(Clone)]

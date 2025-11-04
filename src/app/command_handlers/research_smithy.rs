@@ -5,7 +5,7 @@ use crate::{
     error::ApplicationError,
     game::{GameError, models::smithy::smithy_upgrade_cost_for_unit},
     jobs::{Job, JobPayload, tasks::ResearchSmithyTask},
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 use std::sync::Arc;
@@ -103,7 +103,7 @@ mod tests {
             },
         },
         jobs::tasks::ResearchSmithyTask,
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use std::sync::Arc;
 
@@ -152,7 +152,7 @@ mod tests {
 
         let village_repo = mock_uow.villages();
         let job_repo = mock_uow.jobs();
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
@@ -206,7 +206,7 @@ mod tests {
         village.academy_research[1] = false;
 
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
@@ -235,7 +235,7 @@ mod tests {
         let village_repo = mock_uow.villages();
 
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {

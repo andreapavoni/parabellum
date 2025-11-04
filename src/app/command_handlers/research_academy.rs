@@ -6,7 +6,7 @@ use crate::{
     error::{ApplicationError, Result},
     game::GameError,
     jobs::{Job, JobPayload, tasks::ResearchAcademyTask},
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 pub struct ResearchAcademyCommandHandler {}
@@ -151,7 +151,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -194,7 +194,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -224,7 +224,7 @@ mod tests {
             .retain(|vb| vb.building.name != BuildingName::Smithy);
 
         let village_id = village.id;
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -253,7 +253,7 @@ mod tests {
         village.academy_research[1] = true; // Praetorian
 
         let village_id = village.id;
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {

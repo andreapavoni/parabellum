@@ -6,10 +6,8 @@ use crate::{
     Result,
     db::{DbError, repository::*},
     error::ApplicationError,
-    repository::{
-        uow::{UnitOfWork, UnitOfWorkProvider},
-        *,
-    },
+    repository::*,
+    uow::{UnitOfWork, UnitOfWorkProvider},
 };
 
 #[derive(Debug, Clone)]

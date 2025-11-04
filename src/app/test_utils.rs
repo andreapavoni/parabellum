@@ -20,8 +20,8 @@ pub mod tests {
         jobs::Job,
         repository::{
             ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
-            uow::UnitOfWork,
         },
+        uow::UnitOfWork,
     };
 
     // --- New Mock Repositories ---
@@ -89,14 +89,6 @@ pub mod tests {
             Ok(villages.get(&village_id).unwrap().clone())
         }
 
-        async fn create(&self, village: &Village) -> Result<(), ApplicationError> {
-            self.villages
-                .lock()
-                .unwrap()
-                .insert(village.id, village.clone());
-
-            Ok(())
-        }
         async fn list_by_player_id(
             &self,
             player_id: Uuid,
@@ -140,12 +132,7 @@ pub mod tests {
                 .cloned()
                 .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?)
         }
-        // ... (implement other methods)
-        async fn create(&self, army: &Army) -> Result<(), ApplicationError> {
-            let mut armies = self.armies.lock().unwrap();
-            armies.insert(army.id, army.clone());
-            Ok(())
-        }
+
         async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
             let mut armies = self.armies.lock().unwrap();
             armies.insert(army.id, army.clone());
@@ -166,7 +153,7 @@ pub mod tests {
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {
-        async fn create(&self, player: &Player) -> Result<(), ApplicationError> {
+        async fn save(&self, player: &Player) -> Result<(), ApplicationError> {
             self.players
                 .lock()
                 .unwrap()

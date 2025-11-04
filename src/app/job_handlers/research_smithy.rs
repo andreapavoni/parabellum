@@ -63,7 +63,7 @@ mod tests {
             },
         },
         jobs::{Job, JobPayload},
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -89,7 +89,7 @@ mod tests {
             .get_unit_idx_by_name(&unit_to_upgrade)
             .unwrap();
         village.smithy[unit_idx] = 0;
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let payload = ResearchSmithyTask {
             unit: unit_to_upgrade.clone(),

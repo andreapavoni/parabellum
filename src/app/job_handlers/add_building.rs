@@ -65,7 +65,7 @@ mod tests {
             },
         },
         jobs::{Job, JobPayload},
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -86,7 +86,7 @@ mod tests {
 
         let village_id = village.id;
         let player_id = player.id;
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let slot_id_to_build: u8 = 22;
         let building_to_build = BuildingName::Warehouse;

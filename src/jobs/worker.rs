@@ -10,7 +10,7 @@ use crate::{
         Job,
         handler::{JobHandler, JobHandlerContext, JobRegistry},
     },
-    repository::uow::UnitOfWorkProvider,
+    uow::UnitOfWorkProvider,
 };
 
 /// Responsible for polling and execute job.

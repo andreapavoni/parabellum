@@ -3,7 +3,8 @@ use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::FoundVillage},
     game::models::{map::Valley, village::Village},
-    repository::{MapRepository, VillageRepository, uow::UnitOfWork},
+    repository::{MapRepository, VillageRepository},
+    uow::UnitOfWork,
 };
 use std::sync::Arc;
 
@@ -43,7 +44,7 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
             config.world_size as i32,
         );
 
-        village_repo.create(&village).await?;
+        village_repo.save(&village).await?;
 
         Ok(())
     }
@@ -60,7 +61,7 @@ mod tests {
             models::{Tribe, map::Position},
             test_utils::{PlayerFactoryOptions, player_factory},
         },
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use std::sync::Arc;
 

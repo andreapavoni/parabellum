@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::RegisterPlayer},
     game::models::Player,
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 pub struct RegisterPlayerCommandHandler {}
@@ -37,7 +37,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
         };
 
         let repo = uow.players();
-        repo.create(&player).await?;
+        repo.save(&player).await?;
 
         Ok(())
     }
@@ -51,7 +51,7 @@ mod tests {
         config::Config,
         cqrs::commands::RegisterPlayer,
         game::models::Tribe,
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use std::sync::Arc;
     use uuid::Uuid;

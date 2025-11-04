@@ -40,44 +40,40 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         Ok(army.into())
     }
 
-    async fn create(&self, army: &Army) -> Result<(), ApplicationError> {
+    async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let db_tribe: Tribe = army.tribe.clone().into();
         let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
-        let hero_id = army.clone().hero.map(|hero| hero.id);
-
-        sqlx::query!(
-              r#"
-              INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-              "#,
-              army.id, army.village_id as i32, current_map_field_id as i32, hero_id, Json(&army.units) as _, Json(&army.smithy) as _, db_tribe as _, army.player_id
-          )
-          .execute(&mut *tx_guard.as_mut())
-          .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(())
-    }
-
-    async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
         let hero_id = army.hero.as_ref().map(|h| h.id);
-        let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
 
+        // Questa è la query UPSERT
         sqlx::query!(
-            r#"
-          UPDATE armies
-          SET units = $2, hero_id = $3, current_map_field_id = $4
-          WHERE id = $1
-          "#,
-            army.id,
-            Json(&army.units) as _,
-            hero_id,
-            current_map_field_id as i32
-        )
-        .execute(&mut *tx_guard.as_mut())
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+                r#"
+                INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (id) DO UPDATE
+                SET
+                    units = $5,
+                    hero_id = $4,
+                    current_map_field_id = $3,
+                    -- Aggiungi altri campi che un 'save' dovrebbe aggiornare se necessario
+                    village_id = $2,
+                    player_id = $8,
+                    tribe = $7,
+                    smithy = $6
+                "#,
+                army.id,
+                army.village_id as i32,
+                current_map_field_id as i32,
+                hero_id,
+                Json(&army.units) as _,
+                Json(&army.smithy) as _,
+                db_tribe as _,
+                army.player_id
+            )
+            .execute(&mut *tx_guard.as_mut())
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(())
     }

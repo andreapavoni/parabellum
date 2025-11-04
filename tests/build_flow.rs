@@ -18,7 +18,7 @@ use parabellum::{
         },
     },
     jobs::{JobStatus, tasks::AddBuildingTask, worker::JobWorker},
-    repository::uow::UnitOfWorkProvider,
+    uow::UnitOfWorkProvider,
 };
 use std::sync::Arc;
 use test_utils::tests::TestUnitOfWorkProvider;
@@ -41,7 +41,7 @@ async fn test_full_build_flow() -> Result<()> {
             tribe: Some(Tribe::Roman),
             ..Default::default()
         });
-        uow.players().create(&player).await?;
+        uow.players().save(&player).await?;
 
         let valley = valley_factory(ValleyFactoryOptions {
             position: Some(Position { x: 1, y: 1 }),
@@ -61,7 +61,7 @@ async fn test_full_build_flow() -> Result<()> {
             .stocks
             .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
         village.update_state();
-        uow.villages().create(&village).await?;
+        uow.villages().save(&village).await?;
 
         uow.commit().await?;
         (player, village)

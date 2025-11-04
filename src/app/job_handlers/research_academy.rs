@@ -64,7 +64,7 @@ mod tests {
             },
         },
         jobs::{Job, JobPayload},
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -85,7 +85,7 @@ mod tests {
         let village_id = village.id;
 
         village.academy_research[1] = false; // Praetorian
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let unit_to_research = UnitName::Praetorian;
         let payload = ResearchAcademyTask {

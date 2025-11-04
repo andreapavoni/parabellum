@@ -7,7 +7,8 @@ use crate::{
     cqrs::{CommandHandler, commands::AttackVillage},
     error::ApplicationError,
     jobs::{Job, JobPayload, tasks::AttackTask},
-    repository::{ArmyRepository, JobRepository, VillageRepository, uow::UnitOfWork},
+    repository::{ArmyRepository, JobRepository, VillageRepository},
+    uow::UnitOfWork,
 };
 
 pub struct AttackVillageCommandHandler {}
@@ -137,9 +138,9 @@ mod tests {
             ..Default::default()
         });
 
-        village_repo.create(&attacker_village).await.unwrap();
-        village_repo.create(&defender_village).await.unwrap();
-        army_repo.create(&attacker_army).await.unwrap();
+        village_repo.save(&attacker_village).await.unwrap();
+        village_repo.save(&defender_village).await.unwrap();
+        army_repo.save(&attacker_army).await.unwrap();
 
         let handler = AttackVillageCommandHandler::new();
         let command = AttackVillage {

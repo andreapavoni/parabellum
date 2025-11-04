@@ -42,31 +42,17 @@ impl JobHandler for ArmyReturnJobHandler {
         let village_repo = ctx.uow.villages();
 
         let mut village = village_repo.get_by_id(village_id).await?;
-
-        let mut home_army = village.army.map_or_else(
-            || {
-                Army::new(
-                    None,
-                    village_id,
-                    Some(village_id),
-                    village.player_id,
-                    village.tribe.clone(),
-                    [0; 10],
-                    Default::default(),
-                    None,
-                )
-            },
-            |a| a.clone(),
-        );
-
         let returning_army = army_repo.get_by_id(self.payload.army_id).await?;
 
-        home_army.merge(&returning_army)?;
-        army_repo.save(&home_army).await?;
-
+        let mut village_army = village
+            .army
+            .take()
+            .unwrap_or(Army::new_village_army(&village));
+        village_army.merge(&returning_army)?;
+        army_repo.save(&village_army).await?;
+        village.army = Some(village_army);
         army_repo.remove(returning_army.id).await?;
 
-        village.army = Some(home_army);
         village
             .stocks
             .store_resources(self.payload.resources.clone());
@@ -91,7 +77,7 @@ mod tests {
             },
         },
         jobs::{Job, JobPayload},
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -150,9 +136,9 @@ mod tests {
 
         let (job, config, uow) = setup_test_job(task.clone(), player.id, village.id as i32);
 
-        uow.villages().create(&village).await.unwrap();
-        uow.armies().create(&home_army).await.unwrap();
-        uow.armies().create(&returning_army).await.unwrap();
+        uow.villages().save(&village).await.unwrap();
+        uow.armies().save(&home_army).await.unwrap();
+        uow.armies().save(&returning_army).await.unwrap();
 
         let handler = ArmyReturnJobHandler::new(task);
         let context = JobHandlerContext { uow, config };

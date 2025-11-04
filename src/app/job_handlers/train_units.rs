@@ -41,29 +41,18 @@ impl JobHandler for TrainUnitsJobHandler {
         info!("Executing TrainUnits job");
         let army_repo = ctx.uow.armies();
         let village_repo = ctx.uow.villages();
-
         let mut village = village_repo.get_by_id(village_id).await?;
-        let mut army = village.army.map_or_else(
-            || {
-                Army::new(
-                    None,
-                    village_id,
-                    Some(village_id),
-                    village.player_id,
-                    village.tribe.clone(),
-                    [0; 10],
-                    Default::default(),
-                    None,
-                )
-            },
-            |a| a.clone(),
-        );
 
-        army.add_unit(self.payload.unit.clone(), 1)?;
-        army_repo.save(&army).await?;
+        let mut village_army = village
+            .army
+            .take()
+            .unwrap_or(Army::new_village_army(&village));
 
-        village.army = Some(army);
+        village_army.add_unit(self.payload.unit.clone(), 1)?;
+        village.army = Some(village_army.clone());
         village.update_state();
+
+        army_repo.save(&village_army).await?;
         village_repo.save(&village).await?;
 
         if self.payload.quantity > 1 {
@@ -104,7 +93,7 @@ mod tests {
             },
         },
         jobs::{Job, JobPayload},
-        repository::uow::UnitOfWork,
+        uow::UnitOfWork,
     };
     use serde_json::json;
     use std::sync::Arc;
@@ -133,7 +122,7 @@ mod tests {
         let player_id = player.id;
 
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let config = Arc::new(Config::from_env());
         let payload = TrainUnitsTask {

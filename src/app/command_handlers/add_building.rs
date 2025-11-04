@@ -6,7 +6,7 @@ use crate::{
     cqrs::{CommandHandler, commands::AddBuilding},
     game::{GameError, models::buildings::Building},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 pub struct AddBuildingCommandHandler {}
@@ -137,7 +137,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
@@ -186,7 +186,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
@@ -220,7 +220,7 @@ mod tests {
         // Manually occupy slot 22
         let cranny = Building::new(BuildingName::Cranny);
         village.add_building_at_slot(cranny, 22).unwrap();
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
@@ -253,7 +253,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().create(&village).await.unwrap();
+        mock_uow.villages().save(&village).await.unwrap();
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {

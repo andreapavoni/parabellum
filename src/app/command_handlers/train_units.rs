@@ -10,7 +10,7 @@ use crate::{
         models::{ResourceGroup, buildings::BuildingName},
     },
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 pub struct TrainUnitsCommandHandler {}
@@ -160,7 +160,7 @@ mod tests {
 
         let (player, village, config) = setup_village_with_barracks();
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
 
@@ -228,7 +228,7 @@ mod tests {
         let (player, mut village, config) = setup_village_with_barracks();
         village.stocks.lumber = 10; // Not enough lumber
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
 
@@ -262,7 +262,7 @@ mod tests {
             .retain(|vb| vb.building.name != BuildingName::Barracks);
 
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
 
@@ -295,7 +295,7 @@ mod tests {
             .retain(|vb| vb.building.name != BuildingName::Barracks);
 
         let village_id = village.id;
-        village_repo.create(&village).await.unwrap();
+        village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
 

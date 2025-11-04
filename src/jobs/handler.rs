@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 
-use crate::{
-    Result, config::Config, error::ApplicationError, jobs::Job, repository::uow::UnitOfWork,
-};
+use crate::{Result, config::Config, error::ApplicationError, jobs::Job, uow::UnitOfWork};
 
 /// Context which contains JobHandler dependencies.
 pub struct JobHandlerContext<'a> {

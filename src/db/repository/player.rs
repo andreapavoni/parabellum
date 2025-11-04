@@ -25,28 +25,28 @@ impl<'a> PostgresPlayerRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
-    async fn create(&self, player: &Player) -> Result<(), ApplicationError> {
+    async fn save(&self, player: &Player) -> Result<(), ApplicationError> {
         let tribe: db_models::Tribe = player.tribe.clone().into();
-
-        // Get the lock on the transaction
         let mut tx_guard = self.tx.lock().await;
 
-        sqlx::query_as!(
-            db_models::Player,
+        sqlx::query!(
             r#"
-                INSERT INTO players (id, username, tribe)
-                VALUES ($1, $2, $3)
-                RETURNING id, username, tribe AS "tribe: _"
-                "#,
+              INSERT INTO players (id, username, tribe)
+              VALUES ($1, $2, $3)
+              ON CONFLICT (id) DO UPDATE
+              SET
+                  username = $2,
+                  tribe = $3
+              "#,
             player.id,
             player.username,
             tribe as _
         )
-        .fetch_one(&mut *tx_guard.as_mut()) // Use &mut *tx_guard as Executor
+        .execute(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(()) // release the lock when tx_guard goes out of scope
+        Ok(())
     }
 
     async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {

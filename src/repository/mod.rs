@@ -1,13 +1,11 @@
-mod army_repository;
-mod job_repository;
-mod map_repository;
-mod player_repository;
-mod village_repository;
+mod army;
+mod job;
+mod map;
+mod player;
+mod village;
 
-pub mod uow;
-
-pub use army_repository::ArmyRepository;
-pub use job_repository::JobRepository;
-pub use map_repository::MapRepository;
-pub use player_repository::PlayerRepository;
-pub use village_repository::VillageRepository;
+pub use army::ArmyRepository;
+pub use job::JobRepository;
+pub use map::MapRepository;
+pub use player::PlayerRepository;
+pub use village::VillageRepository;

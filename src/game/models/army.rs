@@ -4,7 +4,7 @@ use uuid::Uuid;
 use super::{Cost, Tribe, smithy::SmithyUpgrades};
 use crate::game::{
     GameError,
-    models::{ResearchCost, buildings::BuildingName, hero::Hero},
+    models::{ResearchCost, buildings::BuildingName, hero::Hero, village::Village},
 };
 
 #[derive(Debug, Clone)]
@@ -148,6 +148,20 @@ impl Army {
             hero,
             current_map_field_id,
         }
+    }
+
+    /// Helper to get a new empty army for a specific village.
+    pub fn new_village_army(village: &Village) -> Self {
+        Army::new(
+            None,
+            village.id,
+            Some(village.id),
+            village.player_id,
+            village.tribe.clone(),
+            [0; 10],
+            village.smithy,
+            None,
+        )
     }
 
     /// Returns the amount of a given unit.

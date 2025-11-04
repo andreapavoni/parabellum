@@ -25,32 +25,6 @@ impl<'a> PostgresVillageRepository<'a> {
 
 #[async_trait::async_trait]
 impl<'a> VillageRepository for PostgresVillageRepository<'a> {
-    async fn create(&self, village: &Village) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
-        sqlx::query!(
-              r#"
-              INSERT INTO villages (id, player_id, name, position, buildings, production, stocks, smithy_upgrades, academy_research, population, loyalty, is_capital)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-              "#,
-              village.id as i32,
-              village.player_id,
-              village.name,
-              Json(&village.position) as _,
-              Json(&village.buildings) as _,
-              Json(&village.production) as _,
-              Json(&village.stocks) as _,
-              Json(&village.smithy) as _,
-              Json(&village.academy_research) as _,
-              village.population as i32,
-              village.loyalty as i16,
-              village.is_capital
-          )
-          .execute(&mut *tx_guard.as_mut())
-          .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(())
-    }
-
     async fn get_by_id(&self, village_id_u32: u32) -> Result<Village, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
@@ -124,15 +98,28 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         sqlx::query!(
             r#"
-              UPDATE villages
-              SET
-                  name = $2, buildings = $3, production = $4,
-                  stocks = $5, smithy_upgrades = $6, academy_research = $7, population = $8,
-                  loyalty = $9, updated_at = NOW()
-              WHERE id = $1
-              "#,
+                INSERT INTO villages (
+                    id, player_id, name, position, buildings, production,
+                    stocks, smithy_upgrades, academy_research, population,
+                    loyalty, is_capital
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (id) DO UPDATE
+                SET
+                    name = $3,
+                    buildings = $5,
+                    production = $6,
+                    stocks = $7,
+                    smithy_upgrades = $8,
+                    academy_research = $9,
+                    population = $10,
+                    loyalty = $11,
+                    updated_at = NOW()
+                "#,
             village.id as i32,
+            village.player_id,
             village.name,
+            Json(&village.position) as _,
             Json(&village.buildings) as _,
             Json(&village.production) as _,
             Json(&village.stocks) as _,
@@ -140,6 +127,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             Json(&village.academy_research) as _,
             village.population as i32,
             village.loyalty as i16,
+            village.is_capital
         )
         .execute(&mut *tx_guard.as_mut())
         .await

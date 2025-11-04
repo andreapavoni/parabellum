@@ -24,7 +24,7 @@ pub mod tests {
             tasks::{ArmyReturnTask, AttackTask},
             worker::JobWorker,
         },
-        repository::uow::UnitOfWorkProvider,
+        uow::UnitOfWorkProvider,
     };
 
     use std::sync::Arc;
@@ -344,7 +344,7 @@ pub mod tests {
                 tribe: Some(tribe.clone()),
                 ..Default::default()
             });
-            player_repo.create(&player).await?;
+            player_repo.save(&player).await?;
 
             let valley = valley_factory(ValleyFactoryOptions {
                 position: Some(position),
@@ -355,7 +355,7 @@ pub mod tests {
                 player: Some(player.clone()),
                 ..Default::default()
             });
-            village_repo.create(&village).await?;
+            village_repo.save(&village).await?;
 
             army = army_factory(ArmyFactoryOptions {
                 player_id: Some(player.id),
@@ -364,7 +364,7 @@ pub mod tests {
                 tribe: Some(tribe.clone()),
                 ..Default::default()
             });
-            army_repo.create(&army).await?;
+            army_repo.save(&army).await?;
         }
 
         uow.commit().await?;

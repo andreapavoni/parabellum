@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     cqrs::{Query, QueryHandler, queries::GetUnoccupiedValley},
     error::ApplicationError,
-    repository::uow::UnitOfWork,
+    uow::UnitOfWork,
 };
 
 pub struct GetUnoccupiedValleyHandler {}
