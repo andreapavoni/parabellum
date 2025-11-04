@@ -1,7 +1,10 @@
+pub mod commands;
+pub mod queries;
+
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::{Result, config::Config, error::ApplicationError, repository::uow::UnitOfWork};
-use async_trait::async_trait;
 
 /// A marker trait for Command structs.
 /// Commands are operations that change the state of the system.

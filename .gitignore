@@ -6,3 +6,4 @@
 Cargo.lock
 tmp/
 logs/
+_*.md

@@ -1,44 +1,31 @@
 use std::sync::Arc;
 use tracing::info;
-use uuid::Uuid;
 
 use crate::{
     Result,
     config::Config,
-    cqrs::{Command, CommandHandler},
+    cqrs::{CommandHandler, commands::AttackVillage},
     error::ApplicationError,
-    game::models::buildings::BuildingName,
     jobs::{Job, JobPayload, tasks::AttackTask},
     repository::{ArmyRepository, JobRepository, VillageRepository, uow::UnitOfWork},
 };
 
-#[derive(Debug, Clone)]
-pub struct AttackVillage {
-    pub player_id: Uuid,
-    pub village_id: u32,
-    pub army_id: Uuid,
-    pub target_village_id: u32,
-    pub catapult_targets: [BuildingName; 2],
-}
+pub struct AttackVillageCommandHandler {}
 
-impl Command for AttackVillage {}
-
-pub struct AttackVillageHandler {}
-
-impl Default for AttackVillageHandler {
+impl Default for AttackVillageCommandHandler {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AttackVillageHandler {
+impl AttackVillageCommandHandler {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait::async_trait]
-impl CommandHandler<AttackVillage> for AttackVillageHandler {
+impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
     async fn handle(
         &self,
         command: AttackVillage,
@@ -155,7 +142,7 @@ mod tests {
 
         let config = Arc::new(Config::from_env());
 
-        let handler = AttackVillageHandler::new();
+        let handler = AttackVillageCommandHandler::new();
 
         let command = AttackVillage {
             player_id: attacker_player.id,

@@ -4,11 +4,12 @@ use uuid::Uuid;
 use parabellum::{
     Result,
     app::{
-        commands::{FoundVillage, FoundVillageHandler, RegisterPlayer, RegisterPlayerHandler},
+        command_handlers::{FoundVillageCommandHandler, RegisterPlayerCommandHandler},
         job_registry::AppJobRegistry,
         queries::{GetUnoccupiedValley, GetUnoccupiedValleyHandler},
     },
     bus::AppBus,
+    cqrs::commands::{FoundVillage, RegisterPlayer},
     db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider},
     error::ApplicationError,
     game::models::Tribe,
@@ -38,7 +39,7 @@ async fn main() -> Result<(), ApplicationError> {
 
     // --- Use Case 1: Register Player ---
     let register_player_cmd = RegisterPlayer::new(None, "pavonz_bus".to_string(), Tribe::Roman);
-    let register_player_handler = RegisterPlayerHandler::new();
+    let register_player_handler = RegisterPlayerCommandHandler::new();
     let player = match app_bus
         .execute(register_player_cmd, register_player_handler)
         .await
@@ -77,7 +78,7 @@ async fn main() -> Result<(), ApplicationError> {
 
     // --- Use Case 3: Found Village ---
     let found_village_cmd = FoundVillage::new(player, valley.position);
-    let found_village_handler = FoundVillageHandler::new();
+    let found_village_handler = FoundVillageCommandHandler::new();
     app_bus
         .execute(found_village_cmd, found_village_handler)
         .await?;

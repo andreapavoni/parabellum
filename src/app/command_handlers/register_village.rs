@@ -1,43 +1,29 @@
 use crate::{
     Result,
     config::Config,
-    cqrs::{Command, CommandHandler},
-    game::models::{Player, map::MapQuadrant, village::Village},
+    cqrs::{CommandHandler, commands::RegisterVillage},
+    game::models::village::Village,
     repository::{MapRepository, VillageRepository, uow::UnitOfWork},
 };
 
 use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct RegisterVillage {
-    pub player: Player,
-    pub quadrant: MapQuadrant,
-}
+pub struct RegisterVillageCommandHandler {}
 
-impl RegisterVillage {
-    pub fn new(player: Player, quadrant: MapQuadrant) -> Self {
-        Self { player, quadrant }
-    }
-}
-
-pub struct RegisterVillageHandler {}
-
-impl Command for RegisterVillage {}
-
-impl Default for RegisterVillageHandler {
+impl Default for RegisterVillageCommandHandler {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RegisterVillageHandler {
+impl RegisterVillageCommandHandler {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait::async_trait]
-impl CommandHandler<RegisterVillage> for RegisterVillageHandler {
+impl CommandHandler<RegisterVillage> for RegisterVillageCommandHandler {
     async fn handle(
         &self,
         cmd: RegisterVillage,

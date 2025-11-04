@@ -18,7 +18,7 @@
 // StartTownHallCelebration
 // StartBreweryCelebration
 
-pub mod commands;
+pub mod command_handlers;
 pub mod job_handlers;
 pub mod job_registry;
 pub mod queries;

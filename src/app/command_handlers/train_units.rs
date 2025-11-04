@@ -1,43 +1,37 @@
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::{
     Result,
+    config::Config,
+    cqrs::{CommandHandler, commands::TrainUnits},
     error::ApplicationError,
     game::{
         GameError,
         models::{ResourceGroup, buildings::BuildingName},
     },
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
-    repository::{JobRepository, VillageRepository},
+    repository::uow::UnitOfWork,
 };
 
-#[derive(Debug, Clone)]
-pub struct TrainUnitsCommand {
-    pub player_id: Uuid,
-    pub village_id: u32,
-    pub unit_idx: u8,
-    pub quantity: i32,
-}
+pub struct TrainUnitsCommandHandler {}
 
-pub struct TrainUnitsCommandHandler<'a> {
-    village_repo: Arc<dyn VillageRepository + 'a>,
-    job_repo: Arc<dyn JobRepository + 'a>,
-}
-
-impl<'a> TrainUnitsCommandHandler<'a> {
-    pub fn new(
-        village_repo: Arc<dyn VillageRepository + 'a>,
-        job_repo: Arc<dyn JobRepository + 'a>,
-    ) -> Self {
-        Self {
-            village_repo,
-            job_repo,
-        }
+impl TrainUnitsCommandHandler {
+    pub fn new() -> Self {
+        Self {}
     }
+}
 
-    pub async fn handle(&self, command: TrainUnitsCommand) -> Result<(), ApplicationError> {
-        let mut village = self.village_repo.get_by_id(command.village_id).await?;
+#[async_trait::async_trait]
+impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
+    async fn handle(
+        &self,
+        command: TrainUnits,
+        uow: &Box<dyn UnitOfWork<'_> + '_>,
+        _config: &Arc<Config>,
+    ) -> Result<(), ApplicationError> {
+        let village_repo = uow.villages();
+        let job_repo = uow.jobs();
+        let mut village = village_repo.get_by_id(command.village_id).await?;
 
         if village.player_id != command.player_id {
             return Err(ApplicationError::Game(GameError::VillageNotOwned {
@@ -69,7 +63,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             return Err(ApplicationError::Game(GameError::NotEnoughResources));
         }
         village.stocks.remove_resources(&total_cost);
-        self.village_repo.save(&village).await?;
+        village_repo.save(&village).await?;
 
         let time_per_unit = cost_per_unit.time;
         let building = village
@@ -97,7 +91,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
             job_payload,
         );
 
-        self.job_repo.add(&new_job).await?;
+        job_repo.add(&new_job).await?;
 
         Ok(())
     }
@@ -108,7 +102,7 @@ impl<'a> TrainUnitsCommandHandler<'a> {
 mod tests {
     use super::*;
     use crate::{
-        app::test_utils::tests::{MockJobRepository, MockVillageRepository},
+        app::test_utils::tests::MockUnitOfWork,
         game::{
             models::{
                 Player, Tribe,
@@ -125,7 +119,7 @@ mod tests {
 
     use std::sync::Arc;
 
-    fn setup_village_with_barracks() -> (Player, Village) {
+    fn setup_village_with_barracks() -> (Player, Village, Arc<Config>) {
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -142,7 +136,7 @@ mod tests {
 
         // Add barracks
         let barracks = VillageBuilding {
-            slot_id: 20, // Example slot
+            slot_id: 20,
             building: Building::new(BuildingName::Barracks),
         };
         village.buildings.push(barracks);
@@ -153,38 +147,38 @@ mod tests {
             .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
         village.update_state();
 
-        (player, village)
+        let config = Arc::new(Config::from_env());
+
+        (player, village, config)
     }
 
     #[tokio::test]
     async fn test_train_units_handler_success() {
-        // 1. Setup
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
 
-        let (player, village) = setup_village_with_barracks();
+        let (player, village, config) = setup_village_with_barracks();
         let village_id = village.id;
-        mock_village_repo.add_village(village);
+        village_repo.create(&village).await.unwrap();
 
-        let handler =
-            TrainUnitsCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = TrainUnitsCommandHandler::new();
 
-        let command = TrainUnitsCommand {
+        let command = TrainUnits {
             player_id: player.id,
             village_id: village_id,
             unit_idx: 0,
             quantity: 5,
         };
 
-        // 2. Act
-        let result = handler.handle(command).await;
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(
             result.is_ok(),
             "Handler should execute successfully, got: {:?}",
             result.err().unwrap().to_string()
         );
-        let saved_villages = mock_village_repo.saved_villages();
+        let saved_villages = village_repo.list_by_player_id(player.id).await.unwrap();
         assert_eq!(saved_villages.len(), 1, "Village should be saved once");
         let saved_village = &saved_villages[0];
 
@@ -210,7 +204,7 @@ mod tests {
         );
 
         // Check if job was created
-        let added_jobs = mock_job_repo.get_added_jobs();
+        let added_jobs = job_repo.list_by_player_id(player.id).await.unwrap();
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
@@ -231,57 +225,59 @@ mod tests {
 
     #[tokio::test]
     async fn test_train_units_handler_not_enough_resources() {
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
 
-        let (player, mut village) = setup_village_with_barracks();
+        let (player, mut village, config) = setup_village_with_barracks();
         village.stocks.lumber = 10; // Not enough lumber
         let village_id = village.id;
-        mock_village_repo.add_village(village);
+        village_repo.create(&village).await.unwrap();
 
-        let handler =
-            TrainUnitsCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = TrainUnitsCommandHandler::new();
 
-        let command = TrainUnitsCommand {
+        let command = TrainUnits {
             player_id: player.id,
             village_id: village_id,
             unit_idx: 0,
             quantity: 10,
         };
 
-        let result = handler.handle(command).await;
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(result.err().unwrap().to_string(), "Not enough resources");
-        assert_eq!(mock_job_repo.get_added_jobs().len(), 0);
+        assert_eq!(
+            job_repo.list_by_player_id(player.id).await.unwrap().len(),
+            0
+        );
     }
 
     #[tokio::test]
     async fn test_train_units_handler_missing_building() {
-        // 1. Setup
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
 
-        let (player, mut village) = setup_village_with_barracks();
+        let village_repo = mock_uow.villages();
+
+        let (player, mut village, config) = setup_village_with_barracks();
 
         village
             .buildings
             .retain(|vb| vb.building.name != BuildingName::Barracks);
 
         let village_id = village.id;
-        mock_village_repo.add_village(village);
+        village_repo.create(&village).await.unwrap();
 
-        let handler =
-            TrainUnitsCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = TrainUnitsCommandHandler::new();
 
-        let command = TrainUnitsCommand {
+        let command = TrainUnits {
             player_id: player.id,
             village_id: village_id,
             unit_idx: 0,
             quantity: 1,
         };
 
-        let result = handler.handle(command).await;
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
@@ -292,23 +288,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_train_units_handler_missing_research() {
-        // 1. Setup
-        let mock_job_repo = Arc::new(MockJobRepository::default());
-        let mock_village_repo = Arc::new(MockVillageRepository::default());
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
 
-        let (player, mut village) = setup_village_with_barracks();
+        let village_repo = mock_uow.villages();
+
+        let (player, mut village, config) = setup_village_with_barracks();
 
         village
             .buildings
             .retain(|vb| vb.building.name != BuildingName::Barracks);
 
         let village_id = village.id;
-        mock_village_repo.add_village(village);
+        village_repo.create(&village).await.unwrap();
 
-        let handler =
-            TrainUnitsCommandHandler::new(mock_village_repo.clone(), mock_job_repo.clone());
+        let handler = TrainUnitsCommandHandler::new();
 
-        let command = TrainUnitsCommand {
+        let command = TrainUnits {
             player_id: player.id,
             village_id: village_id,
             unit_idx: 1,
@@ -316,7 +311,7 @@ mod tests {
         };
 
         // 2. Act
-        let result = handler.handle(command).await;
+        let result = handler.handle(command, &mock_uow, &config).await;
 
         // 3. Assert
         assert!(result.is_err(), "Handler should return an error");

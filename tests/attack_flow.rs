@@ -1,11 +1,8 @@
 use parabellum::{
     Result,
-    app::{
-        commands::{AttackVillage, AttackVillageHandler},
-        job_registry::AppJobRegistry,
-    },
+    app::{command_handlers::AttackVillageCommandHandler, job_registry::AppJobRegistry},
     config::Config,
-    cqrs::CommandHandler,
+    cqrs::{CommandHandler, commands::AttackVillage},
     db::establish_test_connection_pool,
     game::{
         models::{
@@ -76,7 +73,7 @@ async fn test_full_attack_flow() -> Result<()> {
     {
         let uow_attack = uow_provider.begin().await?;
         {
-            let handler = AttackVillageHandler::new();
+            let handler = AttackVillageCommandHandler::new();
             handler
                 .handle(attack_command, &uow_attack, &config)
                 .await
@@ -247,7 +244,7 @@ async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let uow_attack = uow_provider.begin().await?;
 
         {
-            let handler = AttackVillageHandler::new();
+            let handler = AttackVillageCommandHandler::new();
             handler
                 .handle(attack_command, &uow_attack, &config)
                 .await

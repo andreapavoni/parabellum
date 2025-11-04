@@ -1,49 +1,29 @@
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::{
     Result,
     config::Config,
-    cqrs::{Command, CommandHandler},
-    game::models::{Player, Tribe},
+    cqrs::{CommandHandler, commands::RegisterPlayer},
+    game::models::Player,
     repository::uow::UnitOfWork,
 };
 
-#[derive(Debug, Clone)]
-pub struct RegisterPlayer {
-    pub id: Uuid,
-    pub username: String,
-    pub tribe: Tribe,
-}
+pub struct RegisterPlayerCommandHandler {}
 
-impl RegisterPlayer {
-    pub fn new(id: Option<Uuid>, username: String, tribe: Tribe) -> Self {
-        Self {
-            id: id.unwrap_or(Uuid::new_v4()),
-            username,
-            tribe,
-        }
-    }
-}
-
-impl Command for RegisterPlayer {}
-
-pub struct RegisterPlayerHandler {}
-
-impl Default for RegisterPlayerHandler {
+impl Default for RegisterPlayerCommandHandler {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RegisterPlayerHandler {
+impl RegisterPlayerCommandHandler {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait::async_trait]
-impl CommandHandler<RegisterPlayer> for RegisterPlayerHandler {
+impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
     async fn handle(
         &self,
         command: RegisterPlayer,

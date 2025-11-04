@@ -1,46 +1,28 @@
 use crate::{
     Result,
     config::Config,
-    cqrs::{Command, CommandHandler},
-    game::models::{
-        Player,
-        map::{Position, Valley},
-        village::Village,
-    },
+    cqrs::{CommandHandler, commands::FoundVillage},
+    game::models::{map::Valley, village::Village},
     repository::{MapRepository, VillageRepository, uow::UnitOfWork},
 };
 use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct FoundVillage {
-    pub player: Player,
-    pub position: Position,
-}
+pub struct FoundVillageCommandHandler {}
 
-impl FoundVillage {
-    pub fn new(player: Player, position: Position) -> Self {
-        Self { player, position }
-    }
-}
-
-impl Command for FoundVillage {}
-
-pub struct FoundVillageHandler {}
-
-impl Default for FoundVillageHandler {
+impl Default for FoundVillageCommandHandler {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl FoundVillageHandler {
+impl FoundVillageCommandHandler {
     pub fn new() -> Self {
         Self {}
     }
 }
 
 #[async_trait::async_trait]
-impl CommandHandler<FoundVillage> for FoundVillageHandler {
+impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
     async fn handle(
         &self,
         command: FoundVillage,
