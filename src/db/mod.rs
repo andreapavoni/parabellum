@@ -12,5 +12,3 @@ pub use repository::{
     PostgresArmyRepository, PostgresJobRepository, PostgresMapRepository, PostgresPlayerRepository,
     PostgresVillageRepository,
 };
-
-pub mod test_factories;

@@ -1,3 +1,5 @@
+mod test_utils;
+
 use parabellum::{
     Result,
     app::{command_handlers::AddBuildingCommandHandler, job_registry::AppJobRegistry},
@@ -10,7 +12,7 @@ use parabellum::{
             buildings::{Building, BuildingName},
             map::Position,
         },
-        test_factories::{
+        test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
         },
@@ -19,10 +21,8 @@ use parabellum::{
     repository::uow::UnitOfWorkProvider,
 };
 use std::sync::Arc;
+use test_utils::tests::TestUnitOfWorkProvider;
 use tokio::sync::Mutex;
-
-mod test_utils;
-use test_utils::TestUnitOfWorkProvider;
 
 #[tokio::test]
 async fn test_full_build_flow() -> Result<()> {

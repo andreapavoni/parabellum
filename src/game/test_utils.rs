@@ -1,5 +1,4 @@
-//! Factories for creating domain model instances for testing.
-//! These do not interact with the database.
+use crate::game::models::map::{MapField, MapFieldTopology};
 
 use super::models::{
     Tribe,
@@ -12,8 +11,6 @@ use super::models::{
 };
 use rand::Rng;
 use uuid::Uuid;
-
-// --- Options Structs (Builders) ---
 
 #[derive(Default, Clone)]
 pub struct PlayerFactoryOptions<'a> {
@@ -49,7 +46,30 @@ pub struct ArmyFactoryOptions {
     pub hero: Option<Hero>,
 }
 
-// --- Factory Functions ---
+#[derive(Default, Clone)]
+pub struct MapFieldFactoryOptions {
+    pub position: Option<Position>,
+    pub topology: Option<MapFieldTopology>,
+    pub village_id: Option<u32>,
+    pub player_id: Option<Uuid>,
+    pub world_size: Option<i32>,
+}
+
+pub fn map_field_factory(options: MapFieldFactoryOptions) -> MapField {
+    let position = options.position.unwrap_or(Position { x: 0, y: 0 });
+    let topology = options
+        .topology
+        .unwrap_or(MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)));
+    let world_size = options.world_size.unwrap_or(100) as i32;
+
+    MapField {
+        id: position.to_id(world_size),
+        position,
+        topology,
+        village_id: options.village_id,
+        player_id: options.player_id,
+    }
+}
 
 pub fn player_factory(options: PlayerFactoryOptions) -> Player {
     let default_username: String = format!("user_{}", rand::thread_rng().r#gen::<u32>());

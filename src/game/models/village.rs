@@ -420,30 +420,33 @@ impl Village {
             return;
         }
 
-        // Effective hourly production
-        let effective_prod = &self.production.effective;
+        let (lumber_delta, clay_delta, iron_delta, crop_delta) =
+            self.production.calculate_production_deltas(time_elapsed);
 
-        // Calculates per-second production rates
-        // Actual effective production is per hour
-        let lumber_per_sec = (effective_prod.lumber as f64) / 3600.0;
-        let clay_per_sec = (effective_prod.clay as f64) / 3600.0;
-        let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
-        let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
+        self.stocks.lumber = (self.stocks.lumber as f64 + lumber_delta)
+            .min(self.stocks.warehouse_capacity as f64)
+            .max(0.0)
+            .floor() as u32;
+        self.stocks.clay = (self.stocks.clay as f64 + clay_delta)
+            .min(self.stocks.warehouse_capacity as f64)
+            .max(0.0)
+            .floor() as u32;
+        self.stocks.iron = (self.stocks.iron as f64 + iron_delta)
+            .min(self.stocks.warehouse_capacity as f64)
+            .max(0.0)
+            .floor() as u32;
 
-        // Calculates resources after elapsed time, capping at storage capacity
-        let lumber = ((time_elapsed * lumber_per_sec) as u32).min(self.stocks.warehouse_capacity);
-        let clay = ((time_elapsed * clay_per_sec) as u32).min(self.stocks.warehouse_capacity);
-        let iron = ((time_elapsed * iron_per_sec) as u32).min(self.stocks.warehouse_capacity);
-        let crop = ((time_elapsed * crop_per_sec) as i64).min(self.stocks.granary_capacity as i64);
+        let new_crop =
+            (self.stocks.crop as f64 + crop_delta).min(self.stocks.granary_capacity as f64);
 
-        // TODO: use something to calculate deltas and starve armies
-
-        // New stocks
-        self.stocks.lumber += lumber.max(0);
-        self.stocks.clay += clay.max(0);
-        self.stocks.iron += iron.max(0);
-        // crop can be negative due to upkeep, but stocks can't go below 0.
-        self.stocks.crop += crop.max(0);
+        // Handle starvation (if crop goes negative)
+        if new_crop < 0.0 {
+            // TODO: Implement starvation logic (kill troops, etc.)
+            // For now, just cap stock at 0
+            self.stocks.crop = 0;
+        } else {
+            self.stocks.crop = new_crop.floor() as i64;
+        }
 
         self.updated_at = now;
     }
@@ -518,6 +521,22 @@ impl VillageProduction {
         ep.crop -= self.upkeep as i64;
 
         self.effective = ep;
+    }
+
+    pub fn calculate_production_deltas(&self, time_elapsed_secs: f64) -> (f64, f64, f64, f64) {
+        let effective_prod = &self.effective;
+
+        let lumber_per_sec = (effective_prod.lumber as f64) / 3600.0;
+        let clay_per_sec = (effective_prod.clay as f64) / 3600.0;
+        let iron_per_sec = (effective_prod.iron as f64) / 3600.0;
+        let crop_per_sec = (effective_prod.crop as f64) / 3600.0;
+
+        let lumber_delta = time_elapsed_secs * lumber_per_sec;
+        let clay_delta = time_elapsed_secs * clay_per_sec;
+        let iron_delta = time_elapsed_secs * iron_per_sec;
+        let crop_delta = time_elapsed_secs * crop_per_sec;
+
+        (lumber_delta, clay_delta, iron_delta, crop_delta)
     }
 }
 
@@ -610,7 +629,7 @@ impl Default for VillageStocks {
 mod tests {
     use crate::game::{
         models::{Tribe, buildings::BuildingName, village::VillageStocks},
-        test_factories::{
+        test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
         },

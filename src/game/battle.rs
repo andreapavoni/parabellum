@@ -657,7 +657,7 @@ mod tests {
         Result,
         game::{
             models::{Player, Tribe},
-            test_factories::*,
+            test_utils::*,
         },
     };
 
@@ -713,7 +713,6 @@ mod tests {
 
     #[test]
     fn test_battle_100_legionaires_vs_10_spearmen() -> Result<()> {
-        // 1. SETUP
         let (_attacker_player, attacker_village, attacker_army) =
             setup_party(Tribe::Roman, [100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
@@ -723,7 +722,6 @@ mod tests {
         defender_village.army = Some(defender_home_army.clone());
         defender_village.update_state();
 
-        // 2. ACT
         let battle = Battle::new(
             AttackType::Normal,
             attacker_army.clone(),
@@ -732,8 +730,6 @@ mod tests {
             None,
         );
         let report = battle.calculate_battle();
-
-        // 3. ASSERT
         let defender_report = report.defender.expect("Defender report should exist");
 
         let defender_losses: u32 = defender_report.losses.iter().sum();

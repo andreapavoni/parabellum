@@ -49,3 +49,71 @@ impl JobHandler for ResearchSmithyJobHandler {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::test_utils::tests::MockUnitOfWork,
+        config::Config,
+        game::{
+            models::{Tribe, army::UnitName},
+            test_utils::{
+                PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
+            },
+        },
+        jobs::{Job, JobPayload},
+        repository::uow::UnitOfWork,
+    };
+    use serde_json::json;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_research_smithy_job_handler_success() {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let config = Arc::new(Config::from_env());
+
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let mut village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        let village_id = village.id;
+
+        let unit_to_upgrade = UnitName::Legionnaire;
+        let unit_idx = village
+            .tribe
+            .get_unit_idx_by_name(&unit_to_upgrade)
+            .unwrap();
+        village.smithy[unit_idx] = 0;
+        mock_uow.villages().create(&village).await.unwrap();
+
+        let payload = ResearchSmithyTask {
+            unit: unit_to_upgrade.clone(),
+        };
+        let job_payload = JobPayload::new("ResearchSmithy", json!(payload));
+        let job = Job::new(player.id, village_id as i32, 0, job_payload);
+
+        let handler = ResearchSmithyJobHandler::new(payload);
+        let context = JobHandlerContext {
+            uow: mock_uow,
+            config,
+        };
+
+        let result = handler.handle(&context, &job).await;
+        assert!(
+            result.is_ok(),
+            "Job handler should succeed: {:?}",
+            result.err()
+        );
+
+        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        assert_eq!(
+            saved_village.smithy[unit_idx], 1,
+            "Unit smithy level should be incremented to 1"
+        );
+    }
+}

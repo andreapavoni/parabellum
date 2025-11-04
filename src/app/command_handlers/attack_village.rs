@@ -83,10 +83,10 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::test_utils::tests::MockUnitOfWork;
+    use crate::app::test_utils::tests::{MockUnitOfWork, assert_handler_success};
     use crate::game::{
         models::{Tribe, buildings::BuildingName, map::Position},
-        test_factories::{
+        test_utils::{
             ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
             army_factory, player_factory, valley_factory, village_factory,
         },
@@ -94,10 +94,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_attack_village_handler_success() {
-        let mock_uow = MockUnitOfWork::new();
-        let mock_village_repo = mock_uow.villages();
-        let mock_army_repo = mock_uow.armies();
-        let mock_job_repo = mock_uow.jobs();
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let village_repo = mock_uow.villages();
+        let army_repo = mock_uow.armies();
+        let job_repo = mock_uow.jobs();
+        let config = Arc::new(Config::from_env());
 
         let attacker_player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Teuton),
@@ -136,14 +137,11 @@ mod tests {
             ..Default::default()
         });
 
-        mock_village_repo.create(&attacker_village).await.unwrap();
-        mock_village_repo.create(&defender_village).await.unwrap();
-        mock_army_repo.create(&attacker_army).await.unwrap();
-
-        let config = Arc::new(Config::from_env());
+        village_repo.create(&attacker_village).await.unwrap();
+        village_repo.create(&defender_village).await.unwrap();
+        army_repo.create(&attacker_army).await.unwrap();
 
         let handler = AttackVillageCommandHandler::new();
-
         let command = AttackVillage {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
@@ -152,17 +150,10 @@ mod tests {
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
         };
 
-        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(mock_uow);
         let result = handler.handle(command, &mock_uow, &config).await;
+        assert_handler_success(result);
 
-        assert!(
-            result.is_ok(),
-            "Handler should execute successfully, got: {:?}",
-            result.err().unwrap().to_string()
-        );
-
-        // Check if job was created *in mock repo*
-        let added_jobs = mock_job_repo
+        let added_jobs = job_repo
             .list_by_player_id(attacker_player.id)
             .await
             .unwrap();

@@ -143,3 +143,6 @@ impl JobHandler for AttackJobHandler {
         Ok(())
     }
 }
+
+// No unit tests here due to too much complexities in the setup.
+// However, you can check `tests/attack_flow.rs` to see how this code is tested.

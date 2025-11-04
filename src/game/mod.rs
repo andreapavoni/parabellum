@@ -5,4 +5,4 @@ mod error;
 
 pub use error::GameError;
 
-pub mod test_factories;
+pub mod test_utils;

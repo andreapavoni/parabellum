@@ -42,7 +42,6 @@ impl JobHandler for TrainUnitsJobHandler {
         let army_repo = ctx.uow.armies();
         let village_repo = ctx.uow.villages();
 
-        // 1. Load village and army
         let mut village = village_repo.get_by_id(village_id).await?;
         let mut army = village.army.map_or_else(
             || {
@@ -60,26 +59,20 @@ impl JobHandler for TrainUnitsJobHandler {
             |a| a.clone(),
         );
 
-        // 2. Add 1 unit
         army.add_unit(self.payload.unit.clone(), 1)?;
         army_repo.save(&army).await?;
 
-        // 3. Update village upkeep (village.update_state() dovrebbe farlo)
         village.army = Some(army);
         village.update_state();
         village_repo.save(&village).await?;
 
-        // 4. Check if more units need to be trained
         if self.payload.quantity > 1 {
-            // 5. Create the next job in the chain
             let next_payload = TrainUnitsTask {
                 quantity: self.payload.quantity - 1, // Train one less
                 ..self.payload.clone()
             };
 
             let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&next_payload)?);
-
-            // Scale time by server speed
             let time_per_unit =
                 (self.payload.time_per_unit as f64 / ctx.config.speed as f64).floor() as i64;
 
@@ -95,5 +88,131 @@ impl JobHandler for TrainUnitsJobHandler {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        config::Config,
+        game::{
+            models::{Tribe, army::UnitName},
+            test_utils::{
+                PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
+            },
+        },
+        jobs::{Job, JobPayload},
+        repository::uow::UnitOfWork,
+    };
+    use serde_json::json;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    // Helper function to set up a standard test environment
+    async fn setup_test(
+        quantity: i32,
+    ) -> (
+        Job,
+        TrainUnitsTask,
+        Arc<Config>,
+        Box<dyn UnitOfWork<'static> + 'static>,
+        u32,  // village_id
+        Uuid, // player_id
+    ) {
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        let village_id = village.id;
+        let player_id = player.id;
+
+        let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
+        mock_uow.villages().create(&village).await.unwrap();
+
+        let config = Arc::new(Config::from_env());
+        let payload = TrainUnitsTask {
+            slot_id: 20, // Mock Barracks slot
+            unit: UnitName::Legionnaire,
+            quantity,
+            time_per_unit: 100,
+        };
+        let job_payload = JobPayload::new("TrainUnits", json!(payload.clone()));
+        let job = Job::new(player_id, village_id as i32, 0, job_payload);
+
+        (job, payload, config, mock_uow, village_id, player_id)
+    }
+
+    #[tokio::test]
+    async fn test_train_units_job_handler_trains_one_unit() {
+        let (job, payload, config, uow, village_id, _player_id) = setup_test(5).await;
+        let handler = TrainUnitsJobHandler::new(payload);
+        let context = JobHandlerContext { uow, config };
+
+        let result = handler.handle(&context, &job).await;
+        assert_handler_success(result);
+
+        let final_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let army = final_village.army.expect("Village should have an army");
+        assert_eq!(army.units[0], 1, "Should have trained exactly 1 unit");
+
+        let saved_army = context.uow.armies().get_by_id(army.id).await.unwrap();
+        assert_eq!(saved_army.units[0], 1);
+    }
+
+    #[tokio::test]
+    async fn test_train_units_job_handler_queues_next_job() {
+        let (job, payload, config, uow, _village_id, player_id) = setup_test(5).await;
+        let handler = TrainUnitsJobHandler::new(payload);
+        let context = JobHandlerContext { uow, config };
+
+        let result = handler.handle(&context, &job).await;
+        assert_handler_success(result);
+
+        let jobs = context
+            .uow
+            .jobs()
+            .list_by_player_id(player_id)
+            .await
+            .unwrap();
+        assert_eq!(jobs.len(), 1, "A new job should be queued");
+
+        let next_job = &jobs[0];
+        assert_eq!(next_job.task.task_type, "TrainUnits");
+
+        let next_task: TrainUnitsTask = serde_json::from_value(next_job.task.data.clone()).unwrap();
+        // The original quantity was 5, the next job should be for 4
+        assert_eq!(next_task.quantity, 4, "Next job should have quantity - 1");
+        assert_eq!(next_task.unit, UnitName::Legionnaire);
+    }
+
+    #[tokio::test]
+    async fn test_train_units_job_handler_finishes_queue() {
+        // We start with a job for only 1 unit
+        let (job, payload, config, uow, village_id, player_id) = setup_test(1).await;
+        let handler = TrainUnitsJobHandler::new(payload);
+        let context = JobHandlerContext { uow, config };
+
+        let result = handler.handle(&context, &job).await;
+        assert_handler_success(result);
+
+        // Check that NO new job was created
+        let jobs = context
+            .uow
+            .jobs()
+            .list_by_player_id(player_id)
+            .await
+            .unwrap();
+        assert_eq!(jobs.len(), 0, "No new job should be queued");
+
+        // Check that the unit was still trained
+        let final_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let army = final_village.army.expect("Village should have an army");
+        assert_eq!(army.units[0], 1, "Should have trained the last unit");
     }
 }

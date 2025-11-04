@@ -60,7 +60,7 @@ mod tests {
         config::Config,
         game::{
             models::{Tribe, buildings::BuildingName},
-            test_factories::{
+            test_utils::{
                 PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
             },
         },

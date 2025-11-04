@@ -82,16 +82,6 @@ pub mod tests {
         villages: Arc<Mutex<HashMap<u32, Village>>>,
     }
 
-    impl MockVillageRepository {
-        pub fn add_village(&self, village: Village) {
-            self.villages.lock().unwrap().insert(village.id, village);
-        }
-
-        pub fn saved_villages(&self) -> Vec<Village> {
-            self.villages.lock().unwrap().values().cloned().collect()
-        }
-    }
-
     #[async_trait]
     impl VillageRepository for MockVillageRepository {
         async fn get_by_id(&self, village_id: u32) -> Result<Village, ApplicationError> {
@@ -176,9 +166,14 @@ pub mod tests {
 
     #[async_trait]
     impl PlayerRepository for MockPlayerRepository {
-        async fn create(&self, _player: &Player) -> Result<(), ApplicationError> {
+        async fn create(&self, player: &Player) -> Result<(), ApplicationError> {
+            self.players
+                .lock()
+                .unwrap()
+                .insert(player.id, player.clone());
             Ok(())
         }
+
         async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
             if let Some(player) = self.players.lock().unwrap().get(&player_id) {
                 Ok(player.clone())
@@ -191,6 +186,12 @@ pub mod tests {
     #[derive(Default, Clone)]
     pub struct MockMapRepository {
         fields: HashMap<u32, MapField>,
+    }
+
+    impl MockMapRepository {
+        pub fn add_map_field(&mut self, field: MapField) {
+            self.fields.insert(field.id, field);
+        }
     }
 
     #[async_trait]
@@ -209,8 +210,19 @@ pub mod tests {
             .try_into()
             .unwrap())
         }
-        async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
-            Ok(self.fields.get(&(id as u32)).unwrap().clone())
+        async fn get_field_by_id(&self, _id: i32) -> Result<MapField, ApplicationError> {
+            // if let Some(map_field) = self.fields.get(&(id as u32)) {
+            //     Ok(map_field.clone())
+            // } else {
+            //     Err(ApplicationError::Db(DbError::MapFieldNotFound(id as u32)))
+            // }
+            Ok(MapField {
+                id: 100,
+                position: Position { x: 10, y: 10 },
+                village_id: None,
+                topology: MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)),
+                player_id: None,
+            })
         }
     }
 
@@ -262,5 +274,13 @@ pub mod tests {
             *self.rolled_back.lock().unwrap() = true;
             Ok(())
         }
+    }
+
+    pub fn assert_handler_success(result: Result<(), ApplicationError>) {
+        assert!(
+            result.is_ok(),
+            "Handler should execute successfully: {:?}",
+            result.err().unwrap().to_string()
+        )
     }
 }

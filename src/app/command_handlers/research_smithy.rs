@@ -87,7 +87,7 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 mod tests {
     use super::*;
     use crate::{
-        app::test_utils::tests::MockUnitOfWork,
+        app::test_utils::tests::{MockUnitOfWork, assert_handler_success},
         config::Config,
         game::{
             models::{
@@ -98,7 +98,7 @@ mod tests {
                 smithy::smithy_upgrade_cost_for_unit,
                 village::Village,
             },
-            test_factories::{
+            test_utils::{
                 PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
             },
         },
@@ -161,12 +161,7 @@ mod tests {
         };
 
         let result = handler.handle(command.clone(), &mock_uow, &config).await;
-
-        assert!(
-            result.is_ok(),
-            "Handler should execute successfully: {:?}",
-            result.err().unwrap().to_string()
-        );
+        assert_handler_success(result);
 
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
         let cost = smithy_upgrade_cost_for_unit(&command.unit, 0).unwrap();

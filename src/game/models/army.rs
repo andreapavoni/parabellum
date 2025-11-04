@@ -409,7 +409,7 @@ impl Unit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::test_factories::{ArmyFactoryOptions, army_factory};
+    use crate::game::test_utils::{ArmyFactoryOptions, army_factory};
 
     #[test]
     fn test_army_upkeep() {

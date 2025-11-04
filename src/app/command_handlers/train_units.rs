@@ -102,7 +102,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 mod tests {
     use super::*;
     use crate::{
-        app::test_utils::tests::MockUnitOfWork,
+        app::test_utils::tests::{MockUnitOfWork, assert_handler_success},
         game::{
             models::{
                 Player, Tribe,
@@ -110,7 +110,7 @@ mod tests {
                 buildings::Building,
                 village::{Village, VillageBuilding},
             },
-            test_factories::{
+            test_utils::{
                 PlayerFactoryOptions, VillageFactoryOptions, player_factory, valley_factory,
                 village_factory,
             },
@@ -172,12 +172,8 @@ mod tests {
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
+        assert_handler_success(result);
 
-        assert!(
-            result.is_ok(),
-            "Handler should execute successfully, got: {:?}",
-            result.err().unwrap().to_string()
-        );
         let saved_villages = village_repo.list_by_player_id(player.id).await.unwrap();
         assert_eq!(saved_villages.len(), 1, "Village should be saved once");
         let saved_village = &saved_villages[0];
@@ -310,10 +306,7 @@ mod tests {
             quantity: 1,
         };
 
-        // 2. Act
         let result = handler.handle(command, &mock_uow, &config).await;
-
-        // 3. Assert
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
