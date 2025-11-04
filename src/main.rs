@@ -6,10 +6,13 @@ use parabellum::{
     app::{
         command_handlers::{FoundVillageCommandHandler, RegisterPlayerCommandHandler},
         job_registry::AppJobRegistry,
-        queries::{GetUnoccupiedValley, GetUnoccupiedValleyHandler},
+        queries_handlers::GetUnoccupiedValleyHandler,
     },
     bus::AppBus,
-    cqrs::commands::{FoundVillage, RegisterPlayer},
+    cqrs::{
+        commands::{FoundVillage, RegisterPlayer},
+        queries::GetUnoccupiedValley,
+    },
     db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider},
     error::ApplicationError,
     game::models::Tribe,

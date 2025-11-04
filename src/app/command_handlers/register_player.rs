@@ -42,6 +42,3 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {}

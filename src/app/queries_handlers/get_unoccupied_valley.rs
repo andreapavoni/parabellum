@@ -4,28 +4,10 @@ use std::sync::Arc;
 use crate::{
     Result,
     config::Config,
-    cqrs::{Query, QueryHandler},
+    cqrs::{Query, QueryHandler, queries::GetUnoccupiedValley},
     error::ApplicationError,
-    game::models::map::{MapQuadrant, Valley},
     repository::uow::UnitOfWork,
 };
-
-#[derive(Debug, Clone)]
-pub struct GetUnoccupiedValley {
-    pub quadrant: MapQuadrant,
-}
-
-impl GetUnoccupiedValley {
-    pub fn new(quadrant: Option<MapQuadrant>) -> Self {
-        Self {
-            quadrant: quadrant.unwrap_or(MapQuadrant::NorthEast),
-        }
-    }
-}
-
-impl Query for GetUnoccupiedValley {
-    type Output = Valley;
-}
 
 pub struct GetUnoccupiedValleyHandler {}
 
@@ -53,6 +35,3 @@ impl QueryHandler<GetUnoccupiedValley> for GetUnoccupiedValleyHandler {
         Ok(repo.find_unoccupied_valley(&query.quadrant).await?)
     }
 }
-
-#[cfg(test)]
-mod tests {}

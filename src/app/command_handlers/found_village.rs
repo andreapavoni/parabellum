@@ -48,6 +48,3 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {}

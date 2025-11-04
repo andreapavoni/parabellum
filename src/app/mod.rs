@@ -21,7 +21,7 @@
 pub mod command_handlers;
 pub mod job_handlers;
 pub mod job_registry;
-pub mod queries;
+pub mod queries_handlers;
 
 mod error;
 
