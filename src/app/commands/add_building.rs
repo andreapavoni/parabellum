@@ -75,9 +75,7 @@ impl CommandHandler<AddBuilding> for AddBuildingHandler {
         }
 
         village.stocks.remove_resources(&cost.resources);
-        village.add_building_at_slot(building.clone(), command.slot_id)?;
         village.update_state();
-
         villages_repo.save(&village).await?;
 
         let payload = AddBuildingTask {
@@ -86,7 +84,7 @@ impl CommandHandler<AddBuilding> for AddBuildingHandler {
             name: building.clone().name,
         };
 
-        let job_payload = JobPayload::new("Attack", serde_json::to_value(&payload)?);
+        let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
         let new_job = Job::new(
             command.player_id,
             command.village_id as i32,

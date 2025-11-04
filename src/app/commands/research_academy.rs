@@ -138,8 +138,8 @@ mod tests {
         village.stocks.crop = 1000;
         village.update_state();
 
-        let main_building = Building::new(BuildingName::MainBuilding).at_level(3)?;
-        village.upgrade_building_at_slot(main_building, 19)?;
+        village.upgrade_building_at_slot(19)?;
+        village.upgrade_building_at_slot(19)?;
 
         let warehouse = Building::new(BuildingName::Warehouse).at_level(2)?;
         village.add_building_at_slot(warehouse, 20)?;

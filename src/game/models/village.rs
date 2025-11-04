@@ -90,6 +90,7 @@ impl Village {
         village
     }
 
+    /// Build a new building on a given slot.
     pub fn add_building_at_slot(
         &mut self,
         building: Building,
@@ -100,64 +101,53 @@ impl Village {
         Ok(())
     }
 
-    pub fn upgrade_building_at_slot(
-        &mut self,
-        new_building: Building,
-        slot_id: u8,
-    ) -> Result<(), GameError> {
+    /// Upgrades an existing building on a given slot.
+    pub fn upgrade_building_at_slot(&mut self, slot_id: u8) -> Result<(), GameError> {
         let idx = self
             .buildings
             .iter()
             .position(|b| b.slot_id == slot_id)
             .ok_or_else(|| GameError::EmptySlot { slot_id })?;
 
+        let building = self.buildings[idx].building.clone();
+        let building = building.at_level(building.level + 1)?;
+
         let _ = std::mem::replace(
             &mut self.buildings[idx],
             VillageBuilding {
                 slot_id,
-                building: new_building,
+                building: building,
             },
         );
 
         Ok(())
     }
 
-    pub fn downgrade_building_to_level(&mut self, slot_id: u8, level: u8) -> Result<(), GameError> {
-        match self.get_building_by_slot_id(slot_id) {
-            Some(b) => {
-                let building = b.building.at_level(level)?;
-                self.buildings
-                    .append(&mut vec![VillageBuilding { slot_id, building }]);
-                self.update_state();
-            }
+    pub fn set_building_level_at_slot(&mut self, slot_id: u8, level: u8) -> Result<(), GameError> {
+        let idx = self
+            .buildings
+            .iter()
+            .position(|b| b.slot_id == slot_id)
+            .ok_or_else(|| GameError::EmptySlot { slot_id })?;
 
-            None => return Err(GameError::SlotOccupied { slot_id }),
-        };
+        let building = self.buildings[idx].building.clone();
+        let _ = std::mem::replace(
+            &mut self.buildings[idx],
+            VillageBuilding {
+                slot_id,
+                building: building.at_level(level)?,
+            },
+        );
         Ok(())
     }
 
-    pub fn destroy_building(&mut self, slot_id: u8) -> Result<(), GameError> {
-        match self.get_building_by_slot_id(slot_id) {
-            Some(b) => {
-                if b.building.group == BuildingGroup::Resources {
-                    b.building.at_level(0)?;
-                    self.update_state();
-                } else {
-                    let _ = self
-                        .buildings
-                        .iter()
-                        .filter_map(|vb| {
-                            if vb.slot_id != slot_id {
-                                Some(vb)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                }
-            }
-            None => return Err(GameError::EmptySlot { slot_id }),
-        };
+    /// Removes a building from a given slot, except for resource fields because they can just go to level 0.
+    pub fn remove_building_at_slot(&mut self, slot_id: u8) -> Result<(), GameError> {
+        if slot_id >= 1 && slot_id <= 18 {
+            return self.set_building_level_at_slot(slot_id, 0);
+        }
+
+        self.buildings.retain(|vb| vb.slot_id != slot_id);
         Ok(())
     }
 
