@@ -9,7 +9,7 @@ This project is for those who love the deep strategy and community of the origin
 
 The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
-> **Heads up!** Parabellum is under heavy development and is **not yet playable**. Many core mechanics are being built, but it's not a complete game.
+**HEADS UP!** Parabellum is under heavy development and is **not yet playable**. Many core mechanics are being built, but it's not a complete game (yet).
 
 ---
 
@@ -36,7 +36,7 @@ Want to get the server running locally? Here’s how.
 
 1.  **Clone the repo:**
     ```sh
-    git clone [https://github.com/andreapavoni/parabellum.git](https://github.com/andreapavoni/parabellum.git)
+    git clone https://github.com/andreapavoni/parabellum.git
     cd parabellum
     ```
 
@@ -58,7 +58,12 @@ Want to get the server running locally? Here’s how.
     ./setup_db.sh
     ```
 
-5.  **Run the server:**
+5.  **(optional) Run tests:**
+    ```sh
+    cargo test
+    ```
+
+6.  **Run the server:**
     ```sh
     cargo run
     ```
