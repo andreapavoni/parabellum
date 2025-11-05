@@ -1,58 +1,148 @@
 # Parabellum
 
-An attempt to make a Travian 3.x clone written in Rust.
+![Rust](https://img.shields.io/badge/made%20with-Rust-eb4524.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-## Quick setup and running
+Parabellum is an attempt to build a (yet another!) modern, fast, and open-source MMORPG inspired by the classic game Travian 3.x.
 
-Execute the following commands to try Parabellum. Depending on its stage of development,
-when ran it will print on the terminal what it's happening. As of 2023-0207, it just generates
-a new map of 100x100 (x4) squares with each one a randomly assigned topology (valley of different resource fields, or oasis of different bonus percentuals, like in Travian).
+This project is for those who love the deep strategy and community of the original but want an alternative built on a modern tech stack. The goal is to create a lightweight, easy-to-deploy server that's completely free from pay-to-win mechanics.
 
-```sh
-cp .env.sample .env
-docker-compose up -d
+The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
-cargo install sqlx-cli --no-default-features --features postgres
-sqlx migrate run
-cargo run
-```
+> **Heads up!** Parabellum is under heavy development and is **not yet playable**. Many core mechanics are being built, but it's not a complete game.
 
+---
 
-## FAQ
+## Project Goals
 
-### Q: Is it usable yet?
-NO. It's still in its early stages, it has some isolated partially working parts, nothing that can be considered done yet.
+* **Core Travian Experience**: Replicate the core 80-90% of the game mechanics (building, resource management, troops, attacks, alliances).
+* **Fast, Robust & Lightweight**: Use Rust to create a high-performance server that's easy for anyone to run. Code has unit and integration tests to ensure everything is working as expected.
+* **No "Pay-to-Win"**: This is a non-negotiable. This project is for the love of the game, not for predatory monetization.
+* **Modern Stack**: Intentionally skipping outdated features like in-game forums or chats, assuming players will use modern tools like Discord.
+* **Open Source**: Create a community-driven project that can be forked, modified, and learned from.
 
-### Q: Why yet another attempt to make a Travian clone?
+---
 
-Why not? [TravianZ](https://github.com/Shadowss/TravianZ) is an excellent project! But it has many years on its backs (even in terms of technology and design patterns), and develpopment efforts are left back to random volunteers wanting to contribute. I always dreamed about making a Travian clone, and this is my opportunity.
+## Quick Start
 
-### Q: What are the goals? Are you planning to make a 1:1 clone of TravianLegends/TravianZ?
+Want to get the server running locally? Here’s how.
 
-In the beginning, the first goal is to get a playable game with at least 80-90% of the main features of TravianZ.
+**Prerequisites:**
+* Rust (latest stable)
+* Docker & Docker Compose
+* `sqlx-cli` (run `cargo install sqlx-cli --no-default-features --features postgres`)
 
-Another main goal is to make it fast and easy to deploy, that's one of the reasons why I chose Rust to implement this project.
+**Steps:**
 
-Some of the known features will be avoided because outdated and/or not strictly useful, in particular:
+1.  **Clone the repo:**
+    ```sh
+    git clone [https://github.com/andreapavoni/parabellum.git](https://github.com/andreapavoni/parabellum.git)
+    cd parabellum
+    ```
 
-- No _Plus_ and neither _golds_ or _silvers_ :-) I don't like the PayForWin approach. Monetization is not planned yet, but when/if it will come, it will be for things that will help the player to _play better_, not to have an advantage over the ones that don't pay.
-- No alliance forum/chat: it made sense before 2010s, but as of today, it's just a burden, and people use other tools to communicate (Discord, slack, instant messengers...)
+2.  **Set up environment:**
+    ```sh
+    # Copy the sample .env file
+    cp .env.sample .env
+    ```
+    (You shouldn't need to modify this for local dev).
 
-### Q: Where can I find a demo server?
+3.  **Start the database:**
+    ```sh
+    docker-compose up -d
+    ```
 
-There isn't one yet, because it's still under heavy development and there isn't anything to show yet, except the bunch of code published here.
+4.  **Run database migrations:**
+    ```sh
+    # This sets up the dev AND test databases
+    ./setup_db.sh
+    ```
 
-### Q: What about the UI? Will it be the same the players already know?
+5.  **Run the server:**
+    ```sh
+    cargo run
+    ```
+    The server will start and begin processing jobs. Right now, it runs a small demo script in `main.rs` to show the systems working.
 
-Being usability and portability a main goal fo this project, the UI will be designed to be comfortable even on small screens, so the UI will probably be very different. I'm very far from being a graphic designer, so I hope someone will jump in to help.
+---
 
-### Q: Will Parabellum have localized translations?
+## Feature Roadmap
 
-Maybe. The initial main language will be English for _ubiquity_ reasons, but I don't exclude the possibility to add more languages later if the project will gain popularity.
+Here's a high-level tracker of what's working, what's in progress, and what's still to do.
+
+### Implemented
+- [x] **Core Architecture**: A clean, command-based application structure.
+- [x] **Database**: A repository pattern for atomic database transactions.
+- [x] **Job System**: An async, persistent job queue (`Pending`, `Processing`, `Completed` states).
+- [x] **Game Data**: All static data for buildings, units, tribes, and smithy upgrades is defined.
+- [x] **Player**: Player registration.
+- [x] **Village**: Initial village founding.
+- [x] **Resources**: Passive resource generation (the "tick") based on building levels and server speed.
+- [x] **Population**: Cumulative population calculation.
+- [x] **Building**: Full command and job cycle for starting and completing construction.
+- [x] **Unit Training**: Full command and job cycle for training a queue of units.
+- [x] **Research**: Full command and job cycle for Academy and Smithy research.
+- [x] **Battle**: Core battle logic (attacker vs. defender calculation) is implemented.
+- [x] **Attack Cycle**: Full "Attack" -> "Battle" -> "Army Return" job chain.
+- [x] **Battle Features**: Ram/Catapult damage and resource bounty calculation.
+
+### In Progress
+- [ ] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
+- [ ] **Building Upgrades**: The logic for upgrading a building (L1 -> L2) is partially distinct from constructing a new one (L0 -> L1). This needs its own `UpgradeBuilding` command.
+
+### ToDo (Not Started)
+- [ ] **API / UI**: There is **no web server or UI** yet! `parabellum_server` is just a test runner for now. This is the biggest missing piece, but also the least important for now. When the core and app will have enough working features, API and UI will start to come.
+- [ ] **Reinforcements**: Sending troops to support other villages (logic exists, but no command/job).
+- [ ] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
+- [ ] **Merchants**: Sending resources between villages.
+- [ ] **Alliances**: Creating and managing alliances.
+- [ ] **Expansion**: Training settlers, founding new villages (command exists, but not unit training), and conquering.
+- [ ] **Oases**: Capturing and managing oases (models exist, logic does not).
+- [ ] **End Game**: Wonder of the World, Natars, etc.
+
+---
+
+## Project Structure
+
+The project is structured as a Cargo workspace with several distinct crates:
+
+* `parabellum_server`: The main binary executable. This is the entry point that ties everything together.
+* `parabellum_app`: The application layer. This is the "brain" of the project. It contains all the commands, queries, and handlers that orchestrate the game logic. It also manages the Job Queue system.
+* `parabellum_game`: The core domain layer. This crate knows *nothing* about databases or web servers. It contains the pure game rules, models (Village, Army, Building), and logic (e.g., `battle.rs`).
+* `parabellum_db`: The infrastructure layer. This provides the concrete implementation of the database repositories (using `sqlx` and Postgres).
+* `parabellum_core`: A shared crate for common code.
+* `parabellum_types`: Shared, simple data structures that are used by all other crates to avoid circular dependencies.
+
+---
+
+## How to Contribute
+
+Contributions are very welcome! Since the project is in the early stages, things are still very flexible.
+
+1.  **Find something to work on**:
+    * Look at the `ToDo` list in the roadmap above.
+    * Pick an `In Progress` item and help finish it.
+    * Find a bug or a missing calculation.
+    * Help improve documentation or add more tests.
+2.  **Get in touch**:
+    * For now, the best way is to **open an Issue** on GitHub.
+    * Describe what you'd like to work on or the bug you've found.
+    * We can discuss the best approach there before you start coding.
+3.  **Submit a Pull Request**:
+    * Create a PR with your changes, and we'll review it together!
+
+Don't worry about "doing it wrong." The most important thing is to get involved!
+
+---
 
 ## Credits
 
-It would have been nearly impossible to start this project without the efforts of many people that contributed (and still does) to [TravianZ](https://github.com/Shadowss/TravianZ) project (and its many forks around the web). Also [Kirilloid's work](https://github.com/kirilloid/travian) has been fundamental to apply the battle system formulas in this project.
+This project wouldn't be possible without the incredible work done by the [TravianZ project](https://github.com/Shadowss/TravianZ) and [Kirilloid's work](https://github.com/kirilloid/travian) on detailing the game mechanics.
+
+## License
+
+Parabellum is open-source software licensed under the **MIT License**.
+
 
 ## Copyright
 
