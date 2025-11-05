@@ -335,7 +335,7 @@ impl Village {
 
         // data from infrastructures
         for b in self.buildings.iter() {
-            self.population += b.building.cost().upkeep;
+            self.population += b.building.population;
 
             match b.building.name {
                 BuildingName::Woodcutter => self.production.lumber += b.building.value,
@@ -774,6 +774,69 @@ mod tests {
         assert_eq!(
             v.stocks.crop, 800,
             "Crop should be capped at granary capacity"
+        );
+    }
+
+    #[test]
+    fn test_cumulative_population_and_upkeep_on_upgrade() {
+        let server_speed = 1;
+        let mut v = village_factory(VillageFactoryOptions {
+            server_speed: Some(server_speed),
+            ..Default::default()
+        });
+
+        let mb_slot_id = 19;
+        let mb_l1 = v.get_building_by_slot_id(mb_slot_id).unwrap().building;
+
+        // Initial population upkeep: 2 (base) + 2 (MB L1) = 4
+        assert_eq!(mb_l1.level, 1);
+        assert_eq!(
+            mb_l1.population, 2,
+            "Main Building L1 population should be 2"
+        );
+        assert_eq!(v.population, 4, "Initial village population should be 4");
+        assert_eq!(v.production.upkeep, 4, "Initial village upkeep should be 4");
+
+        v.set_building_level_at_slot(mb_slot_id, 2, server_speed)
+            .unwrap();
+        v.update_state();
+
+        let mb_l2 = v.get_building_by_slot_id(mb_slot_id).unwrap().building;
+
+        assert_eq!(mb_l2.level, 2);
+        assert_eq!(
+            mb_l2.population, 3,
+            "Main Building L2 cumulative population should be 3 (2+1)"
+        );
+
+        assert_eq!(
+            v.population, 5,
+            "Village population with MainBuilding L2 should be 5"
+        );
+        assert_eq!(
+            v.production.upkeep, 5,
+            "Village upkeep with MainBuilding L2 should be 5"
+        );
+
+        v.set_building_level_at_slot(mb_slot_id, 3, server_speed)
+            .unwrap();
+        v.update_state();
+
+        let mb_l3 = v.get_building_by_slot_id(mb_slot_id).unwrap().building;
+
+        assert_eq!(mb_l3.level, 3);
+        assert_eq!(
+            mb_l3.population, 4,
+            "Main Building L3 population should be 4 (2+1+1)"
+        );
+
+        assert_eq!(
+            v.population, 6,
+            "Village population with Main Building L3 should be 6"
+        );
+        assert_eq!(
+            v.production.upkeep, 6,
+            "Village upkeep with Main Building L3 upgrade should be 6"
         );
     }
 }

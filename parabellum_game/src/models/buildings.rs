@@ -14,6 +14,7 @@ pub struct Building {
     pub name: BuildingName,
     pub group: BuildingGroup,
     pub value: u32,
+    pub population: u32,
     pub culture_points: u16,
     pub level: u8,
 }
@@ -22,13 +23,16 @@ impl Building {
     pub fn new(name: BuildingName, server_speed: i8) -> Self {
         let building = get_building_data(&name).unwrap();
         let data = building.data[0].clone();
+        let level = 1;
         let effective_value = Self::effective_value(&name, data.6, server_speed);
+        let (population, culture_points) = get_cumulative_stats(&name, &building.group, level);
 
         Self {
             name,
             group: building.group,
-            culture_points: data.5,
-            level: 1,
+            culture_points,
+            level,
+            population,
             value: effective_value,
         }
     }
@@ -58,12 +62,14 @@ impl Building {
 
         let data = building.data[lvl_idx as usize].clone();
         let effective_value = Self::effective_value(&self.name, data.6, server_speed);
+        let (population, culture_points) = get_cumulative_stats(&self.name, &self.group, level);
 
         Ok(Self {
             name: self.name.clone(),
             group: building.group.clone(),
-            culture_points: data.5,
+            culture_points,
             level,
+            population,
             value: effective_value,
         })
     }
@@ -228,6 +234,32 @@ struct BuildingData {
     data: &'static [BuildingValueData],
     group: BuildingGroup,
     rules: BuildingRules,
+}
+
+/// Returns cumulative population and culture points for a given level.
+fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -> (u32, u16) {
+    if level == 0 {
+        return (0, 0); // Level 0 has 0 pop and 0 CP
+    }
+
+    let building_data = get_building_data(&name).unwrap();
+    let mut cumulative_pop = 0;
+    let mut cumulative_cp = 0;
+
+    // iterate from level 1 up to current level
+    for i in 1..=level {
+        let data_idx = if *group == BuildingGroup::Resources {
+            i as usize
+        } else {
+            (i - 1) as usize
+        };
+
+        if let Some(data) = building_data.data.get(data_idx) {
+            cumulative_pop += data.4;
+            cumulative_cp += data.5;
+        }
+    }
+    (cumulative_pop, cumulative_cp)
 }
 
 fn get_building_data(name: &BuildingName) -> Result<BuildingData, GameError> {
