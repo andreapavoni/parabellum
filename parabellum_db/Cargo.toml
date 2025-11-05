@@ -1,0 +1,19 @@
+[package]
+name = "parabellum_db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+parabellum_types = { path = "../parabellum_types" }
+parabellum_core = { path = "../parabellum_core" }
+parabellum_game = { path = "../parabellum_game" }
+parabellum_app = { path = "../parabellum_app" }
+
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dotenvy = { workspace = true }
+async-trait = { workspace = true }

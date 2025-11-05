@@ -1,0 +1,13 @@
+[package]
+name = "parabellum_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+parabellum_core = { path = "../parabellum_core" }
+parabellum_types = { path = "../parabellum_types" }
+
+serde = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }

@@ -1,0 +1,27 @@
+[package]
+name = "parabellum_server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "parabellum"
+path = "src/main.rs"
+
+[dependencies]
+parabellum_types = { path = "../parabellum_types" }
+parabellum_core = { path = "../parabellum_core" }
+parabellum_game = { path = "../parabellum_game" }
+parabellum_app = { path = "../parabellum_app" }
+parabellum_db = { path = "../parabellum_db" }
+
+tokio = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+sqlx = { workspace = true }
+
+std_prelude = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"

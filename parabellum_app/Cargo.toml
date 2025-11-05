@@ -1,0 +1,18 @@
+[package]
+name = "parabellum_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+parabellum_types = { path = "../parabellum_types" }
+parabellum_core = { path = "../parabellum_core" }
+parabellum_game = { path = "../parabellum_game" }
+
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+dotenvy  = { workspace = true }

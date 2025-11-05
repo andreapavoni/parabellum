@@ -1,48 +1,24 @@
-[package]
-name = "parabellum"
-version = "0.1.0"
-description = "API server for Parabellum, a reimplementation of the famous MMORPG browser game Travian v3.x"
-repository = "https://github.com/andreapavoni/parabellum"
-authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
-license = "MIT"
-keywords = ["travian", "MMORPG", "game", "browsergame"]
-readme = "README.md"
-publish = false
-rust-version = "1.86"
-edition = "2024"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+    "parabellum_core",
+    "parabellum_game",
+    "parabellum_app",
+    "parabellum_db",
+    "parabellum_server",
+    "parabellum_types",
+]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
-futures = "0.3"
-async-trait = "0.1"
-
-# JSON handling
-serde_json = { version = "1.0", features = ["raw_value"] }
 serde = { version = "1.0", features = ["derive"] }
-# Date and time
+serde_json = { version = "1.0", features = ["raw_value"] }
 chrono = { version = "0.4", features = ["serde"] }
-time = { version = "0.3", features = ["serde"] }
-
-# Database
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
-
-# Uuid
 uuid = { version = "1.1", features = ["serde", "v4"] }
-
-# Result and Error handling
 anyhow = "1.0"
 thiserror = "1.0"
-
-# Logging & tracing
+async-trait = "0.1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
-
-# Random number generator
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
 rand = "0.8.5"
-
-# Utils
 dotenvy = "0.15"
-
-[dev-dependencies]
