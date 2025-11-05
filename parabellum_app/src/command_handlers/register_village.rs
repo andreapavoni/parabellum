@@ -42,6 +42,7 @@ impl CommandHandler<RegisterVillage> for RegisterVillageCommandHandler {
             &cmd.player,
             true,
             config.world_size as i32,
+            config.speed,
         );
 
         village_repo.save(&village).await?;

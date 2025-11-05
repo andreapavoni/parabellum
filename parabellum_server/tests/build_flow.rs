@@ -54,8 +54,9 @@ async fn test_full_build_flow() -> Result<()> {
             ..Default::default()
         });
 
-        village.set_building_level_at_slot(19, 3)?;
-        let rally_point = Building::new(BuildingName::RallyPoint).at_level(1)?;
+        village.set_building_level_at_slot(19, 3, config.speed)?;
+        let rally_point =
+            Building::new(BuildingName::RallyPoint, config.speed).at_level(1, config.speed)?;
         village.add_building_at_slot(rally_point, 39).unwrap();
 
         village
@@ -68,7 +69,7 @@ async fn test_full_build_flow() -> Result<()> {
         (player, village)
     };
 
-    let cost = Building::new(BuildingName::Barracks).cost();
+    let cost = Building::new(BuildingName::Barracks, config.speed).cost();
     let initial_lumber = village.stocks.lumber;
     let slot_to_build: u8 = 22;
 

@@ -38,6 +38,7 @@ pub struct VillageFactoryOptions {
     pub valley: Option<Valley>,
     pub is_capital: Option<bool>,
     pub world_size: Option<i32>,
+    pub server_speed: Option<i8>,
 }
 
 #[derive(Default, Clone)]
@@ -103,6 +104,7 @@ pub fn village_factory(options: VillageFactoryOptions) -> Village {
         &options.player.unwrap_or(player_factory(Default::default())),
         options.is_capital.unwrap_or(true),
         options.world_size.unwrap_or(100),
+        options.server_speed.unwrap_or(1),
     )
 }
 

@@ -303,7 +303,7 @@ impl Battle {
 
         let wall_report = if wall_level > 0 {
             Some(BuildingDamageReport {
-                name: self.defender_village.get_wall_name().unwrap(),
+                name: self.defender_village.get_wall().map(|b| b.name).unwrap(),
                 level_before: wall_level,
                 level_after: wall_level_after,
             })

@@ -44,6 +44,7 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
             &command.player,
             false,
             config.world_size as i32,
+            config.speed,
         );
 
         village_repo.save(&village).await?;

@@ -120,6 +120,7 @@ mod tests {
     use std::sync::Arc;
 
     fn setup_village_with_barracks() -> (Player, Village, Arc<Config>) {
+        let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -137,7 +138,7 @@ mod tests {
         // Add barracks
         let barracks = VillageBuilding {
             slot_id: 20,
-            building: Building::new(BuildingName::Barracks),
+            building: Building::new(BuildingName::Barracks, config.speed),
         };
         village.buildings.push(barracks);
 
@@ -146,8 +147,6 @@ mod tests {
             .stocks
             .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
         village.update_state();
-
-        let config = Arc::new(Config::from_env());
 
         (player, village, config)
     }

@@ -59,6 +59,7 @@ impl Village {
         player: &Player,
         is_capital: bool,
         world_size: i32,
+        server_speed: i8,
     ) -> Self {
         let position = valley.position.clone();
         let village_id = position.to_id(world_size);
@@ -89,7 +90,9 @@ impl Village {
         };
 
         // FIXME: either fix the method return value or this method one.
-        village.init_village_buildings(valley).unwrap();
+        village
+            .init_village_buildings(valley, server_speed)
+            .unwrap();
         village.update_state();
         village
     }
@@ -105,29 +108,12 @@ impl Village {
         Ok(())
     }
 
-    /// Upgrades an existing building on a given slot.
-    pub fn upgrade_building_at_slot(&mut self, slot_id: u8) -> Result<(), GameError> {
-        let idx = self
-            .buildings
-            .iter()
-            .position(|b| b.slot_id == slot_id)
-            .ok_or_else(|| GameError::EmptySlot { slot_id })?;
-
-        let building = self.buildings[idx].building.clone();
-        let building = building.at_level(building.level + 1)?;
-
-        let _ = std::mem::replace(
-            &mut self.buildings[idx],
-            VillageBuilding {
-                slot_id,
-                building: building,
-            },
-        );
-
-        Ok(())
-    }
-
-    pub fn set_building_level_at_slot(&mut self, slot_id: u8, level: u8) -> Result<(), GameError> {
+    pub fn set_building_level_at_slot(
+        &mut self,
+        slot_id: u8,
+        level: u8,
+        server_speed: i8,
+    ) -> Result<(), GameError> {
         let idx = self
             .buildings
             .iter()
@@ -139,22 +125,27 @@ impl Village {
             &mut self.buildings[idx],
             VillageBuilding {
                 slot_id,
-                building: building.at_level(level)?,
+                building: building.at_level(level, server_speed)?,
             },
         );
         Ok(())
     }
 
     /// Removes a building from a given slot, except for resource fields because they can just go to level 0.
-    pub fn remove_building_at_slot(&mut self, slot_id: u8) -> Result<(), GameError> {
+    pub fn remove_building_at_slot(
+        &mut self,
+        slot_id: u8,
+        server_speed: i8,
+    ) -> Result<(), GameError> {
         if slot_id >= 1 && slot_id <= 18 {
-            return self.set_building_level_at_slot(slot_id, 0);
+            return self.set_building_level_at_slot(slot_id, 0, server_speed);
         }
 
         self.buildings.retain(|vb| vb.slot_id != slot_id);
         Ok(())
     }
 
+    /// Returns a building in the village on a given slot. Returns None if not present.
     pub fn get_building_by_slot_id(&self, slot_id: u8) -> Option<VillageBuilding> {
         self.buildings
             .iter()
@@ -162,7 +153,8 @@ impl Village {
             .cloned()
     }
 
-    // Returns a building in the village. Returns None if not present. In case of multiple buildings of same type, it returns the highest level one.
+    /// Returns a building in the village. Returns None if not present.
+    /// In case of multiple buildings of same type, it returns the highest level one.
     pub fn get_building_by_name(&self, name: BuildingName) -> Option<VillageBuilding> {
         if let Some(village_building) = self
             .buildings
@@ -193,6 +185,7 @@ impl Village {
             .collect::<Vec<Building>>()
     }
 
+    /// Returns either the Palace or Residence, if any.
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
         if let Some(palace) = self.get_building_by_name(BuildingName::Palace) {
             return Some((palace.building, BuildingName::Palace));
@@ -203,7 +196,7 @@ impl Village {
         None
     }
 
-    // Returns the current wall, if any, according to the tribe.
+    /// Returns the village wall, if any, according to the actual tribe.
     pub fn get_wall(&self) -> Option<Building> {
         match self.tribe {
             Tribe::Roman => self.get_building_by_name(BuildingName::CityWall),
@@ -214,15 +207,7 @@ impl Village {
         .map(|vb| vb.building)
     }
 
-    pub fn get_wall_name(&self) -> Option<BuildingName> {
-        match self.tribe {
-            Tribe::Roman => Some(BuildingName::CityWall),
-            Tribe::Teuton => Some(BuildingName::EarthWall),
-            Tribe::Gaul => Some(BuildingName::Palisade),
-            _ => None,
-        }
-    }
-
+    /// Get defense bonus from wall, if any.
     pub fn get_wall_defense_bonus(&self) -> f64 {
         if let Some(wall) = self.get_wall() {
             let tribe_factor: f64 = match self.tribe {
@@ -236,6 +221,7 @@ impl Village {
         1.0
     }
 
+    /// Get buildings durability, considering the level of StonemansionLodge, if any.
     pub fn get_buildings_durability(&self) -> f64 {
         match self.get_building_by_name(BuildingName::StonemansionLodge) {
             Some(b) => 1.0 + b.building.level as f64 * 0.1,
@@ -275,7 +261,11 @@ impl Village {
     }
 
     /// Applies building damages from the battle report to the village.
-    pub fn apply_building_damages(&mut self, report: &BattleReport) -> Result<(), GameError> {
+    pub fn apply_building_damages(
+        &mut self,
+        report: &BattleReport,
+        server_speed: i8,
+    ) -> Result<(), GameError> {
         // Wall damage
         if let Some(wall_damage) = &report.wall_damage {
             if wall_damage.level_after < wall_damage.level_before {
@@ -286,7 +276,9 @@ impl Village {
                         .iter_mut()
                         .find(|vb| vb.building.name == wall_damage.name)
                     {
-                        vb.building = wall_building.building.at_level(wall_damage.level_after)?;
+                        vb.building = wall_building
+                            .building
+                            .at_level(wall_damage.level_after, server_speed)?;
                     }
                 }
             }
@@ -316,8 +308,8 @@ impl Village {
                     {
                         vb.building = target_building
                             .building
-                            .at_level(damage_report.level_after)?;
-                        // Se il livello è 0 e non è un campo risorse, rimuovi l'edificio
+                            .at_level(damage_report.level_after, server_speed)?;
+
                         if damage_report.level_after == 0
                             && vb.building.group != BuildingGroup::Resources
                         {
@@ -455,40 +447,48 @@ impl Village {
         self.updated_at = now;
     }
 
-    fn init_village_buildings(&mut self, valley: &Valley) -> Result<(), GameError> {
+    fn init_village_buildings(
+        &mut self,
+        valley: &Valley,
+        server_speed: i8,
+    ) -> Result<(), GameError> {
         let topology = valley.topology.clone();
 
         // Default resources level 0
         for _ in 0..topology.lumber() {
             let slot_id = self.buildings.len() as u8 + 1;
-            let building = Building::new(BuildingName::Woodcutter).at_level(0)?;
+            let building =
+                Building::new(BuildingName::Woodcutter, server_speed).at_level(0, server_speed)?;
             self.buildings
                 .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.clay() {
             let slot_id = self.buildings.len() as u8 + 1;
-            let building = Building::new(BuildingName::ClayPit).at_level(0)?;
+            let building =
+                Building::new(BuildingName::ClayPit, server_speed).at_level(0, server_speed)?;
             self.buildings
                 .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.iron() {
             let slot_id = self.buildings.len() as u8 + 1;
-            let building = Building::new(BuildingName::IronMine).at_level(0)?;
+            let building =
+                Building::new(BuildingName::IronMine, server_speed).at_level(0, server_speed)?;
             self.buildings
                 .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         for _ in 0..topology.crop() {
             let slot_id = self.buildings.len() as u8 + 1;
-            let building = Building::new(BuildingName::Cropland).at_level(0)?;
+            let building =
+                Building::new(BuildingName::Cropland, server_speed).at_level(0, server_speed)?;
             self.buildings
                 .append(&mut vec![VillageBuilding { slot_id, building }]);
         }
 
         // Main building level 1
-        let main_building = Building::new(BuildingName::MainBuilding);
+        let main_building = Building::new(BuildingName::MainBuilding, server_speed);
         let slot_id: u8 = self.buildings.len() as u8 + 1;
         self.buildings.append(&mut vec![VillageBuilding {
             slot_id,

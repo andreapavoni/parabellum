@@ -88,7 +88,7 @@ impl JobHandler for AttackJobHandler {
         defender_village.loyalty = battle_report.loyalty_after;
 
         // Apply damages to buildings
-        defender_village.apply_building_damages(&battle_report)?;
+        defender_village.apply_building_damages(&battle_report, ctx.config.speed)?;
 
         // Applies combat losses to defender village and its reinforcements
         defender_village.apply_battle_losses(&battle_report);

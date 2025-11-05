@@ -214,8 +214,10 @@ pub mod tests {
 
             {
                 let village_repo = uow_update.villages();
-                let granary = Building::new(BuildingName::Granary).at_level(1)?;
-                let warehouse = Building::new(BuildingName::Warehouse).at_level(1)?;
+                let granary =
+                    Building::new(BuildingName::Granary, config.speed).at_level(1, config.speed)?;
+                let warehouse = Building::new(BuildingName::Warehouse, config.speed)
+                    .at_level(1, config.speed)?;
 
                 defender_village.add_building_at_slot(granary, 21)?;
                 defender_village.add_building_at_slot(warehouse, 20)?;

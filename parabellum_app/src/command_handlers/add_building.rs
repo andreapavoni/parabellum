@@ -46,7 +46,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             .into());
         }
 
-        let building = Building::new(command.name.clone());
+        let building = Building::new(command.name.clone(), config.speed);
 
         Building::validate_build(
             &building,
@@ -104,7 +104,7 @@ mod tests {
     };
     use std::sync::Arc;
 
-    fn setup_village() -> (Player, Village, Arc<Config>) {
+    fn setup_village(config: &Config) -> (Player, Village, Arc<Config>) {
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -116,10 +116,14 @@ mod tests {
         });
 
         // Add Main Building Lvl 3 (requirement for Barracks)
-        village.set_building_level_at_slot(19, 3).unwrap();
+        village
+            .set_building_level_at_slot(19, 3, config.speed)
+            .unwrap();
 
         // Add Rally Point Lvl 1 (requirement for Barracks)
-        let rally_point = Building::new(BuildingName::RallyPoint).at_level(1).unwrap();
+        let rally_point = Building::new(BuildingName::RallyPoint, config.speed)
+            .at_level(1, config.speed)
+            .unwrap();
         village.add_building_at_slot(rally_point, 39).unwrap(); // Slot 39 for Rally Point
 
         village
@@ -134,7 +138,8 @@ mod tests {
     #[tokio::test]
     async fn test_add_building_handler_success() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village();
+        let config = Config::from_env();
+        let (player, village, config) = setup_village(&config);
         let village_id = village.id;
         let player_id = player.id;
 
@@ -154,7 +159,7 @@ mod tests {
 
         // Check if resources were deducted
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
-        let cost = Building::new(BuildingName::Barracks).cost();
+        let cost = Building::new(BuildingName::Barracks, config.speed).cost();
 
         assert_eq!(
             saved_village.stocks.lumber,
@@ -181,8 +186,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_building_handler_not_enough_resources() {
+        let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village();
+        let (player, mut village, config) = setup_village(&config);
         village.stocks = Default::default(); // No resources
         let village_id = village.id;
         let player_id = player.id;
@@ -213,13 +219,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_building_handler_slot_occupied() {
+        let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village();
+        let (player, mut village, config) = setup_village(&config);
         let village_id = village.id;
         let player_id = player.id;
 
         // Manually occupy slot 22
-        let cranny = Building::new(BuildingName::Cranny);
+        let cranny = Building::new(BuildingName::Cranny, config.speed);
         village.add_building_at_slot(cranny, 22).unwrap();
         mock_uow.villages().save(&village).await.unwrap();
 
@@ -243,8 +250,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_building_handler_requirements_not_met() {
+        let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village();
+        let (player, mut village, config) = setup_village(&config);
 
         // Remove Rally Point (requirement for Barracks)
         village

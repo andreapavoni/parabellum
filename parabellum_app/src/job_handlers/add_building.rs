@@ -39,7 +39,8 @@ impl JobHandler for AddBuildingJobHandler {
         let village_repo = ctx.uow.villages();
         let mut village = village_repo.get_by_id(village_id).await?;
 
-        let building = Building::new(self.payload.name.clone()).at_level(1)?;
+        let building = Building::new(self.payload.name.clone(), ctx.config.speed)
+            .at_level(1, ctx.config.speed)?;
 
         village.add_building_at_slot(building, self.payload.slot_id)?;
 

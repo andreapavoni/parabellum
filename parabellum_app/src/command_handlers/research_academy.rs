@@ -113,6 +113,7 @@ mod tests {
 
     // Setup helper che crea un villaggio con i requisiti per ricercare Praetorian
     fn setup_village_for_academy() -> (Player, Village, Arc<Config>) {
+        let config = Config::from_env();
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -123,16 +124,24 @@ mod tests {
             ..Default::default()
         });
 
-        let academy = Building::new(BuildingName::Academy).at_level(1).unwrap();
+        let academy = Building::new(BuildingName::Academy, config.speed)
+            .at_level(1, config.speed)
+            .unwrap();
         village.add_building_at_slot(academy, 23).unwrap();
 
-        let smithy = Building::new(BuildingName::Smithy).at_level(1).unwrap();
+        let smithy = Building::new(BuildingName::Smithy, config.speed)
+            .at_level(1, config.speed)
+            .unwrap();
         village.add_building_at_slot(smithy, 24).unwrap();
 
-        let warehouse = Building::new(BuildingName::Warehouse).at_level(4).unwrap();
+        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
+            .at_level(4, config.speed)
+            .unwrap();
         village.add_building_at_slot(warehouse, 25).unwrap();
 
-        let granary = Building::new(BuildingName::Granary).at_level(4).unwrap();
+        let granary = Building::new(BuildingName::Granary, config.speed)
+            .at_level(4, config.speed)
+            .unwrap();
         village.add_building_at_slot(granary, 26).unwrap();
         village.update_state();
 

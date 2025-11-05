@@ -19,58 +19,52 @@ pub struct Building {
 }
 
 impl Building {
-    pub fn new(name: BuildingName) -> Self {
-        let building = get_building_data(name.clone()).unwrap();
+    pub fn new(name: BuildingName, server_speed: i8) -> Self {
+        let building = get_building_data(&name).unwrap();
+        let data = building.data[0].clone();
+        let effective_value = Self::effective_value(&name, data.6, server_speed);
+
         Self {
             name,
             group: building.group,
-            culture_points: building.data[0].5,
-            level: 1,
-            value: building.data[0].6,
-        }
-    }
-
-    pub fn next_level(&self) -> Result<Self, GameError> {
-        let building = get_building_data(self.name.clone()).unwrap();
-
-        if self.level == building.rules.max_level {
-            return Err(GameError::BuildingMaxLevelReached);
-        }
-
-        let level = self.level + 1;
-        let data = building.data[level as usize].clone();
-
-        Ok(Self {
-            name: self.name.clone(),
-            group: building.group.clone(),
             culture_points: data.5,
-            level,
-            value: data.6,
-        })
+            level: 1,
+            value: effective_value,
+        }
     }
 
-    pub fn at_level(&self, mut level: u8) -> Result<Self, GameError> {
-        let building = get_building_data(self.name.clone()).unwrap();
+    pub fn at_level(&self, mut level: u8, server_speed: i8) -> Result<Self, GameError> {
+        let building = get_building_data(&self.name)?;
 
-        // fallback level to the building's max level when it's beyond
         if level > building.rules.max_level {
             level = building.rules.max_level
         }
 
-        // check starting levels
+        // max level reached?
+        if level >= self.level && self.level == building.rules.max_level {
+            return Err(GameError::BuildingMaxLevelReached);
+        }
+
+        // resource fields have production values at level 0 too
         let mut lvl_idx = level;
         if level > 0 && self.group != BuildingGroup::Resources {
             lvl_idx -= 1;
         }
 
+        // non-resource fields at level 0 should fallback to level 1
+        if level == 0 && self.group != BuildingGroup::Resources {
+            level = 1;
+        }
+
         let data = building.data[lvl_idx as usize].clone();
+        let effective_value = Self::effective_value(&self.name, data.6, server_speed);
 
         Ok(Self {
             name: self.name.clone(),
             group: building.group.clone(),
             culture_points: data.5,
             level,
-            value: data.6,
+            value: effective_value,
         })
     }
 
@@ -80,8 +74,9 @@ impl Building {
         village_buildings: &Vec<VillageBuilding>,
         is_capital: bool,
     ) -> Result<(), GameError> {
-        let data = get_building_data(self.name.clone()).unwrap();
+        let data = get_building_data(&self.name).unwrap();
 
+        // tribe constraints
         if !data.rules.tribes.is_empty() {
             let ok = data.rules.tribes.contains(tribe);
             if !ok {
@@ -92,6 +87,7 @@ impl Building {
             }
         }
 
+        // capital/non-capital constraints
         if is_capital
             && data
                 .rules
@@ -110,6 +106,7 @@ impl Building {
             return Err(GameError::CapitalConstraint(self.name.clone()));
         }
 
+        // building requirements (aka technology tree)
         for req in data.rules.requirements {
             match village_buildings
                 .iter()
@@ -126,6 +123,7 @@ impl Building {
         }
 
         for vb in village_buildings {
+            // check if a building has conflicts with other buildings (eg: Palace vs Residence)
             for conflict in data.rules.conflicts {
                 if vb.building.name == conflict.0 {
                     return Err(GameError::BuildingConflict(
@@ -135,7 +133,7 @@ impl Building {
                 }
             }
 
-            // also, let's check if there's already a building like that
+            // rules for duplicated buildings (eg: Warehouse or Granary)
             if self.name == vb.building.name {
                 // and allows multiple
                 if !data.rules.allow_multiple {
@@ -151,23 +149,14 @@ impl Building {
         Ok(())
     }
 
-    pub fn validate_upgrade(&self) -> Result<(), GameError> {
-        let data = get_building_data(self.name.clone())?;
-
-        // max level reached?
-        if self.level == data.rules.max_level {
-            return Err(GameError::BuildingMaxLevelReached);
-        }
-
-        Ok(())
-    }
-
+    /// Returns the build time of the building considering the server speed.
     pub fn calculate_build_time_secs(&self, server_speed: u8) -> u32 {
         (self.cost().time as f64 / server_speed as f64).floor() as u32
     }
 
+    /// Returns the cost of the building.
     pub fn cost(&self) -> Cost {
-        let building = get_building_data(self.name.clone()).unwrap();
+        let building = get_building_data(&self.name).unwrap();
 
         let mut level = self.level;
 
@@ -181,6 +170,28 @@ impl Building {
             resources: ResourceGroup::new(data.0, data.1, data.2, data.3),
             upkeep: data.4,
             time: data.6,
+        }
+    }
+
+    /// Returns the building effective value (production/capacity) based on server speed.
+    pub fn effective_value(name: &BuildingName, base_value: u32, server_speed: i8) -> u32 {
+        if server_speed <= 1 {
+            return base_value;
+        }
+
+        let speed_multiplier = server_speed as u32;
+
+        match name {
+            BuildingName::Woodcutter
+            | BuildingName::ClayPit
+            | BuildingName::IronMine
+            | BuildingName::Cropland => base_value * speed_multiplier,
+            BuildingName::Warehouse
+            | BuildingName::Granary
+            | BuildingName::GreatWarehouse
+            | BuildingName::GreatGranary => base_value * speed_multiplier,
+
+            _ => base_value,
         }
     }
 }
@@ -219,7 +230,7 @@ struct BuildingData {
     rules: BuildingRules,
 }
 
-fn get_building_data(name: BuildingName) -> Result<BuildingData, GameError> {
+fn get_building_data(name: &BuildingName) -> Result<BuildingData, GameError> {
     match name {
         BuildingName::Woodcutter => Ok(WOODCUTTER.clone()),
         BuildingName::ClayPit => Ok(CLAY_PIT.clone()),
@@ -1721,42 +1732,68 @@ mod tests {
 
     #[test]
     fn test_new_building() {
-        let wood = Building::new(BuildingName::Woodcutter).at_level(1).unwrap();
+        let server_speed: i8 = 1;
+        let wood = Building::new(BuildingName::Woodcutter, server_speed)
+            .at_level(1, server_speed)
+            .unwrap();
 
         assert_eq!(wood.level, 1);
         assert_eq!(wood.value, 5);
         assert_eq!(wood.cost().upkeep, 2);
 
         // Infrastructure start at level 1
-        let mb = Building::new(BuildingName::MainBuilding);
+        let mb = Building::new(BuildingName::MainBuilding, server_speed);
         assert_eq!(mb.level, 1);
         assert_eq!(mb.value, 100); // Build time reduction
         assert_eq!(mb.cost().upkeep, 2);
     }
 
     #[test]
-    fn test_at_level() {
-        let wood = Building::new(BuildingName::Woodcutter);
+    fn test_at_level_with_resource_field() {
+        let server_speed: i8 = 1;
+        let wood = Building::new(BuildingName::Woodcutter, server_speed);
 
         // Get level 5
-        let wood_5 = wood.at_level(5).unwrap();
+        let wood_5 = wood.at_level(5, server_speed).unwrap();
         assert_eq!(wood_5.level, 5);
         assert_eq!(wood_5.value, 33); // Production value for level 5
         assert_eq!(wood_5.cost().upkeep, 1);
 
         // Get level 0
-        let wood_0 = wood.at_level(0).unwrap();
+        let wood_0 = wood.at_level(0, server_speed).unwrap();
         assert_eq!(wood_0.level, 0);
         assert_eq!(wood_0.value, 2); // Production value for level 0
         assert_eq!(wood_0.cost().upkeep, 0);
 
         // Get level beyond max (should clamp to max level)
-        let wood_max = wood.at_level(99).unwrap();
-        let max_level = get_building_data(BuildingName::Woodcutter)
+        let wood_max = wood.at_level(99, server_speed).unwrap();
+        let max_level = get_building_data(&BuildingName::Woodcutter)
             .unwrap()
             .rules
             .max_level;
         assert_eq!(wood_max.level, max_level);
         assert_eq!(wood_max.level, 20);
+    }
+
+    #[test]
+    fn test_at_level_with_building() {
+        let server_speed: i8 = 1;
+        let bakery = Building::new(BuildingName::Bakery, server_speed);
+
+        // Get level 5
+        let bakery_5 = bakery.at_level(5, server_speed).unwrap();
+        assert_eq!(bakery_5.level, 5);
+        assert_eq!(bakery_5.value, 25);
+        assert_eq!(bakery_5.cost().upkeep, 3);
+
+        // Level 0 for a non-resource building means level 1
+        let bakery_0 = bakery.at_level(0, server_speed).unwrap();
+        println!("==== bakery {:#?}", bakery_0);
+        assert_eq!(bakery_0.level, 1);
+        assert_eq!(bakery_0.value, 5);
+
+        // Get level beyond max (should clamp to max level)
+        let bakery_max = bakery.at_level(6, server_speed).unwrap();
+        assert_eq!(bakery_max.level, 5);
     }
 }
