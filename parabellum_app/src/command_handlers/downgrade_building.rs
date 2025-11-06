@@ -35,6 +35,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
         let village = village_repo.get_by_id(command.village_id).await?;
+        let mb_level = village.get_main_building_level();
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -62,8 +63,9 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
             )));
         }
         let target_level = current_level - 1;
-        let cost = vb.building.at_level(target_level, config.speed)?.cost();
-        let build_time_secs = (cost.time as f64 / config.speed as f64).floor() as i64;
+        let target_level_building = vb.building.at_level(target_level, config.speed)?;
+        let build_time_secs =
+            target_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
         let payload = BuildingDowngradeTask {
             slot_id: command.slot_id,

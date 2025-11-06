@@ -156,9 +156,35 @@ impl Building {
         Ok(())
     }
 
-    /// Returns the build time of the building considering the server speed.
-    pub fn calculate_build_time_secs(&self, server_speed: u8) -> u32 {
-        (self.cost().time as f64 / server_speed as f64).floor() as u32
+    pub fn calculate_build_time_secs(&self, server_speed: &i8, mb_level: &u8) -> u32 {
+        let base_time = self.cost().time as f64;
+
+        let mb_factor = if *mb_level == 0 {
+            1000
+        } else {
+            let bdata = get_building_data(&BuildingName::MainBuilding).unwrap();
+            let level_idx = (*mb_level - 1) as usize;
+
+            bdata
+                .data
+                .get(level_idx)
+                .map_or(bdata.data.last().unwrap().6, |data| data.6)
+        };
+
+        let effective_factor: f64 = if self.name == BuildingName::MainBuilding {
+            1.0
+        } else {
+            mb_factor as f64 / 1000.0
+        };
+        println!("===== building {:#?}======", self);
+        println!("===== factor {:#?}======", effective_factor);
+        println!("===== speed {:#?}======", server_speed);
+        println!("===== base_time {:#?}======", base_time);
+
+        let final_time = (base_time * effective_factor) / (*server_speed) as f64;
+        let res = final_time.floor().max(1.0) as u32;
+        println!("===== res {:#?}======", res);
+        res
     }
 
     /// Returns the cost of the building.
@@ -176,7 +202,7 @@ impl Building {
         Cost {
             resources: ResourceGroup::new(data.0, data.1, data.2, data.3),
             upkeep: data.4,
-            time: data.6,
+            time: data.7,
         }
     }
 
@@ -206,6 +232,7 @@ impl Building {
 // lumber, clay, iron, crop, upkeep, culture_points, value, time
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
+/// (lumber, clay, iron, crop, upkeep, culture_points, value, time)
 struct BuildingValueData(u32, u32, u32, u32, u32, u16, u32, u32);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -703,26 +730,26 @@ static TOURNAMENT_SQUARE: BuildingData = BuildingData {
 
 static MAIN_BUILDING: BuildingData = BuildingData {
     data: &[
-        BuildingValueData(70, 40, 60, 20, 2, 2, 100, 2620),
-        BuildingValueData(90, 50, 75, 25, 1, 3, 104, 3220),
-        BuildingValueData(115, 65, 100, 35, 1, 3, 108, 3880),
-        BuildingValueData(145, 85, 125, 40, 1, 4, 112, 4610),
-        BuildingValueData(190, 105, 160, 55, 1, 5, 116, 5410),
-        BuildingValueData(240, 135, 205, 70, 2, 6, 120, 6300),
-        BuildingValueData(310, 175, 265, 90, 2, 7, 125, 7280),
-        BuildingValueData(395, 225, 340, 115, 2, 9, 129, 8380),
-        BuildingValueData(505, 290, 430, 145, 2, 10, 134, 9590),
-        BuildingValueData(645, 370, 555, 185, 2, 12, 139, 10940),
-        BuildingValueData(825, 470, 710, 235, 2, 15, 144, 12440),
-        BuildingValueData(1060, 605, 905, 300, 2, 18, 150, 14120),
-        BuildingValueData(1355, 775, 1160, 385, 2, 21, 155, 15980),
-        BuildingValueData(1735, 990, 1485, 495, 2, 26, 161, 18050),
-        BuildingValueData(2220, 1270, 1900, 635, 2, 31, 167, 20370),
-        BuildingValueData(2840, 1625, 2435, 810, 3, 37, 173, 22950),
-        BuildingValueData(3635, 2075, 3115, 1040, 3, 44, 180, 25830),
-        BuildingValueData(4650, 2660, 3990, 1330, 3, 53, 187, 29040),
-        BuildingValueData(5955, 3405, 5105, 1700, 3, 64, 193, 32630),
-        BuildingValueData(7620, 4355, 6535, 2180, 3, 77, 201, 32632),
+        BuildingValueData(70, 40, 60, 20, 2, 2, 1000, 2620),
+        BuildingValueData(90, 50, 75, 25, 1, 3, 964, 3220),
+        BuildingValueData(115, 65, 100, 35, 1, 3, 929, 3880),
+        BuildingValueData(145, 85, 125, 40, 1, 4, 896, 4610),
+        BuildingValueData(190, 105, 160, 55, 1, 5, 864, 5410),
+        BuildingValueData(240, 135, 205, 70, 2, 6, 833, 6300),
+        BuildingValueData(310, 175, 265, 90, 2, 7, 803, 7280),
+        BuildingValueData(395, 225, 340, 115, 2, 9, 774, 8380),
+        BuildingValueData(505, 290, 430, 145, 2, 10, 746, 9590),
+        BuildingValueData(645, 370, 555, 185, 2, 12, 719, 10940),
+        BuildingValueData(825, 470, 710, 235, 2, 15, 693, 12440),
+        BuildingValueData(1060, 605, 905, 300, 2, 18, 668, 14120),
+        BuildingValueData(1355, 775, 1160, 385, 2, 21, 644, 15980),
+        BuildingValueData(1735, 990, 1485, 495, 2, 26, 621, 18050),
+        BuildingValueData(2220, 1270, 1900, 635, 2, 31, 599, 20370),
+        BuildingValueData(2840, 1625, 2435, 810, 3, 37, 577, 22950),
+        BuildingValueData(3635, 2075, 3115, 1040, 3, 44, 556, 25830),
+        BuildingValueData(4650, 2660, 3990, 1330, 3, 53, 536, 29040),
+        BuildingValueData(5955, 3405, 5105, 1700, 3, 64, 517, 32630),
+        BuildingValueData(7620, 4355, 6535, 2180, 3, 77, 498, 32632),
     ],
     group: BuildingGroup::Infrastructure,
     rules: BuildingRules {
@@ -1764,6 +1791,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_calculate_build_time_with_main_building() {
+        let server_speed: i8 = 1;
+        let barracks = Building::new(BuildingName::Barracks, server_speed);
+
+        // Test L0 e L1 (Fattore 1.0 -> 1000 / 1000.0)
+        // assert_eq!(barracks.calculate_build_time_secs(&server_speed, &0), 2000);
+        assert_eq!(barracks.calculate_build_time_secs(&server_speed, &1), 2000);
+
+        // Test 3: Con Main Building L5 (fattore 0.864)
+        let mb_level_5 = 5;
+        let time_l5 = barracks.calculate_build_time_secs(&server_speed, &mb_level_5);
+        let expected_l5 = (2000.0 as f64 * 0.864 as f64).floor() as u32; // 1728
+        assert_eq!(time_l5, expected_l5, "MB L5 (86.4%) deve ridurre il tempo");
+
+        // Test 4: Con Main Building L20 (fattore 0.498)
+        let mb_level_20 = 20;
+        let time_l20 = barracks.calculate_build_time_secs(&server_speed, &mb_level_20);
+        let expected_l20 = (2000.0 as f64 * 0.498 as f64).floor() as u32; // 996
+        assert_eq!(
+            time_l20, expected_l20,
+            "MB L20 (49.8%) deve ridurre il tempo"
+        );
+    }
+
+    #[test]
     fn test_new_building() {
         let server_speed: i8 = 1;
         let wood = Building::new(BuildingName::Woodcutter, server_speed)
@@ -1777,7 +1829,7 @@ mod tests {
         // Infrastructure start at level 1
         let mb = Building::new(BuildingName::MainBuilding, server_speed);
         assert_eq!(mb.level, 1);
-        assert_eq!(mb.value, 100); // Build time reduction
+        assert_eq!(mb.value, 1000); // Build time reduction
         assert_eq!(mb.cost().upkeep, 2);
     }
 

@@ -223,6 +223,12 @@ impl Village {
         1.0
     }
 
+    /// Returns MainBuilding level
+    pub fn get_main_building_level(&self) -> u8 {
+        self.get_building_by_name(BuildingName::MainBuilding)
+            .map_or(0, |vb| vb.building.level)
+    }
+
     /// Get buildings durability, considering the level of StonemansionLodge, if any.
     pub fn get_buildings_durability(&self) -> f64 {
         match self.get_building_by_name(BuildingName::StonemansionLodge) {

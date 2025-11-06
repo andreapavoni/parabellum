@@ -70,11 +70,13 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             name: building.clone().name,
         };
 
+        let mb_level = village.get_main_building_level();
+
         let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
         let new_job = Job::new(
             command.player_id,
             command.village_id as i32,
-            building.calculate_build_time_secs(config.speed.clone() as u8) as i64,
+            building.calculate_build_time_secs(&config.speed, &mb_level) as i64,
             job_payload,
         );
         uow.jobs().add(&new_job).await?;

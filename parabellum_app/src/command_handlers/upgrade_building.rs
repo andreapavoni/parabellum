@@ -34,6 +34,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
         let mut village = village_repo.get_by_id(command.village_id).await?;
+        let mb_level = village.get_main_building_level();
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -44,8 +45,8 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         let next_level = vb.building.level + 1;
         let next_level_building = vb.building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
-
-        let build_time_secs = (cost.time as f64 / config.speed as f64).floor() as i64;
+        let build_time_secs =
+            next_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
         if !village.stocks.check_resources(&cost.resources) {
             println!(
