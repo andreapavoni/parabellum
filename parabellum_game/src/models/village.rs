@@ -49,6 +49,8 @@ pub struct Village {
     pub smithy: SmithyUpgrades,
     pub stocks: VillageStocks,
     pub academy_research: AcademyResearch,
+    pub total_merchants: u8,
+    pub busy_merchants: u8,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -85,6 +87,8 @@ impl Village {
             is_capital,
             smithy,
             academy_research,
+            total_merchants: 0,
+            busy_merchants: 0,
             stocks: Default::default(),
             updated_at: Utc::now(),
         };
@@ -93,6 +97,7 @@ impl Village {
         village
             .init_village_buildings(valley, server_speed)
             .unwrap();
+        village.update_merchants_count();
         village.update_state();
         village
     }
@@ -104,6 +109,7 @@ impl Village {
         slot_id: u8,
     ) -> Result<(), GameError> {
         self.buildings.push(VillageBuilding { slot_id, building });
+        self.update_state();
 
         Ok(())
     }
@@ -128,6 +134,7 @@ impl Village {
                 building: building.at_level(level, server_speed)?,
             },
         );
+        self.update_state();
         Ok(())
     }
 
@@ -142,6 +149,7 @@ impl Village {
         }
 
         self.buildings.retain(|vb| vb.slot_id != slot_id);
+        self.update_state();
         Ok(())
     }
 
@@ -210,13 +218,7 @@ impl Village {
     /// Get defense bonus from wall, if any.
     pub fn get_wall_defense_bonus(&self) -> f64 {
         if let Some(wall) = self.get_wall() {
-            let tribe_factor: f64 = match self.tribe {
-                Tribe::Roman => 1.030,
-                Tribe::Teuton => 1.020,
-                Tribe::Gaul => 1.025,
-                _ => 1.020,
-            };
-            return tribe_factor.powf(wall.level as f64);
+            return self.tribe.get_wall_factor().powf(wall.level as f64);
         }
         1.0
     }
@@ -319,9 +321,13 @@ impl Village {
                 }
             }
         }
-        // Dopo aver modificato gli edifici, ricalcola lo stato (produzione, pop, capacità)
         self.update_state();
         Ok(())
+    }
+
+    /// Returns available merchants.
+    pub fn get_available_merchants(&self) -> u8 {
+        self.total_merchants.saturating_sub(self.busy_merchants)
     }
 
     /// Updates the village state (production, upkeep, etc...).
@@ -379,9 +385,9 @@ impl Village {
             self.production.upkeep += a.upkeep();
         }
 
-        // update effective production applying bonuses and upkeep
+        // update internal data
         self.production.calculate_effective_production();
-
+        self.update_merchants_count();
         self.update_resources();
     }
 
@@ -403,6 +409,15 @@ impl Village {
         }
 
         Ok(())
+    }
+
+    /// Sets total merchants count based on Marketplace level.
+    fn update_merchants_count(&mut self) {
+        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
+            self.total_merchants = marketplace.building.level;
+        } else {
+            self.total_merchants = 0;
+        }
     }
 
     /// Updates the village stocks based on the time elapsed since the last update

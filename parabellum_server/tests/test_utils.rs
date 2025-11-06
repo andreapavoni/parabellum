@@ -1,9 +1,10 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
+
     use parabellum_db::{
         PostgresArmyRepository, PostgresJobRepository, PostgresMapRepository,
-        PostgresPlayerRepository, PostgresVillageRepository,
+        PostgresMarketplaceRepository, PostgresPlayerRepository, PostgresVillageRepository,
     };
     use sqlx::{Postgres, Transaction};
     use std::sync::Arc;
@@ -11,7 +12,8 @@ pub mod tests {
 
     use parabellum_app::{
         repository::{
-            ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
+            ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
+            VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -28,34 +30,27 @@ pub mod tests {
         'a: 'p,
     {
         fn players(&self) -> Arc<dyn PlayerRepository + 'p> {
-            let repo_with_a: Arc<dyn PlayerRepository + 'a> =
-                Arc::new(PostgresPlayerRepository::new(self.tx.clone()));
-
-            repo_with_a
+            Arc::new(PostgresPlayerRepository::new(self.tx.clone()))
         }
 
         fn villages(&self) -> Arc<dyn VillageRepository + 'p> {
-            let repo_with_a: Arc<dyn VillageRepository + 'a> =
-                Arc::new(PostgresVillageRepository::new(self.tx.clone()));
-            repo_with_a
+            Arc::new(PostgresVillageRepository::new(self.tx.clone()))
         }
 
         fn armies(&self) -> Arc<dyn ArmyRepository + 'p> {
-            let repo_with_a: Arc<dyn ArmyRepository + 'a> =
-                Arc::new(PostgresArmyRepository::new(self.tx.clone()));
-            repo_with_a
+            Arc::new(PostgresArmyRepository::new(self.tx.clone()))
         }
 
         fn jobs(&self) -> Arc<dyn JobRepository + 'p> {
-            let repo_with_a: Arc<dyn JobRepository + 'a> =
-                Arc::new(PostgresJobRepository::new(self.tx.clone()));
-            repo_with_a
+            Arc::new(PostgresJobRepository::new(self.tx.clone()))
         }
 
         fn map(&self) -> Arc<dyn MapRepository + 'p> {
-            let repo_with_a: Arc<dyn MapRepository + 'a> =
-                Arc::new(PostgresMapRepository::new(self.tx.clone()));
-            repo_with_a
+            Arc::new(PostgresMapRepository::new(self.tx.clone()))
+        }
+
+        fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'p> {
+            Arc::new(PostgresMarketplaceRepository::new(self.tx.clone()))
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

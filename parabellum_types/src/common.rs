@@ -4,6 +4,12 @@ use uuid::Uuid;
 use crate::tribe::Tribe;
 
 #[derive(Debug, Clone)]
+pub struct MerchantStats {
+    pub speed: u8,
+    pub capacity: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct Cost {
     pub resources: ResourceGroup,
     pub upkeep: u32,

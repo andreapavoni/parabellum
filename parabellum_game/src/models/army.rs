@@ -238,7 +238,7 @@ impl Army {
     }
 
     pub fn add_unit(&mut self, name: UnitName, quantity: u32) -> Result<(), GameError> {
-        if let Some(idx) = self.get_unit_idx_by_name(&name) {
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(&name) {
             self.units[idx] += quantity;
             return Ok(());
         }
@@ -283,11 +283,6 @@ impl Army {
         ((combat_value as f64)
             + ((combat_value + 300 * unit.cost.upkeep) as f64 / 7.0)
                 * ((1.007f64).powi(level.try_into().unwrap()) - 1.0).floor()) as u32
-    }
-
-    /// Returns the unit idx for a given unit name.
-    fn get_unit_idx_by_name(&self, name: &UnitName) -> Option<usize> {
-        self.tribe.get_units().iter().position(|u| u.name == *name)
     }
 }
 

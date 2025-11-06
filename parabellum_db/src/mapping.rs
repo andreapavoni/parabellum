@@ -54,7 +54,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
         let academy_research = serde_json::from_value(db_village.academy_research)?;
         let position = serde_json::from_value(db_village.position)?;
 
-        let village = game_models::village::Village {
+        let mut village = game_models::village::Village {
             id: village_id_u32,
             name: db_village.name,
             player_id: db_village.player_id,
@@ -72,9 +72,12 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             smithy,
             academy_research,
             stocks: serde_json::from_value(db_village.stocks)?,
+            total_merchants: 0,
+            busy_merchants: 0,
             updated_at: db_village.updated_at,
         };
 
+        village.update_state();
         Ok(village)
     }
 }
@@ -156,6 +159,20 @@ impl From<db_models::Job> for Job {
             completed_at: job.completed_at,
             created_at: job.created_at,
             updated_at: job.updated_at,
+        }
+    }
+}
+
+impl From<db_models::MarketplaceOffer> for game_models::marketplace::MarketplaceOffer {
+    fn from(offer: db_models::MarketplaceOffer) -> Self {
+        Self {
+            id: offer.id,
+            player_id: offer.player_id,
+            village_id: offer.village_id as u32,
+            offer_resources: serde_json::from_value(offer.offer_resources).unwrap(),
+            seek_resources: serde_json::from_value(offer.seek_resources).unwrap(),
+            merchants_required: offer.merchants_required as u8,
+            created_at: offer.created_at,
         }
     }
 }

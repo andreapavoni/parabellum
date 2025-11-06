@@ -1,5 +1,5 @@
 use sqlx::{types::Json, Postgres, Transaction};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -63,6 +63,22 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
+        let busy_merchants_result = sqlx::query!(
+                    r#"
+                    SELECT COALESCE(SUM((task->'data'->>'merchants_used')::smallint), 0) as total_busy
+                    FROM jobs
+                    WHERE village_id = $1
+                      AND status IN ('Pending', 'Processing')
+                      AND task->>'task_type' IN ('MerchantGoing', 'MerchantReturn')
+                    "#,
+                    village_id_i32
+                )
+                .fetch_one(&mut *tx_guard.as_mut())
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let busy_merchants = busy_merchants_result.total_busy.unwrap_or(0) as u8;
+
         let aggregate = VillageAggregate {
             village: db_village,
             player: db_player,
@@ -71,24 +87,120 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         };
 
         let mut game_village = Village::try_from(aggregate)?;
+
         game_village.update_state();
+        game_village.busy_merchants = busy_merchants;
         Ok(game_village)
     }
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let villages_ids = sqlx::query!("SELECT id FROM villages WHERE player_id = $1", player_id)
+        let db_player = sqlx::query_as!(
+            db_models::Player,
+            r#"SELECT id, username, tribe AS "tribe: _" FROM players WHERE id = $1"#,
+            player_id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
+
+        let db_villages = sqlx::query_as!(
+            db_models::Village,
+            "SELECT * FROM villages WHERE player_id = $1",
+            player_id
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        if db_villages.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let village_ids: Vec<i32> = db_villages.iter().map(|v| v.id).collect();
+        let all_armies = sqlx::query_as!(
+                db_models::Army,
+                r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _"
+                 FROM armies
+                 WHERE village_id = ANY($1) OR current_map_field_id = ANY($1)"#,
+                &village_ids
+            )
             .fetch_all(&mut *tx_guard.as_mut())
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let mut result = Vec::new();
-        for record in villages_ids {
-            let village = self.get_by_id(record.id as u32).await?;
-            result.push(village);
+        let all_oases = sqlx::query_as!(
+            db_models::MapField,
+            "SELECT * FROM map_fields WHERE village_id = ANY($1)",
+            &village_ids
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let merchant_counts = sqlx::query_as!(
+                BusyMerchants,
+                r#"
+                SELECT village_id, COALESCE(SUM((task->'data'->>'merchants_used')::smallint), 0) as total_busy
+                FROM jobs
+                WHERE village_id = ANY($1)
+                  AND status IN ('Pending', 'Processing')
+                  AND task->>'task_type' IN ('MerchantGoing', 'MerchantReturn')
+                GROUP BY village_id
+                "#,
+                &village_ids
+            )
+            .fetch_all(&mut *tx_guard.as_mut())
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        drop(tx_guard);
+
+        let oases_map: HashMap<i32, Vec<db_models::MapField>> =
+            all_oases
+                .into_iter()
+                .fold(HashMap::new(), |mut acc, oasis| {
+                    if let Some(vid) = oasis.village_id {
+                        acc.entry(vid).or_default().push(oasis);
+                    }
+                    acc
+                });
+
+        let merchants_map: HashMap<i32, u8> = merchant_counts
+            .into_iter()
+            .map(|rec| (rec.village_id, rec.total_busy.unwrap_or(0) as u8))
+            .collect();
+
+        let mut game_villages: Vec<Village> = Vec::with_capacity(db_villages.len());
+
+        for village in db_villages {
+            let village_id_i32 = village.id;
+
+            let related_armies = all_armies
+                .iter()
+                .filter(|&army| {
+                    army.village_id == village_id_i32 || army.current_map_field_id == village_id_i32
+                })
+                .cloned()
+                .collect();
+
+            let related_oases = &oases_map.get(&village_id_i32).cloned().unwrap_or_default();
+            let aggregate = VillageAggregate {
+                village,
+                player: db_player.clone(),
+                armies: related_armies,
+                oases: related_oases.clone().clone(),
+            };
+
+            let mut game_village = Village::try_from(aggregate)?;
+            let busy_merchants = merchants_map.get(&village_id_i32).cloned().unwrap_or(0);
+            game_village.update_state();
+            game_village.busy_merchants = busy_merchants;
+
+            game_villages.push(game_village);
         }
 
-        Ok(result)
+        Ok(game_villages)
     }
 
     async fn save(&self, village: &Village) -> Result<(), ApplicationError> {
@@ -133,4 +245,10 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         Ok(())
     }
+}
+
+// Helper struct
+struct BusyMerchants {
+    village_id: i32,
+    total_busy: Option<i64>,
 }

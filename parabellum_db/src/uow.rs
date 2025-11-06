@@ -1,6 +1,7 @@
 use parabellum_app::{
     repository::{
-        ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
+        ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
+        VillageRepository,
     },
     uow::{UnitOfWork, UnitOfWorkProvider},
 };
@@ -63,6 +64,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
 
     fn map(&self) -> Arc<dyn MapRepository + 'a> {
         Arc::new(PostgresMapRepository::new(self.tx.clone()))
+    }
+
+    fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a> {
+        Arc::new(PostgresMarketplaceRepository::new(self.tx.clone()))
     }
 
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

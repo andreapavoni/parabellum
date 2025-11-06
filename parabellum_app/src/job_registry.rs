@@ -6,7 +6,8 @@ use parabellum_core::{AppError, ApplicationError};
 use crate::{
     job_handlers::{
         add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
-        attack::AttackJobHandler, research_academy::ResearchAcademyJobHandler,
+        attack::AttackJobHandler, merchant_going::MerchantGoingJobHandler,
+        merchant_return::MerchantReturnJobHandler, research_academy::ResearchAcademyJobHandler,
         research_smithy::ResearchSmithyJobHandler, train_units::TrainUnitsJobHandler,
     },
     jobs::{
@@ -24,6 +25,8 @@ enum AppTaskType {
     ResearchAcademy,
     ResearchSmithy,
     AddBuilding,
+    MerchantGoing,
+    MerchantReturn,
 }
 
 impl AppTaskType {
@@ -36,6 +39,8 @@ impl AppTaskType {
             "ResearchAcademy" => Some(Self::ResearchAcademy),
             "ResearchSmithy" => Some(Self::ResearchSmithy),
             "AddBuilding" => Some(Self::AddBuilding),
+            "MerchantGoing" => Some(Self::MerchantGoing),
+            "MerchantReturn" => Some(Self::MerchantReturn),
             _ => None,
         }
     }
@@ -87,6 +92,15 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::AddBuilding => {
                 let payload: AddBuildingTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(AddBuildingJobHandler::new(payload)))
+            }
+
+            AppTaskType::MerchantGoing => {
+                let payload: MerchantGoingTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(MerchantGoingJobHandler::new(payload)))
+            }
+            AppTaskType::MerchantReturn => {
+                let payload: MerchantReturnTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(MerchantReturnJobHandler::new(payload)))
             }
         }
     }

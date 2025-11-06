@@ -20,7 +20,7 @@ pub struct Player {
     pub tribe: Tribe,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Village {
     pub id: i32,
     pub player_id: Uuid,
@@ -38,7 +38,7 @@ pub struct Village {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Army {
     pub id: Uuid,
     pub village_id: i32,
@@ -50,7 +50,7 @@ pub struct Army {
     pub player_id: Uuid,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, Clone, FromRow)]
 pub struct MapField {
     pub id: i32,
     pub village_id: Option<i32>,
@@ -78,4 +78,15 @@ pub struct Job {
     pub completed_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MarketplaceOffer {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub offer_resources: serde_json::Value,
+    pub seek_resources: serde_json::Value,
+    pub merchants_required: i16,
+    pub created_at: DateTime<Utc>,
 }

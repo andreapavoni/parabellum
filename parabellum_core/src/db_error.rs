@@ -16,6 +16,9 @@ pub enum DbError {
     #[error("Job with ID {0} not found")]
     JobNotFound(Uuid),
 
+    #[error("Marketplace Offer with ID {0} not found")]
+    MarketplaceOfferNotFound(Uuid),
+
     #[error("MapField with ID {0} not found")]
     MapFieldNotFound(u32),
 

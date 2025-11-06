@@ -4,6 +4,7 @@ pub mod tests {
     use parabellum_game::models::{
         army::Army,
         map::{MapField, MapFieldTopology, MapQuadrant, Valley},
+        marketplace::MarketplaceOffer,
         village::Village,
     };
     use parabellum_types::{
@@ -21,7 +22,8 @@ pub mod tests {
     use crate::{
         jobs::Job,
         repository::{
-            ArmyRepository, JobRepository, MapRepository, PlayerRepository, VillageRepository,
+            ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
+            VillageRepository,
         },
         uow::UnitOfWork,
     };
@@ -39,10 +41,6 @@ pub mod tests {
                 added_jobs: Arc::new(Mutex::new(Vec::new())),
             }
         }
-
-        pub fn get_added_jobs(&self) -> Vec<Job> {
-            self.added_jobs.lock().unwrap().clone()
-        }
     }
 
     #[async_trait]
@@ -52,7 +50,6 @@ pub mod tests {
             Ok(())
         }
 
-        // ... (implement other methods as needed, returning Ok(...) or mock data)
         async fn get_by_id(&self, id: Uuid) -> Result<Job, ApplicationError> {
             let jobs = self.added_jobs.lock().unwrap().clone();
 
@@ -61,15 +58,19 @@ pub mod tests {
                 .find(|j| j.id == id)
                 .ok_or_else(|| ApplicationError::Db(DbError::JobNotFound(id)))?)
         }
+
         async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
+
         async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
+
         async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
+
         async fn mark_as_failed(
             &self,
             _job_id: Uuid,
@@ -147,7 +148,6 @@ pub mod tests {
         }
     }
 
-    // Mock per i repo non usati in questo test
     #[derive(Default, Clone)]
     pub struct MockPlayerRepository {
         players: Arc<Mutex<HashMap<Uuid, Player>>>,
@@ -215,6 +215,54 @@ pub mod tests {
         }
     }
 
+    #[derive(Default, Clone)]
+    pub struct MockMarketplaceRepository {
+        offers: Arc<Mutex<HashMap<Uuid, MarketplaceOffer>>>,
+    }
+
+    impl MockMarketplaceRepository {}
+
+    #[async_trait]
+    impl MarketplaceRepository for MockMarketplaceRepository {
+        async fn get_by_id(&self, offer_id: Uuid) -> Result<MarketplaceOffer, ApplicationError> {
+            let offers = self.offers.lock().unwrap();
+            Ok(offers
+                .get(&offer_id)
+                .cloned()
+                .ok_or_else(|| ApplicationError::Db(DbError::MarketplaceOfferNotFound(offer_id)))?)
+        }
+
+        async fn list_by_village(
+            &self,
+            village_id: u32,
+        ) -> Result<Vec<MarketplaceOffer>, ApplicationError> {
+            let offers = self.offers.lock().unwrap();
+            let by_village = offers
+                .values()
+                .filter(|&o| o.village_id == village_id)
+                .cloned()
+                .collect();
+
+            Ok(by_village)
+        }
+
+        async fn create(&self, offer: &MarketplaceOffer) -> Result<(), ApplicationError> {
+            let mut offers = self.offers.lock().unwrap();
+            offers.insert(offer.id, offer.clone());
+            Ok(())
+        }
+
+        async fn delete(&self, offer_id: Uuid) -> Result<(), ApplicationError> {
+            let mut offers = self.offers.lock().unwrap();
+            offers.remove(&offer_id);
+            Ok(())
+        }
+        async fn list_all(&self) -> Result<Vec<MarketplaceOffer>, ApplicationError> {
+            let offers = self.offers.lock().unwrap();
+            Ok(offers.values().into_iter().cloned().collect())
+        }
+    }
+
     /// A Mock Unit of Work that holds mock repositories.
     #[derive(Default)]
     pub struct MockUnitOfWork {
@@ -223,6 +271,7 @@ pub mod tests {
         armies: Arc<MockArmyRepository>,
         jobs: Arc<MockJobRepository>,
         map: Arc<MockMapRepository>,
+        marketplace: Arc<MockMarketplaceRepository>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -251,6 +300,10 @@ pub mod tests {
         }
         fn map(&self) -> Arc<dyn MapRepository + 'a> {
             self.map.clone()
+        }
+
+        fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a> {
+            self.marketplace.clone()
         }
 
         // We consume self (Box<Self>) as per the trait definition

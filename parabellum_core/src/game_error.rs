@@ -9,6 +9,9 @@ pub enum GameError {
     #[error("Not enough resources")]
     NotEnoughResources,
 
+    #[error("Not enough merchants available")]
+    NotEnoughMerchants,
+
     #[error("Village slots are full")]
     VillageSlotsFull,
 

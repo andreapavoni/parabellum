@@ -2,7 +2,11 @@ use uuid::Uuid;
 
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
-    army::UnitName, buildings::BuildingName, common::Player, map::Position, tribe::Tribe,
+    army::UnitName,
+    buildings::BuildingName,
+    common::{Player, ResourceGroup},
+    map::Position,
+    tribe::Tribe,
 };
 
 use crate::cqrs::Command;
@@ -100,3 +104,28 @@ pub struct TrainUnits {
 }
 
 impl Command for TrainUnits {}
+
+#[derive(Debug, Clone)]
+pub struct SendResources {
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub target_village_id: u32,
+    pub resources: ResourceGroup,
+}
+impl Command for SendResources {}
+
+#[derive(Debug, Clone)]
+pub struct CreateMarketplaceOffer {
+    pub village_id: u32,
+    pub offer_resources: ResourceGroup,
+    pub seek_resources: ResourceGroup,
+}
+impl Command for CreateMarketplaceOffer {}
+
+#[derive(Debug, Clone)]
+pub struct AcceptMarketplaceOffer {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub offer_id: Uuid,
+}
+impl Command for AcceptMarketplaceOffer {}

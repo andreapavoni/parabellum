@@ -8,8 +8,10 @@ pub trait JobRepository: Send + Sync {
     /// Creates a new job on the db.
     async fn add(&self, job: &Job) -> Result<(), ApplicationError>;
 
+    /// Find a job by id.
     async fn get_by_id(&self, id: Uuid) -> Result<Job, ApplicationError>;
 
+    /// Lists jobs created by a player.
     async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError>;
 
     /// Finds and locks atomically overdue jobs, setting the status to "Processing".

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::common::MerchantStats;
+
 use super::{
     army::{Unit, UnitGroup, UnitName, UnitRequirement, UnitRole},
     buildings::BuildingName,
@@ -16,6 +18,7 @@ pub enum Tribe {
 }
 
 impl Tribe {
+    /// Returns the army units data for actual tribe.
     pub fn get_units(&self) -> &TribeUnits {
         match self {
             Tribe::Roman => &ROMAN_UNITS,
@@ -26,10 +29,44 @@ impl Tribe {
         }
     }
 
+    /// Returns the army unit index for the given unit name in actual tribe.
     pub fn get_unit_idx_by_name(&self, unit_name: &UnitName) -> Option<usize> {
         self.get_units()
             .iter()
             .position(|unit| unit.name == *unit_name)
+    }
+
+    /// Returns the wall defense factor for actual tribe.
+    pub fn get_wall_factor(&self) -> f64 {
+        match self {
+            Tribe::Roman => 1.030,
+            Tribe::Teuton => 1.020,
+            Tribe::Gaul => 1.025,
+            _ => 1.020,
+        }
+    }
+
+    /// Returns the merchant stats for actual tribe.
+    pub fn get_merchant_stats(&self) -> MerchantStats {
+        match self {
+            Tribe::Roman => MerchantStats {
+                speed: 16,
+                capacity: 500,
+            },
+            Tribe::Gaul => MerchantStats {
+                speed: 24,
+                capacity: 750,
+            },
+            Tribe::Teuton => MerchantStats {
+                speed: 12,
+                capacity: 1000,
+            },
+            // Natars (AFAIK) and Nature haven't merchants
+            _ => MerchantStats {
+                speed: 0,
+                capacity: 0,
+            },
+        }
     }
 }
 

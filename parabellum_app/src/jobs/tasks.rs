@@ -37,20 +37,24 @@ pub struct RaidTask {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReinforcementTask {
-    pub parmy_id: Uuid,
-    pub pvillage_id: i32,
-    pub pplayer_id: Uuid,
+    pub army_id: Uuid,
+    pub village_id: i32,
+    pub player_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerchantGoingTask {
     pub resources: ResourceGroup,
-    pub village_id: i32,
-    pub player_id: Uuid,
+    pub origin_village_id: u32,
+    pub destination_village_id: u32,
+    pub merchants_used: u8,
+    pub travel_time_secs: i64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerchantReturnTask {
-    pub village_id: i32,
+    pub origin_village_id: u32,
+    pub destination_village_id: u32,
+    pub merchants_used: u8,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainBarracks {
