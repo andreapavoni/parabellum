@@ -128,6 +128,14 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             .fetch_all(&mut *tx_guard.as_mut())
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let mut armies_map: HashMap<i32, Vec<db_models::Army>> = HashMap::new();
+        for army in all_armies {
+            armies_map.entry(army.village_id).or_default().push(army);
+
+            // if army.village_id != army.current_map_field_id {
+            //     armies_map.entry(army.current_map_field_id).or_default().push(army);
+            // }
+        }
 
         let all_oases = sqlx::query_as!(
             db_models::MapField,
@@ -176,15 +184,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         for village in db_villages {
             let village_id_i32 = village.id;
 
-            let related_armies = all_armies
-                .iter()
-                .filter(|&army| {
-                    army.village_id == village_id_i32 || army.current_map_field_id == village_id_i32
-                })
-                .cloned()
-                .collect();
+            let related_armies = armies_map.get(&village_id_i32).cloned().unwrap_or_default();
+            let related_oases = oases_map.get(&village_id_i32).cloned().unwrap_or_default();
 
-            let related_oases = &oases_map.get(&village_id_i32).cloned().unwrap_or_default();
             let aggregate = VillageAggregate {
                 village,
                 player: db_player.clone(),
