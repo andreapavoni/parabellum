@@ -1,5 +1,6 @@
 mod add_building;
 mod attack_village;
+mod downgrade_building;
 mod found_village;
 mod register_player;
 mod register_village;
@@ -11,6 +12,7 @@ mod upgrade_building;
 
 pub use add_building::*;
 pub use attack_village::*;
+pub use downgrade_building::*;
 pub use found_village::*;
 pub use register_player::*;
 pub use register_village::*;

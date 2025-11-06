@@ -6,10 +6,10 @@ use parabellum_core::{AppError, ApplicationError};
 use crate::{
     job_handlers::{
         add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
-        attack::AttackJobHandler, merchant_going::MerchantGoingJobHandler,
-        merchant_return::MerchantReturnJobHandler, research_academy::ResearchAcademyJobHandler,
-        research_smithy::ResearchSmithyJobHandler, train_units::TrainUnitsJobHandler,
-        upgrade_building::UpgradeBuildingJobHandler,
+        attack::AttackJobHandler, downgrade_building::DowngradeBuildingJobHandler,
+        merchant_going::MerchantGoingJobHandler, merchant_return::MerchantReturnJobHandler,
+        research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
+        train_units::TrainUnitsJobHandler, upgrade_building::UpgradeBuildingJobHandler,
     },
     jobs::{
         handler::{JobHandler, JobRegistry},
@@ -29,6 +29,7 @@ enum AppTaskType {
     MerchantGoing,
     MerchantReturn,
     BuildingUpgrade,
+    BuildingDowngrade,
 }
 
 impl AppTaskType {
@@ -42,6 +43,7 @@ impl AppTaskType {
             "ResearchSmithy" => Some(Self::ResearchSmithy),
             "AddBuilding" => Some(Self::AddBuilding),
             "BuildingUpgrade" => Some(Self::BuildingUpgrade),
+            "BuildingDowngrade" => Some(Self::BuildingDowngrade),
             "MerchantGoing" => Some(Self::MerchantGoing),
             "MerchantReturn" => Some(Self::MerchantReturn),
             _ => None,
@@ -109,6 +111,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::BuildingUpgrade => {
                 let payload: BuildingUpgradeTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(UpgradeBuildingJobHandler::new(payload)))
+            }
+
+            AppTaskType::BuildingDowngrade => {
+                let payload: BuildingDowngradeTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(DowngradeBuildingJobHandler::new(payload)))
             }
         }
     }

@@ -31,6 +31,15 @@ pub struct UpgradeBuilding {
 impl Command for UpgradeBuilding {}
 
 #[derive(Debug, Clone)]
+pub struct DowngradeBuilding {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub slot_id: u8,
+}
+
+impl Command for DowngradeBuilding {}
+
+#[derive(Debug, Clone)]
 pub struct AttackVillage {
     pub player_id: Uuid,
     pub village_id: u32,

@@ -75,6 +75,9 @@ pub enum GameError {
     #[error("Invalid smithy level: {0}")]
     InvalidSmithyLevel(u8),
 
+    #[error("{0} is an invalid level for {1:?}")]
+    InvalidBuildingLevel(u8, BuildingName),
+
     #[error("Invalid unit index: {0}")]
     InvalidUnitIndex(u8),
 
