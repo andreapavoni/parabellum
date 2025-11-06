@@ -6,3 +6,4 @@ pub mod merchant_return;
 pub mod research_academy;
 pub mod research_smithy;
 pub mod train_units;
+pub mod upgrade_building;

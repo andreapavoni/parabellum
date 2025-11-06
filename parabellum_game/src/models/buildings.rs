@@ -37,6 +37,7 @@ impl Building {
         }
     }
 
+    /// Returns a new building at the specified level.
     pub fn at_level(&self, mut level: u8, server_speed: i8) -> Result<Self, GameError> {
         let building = get_building_data(&self.name)?;
 

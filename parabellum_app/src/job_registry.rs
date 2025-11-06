@@ -9,6 +9,7 @@ use crate::{
         attack::AttackJobHandler, merchant_going::MerchantGoingJobHandler,
         merchant_return::MerchantReturnJobHandler, research_academy::ResearchAcademyJobHandler,
         research_smithy::ResearchSmithyJobHandler, train_units::TrainUnitsJobHandler,
+        upgrade_building::UpgradeBuildingJobHandler,
     },
     jobs::{
         handler::{JobHandler, JobRegistry},
@@ -27,6 +28,7 @@ enum AppTaskType {
     AddBuilding,
     MerchantGoing,
     MerchantReturn,
+    BuildingUpgrade,
 }
 
 impl AppTaskType {
@@ -39,6 +41,7 @@ impl AppTaskType {
             "ResearchAcademy" => Some(Self::ResearchAcademy),
             "ResearchSmithy" => Some(Self::ResearchSmithy),
             "AddBuilding" => Some(Self::AddBuilding),
+            "BuildingUpgrade" => Some(Self::BuildingUpgrade),
             "MerchantGoing" => Some(Self::MerchantGoing),
             "MerchantReturn" => Some(Self::MerchantReturn),
             _ => None,
@@ -101,6 +104,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::MerchantReturn => {
                 let payload: MerchantReturnTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(MerchantReturnJobHandler::new(payload)))
+            }
+
+            AppTaskType::BuildingUpgrade => {
+                let payload: BuildingUpgradeTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(UpgradeBuildingJobHandler::new(payload)))
             }
         }
     }

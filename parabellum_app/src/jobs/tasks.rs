@@ -117,6 +117,7 @@ pub struct AddBuildingTask {
 pub struct BuildingUpgradeTask {
     pub slot_id: u8,
     pub building_name: BuildingName,
+    pub level: u8,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingDowngradeTask {

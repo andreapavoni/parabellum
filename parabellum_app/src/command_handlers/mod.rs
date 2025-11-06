@@ -7,6 +7,7 @@ mod research_academy;
 mod research_smithy;
 mod send_resources;
 mod train_units;
+mod upgrade_building;
 
 pub use add_building::*;
 pub use attack_village::*;
@@ -17,3 +18,4 @@ pub use research_academy::*;
 pub use research_smithy::*;
 pub use send_resources::*;
 pub use train_units::*;
+pub use upgrade_building::*;
