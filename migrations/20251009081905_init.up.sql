@@ -51,7 +51,7 @@ CREATE TABLE heroes (
 CREATE TABLE armies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
-    current_map_field_id INTEGER NOT NULL,
+    current_map_field_id INTEGER,
     hero_id UUID REFERENCES heroes(id) ON DELETE SET NULL,
     units JSONB NOT NULL,
     smithy JSONB NOT NULL,

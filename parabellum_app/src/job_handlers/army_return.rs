@@ -45,6 +45,7 @@ impl JobHandler for ArmyReturnJobHandler {
             .army
             .take()
             .unwrap_or(Army::new_village_army(&village));
+
         village_army.merge(&returning_army)?;
         army_repo.save(&village_army).await?;
         village.army = Some(village_army);
@@ -53,6 +54,7 @@ impl JobHandler for ArmyReturnJobHandler {
         village
             .stocks
             .store_resources(self.payload.resources.clone());
+
         village.update_state();
         village_repo.save(&village).await?;
 
@@ -64,9 +66,9 @@ impl JobHandler for ArmyReturnJobHandler {
 mod tests {
     use super::*;
     use crate::{
-        test_utils::tests::MockUnitOfWork,
         config::Config,
         jobs::{Job, JobPayload},
+        test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
     use parabellum_game::test_utils::{

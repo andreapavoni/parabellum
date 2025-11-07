@@ -210,9 +210,6 @@ pub mod tests {
             let uow_assert2 = uow_provider.begin().await?;
 
             let target_village = uow_assert2.villages().get_by_id(village_b.id).await?;
-
-            println!("=========== target {:#?} =========", target_village);
-
             assert_eq!(
                 target_village.stocks.lumber,
                 initial_target_lumber + resources_to_send.0,

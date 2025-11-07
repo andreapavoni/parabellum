@@ -91,14 +91,15 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Attack Cycle**: Full "Attack" -> "Battle" -> "Army Return" job chain.
 - [x] **Battle Features**: Ram/Catapult damage and resource bounty calculation.
 - [x] **Merchants**: Sending resources between villages.
+- [x] **Server speed**: Full support for different server speeds influencing times and stocks/merchants capacities.
+- [x] **Building Upgrades/downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
 
 ### In Progress
-- [ ] **Building Upgrades**: The logic for upgrading a building (L1 -> L2) is partially distinct from constructing a new one (L0 -> L1). This needs its own `UpgradeBuilding` command.
+- [ ] **Reinforcements**: Sending troops to support other villages (logic exists, but no command/job).
+- [ ] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 
 ### ToDo (Not Started)
 - [ ] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
-- [ ] **Reinforcements**: Sending troops to support other villages (logic exists, but no command/job).
-- [ ] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 - [ ] **API / UI**: There is **no web server or UI** yet! `parabellum_server` is just a test runner for now. This is the biggest missing piece, but also the least important for now. When the core and app will have enough working features, API and UI will start to come.
 - [ ] **Alliances**: Creating and managing alliances.
 - [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not unit training), and conquering.

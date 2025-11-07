@@ -1,6 +1,9 @@
 use uuid::Uuid;
 
-use parabellum_game::models::map::MapQuadrant;
+use parabellum_game::{
+    battle::ScoutingTarget,
+    models::{army::TroopSet, map::MapQuadrant},
+};
 use parabellum_types::{
     army::UnitName,
     buildings::BuildingName,
@@ -49,6 +52,26 @@ pub struct AttackVillage {
 }
 
 impl Command for AttackVillage {}
+
+#[derive(Debug, Clone)]
+pub struct ScoutVillage {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+    pub units: TroopSet,
+    pub target_village_id: u32,
+    pub target: ScoutingTarget,
+}
+impl Command for ScoutVillage {}
+
+#[derive(Debug, Clone)]
+pub struct ReinforceVillage {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+    pub target_village_id: u32,
+}
+impl Command for ReinforceVillage {}
 
 #[derive(Clone)]
 pub struct FoundVillage {

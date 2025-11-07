@@ -1,3 +1,4 @@
+use parabellum_game::battle::ScoutingTarget;
 use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -19,6 +20,16 @@ pub struct AttackTask {
     pub target_village_id: i32,
     pub target_player_id: Uuid,
     pub catapult_targets: [BuildingName; 2],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoutTask {
+    pub army_id: Uuid,
+    pub attacker_village_id: i32,
+    pub attacker_player_id: Uuid,
+    pub target_village_id: i32,
+    pub target_player_id: Uuid,
+    pub target: ScoutingTarget,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

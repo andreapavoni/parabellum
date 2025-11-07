@@ -31,15 +31,22 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
                 && game_army.current_map_field_id == Some(village_id_u32)
             {
                 home_army = Some(game_army);
+
+            // 2. È un rinforzo?
+            // (village_id != casa E current_map_field_id = casa)
             } else if game_army.village_id != village_id_u32
                 && game_army.current_map_field_id == Some(village_id_u32)
             {
                 reinforcements.push(game_army);
+
+            // 3. È un'armata in viaggio (deployed)?
+            // (village_id = casa E current_map_field_id != casa [cioè None o un altro ID])
             } else if game_army.village_id == village_id_u32
                 && game_army.current_map_field_id != Some(village_id_u32)
             {
                 deployed_armies.push(game_army);
             }
+            // --- FINE CORREZIONE ---
         }
 
         let oases: Vec<game_models::map::Oasis> = agg
@@ -121,7 +128,7 @@ impl From<db_models::Army> for game_models::army::Army {
         game_models::army::Army {
             id: army.id,
             village_id: army.village_id as u32,
-            current_map_field_id: Some(army.current_map_field_id as u32),
+            current_map_field_id: army.current_map_field_id.map(|id| id as u32),
             player_id: army.player_id,
             units: serde_json::from_value(army.units).unwrap_or_default(),
             smithy: serde_json::from_value(army.smithy).unwrap_or_default(),

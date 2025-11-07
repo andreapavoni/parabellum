@@ -42,7 +42,7 @@ pub struct Village {
 pub struct Army {
     pub id: Uuid,
     pub village_id: i32,
-    pub current_map_field_id: i32,
+    pub current_map_field_id: Option<i32>,
     pub hero_id: Option<Uuid>,
     pub units: serde_json::Value,
     pub smithy: serde_json::Value,

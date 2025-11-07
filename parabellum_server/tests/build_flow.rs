@@ -87,11 +87,8 @@ async fn test_full_build_flow() -> Result<()> {
         uow_command.commit().await?;
     }
 
-    // --- 3. ASSERT (Phase 1): Check DB state after command ---
     let (job_to_run, village_id) = {
         let uow_assert1 = uow_provider.begin().await?;
-
-        // Check village
         let updated_village = uow_assert1.villages().get_by_id(village.id).await?;
         assert_eq!(
             updated_village.stocks.lumber,
@@ -105,7 +102,6 @@ async fn test_full_build_flow() -> Result<()> {
             "Building should NOT exist yet"
         );
 
-        // Check job
         let jobs = uow_assert1.jobs().list_by_player_id(player.id).await?;
         assert_eq!(jobs.len(), 1, "There should be exactly 1 job");
         let job = jobs.first().unwrap();
@@ -120,7 +116,6 @@ async fn test_full_build_flow() -> Result<()> {
         (job.clone(), village.id)
     };
 
-    // --- 4. ACT (Phase 2): Simulate worker processing job ---
     let worker = Arc::new(JobWorker::new(
         uow_provider.clone(),
         app_registry,
@@ -128,11 +123,8 @@ async fn test_full_build_flow() -> Result<()> {
     ));
     worker.process_jobs(&vec![job_to_run.clone()]).await?;
 
-    // --- 5. ASSERT (Phase 2): Check final DB state ---
     {
         let uow_assert2 = uow_provider.begin().await?;
-
-        // Check village
         let final_village = uow_assert2.villages().get_by_id(village_id).await?;
         let new_building = final_village.get_building_by_slot_id(slot_to_build);
         assert!(new_building.is_some(), "Building should now exist");
@@ -142,7 +134,6 @@ async fn test_full_build_flow() -> Result<()> {
             "Building should be level 1"
         );
 
-        // Check job
         let final_job = uow_assert2.jobs().get_by_id(job_to_run.id).await?;
         assert_eq!(
             final_job.status,

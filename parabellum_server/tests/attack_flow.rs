@@ -16,23 +16,15 @@ pub mod tests {
     };
     use parabellum_core::Result;
     use parabellum_db::establish_test_connection_pool;
-    use parabellum_game::{
-        models::{
-            army::{Army, TroopSet},
-            buildings::Building,
-            village::Village,
-        },
-        test_utils::{
-            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
-            army_factory, player_factory, valley_factory, village_factory,
-        },
-    };
+    use parabellum_game::models::{army::Army, buildings::Building, village::Village};
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
         map::Position,
         tribe::Tribe,
     };
+
+    use crate::test_utils::tests::setup_player_party;
 
     use super::test_utils::tests::TestUnitOfWorkProvider;
     use std::sync::Arc;
@@ -333,52 +325,5 @@ pub mod tests {
         }
 
         Ok(())
-    }
-
-    async fn setup_player_party(
-        uow_provider: Arc<dyn UnitOfWorkProvider>,
-        position: Position,
-        tribe: Tribe,
-        units: TroopSet,
-    ) -> Result<(Player, Village, Army)> {
-        let uow = uow_provider.begin().await?;
-        let player: Player;
-        let village: Village;
-        let army: Army;
-        {
-            let player_repo = uow.players();
-            let village_repo = uow.villages();
-            let army_repo = uow.armies();
-
-            player = player_factory(PlayerFactoryOptions {
-                tribe: Some(tribe.clone()),
-                ..Default::default()
-            });
-            player_repo.save(&player).await?;
-
-            let valley = valley_factory(ValleyFactoryOptions {
-                position: Some(position),
-                ..Default::default()
-            });
-            village = village_factory(VillageFactoryOptions {
-                valley: Some(valley),
-                player: Some(player.clone()),
-                ..Default::default()
-            });
-            village_repo.save(&village).await?;
-
-            army = army_factory(ArmyFactoryOptions {
-                player_id: Some(player.id),
-                village_id: Some(village.id),
-                units: Some(units),
-                tribe: Some(tribe.clone()),
-                ..Default::default()
-            });
-            army_repo.save(&army).await?;
-        }
-
-        uow.commit().await?;
-
-        Ok((player, village, army))
     }
 }

@@ -49,10 +49,6 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             next_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
         if !village.stocks.check_resources(&cost.resources) {
-            println!(
-                "==== here {:#?} | {:#?} ===",
-                &cost.resources, &village.stocks
-            );
             return Err(GameError::NotEnoughResources.into());
         }
         village.stocks.remove_resources(&cost.resources);

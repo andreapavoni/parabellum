@@ -387,7 +387,7 @@ mod tests {
         }
 
         let map_size: f64 = map.len() as f64;
-
+        // TODO: fix with asserts
         println!("Oases:");
         for (v, o) in oases.clone() {
             println!("\t{:?}: {} ({}%)", v, o, (100.0 * o as f64 / map_size));

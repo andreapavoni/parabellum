@@ -8,7 +8,8 @@ use crate::{
         add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
         attack::AttackJobHandler, downgrade_building::DowngradeBuildingJobHandler,
         merchant_going::MerchantGoingJobHandler, merchant_return::MerchantReturnJobHandler,
-        research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
+        reinforcement::ReinforcementJobHandler, research_academy::ResearchAcademyJobHandler,
+        research_smithy::ResearchSmithyJobHandler, scout::ScoutJobHandler,
         train_units::TrainUnitsJobHandler, upgrade_building::UpgradeBuildingJobHandler,
     },
     jobs::{
@@ -21,8 +22,10 @@ use crate::{
 /// It's used for compile-time matching.
 enum AppTaskType {
     Attack,
-    TrainUnits,
+    Scout,
     ArmyReturn,
+    Reinforcement,
+    TrainUnits,
     ResearchAcademy,
     ResearchSmithy,
     AddBuilding,
@@ -37,6 +40,8 @@ impl AppTaskType {
     fn from_str(task_type: &str) -> Option<Self> {
         match task_type {
             "Attack" => Some(Self::Attack),
+            "Scout" => Some(Self::Scout),
+            "Reinforcement" => Some(Self::Reinforcement),
             "TrainUnits" => Some(Self::TrainUnits),
             "ArmyReturn" => Some(Self::ArmyReturn),
             "ResearchAcademy" => Some(Self::ResearchAcademy),
@@ -76,6 +81,14 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::Attack => {
                 let payload: AttackTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(AttackJobHandler::new(payload)))
+            }
+            AppTaskType::Scout => {
+                let payload: ScoutTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(ScoutJobHandler::new(payload)))
+            }
+            AppTaskType::Reinforcement => {
+                let payload: ReinforcementTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(ReinforcementJobHandler::new(payload)))
             }
             AppTaskType::TrainUnits => {
                 let payload: TrainUnitsTask = serde_json::from_value(data.clone())?;

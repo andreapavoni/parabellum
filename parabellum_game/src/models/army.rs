@@ -177,12 +177,15 @@ impl Army {
         (survivors, losses)
     }
 
-    /// Returns the current Army with reduced quantities,
-    /// and a new Army which has been extracted from the current one.
-    pub fn deploy(&mut self, set: TroopSet) -> Result<(Self, Self), GameError> {
-        for (idx, quantity) in set.into_iter().enumerate() {
-            if self.units[idx] > quantity {
-                self.units[idx] -= quantity;
+    /// Updates the current army and returns new deployed army.
+    pub fn deploy(&mut self, set: TroopSet) -> Result<Self, GameError> {
+        for (idx, quantity) in set.iter().enumerate() {
+            if *quantity == 0 {
+                continue;
+            }
+
+            if self.units[idx] >= *quantity {
+                self.units[idx] -= *quantity;
             } else {
                 return Err(GameError::NotEnoughUnits);
             }
@@ -199,7 +202,7 @@ impl Army {
             None,
         );
 
-        Ok((self.clone(), deployed))
+        Ok(deployed)
     }
 
     /// Returns the actual speed of the Army by taking the speed of slowest unit.

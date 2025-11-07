@@ -60,6 +60,12 @@ pub enum GameError {
     #[error("Not enough units available to deploy")]
     NotEnoughUnits,
 
+    #[error("No units selected to deploy")]
+    NotUnitsSelected,
+
+    #[error("Only scout units can be used for a scout mission")]
+    OnlyScoutUnitsAllowed,
+
     #[error("Unit {0:?} is already researched in Academy")]
     UnitAlreadyResearched(UnitName),
 

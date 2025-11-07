@@ -38,7 +38,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
     async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let db_tribe: Tribe = army.tribe.clone().into();
-        let current_map_field_id = army.current_map_field_id.unwrap_or(army.village_id);
+        let current_map_field_id: Option<i32> = army.current_map_field_id.map(|id| id as i32);
         let hero_id = army.hero.as_ref().map(|h| h.id);
 
         // Questa è la query UPSERT
@@ -59,7 +59,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
                 "#,
                 army.id,
                 army.village_id as i32,
-                current_map_field_id as i32,
+                current_map_field_id,
                 hero_id,
                 Json(&army.units) as _,
                 Json(&army.smithy) as _,
@@ -69,7 +69,6 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
             .execute(&mut *tx_guard.as_mut())
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
         Ok(())
     }
 

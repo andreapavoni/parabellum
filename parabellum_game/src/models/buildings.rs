@@ -176,14 +176,8 @@ impl Building {
         } else {
             mb_factor as f64 / 1000.0
         };
-        println!("===== building {:#?}======", self);
-        println!("===== factor {:#?}======", effective_factor);
-        println!("===== speed {:#?}======", server_speed);
-        println!("===== base_time {:#?}======", base_time);
-
         let final_time = (base_time * effective_factor) / (*server_speed) as f64;
         let res = final_time.floor().max(1.0) as u32;
-        println!("===== res {:#?}======", res);
         res
     }
 
@@ -1871,9 +1865,7 @@ mod tests {
         assert_eq!(bakery_5.value, 25);
         assert_eq!(bakery_5.cost().upkeep, 3);
 
-        // Level 0 for a non-resource building means level 1
         let bakery_0 = bakery.at_level(0, server_speed).unwrap();
-        println!("==== bakery {:#?}", bakery_0);
         assert_eq!(bakery_0.level, 1);
         assert_eq!(bakery_0.value, 5);
 
