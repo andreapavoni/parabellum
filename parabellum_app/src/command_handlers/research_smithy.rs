@@ -32,7 +32,7 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
         let tribe_units = village.tribe.get_units();
-        let current_level = village.smithy[unit_idx];
+        let current_level = village.smithy()[unit_idx];
 
         let unit = tribe_units
             .get(unit_idx as usize)
@@ -53,19 +53,14 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
             }
         }
 
-        if !village.academy_research[unit_idx] && unit.research_cost.time > 0 {
+        if !village.academy_research()[unit_idx] && unit.research_cost.time > 0 {
             return Err(ApplicationError::Game(GameError::UnitNotResearched(
                 command.unit,
             )));
         }
 
         let research_cost = smithy_upgrade_cost_for_unit(&command.unit, current_level)?;
-
-        if !village.stocks.check_resources(&research_cost.resources) {
-            return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        }
-        village.stocks.remove_resources(&research_cost.resources);
-
+        village.deduct_resources(&research_cost.resources)?;
         village_repo.save(&village).await?;
 
         let research_time = research_cost.time;
@@ -141,11 +136,9 @@ mod tests {
         village.add_building_at_slot(granary, 26).unwrap();
         village.update_state();
 
-        village.academy_research[1] = true; // Praetorian
+        village.research_academy(UnitName::Praetorian).unwrap();
 
-        village
-            .stocks
-            .store_resources(ResourceGroup(2000, 2000, 2000, 2000));
+        village.store_resources(ResourceGroup(2000, 2000, 2000, 2000));
         village.update_state();
 
         (player, village, config)
@@ -176,23 +169,23 @@ mod tests {
 
         // Lvl 1 Praetorian: 800, 1010, 1320, 650
         assert_eq!(
-            saved_village.stocks.lumber,
+            saved_village.get_stored_resources().lumber(),
             2000 - cost.resources.0,
             "Lumber not deducted"
         );
         assert_eq!(
-            saved_village.stocks.clay,
+            saved_village.get_stored_resources().clay(),
             2000 - cost.resources.1,
             "Clay not deducted"
         );
         assert_eq!(
-            saved_village.stocks.iron,
+            saved_village.get_stored_resources().iron(),
             2000 - cost.resources.2,
             "Iron not deducted"
         );
         assert_eq!(
-            saved_village.stocks.crop,
-            (2000 - cost.resources.3) as i64,
+            saved_village.get_stored_resources().crop(),
+            (2000 - cost.resources.3),
             "Crop not deducted"
         );
 
@@ -211,7 +204,7 @@ mod tests {
         let (_player, mut village, config) = setup_village_for_smithy();
         let village_repo = mock_uow.villages();
 
-        village.academy_research[1] = false;
+        village.set_academy_research_for_test(&UnitName::Praetorian, false);
 
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();

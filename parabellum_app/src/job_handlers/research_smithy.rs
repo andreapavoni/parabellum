@@ -86,7 +86,7 @@ mod tests {
             .tribe
             .get_unit_idx_by_name(&unit_to_upgrade)
             .unwrap();
-        village.smithy[unit_idx] = 0;
+        village.set_smithy_level_for_test(&unit_to_upgrade, 1);
         mock_uow.villages().save(&village).await.unwrap();
 
         let payload = ResearchSmithyTask {
@@ -110,7 +110,8 @@ mod tests {
 
         let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
         assert_eq!(
-            saved_village.smithy[unit_idx], 1,
+            saved_village.smithy()[unit_idx],
+            2,
             "Unit smithy level should be incremented to 1"
         );
     }

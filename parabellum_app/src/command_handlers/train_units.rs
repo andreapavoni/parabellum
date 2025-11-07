@@ -37,12 +37,13 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             }));
         }
 
-        let tribe_units = village.tribe.get_units();
+        let tribe = village.clone().tribe;
+        let tribe_units = &tribe.get_units();
         let unit = tribe_units
             .get(command.unit_idx as usize)
             .ok_or_else(|| ApplicationError::Game(GameError::InvalidUnitIndex(command.unit_idx)))?;
 
-        if !village.academy_research[command.unit_idx as usize] {
+        if !village.academy_research()[command.unit_idx as usize] {
             return Err(ApplicationError::Game(GameError::UnitNotResearched(
                 unit.name.clone(),
             )));
@@ -56,10 +57,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             cost_per_unit.resources.3 * command.quantity as u32,
         );
 
-        if !village.stocks.check_resources(&total_cost) {
-            return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        }
-        village.stocks.remove_resources(&total_cost);
+        village.deduct_resources(&total_cost)?;
         village_repo.save(&village).await?;
 
         let time_per_unit = cost_per_unit.time;
@@ -133,7 +131,7 @@ mod tests {
             ..Default::default()
         });
 
-        village.academy_research[0] = true; // Research Legionnaire
+        village.set_academy_research_for_test(&UnitName::Legionnaire, true);
 
         // Add barracks
         let barracks = VillageBuilding {
@@ -143,9 +141,7 @@ mod tests {
         village.buildings.push(barracks);
 
         // Add resources
-        village
-            .stocks
-            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
         village.update_state();
 
         (player, village, config)
@@ -178,23 +174,23 @@ mod tests {
         let saved_village = &saved_villages[0];
 
         assert_eq!(
-            saved_village.stocks.lumber,
+            saved_village.get_stored_resources().lumber(),
             800 - (120 * 5),
             "Lumber not deducted correctly"
         );
         assert_eq!(
-            saved_village.stocks.clay,
+            saved_village.get_stored_resources().clay(),
             800 - (100 * 5),
             "Clay not deducted correctly"
         );
         assert_eq!(
-            saved_village.stocks.iron,
+            saved_village.get_stored_resources().iron(),
             800 - (150 * 5),
             "Iron not deducted correctly"
         );
         assert_eq!(
-            saved_village.stocks.crop,
-            800 - (30 * 5) as i64,
+            saved_village.get_stored_resources().crop(),
+            800 - (30 * 5),
             "Crop not deducted correctly"
         );
 
@@ -225,7 +221,7 @@ mod tests {
         let village_repo = mock_uow.villages();
 
         let (player, mut village, config) = setup_village_with_barracks();
-        village.stocks.lumber = 10; // Not enough lumber
+        village.store_resources(ResourceGroup(10, 0, 0, 0));
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
 

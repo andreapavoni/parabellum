@@ -89,9 +89,7 @@ pub mod tests {
                 .at_level(10, config.speed)?;
             village_a.add_building_at_slot(marketplace, 25)?;
 
-            village_a
-                .stocks
-                .store_resources(ResourceGroup(5000, 5000, 5000, 5000));
+            village_a.store_resources(ResourceGroup(5000, 5000, 5000, 5000));
             village_a.update_state();
             uow.villages().save(&village_a).await?;
 
@@ -143,8 +141,8 @@ pub mod tests {
 
         let resources_to_send = ResourceGroup(1000, 500, 0, 0); // 1500
         let merchants_needed = 2; // 1500 / 750 (Gaul capacity) = 2
-        let initial_sender_lumber = village_a.stocks.lumber;
-        let initial_target_lumber = village_b.stocks.lumber;
+        let initial_sender_lumber = village_a.get_stored_resources().lumber();
+        let initial_target_lumber = village_b.get_stored_resources().lumber();
 
         let command = SendResources {
             player_id: player_a.id,
@@ -165,13 +163,13 @@ pub mod tests {
 
             let sender_village = uow_assert1.villages().get_by_id(village_a.id).await?;
             assert_eq!(
-                sender_village.stocks.lumber,
+                sender_village.get_stored_resources().lumber(),
                 initial_sender_lumber - resources_to_send.0,
                 "No resources withdrawn from sender stocks"
             );
             assert_eq!(
-                sender_village.stocks.clay,
-                village_a.stocks.clay - resources_to_send.1
+                sender_village.get_stored_resources().clay(),
+                village_a.get_stored_resources().clay() - resources_to_send.1
             );
 
             assert_eq!(sender_village.total_merchants, 10);
@@ -211,11 +209,11 @@ pub mod tests {
 
             let target_village = uow_assert2.villages().get_by_id(village_b.id).await?;
             assert_eq!(
-                target_village.stocks.lumber,
-                initial_target_lumber + resources_to_send.0,
+                target_village.get_stored_resources().lumber(),
+                initial_target_lumber + resources_to_send.lumber(),
                 "Expected to have {} lumber, got {}",
-                initial_target_lumber + resources_to_send.0,
-                target_village.stocks.lumber,
+                initial_target_lumber + resources_to_send.lumber(),
+                target_village.get_stored_resources().lumber(),
             );
 
             let original_job = uow_assert2.jobs().get_by_id(going_job.id).await?;

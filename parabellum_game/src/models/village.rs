@@ -46,15 +46,16 @@ pub struct Village {
     pub loyalty: u8,
     pub production: VillageProduction,
     pub is_capital: bool,
-    pub smithy: SmithyUpgrades,
-    pub stocks: VillageStocks,
-    pub academy_research: AcademyResearch,
+    smithy: SmithyUpgrades,
+    stocks: VillageStocks,
+    academy_research: AcademyResearch,
     pub total_merchants: u8,
     pub busy_merchants: u8,
     pub updated_at: DateTime<Utc>,
 }
 
 impl Village {
+    /// Returns a new village instance.
     pub fn new(
         name: String,
         valley: &Valley,
@@ -102,6 +103,104 @@ impl Village {
         village
     }
 
+    /// Constructor for re-hydrating a Village from persistence (database).
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_persistence(
+        id: u32,
+        name: String,
+        player_id: Uuid,
+        position: Position,
+        tribe: Tribe,
+        buildings: Vec<VillageBuilding>,
+        oases: Vec<Oasis>,
+        population: u32,
+        army: Option<Army>,
+        reinforcements: Vec<Army>,
+        deployed_armies: Vec<Army>,
+        loyalty: u8,
+        production: VillageProduction,
+        is_capital: bool,
+        smithy: SmithyUpgrades,
+        stocks: VillageStocks,
+        academy_research: AcademyResearch,
+        updated_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            player_id,
+            position,
+            tribe,
+            buildings,
+            oases,
+            population,
+            army,
+            reinforcements,
+            deployed_armies,
+            loyalty,
+            production,
+            is_capital,
+            smithy,
+            stocks,
+            academy_research,
+            total_merchants: 0,
+            busy_merchants: 0,
+            updated_at,
+        }
+    }
+
+    /// Returns a reference to the smithy upgrades for persistence (serialization).
+    pub fn smithy(&self) -> &SmithyUpgrades {
+        &self.smithy
+    }
+
+    /// Returns a reference to the academy research for persistence (serialization).
+    pub fn academy_research(&self) -> &AcademyResearch {
+        &self.academy_research
+    }
+
+    /// Returns a reference to the village stocks for persistence (serialization).
+    /// This should primarily be used by the repository layer.
+    pub fn stocks(&self) -> &VillageStocks {
+        &self.stocks
+    }
+
+    /// Checks if the village has enough resources.
+    pub fn has_enough_resources(&self, cost: &ResourceGroup) -> bool {
+        self.stocks.check_resources(cost)
+    }
+
+    /// Tries to deduct resources. Returns GameError::NotEnoughResources if funds are insufficient.
+    pub fn deduct_resources(&mut self, cost: &ResourceGroup) -> Result<(), GameError> {
+        if !self.has_enough_resources(cost) {
+            return Err(GameError::NotEnoughResources);
+        }
+        self.stocks.remove_resources(cost);
+        self.update_state();
+        Ok(())
+    }
+
+    /// Stores resources in the village, respecting capacity.
+    pub fn store_resources(&mut self, resources: ResourceGroup) {
+        self.stocks.store_resources(resources);
+        self.update_state();
+    }
+
+    /// Returns a snapshot of the currently stored resources.
+    pub fn get_stored_resources(&self) -> ResourceGroup {
+        self.stocks.stored_resources()
+    }
+
+    /// Gets the current warehouse capacity.
+    pub fn get_warehouse_capacity(&self) -> u32 {
+        self.stocks.warehouse_capacity
+    }
+
+    /// Gets the current granary capacity.
+    pub fn get_granary_capacity(&self) -> u32 {
+        self.stocks.granary_capacity
+    }
+
     /// Build a new building on a given slot.
     pub fn add_building_at_slot(
         &mut self,
@@ -114,6 +213,7 @@ impl Village {
         Ok(())
     }
 
+    /// Assigns a new level to a building in the given slot.
     pub fn set_building_level_at_slot(
         &mut self,
         slot_id: u8,
@@ -426,6 +526,22 @@ impl Village {
         }
     }
 
+    #[cfg(any(test, feature = "test-utils"))]
+    /// **[TEST ONLY]** Set academy research for specific unit.
+    pub fn set_academy_research_for_test(&mut self, unit: &UnitName, is_researched: bool) {
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
+            self.academy_research[idx] = is_researched;
+        }
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    /// **[TEST ONLY]** Set smithy level for specific unit.
+    pub fn set_smithy_level_for_test(&mut self, unit: &UnitName, level: u8) {
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
+            self.smithy[idx] = level.min(20); // Assicura di non superare il max
+        }
+    }
+
     /// Updates the village stocks based on the time elapsed since the last update
     /// It should be called whenever the village is loaded from the DB.
     fn update_resources(&mut self) {
@@ -602,38 +718,33 @@ pub struct VillageStocks {
 }
 
 impl VillageStocks {
-    /// Returns the total storage capacity (warehouse + granary)
-    pub fn total_capacity(&self) -> u32 {
-        self.warehouse_capacity + self.granary_capacity
-    }
-
     /// Returns the currently stored resources as ResourceGroup
-    pub fn stored_resources(&self) -> ResourceGroup {
+    pub(crate) fn stored_resources(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }
 
     /// Stores resources into the village stocks, capping at storage capacity.
-    pub fn store_resources(&mut self, resources: ResourceGroup) {
-        self.lumber = (self.lumber + resources.0).min(self.warehouse_capacity);
-        self.clay = (self.clay + resources.1).min(self.warehouse_capacity);
-        self.iron = (self.iron + resources.2).min(self.warehouse_capacity);
-        self.crop = (self.crop + resources.3 as i64).min(self.granary_capacity as i64);
+    pub(crate) fn store_resources(&mut self, resources: ResourceGroup) {
+        self.lumber = (self.lumber + resources.lumber()).min(self.warehouse_capacity);
+        self.clay = (self.clay + resources.clay()).min(self.warehouse_capacity);
+        self.iron = (self.iron + resources.iron()).min(self.warehouse_capacity);
+        self.crop = (self.crop + resources.crop() as i64).min(self.granary_capacity as i64);
     }
 
     /// Checks if given resources are present in stocks.
-    pub fn check_resources(&self, resources: &ResourceGroup) -> bool {
-        self.lumber >= resources.0
-            && self.clay >= resources.1
-            && self.iron >= resources.2
-            && self.crop >= resources.3 as i64
+    pub(crate) fn check_resources(&self, resources: &ResourceGroup) -> bool {
+        self.lumber >= resources.lumber()
+            && self.clay >= resources.clay()
+            && self.iron >= resources.iron()
+            && self.crop >= resources.crop() as i64
     }
 
     /// Removes resources from the village stocks, ensuring they don't go negative.
-    pub fn remove_resources(&mut self, resources: &ResourceGroup) {
-        self.lumber = (self.lumber as i64 - resources.0 as i64).max(0) as u32;
-        self.clay = (self.clay as i64 - resources.1 as i64).max(0) as u32;
-        self.iron = (self.iron as i64 - resources.2 as i64).max(0) as u32;
-        self.crop -= resources.3 as i64; // crop can go negative
+    pub(crate) fn remove_resources(&mut self, resources: &ResourceGroup) {
+        self.lumber = (self.lumber as i64 - resources.lumber() as i64).max(0) as u32;
+        self.clay = (self.clay as i64 - resources.clay() as i64).max(0) as u32;
+        self.iron = (self.iron as i64 - resources.iron() as i64).max(0) as u32;
+        self.crop -= resources.crop() as i64; // crop can go negative
     }
 }
 

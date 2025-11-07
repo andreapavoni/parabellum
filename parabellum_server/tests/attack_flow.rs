@@ -291,9 +291,7 @@ pub mod tests {
 
                 defender_village.add_building_at_slot(granary, 21)?;
                 defender_village.add_building_at_slot(warehouse, 20)?;
-                defender_village
-                    .stocks
-                    .store_resources(ResourceGroup::new(800, 800, 800, 800));
+                defender_village.store_resources(ResourceGroup::new(800, 800, 800, 800));
                 defender_village.update_state();
 
                 village_repo.save(&defender_village).await?;
@@ -308,7 +306,7 @@ pub mod tests {
             .building
             .level;
 
-        let initial_defender_resources = defender_village.stocks.stored_resources().total();
+        let initial_defender_resources = defender_village.get_stored_resources().total();
 
         // --- 2. ACT (Phase 1): Execute attack command ---
         let attack_command = AttackVillage {
@@ -391,8 +389,7 @@ pub mod tests {
             let bounty = return_payload.resources.total();
             assert!(bounty > 0, "Attacker should have stolen resources.");
 
-            let final_defender_resources =
-                updated_defender_village.stocks.stored_resources().total();
+            let final_defender_resources = updated_defender_village.get_stored_resources().total();
             assert!(
                 final_defender_resources < initial_defender_resources,
                 "Defender resources should have been reduced (Before: {}, After: {}).",

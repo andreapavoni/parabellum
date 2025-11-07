@@ -63,10 +63,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         if resources_to_send.total() == 0 {
             return Ok(());
         }
-
-        if !sender_village.stocks.check_resources(&resources_to_send) {
-            return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        }
+        sender_village.deduct_resources(&resources_to_send)?;
 
         let merchant_stats = sender_village.tribe.get_merchant_stats();
         let merchants_needed =
@@ -76,7 +73,6 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
             return Err(ApplicationError::Game(GameError::NotEnoughMerchants));
         }
 
-        sender_village.stocks.remove_resources(&resources_to_send);
         village_repo.save(&sender_village).await?;
 
         let travel_time_secs = sender_village.position.calculate_travel_time_secs(
@@ -174,9 +170,7 @@ mod tests {
         village_a.add_building_at_slot(marketplace, 25).unwrap();
         village_a.update_state();
 
-        village_a
-            .stocks
-            .store_resources(ResourceGroup(5000, 5000, 5000, 5000));
+        village_a.store_resources(ResourceGroup(5000, 5000, 5000, 5000));
         village_a.update_state();
 
         let player_b = player_factory(PlayerFactoryOptions {
@@ -217,8 +211,8 @@ mod tests {
         assert_handler_success(result);
 
         let saved_village_a = mock_uow.villages().get_by_id(village_a.id).await.unwrap();
-        assert_eq!(saved_village_a.stocks.lumber, 5000 - 1000);
-        assert_eq!(saved_village_a.stocks.clay, 5000 - 500);
+        assert_eq!(saved_village_a.get_stored_resources().lumber(), 5000 - 1000);
+        assert_eq!(saved_village_a.get_stored_resources().clay(), 5000 - 500);
 
         let jobs = mock_uow
             .jobs()

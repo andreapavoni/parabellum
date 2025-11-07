@@ -16,3 +16,7 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 dotenvy  = { workspace = true }
+
+[dev-dependencies]
+# Enable "test-utils" for parabellum_game
+parabellum_game = { path = "../parabellum_game", features = ["test-utils"] }

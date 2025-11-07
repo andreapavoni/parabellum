@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_core::{GameError, Result};
 
 use crate::{
     config::Config,
@@ -32,17 +32,19 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
         let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
 
         // Check requirements
-        if village.academy_research[unit_idx as usize] {
+        if village.academy_research()[unit_idx as usize] {
             return Err(GameError::UnitAlreadyResearched(command.unit).into());
         }
 
-        let tribe_units = village.tribe.get_units();
+        let tribe = village.clone().tribe;
+        let tribe_units = &tribe.get_units();
         let unit_data = tribe_units
             .get(unit_idx as usize)
             .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
 
         for req in unit_data.requirements.iter() {
             match village
+                .clone()
                 .buildings
                 .iter()
                 .find(|&vb| vb.building.name == req.building && vb.building.level >= req.level)
@@ -59,11 +61,7 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
         }
 
         let research_cost = &unit_data.research_cost;
-
-        if !village.stocks.check_resources(&research_cost.resources) {
-            return Err(ApplicationError::Game(GameError::NotEnoughResources));
-        }
-        village.stocks.remove_resources(&research_cost.resources);
+        village.deduct_resources(&research_cost.resources)?;
         village_repo.save(&village).await?;
 
         let time_per_unit_secs = (research_cost.time as f64 / config.speed as f64).floor() as i64;
@@ -143,12 +141,6 @@ mod tests {
             .at_level(4, config.speed)
             .unwrap();
         village.add_building_at_slot(granary, 26).unwrap();
-        village.update_state();
-
-        village
-            .stocks
-            .store_resources(ResourceGroup(2000, 2000, 2000, 2000));
-        village.update_state();
 
         let config = Arc::new(Config::from_env());
         (player, village, config)
@@ -157,9 +149,10 @@ mod tests {
     #[tokio::test]
     async fn test_research_academy_handler_success() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village_for_academy();
+        let (player, mut village, config) = setup_village_for_academy();
         let village_id = village.id;
         let player_id = player.id;
+        village.store_resources(ResourceGroup(2000, 2000, 2000, 2000));
 
         mock_uow.villages().save(&village).await.unwrap();
 
@@ -175,15 +168,23 @@ mod tests {
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
         // Praetorian research cost: 700, 620, 1480, 580
         assert_eq!(
-            saved_village.stocks.lumber,
+            saved_village.get_stored_resources().lumber(),
             2000 - 700,
             "Lumber not deducted"
         );
-        assert_eq!(saved_village.stocks.clay, 2000 - 620, "Clay not deducted");
-        assert_eq!(saved_village.stocks.iron, 2000 - 1480, "Iron not deducted");
         assert_eq!(
-            saved_village.stocks.crop,
-            (2000 - 580) as i64,
+            saved_village.get_stored_resources().clay(),
+            2000 - 620,
+            "Clay not deducted"
+        );
+        assert_eq!(
+            saved_village.get_stored_resources().iron(),
+            2000 - 1480,
+            "Iron not deducted"
+        );
+        assert_eq!(
+            saved_village.get_stored_resources().crop(),
+            (2000 - 580),
             "Crop not deducted"
         );
 
@@ -200,7 +201,7 @@ mod tests {
     async fn test_research_academy_handler_not_enough_resources() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (player, mut village, config) = setup_village_for_academy();
-        village.stocks = Default::default(); // No resources
+        village.store_resources(ResourceGroup::default()); // No resources
         let village_id = village.id;
         let player_id = player.id;
 
@@ -260,7 +261,7 @@ mod tests {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (_player, mut village, config) = setup_village_for_academy();
 
-        village.academy_research[1] = true; // Praetorian
+        village.set_academy_research_for_test(&UnitName::Praetorian, true);
 
         let village_id = village.id;
         mock_uow.villages().save(&village).await.unwrap();

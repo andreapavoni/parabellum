@@ -59,9 +59,7 @@ async fn test_full_build_flow() -> Result<()> {
             Building::new(BuildingName::RallyPoint, config.speed).at_level(1, config.speed)?;
         village.add_building_at_slot(rally_point, 39).unwrap();
 
-        village
-            .stocks
-            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
         village.update_state();
         uow.villages().save(&village).await?;
 
@@ -70,7 +68,7 @@ async fn test_full_build_flow() -> Result<()> {
     };
 
     let cost = Building::new(BuildingName::Barracks, config.speed).cost();
-    let initial_lumber = village.stocks.lumber;
+    let initial_lumber = village.get_stored_resources().lumber();
     let slot_to_build: u8 = 22;
 
     let command = AddBuilding {
@@ -91,7 +89,7 @@ async fn test_full_build_flow() -> Result<()> {
         let uow_assert1 = uow_provider.begin().await?;
         let updated_village = uow_assert1.villages().get_by_id(village.id).await?;
         assert_eq!(
-            updated_village.stocks.lumber,
+            updated_village.get_stored_resources().lumber(),
             initial_lumber - cost.resources.0,
             "Resources should be deducted"
         );

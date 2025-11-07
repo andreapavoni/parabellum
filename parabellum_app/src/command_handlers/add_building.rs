@@ -56,12 +56,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         )?;
 
         let cost = building.cost();
-        if !village.stocks.check_resources(&cost.resources) {
-            return Err(GameError::NotEnoughResources.into());
-        }
-
-        village.stocks.remove_resources(&cost.resources);
-        village.update_state();
+        village.deduct_resources(&cost.resources)?;
         villages_repo.save(&village).await?;
 
         let payload = AddBuildingTask {
@@ -128,11 +123,6 @@ mod tests {
             .unwrap();
         village.add_building_at_slot(rally_point, 39).unwrap(); // Slot 39 for Rally Point
 
-        village
-            .stocks
-            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
-        village.update_state();
-
         let config = Arc::new(Config::from_env());
         (player, village, config)
     }
@@ -141,9 +131,11 @@ mod tests {
     async fn test_add_building_handler_success() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Config::from_env();
-        let (player, village, config) = setup_village(&config);
+        let (player, mut village, config) = setup_village(&config);
         let village_id = village.id;
         let player_id = player.id;
+
+        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
 
         mock_uow.villages().save(&village).await.unwrap();
 
@@ -164,7 +156,7 @@ mod tests {
         let cost = Building::new(BuildingName::Barracks, config.speed).cost();
 
         assert_eq!(
-            saved_village.stocks.lumber,
+            saved_village.get_stored_resources().lumber(),
             800 - cost.resources.0,
             "Lumber not deducted correctly"
         );
@@ -190,17 +182,14 @@ mod tests {
     async fn test_add_building_handler_not_enough_resources() {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village(&config);
-        village.stocks = Default::default(); // No resources
-        let village_id = village.id;
-        let player_id = player.id;
+        let (player, village, config) = setup_village(&config);
 
         mock_uow.villages().save(&village).await.unwrap();
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
-            player_id,
-            village_id,
+            player_id: player.id,
+            village_id: village.id,
             slot_id: 22,
             name: BuildingName::Barracks,
         };
@@ -215,7 +204,7 @@ mod tests {
         );
 
         // Check that no job was created
-        let added_jobs = uow_box.jobs().list_by_player_id(player_id).await.unwrap();
+        let added_jobs = uow_box.jobs().list_by_player_id(player.id).await.unwrap();
         assert_eq!(added_jobs.len(), 0, "No job should be created");
     }
 

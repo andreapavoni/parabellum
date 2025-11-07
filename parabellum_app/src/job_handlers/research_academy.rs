@@ -83,7 +83,7 @@ mod tests {
         });
         let village_id = village.id;
 
-        village.academy_research[1] = false; // Praetorian
+        village.set_academy_research_for_test(&UnitName::Praetorian, false);
         mock_uow.villages().save(&village).await.unwrap();
 
         let unit_to_research = UnitName::Praetorian;
@@ -112,7 +112,7 @@ mod tests {
             .get_unit_idx_by_name(&unit_to_research)
             .unwrap();
         assert!(
-            saved_village.academy_research[unit_idx],
+            saved_village.academy_research()[unit_idx],
             "Unit should be marked as researched"
         );
     }

@@ -7,7 +7,7 @@ use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use crate::models::{
     army::{Army, TroopSet},
     buildings::Building,
-    village::{Village, VillageStocks},
+    village::Village,
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
@@ -339,7 +339,7 @@ impl Battle {
         // bounty
         let bounty = calculate_bounty(
             self.attacker.bounty_capacity_troop_set(&attacker_survivors),
-            &self.defender_village.stocks,
+            &self.defender_village.get_stored_resources(),
         );
 
         BattleReport {
@@ -427,7 +427,7 @@ impl Battle {
         // Prepare scouting target report
         let target_report = match target {
             ScoutingTarget::Resources => {
-                let resources = self.defender_village.stocks.stored_resources();
+                let resources = self.defender_village.get_stored_resources();
                 ScoutingTargetReport::Resources(resources)
             }
             ScoutingTarget::Defenses => {
@@ -482,11 +482,11 @@ impl Battle {
 ///
 /// # Returns
 /// * `ResourceGroup` - Stolen resources (Lumber, Clay, Iron, Crop).
-fn calculate_bounty(total_capacity: u32, available_stocks: &VillageStocks) -> ResourceGroup {
-    let available_lumber = available_stocks.lumber;
-    let available_clay = available_stocks.clay;
-    let available_iron = available_stocks.iron;
-    let available_crop = available_stocks.crop.max(0) as u32;
+fn calculate_bounty(total_capacity: u32, stored_resources: &ResourceGroup) -> ResourceGroup {
+    let available_lumber = stored_resources.lumber();
+    let available_clay = stored_resources.clay();
+    let available_iron = stored_resources.iron();
+    let available_crop = stored_resources.crop().max(0) as u32;
 
     let total_available = available_lumber + available_clay + available_iron + available_crop;
 

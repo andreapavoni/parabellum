@@ -48,11 +48,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         let build_time_secs =
             next_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
-        if !village.stocks.check_resources(&cost.resources) {
-            return Err(GameError::NotEnoughResources.into());
-        }
-        village.stocks.remove_resources(&cost.resources);
-        village.update_state();
+        village.deduct_resources(&cost.resources)?;
         village_repo.save(&village).await?;
 
         let payload = BuildingUpgradeTask {
@@ -114,11 +110,7 @@ mod tests {
         village
             .set_building_level_at_slot(main_building_slot, 1, config.speed)
             .unwrap();
-        village
-            .stocks
-            .store_resources(ResourceGroup(1000, 1000, 1000, 1000));
-
-        village.update_state();
+        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
 
         (player, village, config, main_building_slot)
     }
@@ -130,7 +122,7 @@ mod tests {
 
         let village_id = village.id;
         let player_id = player.id;
-        let initial_lumber = village.stocks.lumber;
+        let initial_lumber = village.get_stored_resources().lumber();
         let initial_population = village.population;
 
         mock_uow.villages().save(&village).await.unwrap();
@@ -155,7 +147,7 @@ mod tests {
 
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
         assert_eq!(
-            saved_village.stocks.lumber,
+            saved_village.get_stored_resources().lumber(),
             initial_lumber - cost.resources.0,
             "No resources withdrawn from stocks"
         );
@@ -192,10 +184,12 @@ mod tests {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (player, mut village, config, slot_id) = setup_village_for_upgrade();
 
-        village
-            .stocks
-            .remove_resources(&ResourceGroup(1000, 1000, 1000, 1000));
-        village.update_state();
+        assert!(
+            village
+                .deduct_resources(&ResourceGroup(800, 800, 800, 800))
+                .is_ok(),
+            "Village should have enough resources"
+        );
         mock_uow.villages().save(&village).await.unwrap();
 
         let handler = UpgradeBuildingCommandHandler::new();

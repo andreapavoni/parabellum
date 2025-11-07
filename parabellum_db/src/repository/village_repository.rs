@@ -234,9 +234,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             Json(&village.position) as _,
             Json(&village.buildings) as _,
             Json(&village.production) as _,
-            Json(&village.stocks) as _,
-            Json(&village.smithy) as _,
-            Json(&village.academy_research) as _,
+            Json(&village.stocks()) as _,
+            Json(&village.smithy()) as _,
+            Json(&village.academy_research()) as _,
             village.population as i32,
             village.loyalty as i16,
             village.is_capital

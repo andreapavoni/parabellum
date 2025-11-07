@@ -43,9 +43,7 @@ impl JobHandler for MerchantGoingJobHandler {
             .get_by_id(self.payload.destination_village_id)
             .await?;
 
-        destination_village
-            .stocks
-            .store_resources(self.payload.resources.clone());
+        destination_village.store_resources(self.payload.resources.clone());
 
         destination_village.update_state();
         village_repo.save(&destination_village).await?;

@@ -60,29 +60,30 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
         let smithy = serde_json::from_value(db_village.smithy_upgrades)?;
         let academy_research = serde_json::from_value(db_village.academy_research)?;
         let position = serde_json::from_value(db_village.position)?;
+        let stocks = serde_json::from_value(db_village.stocks)?;
+        let production = serde_json::from_value(db_village.production)?;
+        let buildings = serde_json::from_value(db_village.buildings)?;
 
-        let mut village = game_models::village::Village {
-            id: village_id_u32,
-            name: db_village.name,
-            player_id: db_village.player_id,
+        let mut village = game_models::village::Village::from_persistence(
+            village_id_u32,
+            db_village.name,
+            db_village.player_id,
             position,
-            tribe: tribe.clone(),
-            buildings: serde_json::from_value(db_village.buildings)?,
+            tribe.clone(),
+            buildings,
             oases,
-            population: db_village.population as u32,
-            army: home_army,
+            db_village.population as u32,
+            home_army,
             reinforcements,
             deployed_armies,
-            loyalty: db_village.loyalty as u8,
-            production: serde_json::from_value(db_village.production)?,
-            is_capital: db_village.is_capital,
+            db_village.loyalty as u8,
+            production,
+            db_village.is_capital,
             smithy,
+            stocks,
             academy_research,
-            stocks: serde_json::from_value(db_village.stocks)?,
-            total_merchants: 0,
-            busy_merchants: 0,
-            updated_at: db_village.updated_at,
-        };
+            db_village.updated_at,
+        );
 
         village.update_state();
         Ok(village)

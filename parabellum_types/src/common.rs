@@ -22,7 +22,7 @@ pub struct ResearchCost {
     pub time: u64,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct ResourceGroup(pub u32, pub u32, pub u32, pub u32);
 
@@ -33,6 +33,19 @@ impl ResourceGroup {
 
     pub fn total(&self) -> u32 {
         self.0 + self.1 + self.2 + self.3
+    }
+
+    pub fn lumber(&self) -> u32 {
+        self.0
+    }
+    pub fn clay(&self) -> u32 {
+        self.1
+    }
+    pub fn iron(&self) -> u32 {
+        self.2
+    }
+    pub fn crop(&self) -> u32 {
+        self.3
     }
 }
 

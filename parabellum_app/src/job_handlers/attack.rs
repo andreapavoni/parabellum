@@ -83,7 +83,7 @@ impl JobHandler for AttackJobHandler {
 
         // 3.2 Applies changes to defender village
         if let Some(bounty) = &battle_report.bounty {
-            defender_village.stocks.remove_resources(bounty);
+            defender_village.deduct_resources(bounty)?;
         }
         defender_village.loyalty = battle_report.loyalty_after;
 

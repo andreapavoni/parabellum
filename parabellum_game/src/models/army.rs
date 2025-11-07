@@ -32,8 +32,8 @@ impl Army {
         current_map_field_id: Option<u32>,
         player_id: Uuid,
         tribe: Tribe,
-        units: TroopSet,
-        smithy: SmithyUpgrades,
+        units: &TroopSet,
+        smithy: &SmithyUpgrades,
         hero: Option<Hero>,
     ) -> Self {
         Army {
@@ -41,8 +41,8 @@ impl Army {
             village_id,
             player_id,
             tribe,
-            units,
-            smithy,
+            units: *units,
+            smithy: *smithy,
             hero,
             current_map_field_id,
         }
@@ -56,8 +56,8 @@ impl Army {
             Some(village.id),
             village.player_id,
             village.tribe.clone(),
-            [0; 10],
-            village.smithy,
+            &[0; 10],
+            village.smithy(),
             None,
         )
     }
@@ -197,8 +197,8 @@ impl Army {
             None,
             self.player_id,
             self.tribe.clone(),
-            set,
-            self.smithy,
+            &set,
+            &self.smithy,
             None,
         );
 

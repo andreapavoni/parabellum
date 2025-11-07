@@ -51,11 +51,7 @@ impl JobHandler for ArmyReturnJobHandler {
         village.army = Some(village_army);
         army_repo.remove(returning_army.id).await?;
 
-        village
-            .stocks
-            .store_resources(self.payload.resources.clone());
-
-        village.update_state();
+        village.store_resources(self.payload.resources.clone());
         village_repo.save(&village).await?;
 
         Ok(())
@@ -146,14 +142,18 @@ mod tests {
 
         // Check village army (should be 10 + 5 = 15)
         let final_village = context.uow.villages().get_by_id(village.id).await.unwrap();
-        let final_home_army = final_village.army.expect("Village should have an army");
+        let final_home_army = final_village
+            .clone()
+            .army
+            .expect("Village should have an army");
         assert_eq!(
             final_home_army.units[0], 15,
             "Home army should have 15 units"
         );
 
         assert_eq!(
-            final_village.stocks.lumber, bounty.0,
+            final_village.get_stored_resources().lumber(),
+            bounty.0,
             "Home stocks should be increased with bounty"
         );
 
