@@ -22,6 +22,7 @@ pub mod app_bus;
 pub mod command_handlers;
 pub mod config;
 pub mod cqrs;
+pub mod helpers;
 pub mod job_handlers;
 pub mod job_registry;
 pub mod jobs;

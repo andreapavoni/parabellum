@@ -28,10 +28,8 @@ pub mod tests {
         uow::UnitOfWork,
     };
 
-    // --- New Mock Repositories ---
     #[derive(Default, Clone)]
     pub struct MockJobRepository {
-        // Use Arc<Mutex<...>> to hold state
         added_jobs: Arc<Mutex<Vec<Job>>>,
     }
 
@@ -263,7 +261,6 @@ pub mod tests {
         }
     }
 
-    /// A Mock Unit of Work that holds mock repositories.
     #[derive(Default)]
     pub struct MockUnitOfWork {
         players: Arc<MockPlayerRepository>,

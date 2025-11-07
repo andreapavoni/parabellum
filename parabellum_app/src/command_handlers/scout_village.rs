@@ -7,6 +7,7 @@ use parabellum_core::{ApplicationError, GameError, Result};
 use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::ScoutVillage},
+    helpers::army_service::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::ScoutTask},
     uow::UnitOfWork,
 };
@@ -33,20 +34,16 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        // --- FIX 1: Controlla la somma, non il count ---
-        if command.units.iter().sum::<u32>() == 0 {
-            return Err(ApplicationError::Game(GameError::NotUnitsSelected));
-        }
-
         let job_repo = uow.jobs();
         let village_repo = uow.villages();
-        let army_repo = uow.armies();
 
-        let mut attacker_village = village_repo.get_by_id(command.village_id).await?;
-        let mut attacker_army = army_repo.get_by_id(command.army_id).await?;
         let defender_village = village_repo.get_by_id(command.target_village_id).await?;
+        let attacker_village = village_repo.get_by_id(command.village_id).await?;
 
-        // --- VALIDAZIONE 2: Controlla che siano solo scout ---
+        let (attacker_village, deployed_army) =
+            deploy_army_from_village(uow, attacker_village, command.army_id, command.units).await?;
+
+        // Check only army is only scouts
         let tribe_units = attacker_village.tribe.get_units();
         for (idx, &quantity) in command.units.iter().enumerate() {
             if quantity > 0 {
@@ -58,21 +55,6 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
                 }
             }
         }
-        // --- FINE VALIDAZIONE ---
-
-        let deployed_army = attacker_army.deploy(command.units)?;
-
-        if attacker_army.immensity() == 0 {
-            army_repo.remove(attacker_army.id).await?;
-            attacker_village.army = None;
-        } else {
-            army_repo.save(&attacker_army).await?;
-            attacker_village.army = Some(attacker_army);
-        }
-
-        attacker_village.update_state();
-        village_repo.save(&attacker_village).await?;
-        army_repo.save(&deployed_army).await?;
 
         let travel_time_secs = attacker_village.position.calculate_travel_time_secs(
             defender_village.position,
@@ -82,7 +64,7 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
         ) as i64;
 
         let scout_payload = ScoutTask {
-            army_id: deployed_army.id, // <-- ID della nuova armata
+            army_id: deployed_army.id,
             attacker_village_id: attacker_village.id as i32,
             attacker_player_id: command.player_id,
             target_village_id: command.target_village_id as i32,

@@ -47,6 +47,7 @@ pub struct AttackVillage {
     pub player_id: Uuid,
     pub village_id: u32,
     pub army_id: Uuid,
+    pub units: TroopSet,
     pub target_village_id: u32,
     pub catapult_targets: [BuildingName; 2],
 }
@@ -69,6 +70,7 @@ pub struct ReinforceVillage {
     pub player_id: Uuid,
     pub village_id: u32,
     pub army_id: Uuid,
+    pub units: TroopSet,
     pub target_village_id: u32,
 }
 impl Command for ReinforceVillage {}

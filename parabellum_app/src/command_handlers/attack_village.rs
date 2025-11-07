@@ -6,8 +6,9 @@ use parabellum_core::ApplicationError;
 use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::AttackVillage},
+    helpers::army_service::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::AttackTask},
-    repository::{ArmyRepository, JobRepository, VillageRepository},
+    repository::{JobRepository, VillageRepository},
     uow::UnitOfWork,
 };
 
@@ -35,23 +36,21 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
     ) -> Result<(), ApplicationError> {
         let job_repo: Arc<dyn JobRepository + '_> = uow.jobs();
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
-        let army_repo: Arc<dyn ArmyRepository + '_> = uow.armies();
-
         let attacker_village = village_repo.get_by_id(command.village_id).await?;
-
-        let attacker_army = army_repo.get_by_id(command.army_id).await?;
+        let (attacker_village, deployed_army) =
+            deploy_army_from_village(uow, attacker_village, command.army_id, command.units).await?;
 
         let defender_village = village_repo.get_by_id(command.target_village_id).await?;
 
         let travel_time_secs = attacker_village.position.calculate_travel_time_secs(
             defender_village.position,
-            attacker_army.speed(),
+            deployed_army.speed(),
             config.world_size as i32,
             config.speed as u8,
         ) as i64;
 
         let attack_payload = AttackTask {
-            army_id: command.army_id,
+            army_id: deployed_army.id,
             attacker_village_id: attacker_village.id as i32,
             attacker_player_id: command.player_id,
             target_village_id: command.target_village_id as i32,
@@ -146,6 +145,7 @@ mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
+            units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
         };

@@ -41,15 +41,18 @@ pub mod tests {
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
             Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
 
+        let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
         let (attacker_player, attacker_village, attacker_army) = {
             setup_player_party(
                 uow_provider.clone(),
                 Position { x: 10, y: 10 },
                 Tribe::Roman,
-                [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                units_to_send.clone(),
             )
             .await?
         };
+        let original_home_army_id = attacker_army.id; // Save original ID
 
         let (_defender_player, defender_village, _defender_army) = {
             setup_player_party(
@@ -64,7 +67,8 @@ pub mod tests {
         let attack_command = AttackVillage {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
-            army_id: attacker_army.id,
+            army_id: original_home_army_id, // Use original ID
+            units: units_to_send.clone(),   // Pass the units
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
         };
@@ -82,9 +86,10 @@ pub mod tests {
             uow_attack.commit().await?;
         };
 
-        let attack_job = {
+        let (attack_job, deployed_army_id) = {
             let uow_assert1 = uow_provider.begin().await?;
             let cloned_job;
+            let deployed_id;
 
             {
                 let job_repo = uow_assert1.jobs();
@@ -100,7 +105,13 @@ pub mod tests {
                 let task_data: Result<AttackTask, _> =
                     serde_json::from_value(attack_job.task.data.clone());
                 assert!(task_data.is_ok(), "Job data should be a valid AttackTask");
-                assert_eq!(task_data.unwrap().army_id, attacker_army.id);
+
+                let payload = task_data.unwrap();
+                assert_ne!(
+                    payload.army_id, original_home_army_id,
+                    "Deployed army ID should be new"
+                );
+                deployed_id = payload.army_id;
 
                 assert_eq!(
                     attack_job.status,
@@ -109,14 +120,35 @@ pub mod tests {
                     attack_job.status
                 );
 
+                // Check village and army state
+                let home_village = uow_assert1
+                    .villages()
+                    .get_by_id(attacker_village.id)
+                    .await?;
+                assert!(
+                    home_village.army.is_none(),
+                    "Home village army should be None (all troops sent)"
+                );
+                assert!(
+                    uow_assert1
+                        .armies()
+                        .get_by_id(original_home_army_id)
+                        .await
+                        .is_err(),
+                    "Initial home army should be removed"
+                );
+                assert!(
+                    uow_assert1.armies().get_by_id(deployed_id).await.is_ok(),
+                    "Deployed army should exist"
+                );
+
                 cloned_job = attack_job.clone();
             }
 
             uow_assert1.rollback().await?;
-            cloned_job
+            (cloned_job, deployed_id)
         };
 
-        // --- 4. ACT (Phase 2): Simulate worker processing job ---
         let worker = Arc::new(JobWorker::new(
             uow_provider.clone(),
             app_registry,
@@ -127,8 +159,7 @@ pub mod tests {
             .await
             .unwrap();
 
-        // --- 5. ASSERT (Phase 2): Check job result ---
-        {
+        let return_job = {
             let uow_assert2 = uow_provider.begin().await?;
             let job_repo = uow_assert2.jobs();
             let final_jobs = job_repo
@@ -146,7 +177,7 @@ pub mod tests {
                 assert_eq!(original_job.status, JobStatus::Completed);
             }
 
-            let return_job = &final_jobs[0];
+            let return_job = final_jobs.first().unwrap().clone();
             assert_eq!(return_job.task.task_type, "ArmyReturn");
             let return_task_data: Result<ArmyReturnTask, _> =
                 serde_json::from_value(return_job.task.data.clone());
@@ -154,9 +185,56 @@ pub mod tests {
                 return_task_data.is_ok(),
                 "Job data should be a valid ArmyReturnTask"
             );
+            assert_eq!(return_task_data.unwrap().army_id, deployed_army_id);
             assert_eq!(return_job.status, JobStatus::Pending);
 
             uow_assert2.rollback().await?;
+            return_job
+        };
+        worker.process_jobs(&vec![return_job.clone()]).await?;
+        {
+            let uow_assert3 = uow_provider.begin().await?;
+            let final_return_job = uow_assert3.jobs().get_by_id(return_job.id).await?;
+            assert_eq!(final_return_job.status, JobStatus::Completed);
+
+            let pending_jobs = uow_assert3
+                .jobs()
+                .list_by_player_id(attacker_player.id)
+                .await?;
+            assert_eq!(pending_jobs.len(), 0, "No jobs should be pending");
+
+            assert!(
+                uow_assert3
+                    .armies()
+                    .get_by_id(deployed_army_id)
+                    .await
+                    .is_err(),
+                "Deployed army should be deleted after returning"
+            );
+
+            let home_village = uow_assert3
+                .villages()
+                .get_by_id(attacker_village.id)
+                .await?;
+            assert!(
+                home_village.army.is_some(),
+                "Home army should be back in village"
+            );
+            let home_army = home_village.army.unwrap();
+            assert_eq!(
+                home_army.units[0], 100,
+                "Home army should have 100 troops (assuming 0 losses for simplicity)"
+            );
+            assert_ne!(
+                home_army.id, deployed_army_id,
+                "Home army ID should be new (or the original, depending on merge logic)"
+            );
+            assert_ne!(
+                home_army.id, original_home_army_id,
+                "Home army ID should be new after merge"
+            );
+
+            uow_assert3.rollback().await?;
         }
 
         Ok(())
@@ -237,6 +315,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
+            units: [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::Warehouse, BuildingName::Granary],
         };

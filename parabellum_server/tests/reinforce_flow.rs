@@ -31,15 +31,18 @@ pub mod tests {
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
             Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
 
+        let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
         let (reinforcer_player, reinforcer_village, reinforcing_army) = {
             setup_player_party(
                 uow_provider.clone(),
                 Position { x: 10, y: 10 },
                 Tribe::Roman,
-                [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                units_to_send.clone(),
             )
             .await?
         };
+        let original_home_army_id = reinforcing_army.id;
 
         let (_target_player, target_village, _target_army) = {
             setup_player_party(
@@ -54,7 +57,8 @@ pub mod tests {
         let command = ReinforceVillage {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
-            army_id: reinforcing_army.id,
+            army_id: original_home_army_id,
+            units: units_to_send.clone(),
             target_village_id: target_village.id,
         };
 
@@ -65,7 +69,7 @@ pub mod tests {
             uow_cmd.commit().await?;
         };
 
-        let reinforce_job = {
+        let (reinforce_job, deployed_army_id) = {
             let uow_assert1 = uow_provider.begin().await?;
             let jobs = uow_assert1
                 .jobs()
@@ -84,11 +88,39 @@ pub mod tests {
             assert_eq!(job.task.task_type, "Reinforcement");
 
             let payload: ReinforcementTask = serde_json::from_value(job.task.data.clone())?;
-            assert_eq!(payload.army_id, reinforcing_army.id);
+            assert_ne!(
+                payload.army_id, original_home_army_id,
+                "Deployed army ID should be new"
+            );
             assert_eq!(payload.village_id, target_village.id as i32);
 
+            let home_village = uow_assert1
+                .villages()
+                .get_by_id(reinforcer_village.id)
+                .await?;
+            assert!(
+                home_village.army.is_none(),
+                "Home village army should be None"
+            );
+            assert!(
+                uow_assert1
+                    .armies()
+                    .get_by_id(original_home_army_id)
+                    .await
+                    .is_err(),
+                "Original home army should be deleted"
+            );
+            assert!(
+                uow_assert1
+                    .armies()
+                    .get_by_id(payload.army_id)
+                    .await
+                    .is_ok(),
+                "Deployed army should exist"
+            );
+
             uow_assert1.rollback().await?;
-            job
+            (job, payload.army_id)
         };
 
         let worker = Arc::new(JobWorker::new(
@@ -110,7 +142,7 @@ pub mod tests {
                 .await?;
             assert_eq!(pending_jobs.len(), 0, "There shouldn't be return jobs");
 
-            let final_army = uow_assert2.armies().get_by_id(reinforcing_army.id).await?;
+            let final_army = uow_assert2.armies().get_by_id(deployed_army_id).await?;
             assert_eq!(
                 final_army.current_map_field_id,
                 Some(target_village.id),
@@ -125,7 +157,8 @@ pub mod tests {
 
             assert_eq!(final_target_village.reinforcements.len(), 1);
             assert_eq!(
-                final_target_village.reinforcements[0].id, reinforcing_army.id,
+                final_target_village.reinforcements[0].id,
+                deployed_army_id, // <-- Check for deployed_army_id
                 "Target village should have reinforcements"
             );
             assert_eq!(

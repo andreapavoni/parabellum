@@ -6,6 +6,7 @@ use parabellum_core::{ApplicationError, Result};
 use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::ReinforceVillage},
+    helpers::army_service::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::ReinforcementTask},
     uow::UnitOfWork,
 };
@@ -34,21 +35,22 @@ impl CommandHandler<ReinforceVillage> for ReinforceVillageCommandHandler {
     ) -> Result<(), ApplicationError> {
         let job_repo = uow.jobs();
         let village_repo = uow.villages();
-        let army_repo = uow.armies();
 
-        let attacker_village = village_repo.get_by_id(command.village_id).await?;
-        let attacker_army = army_repo.get_by_id(command.army_id).await?;
+        let reinforcer_village = village_repo.get_by_id(command.village_id).await?;
         let target_village = village_repo.get_by_id(command.target_village_id).await?;
+        let (reinforcer_village, deployed_army) =
+            deploy_army_from_village(uow, reinforcer_village, command.army_id, command.units)
+                .await?;
 
-        let travel_time_secs = attacker_village.position.calculate_travel_time_secs(
+        let travel_time_secs = reinforcer_village.position.calculate_travel_time_secs(
             target_village.position,
-            attacker_army.speed(),
+            deployed_army.speed(),
             config.world_size as i32,
             config.speed as u8,
         ) as i64;
 
         let reinforce_payload = ReinforcementTask {
-            army_id: command.army_id,
+            army_id: deployed_army.id,
             village_id: command.target_village_id as i32,
             player_id: command.player_id,
         };
