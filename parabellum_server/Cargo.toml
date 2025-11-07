@@ -3,9 +3,12 @@ name = "parabellum_server"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "lib.rs"
+
 [[bin]]
 name = "parabellum"
-path = "src/main.rs"
+path = "main.rs"
 
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }

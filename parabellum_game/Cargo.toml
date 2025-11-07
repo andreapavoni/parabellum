@@ -3,6 +3,9 @@ name = "parabellum_game"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "lib.rs"
+
 [dependencies]
 parabellum_core = { path = "../parabellum_core" }
 parabellum_types = { path = "../parabellum_types" }

@@ -3,12 +3,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-pub mod handler;
-pub mod tasks;
-pub mod worker;
+#[derive(Debug, Clone)]
+pub struct Job {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub task: JobPayload,
+    pub status: JobStatus,
+    pub completed_at: DateTime<Utc>,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+}
 
-/// Represents the data payload for any job.
-/// This struct is what gets serialized into the `task` column in the DB.
+impl Job {
+    pub fn new(player_id: Uuid, village_id: i32, duration: i64, task: JobPayload) -> Self {
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        let completed_at = now.checked_add_signed(Duration::seconds(duration)).unwrap();
+
+        Self {
+            id,
+            player_id,
+            village_id,
+            task,
+            status: JobStatus::Pending,
+            completed_at,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+/// Represents the data payload for any job, it holds data for the task.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobPayload {
     /// A string key used to find the correct handler registry.
@@ -28,43 +54,12 @@ impl JobPayload {
     }
 }
 
-impl Job {
-    pub fn new(player_id: Uuid, village_id: i32, duration: i64, task: JobPayload) -> Self {
-        let id = Uuid::new_v4();
-        let now = Utc::now();
-
-        let completed_at = now.checked_add_signed(Duration::seconds(duration)).unwrap();
-
-        Self {
-            id,
-            player_id,
-            village_id,
-            task,
-            status: JobStatus::Pending,
-            completed_at,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobStatus {
     Pending,
     Processing,
     Completed,
     Failed,
-}
-
-#[derive(Debug, Clone)]
-pub struct Job {
-    pub id: Uuid,
-    pub player_id: Uuid,
-    pub village_id: i32,
-    pub task: JobPayload,
-    pub status: JobStatus,
-    pub completed_at: DateTime<Utc>,
-    pub created_at: chrono::DateTime<Utc>,
-    pub updated_at: chrono::DateTime<Utc>,
 }
 
 #[cfg(test)]

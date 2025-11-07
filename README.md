@@ -93,10 +93,10 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Merchants**: Sending resources between villages.
 - [x] **Server speed**: Full support for different server speeds influencing times and stocks/merchants capacities.
 - [x] **Building Upgrades/downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
+- [x] **Reinforcements**: Sending troops to support other villages.
+- [x] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 
 ### In Progress
-- [ ] **Reinforcements**: Sending troops to support other villages (logic exists, but no command/job).
-- [ ] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 
 ### ToDo (Not Started)
 - [ ] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.

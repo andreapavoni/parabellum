@@ -3,6 +3,9 @@ name = "parabellum_core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "lib.rs"
+
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 

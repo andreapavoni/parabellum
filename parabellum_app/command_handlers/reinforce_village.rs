@@ -6,7 +6,7 @@ use parabellum_core::{ApplicationError, Result};
 use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::ReinforceVillage},
-    helpers::army_service::deploy_army_from_village,
+    helpers::army_helper::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::ReinforcementTask},
     uow::UnitOfWork,
 };
