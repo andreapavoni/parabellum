@@ -36,18 +36,8 @@ impl JobHandler for ReinforcementJobHandler {
         info!("Executing Reinforcement job: Army arriving at village.");
 
         let army_repo = ctx.uow.armies();
-
-        // 1. Carica l'armata
         let mut army = army_repo.get_by_id(self.payload.army_id).await?;
-
-        // 2. Aggiorna il suo 'current_map_field_id' con il villaggio target
-        //    (preso dal payload del task)
         army.current_map_field_id = Some(self.payload.village_id as u32);
-
-        // 3. Salva l'armata.
-        //    Quando il villaggio target (village_id) verrà caricato,
-        //    la logica in `village.rs` (TryFrom<VillageAggregate>)
-        //    la identificherà correttamente come rinforzo.
         army_repo.save(&army).await?;
 
         info!(
@@ -56,7 +46,6 @@ impl JobHandler for ReinforcementJobHandler {
             "Army reinforcement has arrived and is now stationed at new location."
         );
 
-        // Come da piano, nessun job di ritorno viene creato.
         Ok(())
     }
 }

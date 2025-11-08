@@ -102,7 +102,7 @@ impl JobHandler for AttackJobHandler {
             ctx.uow.armies().save(&army).await?;
         }
 
-        for reinforcement_army in defender_village.reinforcements {
+        for reinforcement_army in defender_village.reinforcements() {
             ctx.uow.armies().save(&reinforcement_army).await?;
         }
 

@@ -127,7 +127,7 @@ impl Battle {
 
         total_defender_immensity += self.defender_village.army().map_or(0, |a| a.immensity());
 
-        for defender_army in self.defender_village.reinforcements.iter() {
+        for defender_army in self.defender_village.reinforcements().iter() {
             let (defender_infantry_points, defender_cavalry_points) =
                 defender_army.defense_points();
 
@@ -184,7 +184,7 @@ impl Battle {
             + defender_home_army_upkeep
             + self
                 .defender_village
-                .reinforcements
+                .reinforcements()
                 .iter()
                 .map(|a| a.upkeep())
                 .sum::<u32>();
@@ -220,7 +220,7 @@ impl Battle {
 
         let reinforcements_report: Vec<BattlePartyReport> = self
             .defender_village
-            .reinforcements
+            .reinforcements()
             .iter()
             .map(|reinforcement| {
                 let (survivors, losses) = reinforcement.calculate_losses(defender_loss_percentage);
@@ -361,7 +361,7 @@ impl Battle {
             .army()
             .map_or(0, |a| a.scouting_defense_points());
         let mut total_defense_scouts = 0;
-        for reinforcement in self.defender_village.reinforcements.iter() {
+        for reinforcement in self.defender_village.reinforcements().iter() {
             total_scout_defense_power += reinforcement.scouting_defense_points();
             total_defense_scouts += reinforcement.unit_amount(3);
         }
@@ -401,7 +401,7 @@ impl Battle {
 
         let reinforcements_report: Vec<BattlePartyReport> = self
             .defender_village
-            .reinforcements
+            .reinforcements()
             .iter()
             .map(|reinforcement| {
                 BattlePartyReport {

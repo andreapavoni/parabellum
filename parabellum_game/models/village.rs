@@ -43,18 +43,18 @@ pub struct Village {
     pub player_id: Uuid,
     pub position: Position,
     pub tribe: Tribe,
-    buildings: Vec<VillageBuilding>,
     pub oases: Vec<Oasis>,
     pub population: u32,
+    buildings: Vec<VillageBuilding>,
     army: Option<Army>,
-    pub reinforcements: Vec<Army>,
+    reinforcements: Vec<Army>,
+    smithy: SmithyUpgrades,
+    stocks: VillageStocks,
+    academy_research: AcademyResearch,
     pub deployed_armies: Vec<Army>,
     pub loyalty: u8,
     pub production: VillageProduction,
     pub is_capital: bool,
-    smithy: SmithyUpgrades,
-    stocks: VillageStocks,
-    academy_research: AcademyResearch,
     pub total_merchants: u8,
     pub busy_merchants: u8,
     pub updated_at: DateTime<Utc>,
@@ -448,6 +448,10 @@ impl Village {
         Ok(())
     }
 
+    pub fn reinforcements(&self) -> &Vec<Army> {
+        &self.reinforcements
+    }
+
     /// Applies combat losses to the village's army and reinforcements based on the battle report.
     pub fn apply_battle_losses(&mut self, report: &BattleReport) {
         let mut final_home_army = None;
@@ -640,7 +644,7 @@ impl Village {
     /// **[TEST ONLY]** Set smithy level for specific unit.
     pub fn set_smithy_level_for_test(&mut self, unit: &UnitName, level: u8) {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
-            self.smithy[idx] = level.min(20); // Assicura di non superare il max
+            self.smithy[idx] = level.min(20);
         }
     }
 

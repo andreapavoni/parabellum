@@ -155,9 +155,9 @@ pub mod tests {
                 .get_by_id(reinforcer_village.id)
                 .await?;
 
-            assert_eq!(final_target_village.reinforcements.len(), 1);
+            assert_eq!(final_target_village.reinforcements().len(), 1);
             assert_eq!(
-                final_target_village.reinforcements[0].id,
+                final_target_village.reinforcements()[0].id,
                 deployed_army_id, // <-- Check for deployed_army_id
                 "Target village should have reinforcements"
             );
