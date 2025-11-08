@@ -2,12 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use parabellum_core::GameError;
 use parabellum_types::{
-    buildings::{BuildingGroup, BuildingName},
+    buildings::{BuildingGroup, BuildingName, BuildingRequirement},
     common::{Cost, ResourceGroup},
     tribe::Tribe,
 };
-
-use crate::models::village::VillageBuilding;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Building {
@@ -28,8 +26,8 @@ impl Building {
         let (population, culture_points) = get_cumulative_stats(&name, &building.group, level);
 
         Self {
-            name,
-            group: building.group,
+            name: name.clone(),
+            group: building.group.clone(),
             culture_points,
             level,
             population,
@@ -73,87 +71,6 @@ impl Building {
             population,
             value: effective_value,
         })
-    }
-
-    pub fn validate_build(
-        &self,
-        tribe: &Tribe,
-        village_buildings: &Vec<VillageBuilding>,
-        is_capital: bool,
-    ) -> Result<(), GameError> {
-        let data = get_building_data(&self.name).unwrap();
-
-        // tribe constraints
-        if !data.rules.tribes.is_empty() {
-            let ok = data.rules.tribes.contains(tribe);
-            if !ok {
-                return Err(GameError::BuildingTribeMismatch {
-                    building: self.name.clone(),
-                    tribe: tribe.clone(),
-                });
-            }
-        }
-
-        // capital/non-capital constraints
-        if is_capital
-            && data
-                .rules
-                .constraints
-                .contains(&BuildingConstraint::NonCapital)
-        {
-            return Err(GameError::NonCapitalConstraint(self.name.clone()));
-        }
-
-        if !is_capital
-            && data
-                .rules
-                .constraints
-                .contains(&BuildingConstraint::OnlyCapital)
-        {
-            return Err(GameError::CapitalConstraint(self.name.clone()));
-        }
-
-        // building requirements (aka technology tree)
-        for req in data.rules.requirements {
-            match village_buildings
-                .iter()
-                .find(|&vb| vb.building.name == req.0 && vb.building.level >= req.1)
-            {
-                Some(_) => (),
-                None => {
-                    return Err(GameError::BuildingRequirementsNotMet {
-                        building: req.0.clone(),
-                        level: req.1,
-                    });
-                }
-            };
-        }
-
-        for vb in village_buildings {
-            // check if a building has conflicts with other buildings (eg: Palace vs Residence)
-            for conflict in data.rules.conflicts {
-                if vb.building.name == conflict.0 {
-                    return Err(GameError::BuildingConflict(
-                        self.name.clone(),
-                        conflict.0.clone(),
-                    ));
-                }
-            }
-
-            // rules for duplicated buildings (eg: Warehouse or Granary)
-            if self.name == vb.building.name {
-                // and allows multiple
-                if !data.rules.allow_multiple {
-                    return Err(GameError::NoMultipleBuildingConstraint(self.name.clone()));
-                }
-                // and has reached max level
-                if self.level != data.rules.max_level {
-                    return Err(GameError::MultipleBuildingMaxNotReached(self.name.clone()));
-                }
-            }
-        }
-
-        Ok(())
     }
 
     pub fn calculate_build_time_secs(&self, server_speed: &i8, mb_level: &u8) -> u32 {
@@ -227,35 +144,32 @@ impl Building {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 /// (lumber, clay, iron, crop, upkeep, culture_points, value, time)
-struct BuildingValueData(u32, u32, u32, u32, u32, u16, u32, u32);
+pub struct BuildingValueData(u32, u32, u32, u32, u32, u16, u32, u32);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-enum BuildingConstraint {
+pub enum BuildingConstraint {
     OnlyCapital,
     NonCapital,
 }
 
 #[derive(Debug, Clone)]
-struct BuildingRequirement(BuildingName, u8);
+pub struct BuildingConflict(pub BuildingName);
 
 #[derive(Debug, Clone)]
-struct BuildingConflict(BuildingName);
-
-#[derive(Debug, Clone)]
-struct BuildingRules {
-    requirements: &'static [BuildingRequirement],
-    conflicts: &'static [BuildingConflict],
-    tribes: &'static [Tribe],
-    max_level: u8,
-    constraints: &'static [BuildingConstraint],
-    allow_multiple: bool,
+pub struct BuildingRules {
+    pub requirements: &'static [BuildingRequirement],
+    pub conflicts: &'static [BuildingConflict],
+    pub tribes: &'static [Tribe],
+    pub max_level: u8,
+    pub constraints: &'static [BuildingConstraint],
+    pub allow_multiple: bool,
 }
 
 #[derive(Debug, Clone)]
-struct BuildingData {
-    data: &'static [BuildingValueData],
-    group: BuildingGroup,
-    rules: BuildingRules,
+pub struct BuildingData {
+    pub data: &'static [BuildingValueData],
+    pub group: BuildingGroup,
+    pub rules: BuildingRules,
 }
 
 /// Returns cumulative population and culture points for a given level.
@@ -284,51 +198,51 @@ fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -
     (cumulative_pop, cumulative_cp)
 }
 
-fn get_building_data(name: &BuildingName) -> Result<BuildingData, GameError> {
+pub fn get_building_data(name: &BuildingName) -> Result<&BuildingData, GameError> {
     match name {
-        BuildingName::Woodcutter => Ok(WOODCUTTER.clone()),
-        BuildingName::ClayPit => Ok(CLAY_PIT.clone()),
-        BuildingName::IronMine => Ok(IRON_MINE.clone()),
-        BuildingName::Cropland => Ok(CROPLAND.clone()),
-        BuildingName::Sawmill => Ok(SAWMILL.clone()),
-        BuildingName::Brickyard => Ok(BRICKYARD.clone()),
-        BuildingName::IronFoundry => Ok(IRON_FOUNDRY.clone()),
-        BuildingName::GrainMill => Ok(GRAIN_MILL.clone()),
-        BuildingName::Bakery => Ok(BAKERY.clone()),
-        BuildingName::Warehouse => Ok(WAREHOUSE.clone()),
-        BuildingName::Granary => Ok(GRANARY.clone()),
-        BuildingName::Smithy => Ok(SMITHY.clone()),
-        BuildingName::MainBuilding => Ok(MAIN_BUILDING.clone()),
-        BuildingName::RallyPoint => Ok(RALLY_POINT.clone()),
-        BuildingName::TournamentSquare => Ok(TOURNAMENT_SQUARE.clone()),
-        BuildingName::Marketplace => Ok(MARKETPLACE.clone()),
-        BuildingName::Embassy => Ok(EMBASSY.clone()),
-        BuildingName::Barracks => Ok(BARRACKS.clone()),
-        BuildingName::Stable => Ok(STABLE.clone()),
-        BuildingName::Workshop => Ok(WORKSHOP.clone()),
-        BuildingName::Academy => Ok(ACADEMY.clone()),
-        BuildingName::Cranny => Ok(CRANNY.clone()),
-        BuildingName::TownHall => Ok(TOWN_HALL.clone()),
-        BuildingName::Residence => Ok(RESIDENCE.clone()),
-        BuildingName::Palace => Ok(PALACE.clone()),
-        BuildingName::Treasury => Ok(TREASURY.clone()),
-        BuildingName::TradeOffice => Ok(TRADE_OFFICE.clone()),
-        BuildingName::GreatBarracks => Ok(GREAT_BARRACKS.clone()),
-        BuildingName::GreatStable => Ok(GREAT_STABLE.clone()),
-        BuildingName::Palisade => Ok(PALISADE.clone()),
-        BuildingName::EarthWall => Ok(EARTH_WALL.clone()),
-        BuildingName::CityWall => Ok(CITY_WALL.clone()),
-        BuildingName::Brewery => Ok(BREWERY.clone()),
-        BuildingName::StonemansionLodge => Ok(STONEMANSION_LODGE.clone()),
-        BuildingName::Trapper => Ok(TRAPPER.clone()),
-        BuildingName::HeroMansion => Ok(HERO_MANSION.clone()),
-        BuildingName::GreatWorkshop => Ok(GREAT_WORKSHOP.clone()),
-        BuildingName::GreatGranary => Ok(GREAT_GRANARY.clone()),
-        BuildingName::GreatWarehouse => Ok(GREAT_WAREHOUSE.clone()),
-        BuildingName::HorseDrinkingTrough => Ok(HORSE_DRINKING_TROUGH.clone()),
-        BuildingName::WonderOfTheWorld => Ok(WONDER_OF_THW_WORLD.clone()),
+        BuildingName::Woodcutter => Ok(&WOODCUTTER),
+        BuildingName::ClayPit => Ok(&CLAY_PIT),
+        BuildingName::IronMine => Ok(&IRON_MINE),
+        BuildingName::Cropland => Ok(&CROPLAND),
+        BuildingName::Sawmill => Ok(&SAWMILL),
+        BuildingName::Brickyard => Ok(&BRICKYARD),
+        BuildingName::IronFoundry => Ok(&IRON_FOUNDRY),
+        BuildingName::GrainMill => Ok(&GRAIN_MILL),
+        BuildingName::Bakery => Ok(&BAKERY),
+        BuildingName::Warehouse => Ok(&WAREHOUSE),
+        BuildingName::Granary => Ok(&GRANARY),
+        BuildingName::Smithy => Ok(&SMITHY),
+        BuildingName::MainBuilding => Ok(&MAIN_BUILDING),
+        BuildingName::RallyPoint => Ok(&RALLY_POINT),
+        BuildingName::TournamentSquare => Ok(&TOURNAMENT_SQUARE),
+        BuildingName::Marketplace => Ok(&MARKETPLACE),
+        BuildingName::Embassy => Ok(&EMBASSY),
+        BuildingName::Barracks => Ok(&BARRACKS),
+        BuildingName::Stable => Ok(&STABLE),
+        BuildingName::Workshop => Ok(&WORKSHOP),
+        BuildingName::Academy => Ok(&ACADEMY),
+        BuildingName::Cranny => Ok(&CRANNY),
+        BuildingName::TownHall => Ok(&TOWN_HALL),
+        BuildingName::Residence => Ok(&RESIDENCE),
+        BuildingName::Palace => Ok(&PALACE),
+        BuildingName::Treasury => Ok(&TREASURY),
+        BuildingName::TradeOffice => Ok(&TRADE_OFFICE),
+        BuildingName::GreatBarracks => Ok(&GREAT_BARRACKS),
+        BuildingName::GreatStable => Ok(&GREAT_STABLE),
+        BuildingName::Palisade => Ok(&PALISADE),
+        BuildingName::EarthWall => Ok(&EARTH_WALL),
+        BuildingName::CityWall => Ok(&CITY_WALL),
+        BuildingName::Brewery => Ok(&BREWERY),
+        BuildingName::StonemansionLodge => Ok(&STONEMANSION_LODGE),
+        BuildingName::Trapper => Ok(&TRAPPER),
+        BuildingName::HeroMansion => Ok(&HERO_MANSION),
+        BuildingName::GreatWorkshop => Ok(&GREAT_WORKSHOP),
+        BuildingName::GreatGranary => Ok(&GREAT_GRANARY),
+        BuildingName::GreatWarehouse => Ok(&GREAT_WAREHOUSE),
+        BuildingName::HorseDrinkingTrough => Ok(&HORSE_DRINKING_TROUGH),
+        BuildingName::WonderOfTheWorld => Ok(&WONDER_OF_THW_WORLD),
         // FIXME: artifacts and construction plans deserve another category
-        BuildingName::AncientConstructionPlan => Ok(WONDER_OF_THW_WORLD.clone()),
+        BuildingName::AncientConstructionPlan => Ok(&WONDER_OF_THW_WORLD),
     }
 }
 

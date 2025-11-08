@@ -99,7 +99,7 @@ pub mod tests {
                 .get_by_id(reinforcer_village.id)
                 .await?;
             assert!(
-                home_village.army.is_none(),
+                home_village.army().is_none(),
                 "Home village army should be None"
             );
             assert!(
@@ -162,7 +162,7 @@ pub mod tests {
                 "Target village should have reinforcements"
             );
             assert_eq!(
-                reinforcer_village.army.is_none(),
+                reinforcer_village.army().is_none(),
                 true,
                 "Reinforcer village shouldn't have army at home"
             );

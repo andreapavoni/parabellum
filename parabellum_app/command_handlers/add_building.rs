@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::{GameError, Result};
-use parabellum_game::models::buildings::Building;
+use parabellum_core::Result;
 
 use crate::{
     config::Config,
@@ -28,50 +27,27 @@ impl AddBuildingCommandHandler {
 impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
     async fn handle(
         &self,
-        command: AddBuilding,
+        cmd: AddBuilding,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
     ) -> Result<()> {
         let villages_repo = uow.villages();
 
-        let mut village = villages_repo.get_by_id(command.village_id).await?;
-
-        if village.buildings.len() == 40 {
-            return Err(GameError::VillageSlotsFull.into());
-        }
-        if village.get_building_by_slot_id(command.slot_id).is_some() {
-            return Err(GameError::SlotOccupied {
-                slot_id: command.slot_id,
-            }
-            .into());
-        }
-
-        let building = Building::new(command.name.clone(), config.speed);
-
-        Building::validate_build(
-            &building,
-            &village.tribe,
-            &village.buildings,
-            village.is_capital,
-        )?;
-
-        let cost = building.cost();
-        village.deduct_resources(&cost.resources)?;
+        let mut village = villages_repo.get_by_id(cmd.village_id).await?;
+        let build_time_secs =
+            village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
         villages_repo.save(&village).await?;
 
         let payload = AddBuildingTask {
             village_id: village.id as i32,
-            slot_id: command.slot_id,
-            name: building.clone().name,
+            slot_id: cmd.slot_id,
+            name: cmd.name,
         };
-
-        let mb_level = village.get_main_building_level();
-
         let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
         let new_job = Job::new(
-            command.player_id,
-            command.village_id as i32,
-            building.calculate_build_time_secs(&config.speed, &mb_level) as i64,
+            cmd.player_id,
+            cmd.village_id as i32,
+            build_time_secs as i64,
             job_payload,
         );
         uow.jobs().add(&new_job).await?;
@@ -82,8 +58,9 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_core::GameError;
     use parabellum_game::{
-        models::village::Village,
+        models::{buildings::Building, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
@@ -245,10 +222,8 @@ mod tests {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (player, mut village, config) = setup_village(&config);
 
-        // Remove Rally Point (requirement for Barracks)
-        village
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::RallyPoint);
+        // Remove Rally Point at slot 39 (requirement for Barracks)
+        village.remove_building_at_slot(39, config.speed).unwrap();
 
         let village_id = village.id;
         let player_id = player.id;

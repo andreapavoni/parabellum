@@ -41,13 +41,11 @@ impl JobHandler for TrainUnitsJobHandler {
         let mut village = village_repo.get_by_id(village_id).await?;
 
         let mut village_army = village
-            .army
-            .take()
-            .unwrap_or(Army::new_village_army(&village));
+            .army()
+            .map_or(Army::new_village_army(&village), |a| a.clone());
 
         village_army.add_unit(self.payload.unit.clone(), 1)?;
-        village.army = Some(village_army.clone());
-        village.update_state();
+        village.set_army(Some(&village_army))?;
 
         army_repo.save(&village_army).await?;
         village_repo.save(&village).await?;
@@ -59,13 +57,10 @@ impl JobHandler for TrainUnitsJobHandler {
             };
 
             let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&next_payload)?);
-            let time_per_unit =
-                (self.payload.time_per_unit as f64 / ctx.config.speed as f64).floor() as i64;
-
             let next_job = Job::new(
                 player_id,
                 village_id as i32,
-                time_per_unit, // Schedule for one unit's time
+                self.payload.time_per_unit as i64, // Schedule for one unit's time
                 job_payload,
             );
 
@@ -142,7 +137,7 @@ mod tests {
         assert_handler_success(result);
 
         let final_village = context.uow.villages().get_by_id(village_id).await.unwrap();
-        let army = final_village.army.expect("Village should have an army");
+        let army = final_village.army().expect("Village should have an army");
         assert_eq!(army.units[0], 1, "Should have trained exactly 1 unit");
 
         let saved_army = context.uow.armies().get_by_id(army.id).await.unwrap();
@@ -196,7 +191,7 @@ mod tests {
 
         // Check that the unit was still trained
         let final_village = context.uow.villages().get_by_id(village_id).await.unwrap();
-        let army = final_village.army.expect("Village should have an army");
+        let army = final_village.army().expect("Village should have an army");
         assert_eq!(army.units[0], 1, "Should have trained the last unit");
     }
 }

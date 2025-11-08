@@ -1,4 +1,4 @@
-use sqlx::{types::Json, Postgres, Transaction};
+use sqlx::{Postgres, Transaction, types::Json};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -232,7 +232,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             village.player_id,
             village.name,
             Json(&village.position) as _,
-            Json(&village.buildings) as _,
+            Json(&village.buildings()) as _,
             Json(&village.production) as _,
             Json(&village.stocks()) as _,
             Json(&village.smithy()) as _,

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::common::MerchantStats;
+use crate::{buildings::BuildingRequirement, common::MerchantStats};
 
 use super::{
-    army::{Unit, UnitGroup, UnitName, UnitRequirement, UnitRole},
+    army::{Unit, UnitGroup, UnitName, UnitRole},
     buildings::BuildingName,
     common::{Cost, ResearchCost, ResourceGroup},
 };
@@ -34,6 +34,11 @@ impl Tribe {
         self.get_units()
             .iter()
             .position(|unit| unit.name == *unit_name)
+    }
+
+    /// Returns the army unit for the given unit name in actual tribe.
+    pub fn get_unit_by_name(&self, unit_name: &UnitName) -> Option<&Unit> {
+        self.get_units().iter().find(|unit| unit.name == *unit_name)
     }
 
     /// Returns the wall defense factor for actual tribe.
@@ -91,10 +96,7 @@ static ROMAN_UNITS: TribeUnits = [
             resources: ResourceGroup::new(0, 0, 0, 0),
             time: 0,
         },
-        requirements: &[UnitRequirement {
-            building: BuildingName::Barracks,
-            level: 1,
-        }],
+        requirements: &[BuildingRequirement(BuildingName::Barracks, 1)],
     },
     Unit {
         name: UnitName::Praetorian,
@@ -115,14 +117,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 8400,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 1,
-            },
-            UnitRequirement {
-                building: BuildingName::Smithy,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 1),
+            BuildingRequirement(BuildingName::Smithy, 1),
         ],
     },
     Unit {
@@ -144,14 +140,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 9000,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Smithy,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Smithy, 1),
         ],
     },
     Unit {
@@ -173,14 +163,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 6900,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 1),
         ],
     },
     Unit {
@@ -202,14 +186,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 11700,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 5),
         ],
     },
     Unit {
@@ -231,14 +209,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 15000,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 5),
         ],
     },
     Unit {
@@ -260,14 +232,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 15600,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 10,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 10),
+            BuildingRequirement(BuildingName::Workshop, 1),
         ],
     },
     Unit {
@@ -289,14 +255,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 28800,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 15,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Workshop, 10),
         ],
     },
     Unit {
@@ -318,14 +278,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 24475,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 20,
-            },
-            UnitRequirement {
-                building: BuildingName::RallyPoint,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 20),
+            BuildingRequirement(BuildingName::RallyPoint, 10),
         ],
     },
     Unit {
@@ -369,10 +323,7 @@ static TEUTON_UNITS: TribeUnits = [
             resources: ResourceGroup::new(0, 0, 0, 0),
             time: 0,
         },
-        requirements: &[UnitRequirement {
-            building: BuildingName::Barracks,
-            level: 1,
-        }],
+        requirements: &[BuildingRequirement(BuildingName::Barracks, 1)],
     },
     Unit {
         name: UnitName::Spearman,
@@ -393,14 +344,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 5760,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 1,
-            },
-            UnitRequirement {
-                building: BuildingName::Barracks,
-                level: 3,
-            },
+            BuildingRequirement(BuildingName::Academy, 1),
+            BuildingRequirement(BuildingName::Barracks, 3),
         ],
     },
     Unit {
@@ -422,14 +367,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 6300,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 3,
-            },
-            UnitRequirement {
-                building: BuildingName::Smithy,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 3),
+            BuildingRequirement(BuildingName::Smithy, 1),
         ],
     },
     Unit {
@@ -451,14 +390,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 6000,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 1,
-            },
-            UnitRequirement {
-                building: BuildingName::MainBuilding,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 1),
+            BuildingRequirement(BuildingName::MainBuilding, 5),
         ],
     },
     Unit {
@@ -480,14 +413,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 10800,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 3,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 3),
         ],
     },
     Unit {
@@ -509,14 +436,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 13500,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 15,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Stable, 10),
         ],
     },
     Unit {
@@ -538,14 +459,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 14400,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 10,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 10),
+            BuildingRequirement(BuildingName::Workshop, 1),
         ],
     },
     Unit {
@@ -567,14 +482,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 28800,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 15,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Workshop, 10),
         ],
     },
     Unit {
@@ -596,14 +505,8 @@ static TEUTON_UNITS: TribeUnits = [
             time: 19425,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 20,
-            },
-            UnitRequirement {
-                building: BuildingName::RallyPoint,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 20),
+            BuildingRequirement(BuildingName::RallyPoint, 5),
         ],
     },
     Unit {
@@ -647,10 +550,7 @@ static GAUL_UNITS: TribeUnits = [
             resources: ResourceGroup::new(0, 0, 0, 0),
             time: 0,
         },
-        requirements: &[UnitRequirement {
-            building: BuildingName::Barracks,
-            level: 1,
-        }],
+        requirements: &[BuildingRequirement(BuildingName::Barracks, 1)],
     },
     Unit {
         name: UnitName::Swordsman,
@@ -671,14 +571,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 7200,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 3,
-            },
-            UnitRequirement {
-                building: BuildingName::Smithy,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 3),
+            BuildingRequirement(BuildingName::Smithy, 1),
         ],
     },
     Unit {
@@ -700,14 +594,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 3501,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 1),
         ],
     },
     Unit {
@@ -729,14 +617,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 11100,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 3,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 3),
         ],
     },
     Unit {
@@ -758,14 +640,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 11400,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 5,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 5),
+            BuildingRequirement(BuildingName::Stable, 5),
         ],
     },
     Unit {
@@ -787,14 +663,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 13500,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 15,
-            },
-            UnitRequirement {
-                building: BuildingName::Stable,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Stable, 10),
         ],
     },
     Unit {
@@ -816,14 +686,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 16800,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 10,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 1,
-            },
+            BuildingRequirement(BuildingName::Academy, 10),
+            BuildingRequirement(BuildingName::Workshop, 1),
         ],
     },
     Unit {
@@ -845,14 +709,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 28800,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 15,
-            },
-            UnitRequirement {
-                building: BuildingName::Workshop,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Workshop, 10),
         ],
     },
     Unit {
@@ -874,14 +732,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 24475,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 20,
-            },
-            UnitRequirement {
-                building: BuildingName::RallyPoint,
-                level: 10,
-            },
+            BuildingRequirement(BuildingName::Academy, 20),
+            BuildingRequirement(BuildingName::RallyPoint, 10),
         ],
     },
     Unit {
@@ -903,14 +755,8 @@ static GAUL_UNITS: TribeUnits = [
             time: 6000,
         },
         requirements: &[
-            UnitRequirement {
-                building: BuildingName::Academy,
-                level: 1,
-            },
-            UnitRequirement {
-                building: BuildingName::MainBuilding,
-                level: 5,
-            },
+            BuildingRequirement(BuildingName::Academy, 1),
+            BuildingRequirement(BuildingName::MainBuilding, 5),
         ],
     },
 ];

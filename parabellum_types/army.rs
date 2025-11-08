@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    buildings::BuildingName,
+    buildings::{BuildingName, BuildingRequirement},
     common::{Cost, ResearchCost},
 };
 
@@ -17,7 +17,7 @@ pub struct Unit {
     pub capacity: u32,
     pub cost: Cost,
     pub research_cost: ResearchCost,
-    pub requirements: &'static [UnitRequirement],
+    pub requirements: &'static [BuildingRequirement],
 }
 
 impl Unit {
@@ -27,7 +27,7 @@ impl Unit {
                 * ((1.007f64).powi(smithy_level.try_into().unwrap()) - 1.0).floor()) as u32
     }
 
-    pub fn get_requirements(&self) -> &'static [UnitRequirement] {
+    pub fn get_requirements(&self) -> &'static [BuildingRequirement] {
         self.requirements
     }
 }

@@ -3,9 +3,6 @@ name = "parabellum_server"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-path = "lib.rs"
-
 [[bin]]
 name = "parabellum"
 path = "main.rs"

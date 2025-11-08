@@ -1,5 +1,4 @@
-use parabellum_core::{ApplicationError, GameError};
-use parabellum_game::models::smithy::smithy_upgrade_cost_for_unit;
+use parabellum_core::ApplicationError;
 
 use crate::{
     config::Config,
@@ -24,46 +23,15 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
         &self,
         command: ResearchSmithy,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
         let mut village = village_repo.get_by_id(command.village_id).await?;
 
-        let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
-        let tribe_units = village.tribe.get_units();
-        let current_level = village.smithy()[unit_idx];
-
-        let unit = tribe_units
-            .get(unit_idx as usize)
-            .ok_or_else(|| ApplicationError::Game(GameError::InvalidUnitIndex(unit_idx as u8)))?;
-
-        for req in unit.get_requirements() {
-            if !village
-                .buildings
-                .iter()
-                .any(|b| b.building.name == req.building)
-            {
-                return Err(ApplicationError::Game(
-                    GameError::BuildingRequirementsNotMet {
-                        building: req.building.clone(),
-                        level: req.level,
-                    },
-                ));
-            }
-        }
-
-        if !village.academy_research()[unit_idx] && unit.research_cost.time > 0 {
-            return Err(ApplicationError::Game(GameError::UnitNotResearched(
-                command.unit,
-            )));
-        }
-
-        let research_cost = smithy_upgrade_cost_for_unit(&command.unit, current_level)?;
-        village.deduct_resources(&research_cost.resources)?;
+        let research_time = village.init_smithy_research(&command.unit, config.speed)? as i64;
         village_repo.save(&village).await?;
 
-        let research_time = research_cost.time;
         let payload = ResearchSmithyTask { unit: command.unit };
         let job_payload = JobPayload::new("ResearchSmithy", serde_json::to_value(&payload)?);
         let new_job = Job::new(
@@ -80,8 +48,9 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_core::GameError;
     use parabellum_game::{
-        models::{buildings::Building, village::Village},
+        models::{buildings::Building, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
@@ -228,20 +197,15 @@ mod tests {
     async fn test_smithy_handler_requirements_not_met() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (_player, mut village, config) = setup_village_for_smithy();
-
-        village
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::Smithy);
-
         let village_repo = mock_uow.villages();
 
-        let village_id = village.id;
+        village.remove_building_at_slot(24, config.speed).unwrap();
         village_repo.save(&village).await.unwrap();
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
             unit: UnitName::Praetorian,
-            village_id,
+            village_id: village.id,
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;

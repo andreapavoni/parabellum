@@ -238,10 +238,7 @@ mod tests {
         let config = Arc::new(Config::from_env());
         let (mock_uow, player_a, mut village_a, village_b) = setup_test_villages(&config).await;
 
-        village_a
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::Marketplace);
-        village_a.update_state();
+        village_a.remove_building_at_slot(25, config.speed).unwrap();
         mock_uow.villages().save(&village_a).await.unwrap();
 
         let handler = SendResourcesCommandHandler::new();

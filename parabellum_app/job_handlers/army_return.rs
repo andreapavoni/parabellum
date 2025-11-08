@@ -6,7 +6,6 @@ use crate::jobs::{
 
 use async_trait::async_trait;
 use parabellum_core::ApplicationError;
-use parabellum_game::models::army::Army;
 use tracing::{info, instrument};
 
 pub struct ArmyReturnJobHandler {
@@ -40,17 +39,10 @@ impl JobHandler for ArmyReturnJobHandler {
 
         let mut village = village_repo.get_by_id(village_id).await?;
         let returning_army = army_repo.get_by_id(self.payload.army_id).await?;
+        village.merge_army(&returning_army)?;
 
-        let mut village_army = village
-            .army
-            .take()
-            .unwrap_or(Army::new_village_army(&village));
-
-        village_army.merge(&returning_army)?;
-        army_repo.save(&village_army).await?;
-        village.army = Some(village_army);
+        army_repo.save(&village.army().unwrap()).await?;
         army_repo.remove(returning_army.id).await?;
-
         village.store_resources(self.payload.resources.clone());
         village_repo.save(&village).await?;
 
@@ -107,7 +99,7 @@ mod tests {
             units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             ..Default::default()
         });
-        village.army = Some(home_army.clone());
+        village.set_army(Some(&home_army)).unwrap();
 
         // Returning army has 5 legionnaires
         let returning_army = army_factory(ArmyFactoryOptions {
@@ -142,10 +134,7 @@ mod tests {
 
         // Check village army (should be 10 + 5 = 15)
         let final_village = context.uow.villages().get_by_id(village.id).await.unwrap();
-        let final_home_army = final_village
-            .clone()
-            .army
-            .expect("Village should have an army");
+        let final_home_army = final_village.army().expect("Village should have an army");
         assert_eq!(
             final_home_army.units[0], 15,
             "Home army should have 15 units"

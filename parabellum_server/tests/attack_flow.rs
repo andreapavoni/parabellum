@@ -126,7 +126,7 @@ pub mod tests {
                     .get_by_id(attacker_village.id)
                     .await?;
                 assert!(
-                    home_village.army.is_none(),
+                    home_village.army().is_none(),
                     "Home village army should be None (all troops sent)"
                 );
                 assert!(
@@ -217,10 +217,10 @@ pub mod tests {
                 .get_by_id(attacker_village.id)
                 .await?;
             assert!(
-                home_village.army.is_some(),
+                home_village.army().is_some(),
                 "Home army should be back in village"
             );
-            let home_army = home_village.army.unwrap();
+            let home_army = home_village.army().unwrap();
             assert_eq!(
                 home_army.units[0], 100,
                 "Home army should have 100 troops (assuming 0 losses for simplicity)"

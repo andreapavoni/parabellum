@@ -24,7 +24,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         &self,
         command: TrainUnits,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
@@ -60,7 +60,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         village.deduct_resources(&total_cost)?;
         village_repo.save(&village).await?;
 
-        let time_per_unit = cost_per_unit.time;
+        let time_per_unit = (cost_per_unit.time as f64 / config.speed as f64).floor() as i64;
         let building = village
             .get_building_by_name(BuildingName::Barracks)
             .ok_or_else(|| {
@@ -96,10 +96,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 #[cfg(test)]
 mod tests {
     use parabellum_game::{
-        models::{
-            buildings::Building,
-            village::{Village, VillageBuilding},
-        },
+        models::{buildings::Building, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, valley_factory,
             village_factory,
@@ -134,11 +131,10 @@ mod tests {
         village.set_academy_research_for_test(&UnitName::Legionnaire, true);
 
         // Add barracks
-        let barracks = VillageBuilding {
-            slot_id: 20,
-            building: Building::new(BuildingName::Barracks, config.speed),
-        };
-        village.buildings.push(barracks);
+        let barracks = Building::new(BuildingName::Barracks, config.speed)
+            .at_level(10, config.speed)
+            .unwrap();
+        village.add_building_at_slot(barracks, 20).unwrap();
 
         // Add resources
         village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
@@ -252,22 +248,16 @@ mod tests {
 
         let (player, mut village, config) = setup_village_with_barracks();
 
-        village
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::Barracks);
-
-        let village_id = village.id;
+        village.remove_building_at_slot(20, config.speed).unwrap();
         village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
-
         let command = TrainUnits {
             player_id: player.id,
-            village_id: village_id,
+            village_id: village.id,
             unit_idx: 0,
             quantity: 1,
         };
-
         let result = handler.handle(command, &mock_uow, &config).await;
 
         assert!(result.is_err(), "Handler should return an error");
@@ -285,18 +275,13 @@ mod tests {
 
         let (player, mut village, config) = setup_village_with_barracks();
 
-        village
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::Barracks);
-
-        let village_id = village.id;
+        village.remove_building_at_slot(20, config.speed).unwrap();
         village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
-
         let command = TrainUnits {
             player_id: player.id,
-            village_id: village_id,
+            village_id: village.id,
             unit_idx: 1,
             quantity: 1,
         };

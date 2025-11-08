@@ -98,7 +98,7 @@ impl JobHandler for AttackJobHandler {
         ctx.uow.villages().save(&defender_village).await?;
 
         // Update armies
-        if let Some(army) = defender_village.army {
+        if let Some(army) = defender_village.army() {
             ctx.uow.armies().save(&army).await?;
         }
 

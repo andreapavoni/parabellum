@@ -119,7 +119,7 @@ pub mod tests {
 
             // *** QUESTA È L'ASSERTION CORRETTA ***
             assert!(
-                scout_village.army.is_none(),
+                scout_village.army().is_none(),
                 "Scout village shouldn't have army at home (all troops sent)"
             );
 
@@ -199,11 +199,11 @@ pub mod tests {
             let home_village = uow_assert3.villages().get_by_id(scout_village.id).await?;
 
             assert_eq!(
-                home_village.army.is_some(),
+                home_village.army().is_some(),
                 true,
                 "Army should be returned at home"
             );
-            let home_army = home_village.army.clone().unwrap();
+            let home_army = home_village.army().clone().unwrap();
             assert_eq!(
                 home_army.units[3], 10,
                 "Expected 10 scouts at home, got {}",

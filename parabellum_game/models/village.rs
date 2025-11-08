@@ -5,13 +5,19 @@ use uuid::Uuid;
 use parabellum_core::GameError;
 use parabellum_types::{
     army::UnitName,
-    buildings::{BuildingGroup, BuildingName},
+    buildings::{BuildingGroup, BuildingName, BuildingRequirement},
     common::{Player, ResourceGroup},
     map::Position,
     tribe::Tribe,
 };
 
-use crate::battle::BattleReport;
+use crate::{
+    battle::BattleReport,
+    models::{
+        buildings::{BuildingConstraint, get_building_data},
+        smithy::smithy_upgrade_cost_for_unit,
+    },
+};
 
 use super::{
     army::Army,
@@ -37,10 +43,10 @@ pub struct Village {
     pub player_id: Uuid,
     pub position: Position,
     pub tribe: Tribe,
-    pub buildings: Vec<VillageBuilding>,
+    buildings: Vec<VillageBuilding>,
     pub oases: Vec<Oasis>,
     pub population: u32,
-    pub army: Option<Army>,
+    army: Option<Army>,
     pub reinforcements: Vec<Army>,
     pub deployed_armies: Vec<Army>,
     pub loyalty: u8,
@@ -149,6 +155,86 @@ impl Village {
         }
     }
 
+    /// Prepares for adding a new building, does validations, and returns the calculated construction times.
+    pub fn init_building_construction(
+        &mut self,
+        slot_id: u8,
+        name: BuildingName,
+        server_speed: i8,
+    ) -> Result<u32, GameError> {
+        if self.buildings.len() == 40 {
+            return Err(GameError::VillageSlotsFull.into());
+        }
+        if self.get_building_by_slot_id(slot_id).is_some() {
+            return Err(GameError::SlotOccupied { slot_id }.into());
+        }
+
+        let building = Building::new(name, server_speed);
+        self.validate_building_construction(&building)?;
+
+        self.deduct_resources(&building.cost().resources)?;
+        let mb_level = self.get_main_building_level();
+        Ok(building.calculate_build_time_secs(&server_speed, &mb_level))
+    }
+
+    /// Prepares for starting a research in academy, does validations, and returns research time.
+    pub fn init_academy_research(
+        &mut self,
+        unit: &UnitName,
+        server_speed: i8,
+    ) -> Result<u32, GameError> {
+        let unit_idx = self.tribe.get_unit_idx_by_name(unit).unwrap();
+
+        if self.academy_research()[unit_idx as usize] {
+            return Err(GameError::UnitAlreadyResearched(unit.clone()).into());
+        }
+
+        let tribe = self.tribe.clone();
+        let unit_data = tribe
+            .get_unit_by_name(unit)
+            .ok_or_else(|| GameError::UnitNotFound(unit.clone()))?;
+        self.validate_building_requirements(unit_data.requirements)?;
+
+        let research_cost = &unit_data.research_cost;
+        self.deduct_resources(&research_cost.resources)?;
+        let research_time_secs = (research_cost.time as f64 / server_speed as f64).floor() as u32;
+
+        Ok(research_time_secs)
+    }
+
+    pub fn init_smithy_research(
+        &mut self,
+        unit_name: &UnitName,
+        server_speed: i8,
+    ) -> Result<u32, GameError> {
+        let unit_idx = self.tribe.get_unit_idx_by_name(unit_name).unwrap();
+        let tribe_units = self.tribe.get_units();
+        let current_level = self.smithy()[unit_idx];
+
+        let unit = tribe_units
+            .get(unit_idx as usize)
+            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
+
+        for req in unit.get_requirements() {
+            if !self.buildings.iter().any(|b| b.building.name == req.0) {
+                return Err(GameError::BuildingRequirementsNotMet {
+                    building: req.0.clone(),
+                    level: req.1,
+                });
+            }
+        }
+
+        if !self.academy_research()[unit_idx] && unit.research_cost.time > 0 {
+            return Err(GameError::UnitNotResearched(unit_name.clone()));
+        }
+
+        let research_cost = smithy_upgrade_cost_for_unit(&unit_name, current_level)?;
+        self.deduct_resources(&research_cost.resources)?;
+        let research_time_secs = (research_cost.time as f64 / server_speed as f64).floor() as u32;
+
+        Ok(research_time_secs)
+    }
+
     /// Returns a reference to the smithy upgrades for persistence (serialization).
     pub fn smithy(&self) -> &SmithyUpgrades {
         &self.smithy
@@ -163,6 +249,12 @@ impl Village {
     /// This should primarily be used by the repository layer.
     pub fn stocks(&self) -> &VillageStocks {
         &self.stocks
+    }
+
+    /// Returns a reference to the village buildings for persistence (serialization).
+    /// This should primarily be used by the repository layer.
+    pub fn buildings(&self) -> &Vec<VillageBuilding> {
+        &self.buildings
     }
 
     /// Checks if the village has enough resources.
@@ -201,7 +293,7 @@ impl Village {
         self.stocks.granary_capacity
     }
 
-    /// Build a new building on a given slot.
+    /// Builds a new building on a given slot.
     pub fn add_building_at_slot(
         &mut self,
         building: Building,
@@ -335,6 +427,25 @@ impl Village {
             Some(b) => 1.0 + b.building.level as f64 * 0.1,
             None => 1.0,
         }
+    }
+
+    pub fn army(&self) -> Option<&Army> {
+        self.army.as_ref()
+    }
+
+    pub fn set_army(&mut self, army: Option<&Army>) -> Result<(), GameError> {
+        self.army = army.map(|a| a.clone());
+        Ok(())
+    }
+
+    pub fn merge_army(&mut self, army: &Army) -> Result<(), GameError> {
+        let mut home_army = self
+            .army()
+            .map_or(Army::new_village_army(self), |a| a.clone());
+        home_army.merge(army)?;
+        self.set_army(Some(&home_army))?;
+        self.update_state();
+        Ok(())
     }
 
     /// Applies combat losses to the village's army and reinforcements based on the battle report.
@@ -517,15 +628,6 @@ impl Village {
         Ok(())
     }
 
-    /// Sets total merchants count based on Marketplace level.
-    fn update_merchants_count(&mut self) {
-        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
-            self.total_merchants = marketplace.building.level;
-        } else {
-            self.total_merchants = 0;
-        }
-    }
-
     #[cfg(any(test, feature = "test-utils"))]
     /// **[TEST ONLY]** Set academy research for specific unit.
     pub fn set_academy_research_for_test(&mut self, unit: &UnitName, is_researched: bool) {
@@ -540,6 +642,103 @@ impl Village {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
             self.smithy[idx] = level.min(20); // Assicura di non superare il max
         }
+    }
+
+    /// Sets total merchants count based on Marketplace level.
+    fn update_merchants_count(&mut self) {
+        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
+            self.total_merchants = marketplace.building.level;
+        } else {
+            self.total_merchants = 0;
+        }
+    }
+
+    /// Validates over a list of building requirements.
+    pub fn validate_building_requirements(
+        &self,
+        requirements: &'static [BuildingRequirement],
+    ) -> Result<(), GameError> {
+        for req in requirements {
+            if !self
+                .buildings
+                .iter()
+                .any(|vb| vb.building.name == req.0 && vb.building.level >= req.1)
+            {
+                return Err(GameError::BuildingRequirementsNotMet {
+                    building: req.0.clone(),
+                    level: req.1,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Applies validations to build a construction.
+    pub fn validate_building_construction(&self, building: &Building) -> Result<(), GameError> {
+        let data = get_building_data(&building.name)?;
+
+        // tribe constraints
+        if !data.rules.tribes.is_empty() {
+            let ok = data.rules.tribes.contains(&self.tribe);
+            if !ok {
+                return Err(GameError::BuildingTribeMismatch {
+                    building: building.name.clone(),
+                    tribe: self.tribe.clone(),
+                });
+            }
+        }
+
+        // capital/non-capital constraints
+        if self.is_capital
+            && data
+                .rules
+                .constraints
+                .contains(&BuildingConstraint::NonCapital)
+        {
+            return Err(GameError::NonCapitalConstraint(building.name.clone()));
+        }
+
+        if !self.is_capital
+            && data
+                .rules
+                .constraints
+                .contains(&BuildingConstraint::OnlyCapital)
+        {
+            return Err(GameError::CapitalConstraint(building.name.clone()));
+        }
+
+        self.validate_building_requirements(data.rules.requirements)?;
+
+        for vb in self.buildings.iter() {
+            // check if a building has conflicts with other buildings (eg: Palace vs Residence)
+            for conflict in data.rules.conflicts {
+                if vb.building.name == conflict.0 {
+                    return Err(GameError::BuildingConflict(
+                        building.name.clone(),
+                        conflict.0.clone(),
+                    ));
+                }
+            }
+
+            // rules for duplicated buildings (eg: Warehouse or Granary)
+            if building.name == vb.building.name {
+                // and allows multiple
+                if !data.rules.allow_multiple {
+                    return Err(GameError::NoMultipleBuildingConstraint(
+                        building.name.clone(),
+                    ));
+                }
+                // and has reached max level
+                if building.level != data.rules.max_level {
+                    return Err(GameError::MultipleBuildingMaxNotReached(
+                        building.name.clone(),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Updates the village stocks based on the time elapsed since the last update

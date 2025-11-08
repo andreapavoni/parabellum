@@ -122,15 +122,10 @@ impl Battle {
 
         let (mut total_defender_infantry_points, mut total_defender_cavalry_points): (u32, u32) =
             self.defender_village
-                .army
-                .clone()
+                .army()
                 .map_or((0, 0), |a| a.defense_points());
 
-        total_defender_immensity += self
-            .defender_village
-            .army
-            .clone()
-            .map_or(0, |a| a.immensity());
+        total_defender_immensity += self.defender_village.army().map_or(0, |a| a.immensity());
 
         for defender_army in self.defender_village.reinforcements.iter() {
             let (defender_infantry_points, defender_cavalry_points) =
@@ -184,11 +179,7 @@ impl Battle {
         let mut morale_bonus = 1.0;
         let total_attacker_population = self.attacker_village.population + self.attacker.upkeep();
 
-        let defender_home_army_upkeep = self
-            .defender_village
-            .army
-            .as_ref()
-            .map_or(0, |a| a.upkeep());
+        let defender_home_army_upkeep = self.defender_village.army().map_or(0, |a| a.upkeep());
         let total_defender_population = self.defender_village.population
             + defender_home_army_upkeep
             + self
@@ -222,8 +213,7 @@ impl Battle {
 
         let (defender_survivors, defender_losses) = self
             .defender_village
-            .army
-            .clone()
+            .army()
             .map_or(([0; 10], [0; 10]), |da| {
                 da.calculate_losses(defender_loss_percentage)
             });
@@ -326,9 +316,9 @@ impl Battle {
                 .collect(),
         };
 
-        let defender_report = if self.defender_village.army.is_some() {
+        let defender_report = if self.defender_village.army().is_some() {
             Some(BattlePartyReport {
-                army_before: self.defender_village.army.clone().unwrap(),
+                army_before: self.defender_village.army().unwrap().clone(),
                 survivors: defender_survivors,
                 losses: defender_losses,
             })
@@ -368,8 +358,7 @@ impl Battle {
 
         let mut total_scout_defense_power = self
             .defender_village
-            .army
-            .clone()
+            .army()
             .map_or(0, |a| a.scouting_defense_points());
         let mut total_defense_scouts = 0;
         for reinforcement in self.defender_village.reinforcements.iter() {
@@ -719,7 +708,9 @@ mod tests {
         let (_defender_player, mut defender_village, defender_home_army) =
             setup_party(Tribe::Teuton, [0, 10, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-        defender_village.army = Some(defender_home_army.clone());
+        defender_village
+            .set_army(Some(&defender_home_army))
+            .unwrap();
         defender_village.update_state();
 
         let battle = Battle::new(

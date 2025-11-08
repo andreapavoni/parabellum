@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::{GameError, Result};
+use parabellum_core::Result;
 
 use crate::{
     config::Config,
@@ -26,68 +26,29 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
         config: &Arc<Config>,
     ) -> Result<()> {
         let village_repo = uow.villages();
+        let job_repo = uow.jobs();
 
         let mut village = village_repo.get_by_id(command.village_id).await?;
-
-        let unit_idx = village.tribe.get_unit_idx_by_name(&command.unit).unwrap();
-
-        // Check requirements
-        if village.academy_research()[unit_idx as usize] {
-            return Err(GameError::UnitAlreadyResearched(command.unit).into());
-        }
-
-        let tribe = village.clone().tribe;
-        let tribe_units = &tribe.get_units();
-        let unit_data = tribe_units
-            .get(unit_idx as usize)
-            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
-
-        for req in unit_data.requirements.iter() {
-            match village
-                .clone()
-                .buildings
-                .iter()
-                .find(|&vb| vb.building.name == req.building && vb.building.level >= req.level)
-            {
-                Some(_) => (),
-                None => {
-                    return Err(GameError::BuildingRequirementsNotMet {
-                        building: req.building.clone(),
-                        level: req.level,
-                    }
-                    .into());
-                }
-            }
-        }
-
-        let research_cost = &unit_data.research_cost;
-        village.deduct_resources(&research_cost.resources)?;
+        let research_time_secs = village.init_academy_research(&command.unit, config.speed)? as i64;
         village_repo.save(&village).await?;
 
-        let time_per_unit_secs = (research_cost.time as f64 / config.speed as f64).floor() as i64;
-
-        let payload = ResearchAcademyTask {
-            unit: unit_data.clone().name,
-        };
-
+        let payload = ResearchAcademyTask { unit: command.unit };
         let job_payload = JobPayload::new("ResearchAcademy", serde_json::to_value(&payload)?);
-        // Schedule the *first* unit to be completed.
         let new_job = Job::new(
             village.player_id,
             command.village_id as i32,
-            time_per_unit_secs as i64,
+            research_time_secs as i64,
             job_payload,
         );
 
-        let job_repo = uow.jobs();
         job_repo.add(&new_job).await?;
-
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use parabellum_core::GameError;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -229,18 +190,13 @@ mod tests {
     async fn test_research_academy_handler_requirements_not_met() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (_player, mut village, config) = setup_village_for_academy();
-
-        village
-            .buildings
-            .retain(|vb| vb.building.name != BuildingName::Smithy);
-
-        let village_id = village.id;
+        village.remove_building_at_slot(24, config.speed).unwrap();
         mock_uow.villages().save(&village).await.unwrap();
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
             unit: UnitName::Praetorian,
-            village_id,
+            village_id: village.id,
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;

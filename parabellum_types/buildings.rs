@@ -7,6 +7,9 @@ pub enum BuildingGroup {
     Military,
 }
 
+#[derive(Debug, Clone)]
+pub struct BuildingRequirement(pub BuildingName, pub u8);
+
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub enum BuildingName {
     Woodcutter,

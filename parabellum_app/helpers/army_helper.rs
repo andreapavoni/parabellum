@@ -31,10 +31,10 @@ pub async fn deploy_army_from_village<'a>(
 
     if home_army.immensity() == 0 {
         army_repo.remove(home_army_id).await?;
-        village.army = None;
+        village.set_army(None)?;
     } else {
         army_repo.save(&home_army).await?;
-        village.army = Some(home_army);
+        village.set_army(Some(&home_army))?;
     }
 
     village.update_state();
