@@ -1,6 +1,7 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
+    use rand::Rng;
 
     use parabellum_db::{
         PostgresArmyRepository, PostgresJobRepository, PostgresMapRepository,
@@ -101,7 +102,7 @@ pub mod tests {
     #[allow(dead_code)]
     pub async fn setup_player_party(
         uow_provider: Arc<dyn UnitOfWorkProvider>,
-        position: Position,
+        position: Option<Position>,
         tribe: Tribe,
         units: TroopSet,
     ) -> Result<(Player, Village, Army)> {
@@ -113,6 +114,12 @@ pub mod tests {
             let player_repo = uow.players();
             let village_repo = uow.villages();
             let army_repo = uow.armies();
+            let position = position.unwrap_or_else(|| {
+                let mut rng = rand::thread_rng();
+                let x = rng.gen_range(1..99);
+                let y = rng.gen_range(1..99);
+                Position { x, y }
+            });
 
             player = player_factory(PlayerFactoryOptions {
                 tribe: Some(tribe.clone()),

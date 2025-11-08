@@ -15,7 +15,7 @@ pub mod tests {
     };
     use parabellum_core::Result;
     use parabellum_db::establish_test_connection_pool;
-    use parabellum_types::{map::Position, tribe::Tribe};
+    use parabellum_types::tribe::Tribe;
 
     use super::test_utils::tests::TestUnitOfWorkProvider;
     use super::test_utils::tests::setup_player_party;
@@ -36,7 +36,7 @@ pub mod tests {
         let (reinforcer_player, reinforcer_village, reinforcing_army) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 10, y: 10 },
+                None,
                 Tribe::Roman,
                 units_to_send.clone(),
             )
@@ -47,7 +47,7 @@ pub mod tests {
         let (_target_player, target_village, _target_army) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 20, y: 20 },
+                None,
                 Tribe::Gaul,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             )

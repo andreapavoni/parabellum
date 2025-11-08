@@ -20,7 +20,6 @@ pub mod tests {
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
-        map::Position,
         tribe::Tribe,
     };
 
@@ -46,7 +45,7 @@ pub mod tests {
         let (attacker_player, attacker_village, attacker_army) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 10, y: 10 },
+                None,
                 Tribe::Roman,
                 units_to_send.clone(),
             )
@@ -57,7 +56,7 @@ pub mod tests {
         let (_defender_player, defender_village, _defender_army) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 20, y: 20 },
+                None,
                 Tribe::Roman,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             )
@@ -262,7 +261,7 @@ pub mod tests {
         (attacker_player, attacker_village, attacker_army) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 10, y: 10 },
+                None,
                 Tribe::Roman,
                 [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
             )
@@ -272,7 +271,7 @@ pub mod tests {
         (_, defender_village, _) = {
             setup_player_party(
                 uow_provider.clone(),
-                Position { x: 20, y: 20 },
+                None,
                 Tribe::Teuton,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             )
