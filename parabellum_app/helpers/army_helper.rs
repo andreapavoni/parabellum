@@ -37,9 +37,7 @@ pub async fn deploy_army_from_village<'a>(
         village.set_army(Some(&home_army))?;
     }
 
-    village.update_state();
     village_repo.save(&village).await?;
-
     army_repo.save(&deployed_army).await?;
 
     Ok((village, deployed_army))

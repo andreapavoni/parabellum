@@ -60,7 +60,6 @@ async fn test_full_build_flow() -> Result<()> {
         village.add_building_at_slot(rally_point, 39).unwrap();
 
         village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
-        village.update_state();
         uow.villages().save(&village).await?;
 
         uow.commit().await?;

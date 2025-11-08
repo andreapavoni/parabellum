@@ -34,9 +34,9 @@ impl JobHandler for ReinforcementJobHandler {
         _job: &'ctx Job,
     ) -> Result<(), ApplicationError> {
         info!("Executing Reinforcement job: Army arriving at village.");
-
         let army_repo = ctx.uow.armies();
         let mut army = army_repo.get_by_id(self.payload.army_id).await?;
+
         army.current_map_field_id = Some(self.payload.village_id as u32);
         army_repo.save(&army).await?;
 

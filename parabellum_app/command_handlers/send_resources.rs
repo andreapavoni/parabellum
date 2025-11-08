@@ -168,22 +168,18 @@ mod tests {
             .at_level(3, config.speed)
             .unwrap();
         village_a.add_building_at_slot(marketplace, 25).unwrap();
-        village_a.update_state();
 
         village_a.store_resources(ResourceGroup(5000, 5000, 5000, 5000));
-        village_a.update_state();
-
         let player_b = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
         });
         let valley_b = valley_factory(Default::default());
-        let mut village_b = village_factory(VillageFactoryOptions {
+        let village_b = village_factory(VillageFactoryOptions {
             player: Some(player_b.clone()),
             valley: Some(valley_b),
             ..Default::default()
         });
-        village_b.update_state();
 
         mock_uow.players().save(&player_a).await.unwrap();
         mock_uow.players().save(&player_b).await.unwrap();

@@ -43,8 +43,6 @@ impl JobHandler for AddBuildingJobHandler {
             .at_level(1, ctx.config.speed)?;
 
         village.add_building_at_slot(building, self.payload.slot_id)?;
-
-        village.update_state();
         village_repo.save(&village).await?;
 
         Ok(())

@@ -32,21 +32,20 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             {
                 home_army = Some(game_army);
 
-            // 2. È un rinforzo?
-            // (village_id != casa E current_map_field_id = casa)
+            // 2. reinforcement?
+            // (village_id != home AND current_map_field_id = home)
             } else if game_army.village_id != village_id_u32
                 && game_army.current_map_field_id == Some(village_id_u32)
             {
                 reinforcements.push(game_army);
 
-            // 3. È un'armata in viaggio (deployed)?
-            // (village_id = casa E current_map_field_id != casa [cioè None o un altro ID])
+            // 3. Travelling army (deployed)?
+            // (village_id = home AND current_map_field_id != home [None or other ID])
             } else if game_army.village_id == village_id_u32
                 && game_army.current_map_field_id != Some(village_id_u32)
             {
                 deployed_armies.push(game_army);
             }
-            // --- FINE CORREZIONE ---
         }
 
         let oases: Vec<game_models::map::Oasis> = agg
@@ -64,7 +63,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
         let production = serde_json::from_value(db_village.production)?;
         let buildings = serde_json::from_value(db_village.buildings)?;
 
-        let mut village = game_models::village::Village::from_persistence(
+        let village = game_models::village::Village::from_persistence(
             village_id_u32,
             db_village.name,
             db_village.player_id,
@@ -84,8 +83,6 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             academy_research,
             db_village.updated_at,
         );
-
-        village.update_state();
         Ok(village)
     }
 }

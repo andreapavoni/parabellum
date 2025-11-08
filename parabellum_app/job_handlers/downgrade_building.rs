@@ -114,7 +114,6 @@ mod tests {
         village
             .set_building_level_at_slot(slot_id, start_level, config.speed)
             .unwrap();
-        village.update_state();
         let initial_population = village.population;
 
         let village_id = village.id;
@@ -204,7 +203,6 @@ mod tests {
             config.speed,
         );
         village.add_building_at_slot(building, slot_id).unwrap();
-        village.update_state();
         let initial_pop = village.population;
         let village_id = village.id;
 

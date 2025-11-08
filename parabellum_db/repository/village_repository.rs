@@ -87,8 +87,6 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         };
 
         let mut game_village = Village::try_from(aggregate)?;
-
-        game_village.update_state();
         game_village.busy_merchants = busy_merchants;
         Ok(game_village)
     }
@@ -131,10 +129,6 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         let mut armies_map: HashMap<i32, Vec<db_models::Army>> = HashMap::new();
         for army in all_armies {
             armies_map.entry(army.village_id).or_default().push(army);
-
-            // if army.village_id != army.current_map_field_id {
-            //     armies_map.entry(army.current_map_field_id).or_default().push(army);
-            // }
         }
 
         let all_oases = sqlx::query_as!(
@@ -196,7 +190,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
             let mut game_village = Village::try_from(aggregate)?;
             let busy_merchants = merchants_map.get(&village_id_i32).cloned().unwrap_or(0);
-            game_village.update_state();
+
             game_village.busy_merchants = busy_merchants;
 
             game_villages.push(game_village);
@@ -238,7 +232,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             Json(&village.smithy()) as _,
             Json(&village.academy_research()) as _,
             village.population as i32,
-            village.loyalty as i16,
+            village.loyalty() as i16,
             village.is_capital
         )
         .execute(&mut *tx_guard.as_mut())

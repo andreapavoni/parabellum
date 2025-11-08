@@ -103,13 +103,8 @@ mod tests {
             .at_level(4, config.speed)
             .unwrap();
         village.add_building_at_slot(granary, 26).unwrap();
-        village.update_state();
-
         village.research_academy(UnitName::Praetorian).unwrap();
-
         village.store_resources(ResourceGroup(2000, 2000, 2000, 2000));
-        village.update_state();
-
         (player, village, config)
     }
 

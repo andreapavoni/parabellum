@@ -39,15 +39,10 @@ impl JobHandler for AttackJobHandler {
     ) -> Result<(), ApplicationError> {
         info!("Execute Attack Job");
 
-        let mut attacker_army = ctx.uow.armies().get_by_id(self.payload.army_id).await?;
+        let mut atk_army = ctx.uow.armies().get_by_id(self.payload.army_id).await?;
+        let atk_village = ctx.uow.villages().get_by_id(atk_army.village_id).await?;
 
-        let attacker_village = ctx
-            .uow
-            .villages()
-            .get_by_id(attacker_army.village_id)
-            .await?;
-
-        let mut defender_village = ctx
+        let mut def_village = ctx
             .uow
             .villages()
             .get_by_id(self.payload.target_village_id as u32)
@@ -57,72 +52,58 @@ impl JobHandler for AttackJobHandler {
         let mut catapult_targets: Vec<Building> = Vec::new();
 
         for ct in &self.payload.catapult_targets {
-            match defender_village.get_building_by_name(ct.clone()) {
+            match def_village.get_building_by_name(ct.clone()) {
                 Some(b) => catapult_targets.push(b.building.clone()),
                 None => {
-                    let b = defender_village.get_random_buildings(1).pop().unwrap();
-                    catapult_targets.push(b.clone())
+                    def_village
+                        .get_random_buildings(1)
+                        .pop()
+                        .map(|b| catapult_targets.push(b.clone()));
                 }
-            }
+            };
         }
 
         let catapult_targets: [Building; 2] = catapult_targets.try_into().unwrap();
 
         let battle = Battle::new(
             AttackType::Normal,
-            attacker_army.clone(),
-            attacker_village.clone(),
-            defender_village.clone(),
+            atk_army.clone(),
+            atk_village.clone(),
+            def_village.clone(),
             Some(catapult_targets),
         );
-        let battle_report = battle.calculate_battle();
+        let report = battle.calculate_battle();
 
-        // 3. Store results on db
-        attacker_army.update_units(&battle_report.attacker.survivors);
-        ctx.uow.armies().save(&attacker_army).await?; // Salva l'esercito attaccante aggiornato
+        atk_army.update_units(&report.attacker.survivors);
+        ctx.uow.armies().save(&atk_army).await?;
 
-        // 3.2 Applies changes to defender village
-        if let Some(bounty) = &battle_report.bounty {
-            defender_village.deduct_resources(bounty)?;
-        }
-        defender_village.loyalty = battle_report.loyalty_after;
-
-        // Apply damages to buildings
-        defender_village.apply_building_damages(&battle_report, ctx.config.speed)?;
-
-        // Applies combat losses to defender village and its reinforcements
-        defender_village.apply_battle_losses(&battle_report);
-
-        // Update village state
-        defender_village.update_state();
-        ctx.uow.villages().save(&defender_village).await?;
+        def_village.apply_battle_report(&report, ctx.config.speed)?;
+        ctx.uow.villages().save(&def_village).await?;
 
         // Update armies
-        if let Some(army) = defender_village.army() {
+        if let Some(army) = def_village.army() {
             ctx.uow.armies().save(&army).await?;
         }
 
-        for reinforcement_army in defender_village.reinforcements() {
+        for reinforcement_army in def_village.reinforcements() {
             ctx.uow.armies().save(&reinforcement_army).await?;
         }
 
         // --- 4. Return job ---
-        let return_travel_time = attacker_village.position.calculate_travel_time_secs(
-            defender_village.position,
-            attacker_army.speed(),
+        let return_travel_time = atk_village.position.calculate_travel_time_secs(
+            def_village.position,
+            atk_army.speed(),
             ctx.config.world_size as i32,
             ctx.config.speed as u8,
         ) as i64;
 
-        let player_id = attacker_village.player_id;
-        let village_id = attacker_village.id as i32;
-        let defender_village_id = defender_village.id as i32;
+        let player_id = atk_village.player_id;
+        let village_id = atk_village.id as i32;
+        let defender_village_id = def_village.id as i32;
 
         let return_payload = ArmyReturnTask {
-            army_id: attacker_army.id, // Attacking army ID
-            resources: battle_report
-                .bounty
-                .unwrap_or(ResourceGroup::new(0, 0, 0, 0)), // Resources to bring back
+            army_id: atk_army.id, // Attacking army ID
+            resources: report.bounty.unwrap_or(ResourceGroup::new(0, 0, 0, 0)), // Resources to bring back
             destination_player_id: player_id,
             destination_village_id: village_id,
             from_village_id: defender_village_id,

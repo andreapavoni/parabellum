@@ -90,7 +90,6 @@ pub mod tests {
             village_a.add_building_at_slot(marketplace, 25)?;
 
             village_a.store_resources(ResourceGroup(5000, 5000, 5000, 5000));
-            village_a.update_state();
             uow.villages().save(&village_a).await?;
 
             // Player B (Receiver)
@@ -274,7 +273,6 @@ pub mod tests {
             let uow = uow_provider.begin().await?;
             let mut v = uow.villages().get_by_id(village_a.id).await?;
             v.set_building_level_at_slot(25, 1, config.speed)?;
-            v.update_state();
             uow.villages().save(&v).await?;
             uow.commit().await?;
         }

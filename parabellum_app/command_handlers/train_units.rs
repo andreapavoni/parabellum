@@ -138,7 +138,6 @@ mod tests {
 
         // Add resources
         village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
-        village.update_state();
 
         (player, village, config)
     }

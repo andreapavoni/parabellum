@@ -45,7 +45,6 @@ impl JobHandler for MerchantGoingJobHandler {
 
         destination_village.store_resources(self.payload.resources.clone());
 
-        destination_village.update_state();
         village_repo.save(&destination_village).await?;
 
         info!(

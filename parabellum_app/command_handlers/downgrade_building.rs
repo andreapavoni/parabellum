@@ -119,7 +119,6 @@ mod tests {
         village
             .set_building_level_at_slot(slot_id, 10, config.speed)
             .unwrap();
-        village.update_state();
 
         (player, village, config, slot_id)
     }

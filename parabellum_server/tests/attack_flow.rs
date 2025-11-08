@@ -292,7 +292,6 @@ pub mod tests {
                 defender_village.add_building_at_slot(granary, 21)?;
                 defender_village.add_building_at_slot(warehouse, 20)?;
                 defender_village.store_resources(ResourceGroup::new(800, 800, 800, 800));
-                defender_village.update_state();
 
                 village_repo.save(&defender_village).await?;
             }

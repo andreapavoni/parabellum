@@ -51,8 +51,8 @@ pub struct Village {
     smithy: SmithyUpgrades,
     stocks: VillageStocks,
     academy_research: AcademyResearch,
-    pub deployed_armies: Vec<Army>,
-    pub loyalty: u8,
+    deployed_armies: Vec<Army>,
+    loyalty: u8,
     pub production: VillageProduction,
     pub is_capital: bool,
     pub total_merchants: u8,
@@ -131,7 +131,7 @@ impl Village {
         academy_research: AcademyResearch,
         updated_at: DateTime<Utc>,
     ) -> Self {
-        Self {
+        let mut village = Self {
             id,
             name,
             player_id,
@@ -152,7 +152,10 @@ impl Village {
             total_merchants: 0,
             busy_merchants: 0,
             updated_at,
-        }
+        };
+
+        village.update_state();
+        village
     }
 
     /// Prepares for adding a new building, does validations, and returns the calculated construction times.
@@ -429,12 +432,17 @@ impl Village {
         }
     }
 
+    pub fn loyalty(&self) -> u8 {
+        self.loyalty
+    }
+
     pub fn army(&self) -> Option<&Army> {
         self.army.as_ref()
     }
 
     pub fn set_army(&mut self, army: Option<&Army>) -> Result<(), GameError> {
         self.army = army.map(|a| a.clone());
+        self.update_state();
         Ok(())
     }
 
@@ -452,8 +460,17 @@ impl Village {
         &self.reinforcements
     }
 
-    /// Applies combat losses to the village's army and reinforcements based on the battle report.
-    pub fn apply_battle_losses(&mut self, report: &BattleReport) {
+    pub fn add_reinforcements(&mut self, army: &Army) -> Result<(), GameError> {
+        self.reinforcements.append(&mut vec![army.clone()]);
+        Ok(())
+    }
+
+    /// Applies losses and damages from the battle report to the village.
+    pub fn apply_battle_report(
+        &mut self,
+        report: &BattleReport,
+        server_speed: i8,
+    ) -> Result<(), GameError> {
         let mut final_home_army = None;
         if let Some(defender_report) = &report.defender {
             if let Some(mut home_army) = self.army.take() {
@@ -477,32 +494,20 @@ impl Village {
                 let mut army = self.reinforcements.remove(index);
                 army.update_units(&report.survivors);
                 if army.immensity() > 0 {
-                    self.reinforcements.insert(index, army.clone());
+                    let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
                 }
             }
         }
-    }
+        self.update_state();
 
-    /// Applies building damages from the battle report to the village.
-    pub fn apply_building_damages(
-        &mut self,
-        report: &BattleReport,
-        server_speed: i8,
-    ) -> Result<(), GameError> {
+        // Building damages
+
         // Wall damage
         if let Some(wall_damage) = &report.wall_damage {
             if wall_damage.level_after < wall_damage.level_before {
-                if let Some(wall_building) = self.get_building_by_name(wall_damage.name.clone()) {
-                    // Find the VillageBuilding for the wall
-                    if let Some(vb) = self
-                        .buildings
-                        .iter_mut()
-                        .find(|vb| vb.building.name == wall_damage.name)
-                    {
-                        vb.building = wall_building
-                            .building
-                            .at_level(wall_damage.level_after, server_speed)?;
-                    }
+                if self.get_wall().is_some() {
+                    // FIXME: assume wall slot_id is always 19
+                    self.set_building_level_at_slot(19, wall_damage.level_after, server_speed)?;
                 }
             }
         }
@@ -510,38 +515,29 @@ impl Village {
         // Catapult damages to other buildings
         for damage_report in &report.catapult_damage {
             if damage_report.level_after < damage_report.level_before {
-                if let Some(target_building) = self.get_building_by_name(damage_report.name.clone())
-                {
-                    // Trova il VillageBuilding per lo slot_id
-                    // Nota: Questo assume che tu abbia memorizzato lo slot_id
-                    // nel report o che tu possa recuperarlo dal nome.
-                    // Se hai più edifici dello stesso tipo, devi identificare
-                    // quello specifico bersagliato.
-                    // Qui assumo che ci sia uno slot_id fittizio 0 per semplicità.
-                    let slot_id_da_trovare = self
-                        .buildings
-                        .iter()
-                        .find(|vb| vb.building.name == damage_report.name)
-                        .map_or(0, |vb| vb.slot_id); // Trova il vero slot_id
+                if let Some(target) = self.get_building_by_name(damage_report.name.clone()) {
+                    self.set_building_level_at_slot(
+                        target.slot_id,
+                        damage_report.level_after,
+                        server_speed,
+                    )?;
 
-                    if let Some(vb) = self
-                        .buildings
-                        .iter_mut()
-                        .find(|vb| vb.slot_id == slot_id_da_trovare)
+                    if damage_report.level_after == 0
+                        && target.building.group != BuildingGroup::Resources
                     {
-                        vb.building = target_building
-                            .building
-                            .at_level(damage_report.level_after, server_speed)?;
-
-                        if damage_report.level_after == 0
-                            && vb.building.group != BuildingGroup::Resources
-                        {
-                            self.buildings.retain(|b| b.slot_id != slot_id_da_trovare);
-                        }
+                        self.remove_building_at_slot(target.slot_id, server_speed)?;
                     }
                 }
             }
         }
+        // Loyalty
+        self.loyalty = report.loyalty_after;
+
+        // Bounty
+        if let Some(bounty) = &report.bounty {
+            self.stocks.remove_resources(bounty);
+        }
+
         self.update_state();
         Ok(())
     }
@@ -549,67 +545,6 @@ impl Village {
     /// Returns available merchants.
     pub fn get_available_merchants(&self) -> u8 {
         self.total_merchants.saturating_sub(self.busy_merchants)
-    }
-
-    /// Updates the village state (production, upkeep, etc...).
-    pub fn update_state(&mut self) {
-        self.population = 2;
-        self.production = Default::default();
-
-        // reset the stocks capacities because we're going to recalculate them
-        self.stocks.warehouse_capacity = 0;
-        self.stocks.granary_capacity = 0;
-
-        // data from infrastructures
-        for b in self.buildings.iter() {
-            self.population += b.building.population;
-
-            match b.building.name {
-                BuildingName::Woodcutter => self.production.lumber += b.building.value,
-                BuildingName::ClayPit => self.production.clay += b.building.value,
-                BuildingName::IronMine => self.production.iron += b.building.value,
-                BuildingName::Cropland => self.production.crop += b.building.value,
-                BuildingName::Sawmill => self.production.bonus.lumber += b.building.value as u8,
-                BuildingName::Brickyard => self.production.bonus.clay += b.building.value as u8,
-                BuildingName::IronFoundry => self.production.bonus.iron += b.building.value as u8,
-                BuildingName::GrainMill => self.production.bonus.crop += b.building.value as u8,
-                BuildingName::Bakery => self.production.bonus.crop += b.building.value as u8,
-                BuildingName::Warehouse => self.stocks.warehouse_capacity += b.building.value,
-                BuildingName::Granary => self.stocks.granary_capacity += b.building.value,
-                BuildingName::GreatWarehouse => self.stocks.warehouse_capacity += b.building.value,
-                BuildingName::GreatGranary => self.stocks.granary_capacity += b.building.value,
-                _ => continue,
-            }
-        }
-
-        // set default stocks capacities if no warehouse/granary present
-        let default_socks = VillageStocks::default();
-        if self.stocks.granary_capacity == 0 {
-            self.stocks.granary_capacity = default_socks.granary_capacity;
-        }
-        if self.stocks.warehouse_capacity == 0 {
-            self.stocks.warehouse_capacity = default_socks.warehouse_capacity;
-        }
-
-        // population upkeep
-        self.production.upkeep += self.population;
-
-        // oases production bonuses
-        for o in self.oases.clone() {
-            let oasis_bonus = o.bonus();
-            self.production.bonus.add(&oasis_bonus)
-        }
-
-        // armies upkeep
-        self.production.upkeep += self.army.clone().map_or(0, |a| a.upkeep());
-        for a in self.reinforcements.iter() {
-            self.production.upkeep += a.upkeep();
-        }
-
-        // update internal data
-        self.production.calculate_effective_production();
-        self.update_merchants_count();
-        self.update_resources();
     }
 
     /// Marks a unit name as researched in the academy.
@@ -645,15 +580,6 @@ impl Village {
     pub fn set_smithy_level_for_test(&mut self, unit: &UnitName, level: u8) {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
             self.smithy[idx] = level.min(20);
-        }
-    }
-
-    /// Sets total merchants count based on Marketplace level.
-    fn update_merchants_count(&mut self) {
-        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
-            self.total_merchants = marketplace.building.level;
-        } else {
-            self.total_merchants = 0;
         }
     }
 
@@ -743,6 +669,76 @@ impl Village {
         }
 
         Ok(())
+    }
+
+    /// Updates the village state (production, upkeep, etc...).
+    fn update_state(&mut self) {
+        self.population = 2;
+        self.production = Default::default();
+
+        // reset the stocks capacities because we're going to recalculate them
+        self.stocks.warehouse_capacity = 0;
+        self.stocks.granary_capacity = 0;
+
+        // data from infrastructures
+        for b in self.buildings.iter() {
+            self.population += b.building.population;
+
+            match b.building.name {
+                BuildingName::Woodcutter => self.production.lumber += b.building.value,
+                BuildingName::ClayPit => self.production.clay += b.building.value,
+                BuildingName::IronMine => self.production.iron += b.building.value,
+                BuildingName::Cropland => self.production.crop += b.building.value,
+                BuildingName::Sawmill => self.production.bonus.lumber += b.building.value as u8,
+                BuildingName::Brickyard => self.production.bonus.clay += b.building.value as u8,
+                BuildingName::IronFoundry => self.production.bonus.iron += b.building.value as u8,
+                BuildingName::GrainMill => self.production.bonus.crop += b.building.value as u8,
+                BuildingName::Bakery => self.production.bonus.crop += b.building.value as u8,
+                BuildingName::Warehouse => self.stocks.warehouse_capacity += b.building.value,
+                BuildingName::Granary => self.stocks.granary_capacity += b.building.value,
+                BuildingName::GreatWarehouse => self.stocks.warehouse_capacity += b.building.value,
+                BuildingName::GreatGranary => self.stocks.granary_capacity += b.building.value,
+                _ => continue,
+            }
+        }
+
+        // set default stocks capacities if no warehouse/granary present
+        let default_socks = VillageStocks::default();
+        if self.stocks.granary_capacity == 0 {
+            self.stocks.granary_capacity = default_socks.granary_capacity;
+        }
+        if self.stocks.warehouse_capacity == 0 {
+            self.stocks.warehouse_capacity = default_socks.warehouse_capacity;
+        }
+
+        // population upkeep
+        self.production.upkeep += self.population;
+
+        // oases production bonuses
+        for o in self.oases.clone() {
+            let oasis_bonus = o.bonus();
+            self.production.bonus.add(&oasis_bonus)
+        }
+
+        // armies upkeep
+        self.production.upkeep += self.army.clone().map_or(0, |a| a.upkeep());
+        for a in self.reinforcements.iter() {
+            self.production.upkeep += a.upkeep();
+        }
+
+        // update internal data
+        self.production.calculate_effective_production();
+        self.update_merchants_count();
+        self.update_resources();
+    }
+
+    /// Sets total merchants count based on Marketplace level.
+    fn update_merchants_count(&mut self) {
+        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
+            self.total_merchants = marketplace.building.level;
+        } else {
+            self.total_merchants = 0;
+        }
     }
 
     /// Updates the village stocks based on the time elapsed since the last update
@@ -836,7 +832,6 @@ impl Village {
         }]);
 
         self.update_state();
-
         Ok(())
     }
 }

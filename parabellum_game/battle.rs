@@ -101,7 +101,7 @@ impl Battle {
 
     // Main function to calculate the battle
     pub fn calculate_battle(&self) -> BattleReport {
-        // STEP 1: Calculate total attack and defense points
+        // Calculate total attack and defense points
         // 1.1: Attack points
         let (mut total_attacker_infantry_points, mut total_attacker_cavalry_points): (u32, u32) =
             self.attacker.attack_points();
@@ -162,7 +162,7 @@ impl Battle {
             (total_defender_infantry_points as f64 * wall_bonus) as u32;
         total_defender_cavalry_points = (total_defender_cavalry_points as f64 * wall_bonus) as u32;
 
-        // STEP 2: Calculate total power and casualties
+        // Calculate total power and casualties
 
         // 2.1 Total attack power
         let total_attack_power_f64 =
@@ -233,7 +233,7 @@ impl Battle {
             })
             .collect();
 
-        // STEP 3: Calculate damages to wall and buildings
+        // Calculate damages to wall and buildings
 
         let wall_level = self.defender_village.get_wall().map_or(0, |w| w.level);
         let mut wall_level_after = wall_level;
@@ -267,14 +267,14 @@ impl Battle {
                 .clamp(1.0, 3.0);
 
             // TODO: fix catapult targets (none, random, 1 or 2)
+            // also the number of catapults and the rally point level influence the number of targets
             let catapults_targets_quantity: u32 =
-                match self.catapult_targets.clone().map_or(0, |cts| cts.len()) as u32 {
-                    0 => 1,
-                    len => len,
-                };
+                self.catapult_targets
+                    .as_ref()
+                    .map_or(1, |cts| cts.len().max(1)) as u32;
 
             let catapult_damage = calculate_machine_damage(
-                surviving_catapults / catapults_targets_quantity, // Quantità per questo target
+                surviving_catapults / catapults_targets_quantity,
                 smithy_level,
                 buildings_durability,
                 power_ratio,
@@ -289,8 +289,7 @@ impl Battle {
             }
         }
 
-        // STEP 4: Final result
-
+        // Final result
         let wall_report = if wall_level > 0 {
             Some(BuildingDamageReport {
                 name: self.defender_village.get_wall().map(|b| b.name).unwrap(),
@@ -351,8 +350,6 @@ impl Battle {
     }
 
     pub fn calculate_scout_battle(&self, target: ScoutingTarget) -> BattleReport {
-        // STEP 1: Calculates attack and defense points for scouts
-
         let total_scout_attack_power = self.attacker.scouting_attack_points();
         let total_attack_scouts = self.attacker.unit_amount(3);
 
@@ -368,7 +365,7 @@ impl Battle {
 
         let defender_has_scouts = total_scout_defense_power > 0;
 
-        // STEP 2: Apply bonuses and casualties
+        // Apply bonuses and casualties
         let wall_bonus = self.defender_village.get_wall_defense_bonus();
 
         // 2.1: Apply wall defense bonus
@@ -393,7 +390,7 @@ impl Battle {
             attacker_loss_percentage = power_ratio.powf(m_factor).min(1.0);
         }
 
-        // STEP 3: Final result
+        // Final result
 
         // Calculate casualties in attacker scouts
         let (attacker_survivors, attacker_losses) =
@@ -711,7 +708,6 @@ mod tests {
         defender_village
             .set_army(Some(&defender_home_army))
             .unwrap();
-        defender_village.update_state();
 
         let battle = Battle::new(
             AttackType::Normal,
