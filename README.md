@@ -78,26 +78,26 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 ### Implemented
 - [x] **Core Architecture**: A clean, command-based application structure.
 - [x] **Database**: A repository pattern for atomic database transactions.
-- [x] **Job System**: An async, persistent job queue (`Pending`, `Processing`, `Completed` states).
+- [x] **Job System**: An async, persistent job queue.
 - [x] **Game Data**: All static data for buildings, units, tribes, and smithy upgrades is defined.
 - [x] **Player**: Player registration.
 - [x] **Village**: Initial village founding.
 - [x] **Resources**: Passive resource generation (the "tick") based on building levels and server speed.
-- [x] **Population**: Cumulative population calculation.
+- [x] **Population**: Population calculation.
 - [x] **Building**: Full command and job cycle for starting and completing construction.
-- [x] **Unit Training**: Full command and job cycle for training a queue of units.
+- [x] **Unit Training**: Full command and job cycle for training a queue of units. Only barracks at the moment.
 - [x] **Research**: Full command and job cycle for Academy and Smithy research.
 - [x] **Battle**: Core battle logic (attacker vs. defender calculation) is implemented.
 - [x] **Attack Cycle**: Full "Attack" -> "Battle" -> "Army Return" job chain.
 - [x] **Battle Features**: Ram/Catapult damage and resource bounty calculation.
 - [x] **Merchants**: Sending resources between villages.
-- [x] **Server speed**: Full support for different server speeds influencing times and stocks/merchants capacities.
-- [x] **Building Upgrades/downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
+- [x] **Server Speed**: Full support for different server speeds influencing times and stocks/merchants capacities.
+- [x] **Building Upgrades/Downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
 - [x] **Reinforcements**: Sending troops to support other villages.
 - [x] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 
 ### In Progress
-
+- [ ] **Unit Training**: adding support for all units types in their related buildings.
 ### ToDo (Not Started)
 - [ ] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
 - [ ] **API / UI**: There is **no web server or UI** yet! `parabellum_server` is just a test runner for now. This is the biggest missing piece, but also the least important for now. When the core and app will have enough working features, API and UI will start to come.
