@@ -169,7 +169,7 @@ mod tests {
             .unwrap();
         village_a.add_building_at_slot(marketplace, 25).unwrap();
 
-        village_a.store_resources(ResourceGroup(5000, 5000, 5000, 5000));
+        village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
         let player_b = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
@@ -207,8 +207,8 @@ mod tests {
         assert_handler_success(result);
 
         let saved_village_a = mock_uow.villages().get_by_id(village_a.id).await.unwrap();
-        assert_eq!(saved_village_a.get_stored_resources().lumber(), 5000 - 1000);
-        assert_eq!(saved_village_a.get_stored_resources().clay(), 5000 - 500);
+        assert_eq!(saved_village_a.stored_resources().lumber(), 5000 - 1000);
+        assert_eq!(saved_village_a.stored_resources().clay(), 5000 - 500);
 
         let jobs = mock_uow
             .jobs()

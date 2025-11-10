@@ -29,6 +29,8 @@ pub enum GameError {
         building: BuildingName,
         tribe: Tribe,
     },
+    #[error("Building {0:?} not found")]
+    BuildingNotFound(BuildingName),
 
     #[error("Building {0:?} can only be built in capital")]
     CapitalConstraint(BuildingName),
@@ -65,6 +67,9 @@ pub enum GameError {
 
     #[error("Only scout units can be used for a scout mission")]
     OnlyScoutUnitsAllowed,
+
+    #[error("Can't use {0:?} to train {1:?}")]
+    InvalidTrainingBuilding(BuildingName, UnitName),
 
     #[error("Unit {0:?} is already researched in Academy")]
     UnitAlreadyResearched(UnitName),

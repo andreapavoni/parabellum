@@ -35,7 +35,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
         let village = village_repo.get_by_id(command.village_id).await?;
-        let mb_level = village.get_main_building_level();
+        let mb_level = village.main_building_level();
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -44,7 +44,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
             })?;
 
         if village
-            .get_building_by_name(BuildingName::MainBuilding)
+            .get_building_by_name(&BuildingName::MainBuilding)
             .map_or(0, |vb| vb.building.level)
             < 10
         {

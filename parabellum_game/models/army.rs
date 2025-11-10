@@ -320,28 +320,27 @@ mod tests {
     fn test_army_attack_points_no_smithy() {
         // 10 Maceman (40 attack) = 400 infantry
         // 5 Teutonic Knight (150 attack) = 750 infantry
-        // Total: 1150 infantry, 0 cavalry
-        let army = army_factory(ArmyFactoryOptions {
+        let (infantry, cavalry) = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
             units: Some([10, 0, 0, 0, 0, 5, 0, 0, 0, 0]),
             smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
-        });
+        })
+        .attack_points();
 
-        let (infantry, cavalry) = army.attack_points();
-        assert_eq!(infantry, 1150);
-        assert_eq!(cavalry, 0);
+        assert_eq!(infantry, 400);
+        assert_eq!(cavalry, 750);
 
         // 10 Legionnaire (40 attack) = 400 infantry
         // 5 Equites Imperatoris (120 attack) = 600 cavalry
-        let army_roman = army_factory(ArmyFactoryOptions {
+        let (infantry, cavalry) = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Roman),
             units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
             smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
-        });
+        })
+        .attack_points();
 
-        let (infantry, cavalry) = army_roman.attack_points();
         assert_eq!(infantry, 400);
         assert_eq!(cavalry, 600);
     }

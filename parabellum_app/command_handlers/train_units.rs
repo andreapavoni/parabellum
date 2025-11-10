@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError};
-use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 
 use crate::{
     config::Config,
@@ -37,42 +36,17 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             }));
         }
 
-        let tribe = village.clone().tribe;
-        let tribe_units = &tribe.get_units();
-        let unit = tribe_units
-            .get(command.unit_idx as usize)
-            .ok_or_else(|| ApplicationError::Game(GameError::InvalidUnitIndex(command.unit_idx)))?;
-
-        if !village.academy_research()[command.unit_idx as usize] {
-            return Err(ApplicationError::Game(GameError::UnitNotResearched(
-                unit.name.clone(),
-            )));
-        }
-
-        let cost_per_unit = &unit.cost;
-        let total_cost = ResourceGroup::new(
-            cost_per_unit.resources.0 * command.quantity as u32,
-            cost_per_unit.resources.1 * command.quantity as u32,
-            cost_per_unit.resources.2 * command.quantity as u32,
-            cost_per_unit.resources.3 * command.quantity as u32,
-        );
-
-        village.deduct_resources(&total_cost)?;
+        let (slot_id, unit_name, time_per_unit) = village.init_unit_training(
+            command.unit_idx,
+            &command.building_name,
+            command.quantity,
+            config.speed,
+        )?;
         village_repo.save(&village).await?;
 
-        let time_per_unit = (cost_per_unit.time as f64 / config.speed as f64).floor() as i64;
-        let building = village
-            .get_building_by_name(BuildingName::Barracks)
-            .ok_or_else(|| {
-                ApplicationError::Game(GameError::BuildingRequirementsNotMet {
-                    building: BuildingName::Barracks,
-                    level: 1,
-                })
-            })?;
-
         let payload = TrainUnitsTask {
-            slot_id: building.slot_id,
-            unit: unit.clone().name,
+            slot_id: slot_id,
+            unit: unit_name,
             quantity: command.quantity,
             time_per_unit: time_per_unit as i32,
         };
@@ -92,7 +66,6 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
     }
 }
 
-// 4. Tests
 #[cfg(test)]
 mod tests {
     use parabellum_game::{
@@ -137,7 +110,44 @@ mod tests {
         village.add_building_at_slot(barracks, 20).unwrap();
 
         // Add resources
-        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
+
+        (player, village, config)
+    }
+
+    // Helper per un villaggio con Scuderia e ricerche per cavalleria
+    fn setup_village_with_stable() -> (Player, Village, Arc<Config>) {
+        let config = Arc::new(Config::from_env());
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Gaul),
+            ..Default::default()
+        });
+
+        let valley = valley_factory(Default::default());
+        let mut village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            valley: Some(valley),
+            ..Default::default()
+        });
+
+        // Requisiti per Scuderia (Accademia L5, Fabbro L3)
+        let granary = Building::new(BuildingName::Granary, config.speed)
+            .at_level(20, config.speed)
+            .unwrap();
+        village.add_building_at_slot(granary, 20).unwrap();
+
+        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
+            .at_level(20, config.speed)
+            .unwrap();
+        village.add_building_at_slot(warehouse, 21).unwrap();
+
+        let stable = Building::new(BuildingName::Stable, config.speed)
+            .at_level(1, config.speed)
+            .unwrap();
+        village.add_building_at_slot(stable, 22).unwrap();
+
+        village.set_academy_research_for_test(&UnitName::Pathfinder, true);
+        village.store_resources(&ResourceGroup(10000, 10000, 10000, 10000));
 
         (player, village, config)
     }
@@ -159,6 +169,7 @@ mod tests {
             village_id: village_id,
             unit_idx: 0,
             quantity: 5,
+            building_name: BuildingName::Barracks,
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -169,22 +180,22 @@ mod tests {
         let saved_village = &saved_villages[0];
 
         assert_eq!(
-            saved_village.get_stored_resources().lumber(),
+            saved_village.stored_resources().lumber(),
             800 - (120 * 5),
             "Lumber not deducted correctly"
         );
         assert_eq!(
-            saved_village.get_stored_resources().clay(),
+            saved_village.stored_resources().clay(),
             800 - (100 * 5),
             "Clay not deducted correctly"
         );
         assert_eq!(
-            saved_village.get_stored_resources().iron(),
+            saved_village.stored_resources().iron(),
             800 - (150 * 5),
             "Iron not deducted correctly"
         );
         assert_eq!(
-            saved_village.get_stored_resources().crop(),
+            saved_village.stored_resources().crop(),
             800 - (30 * 5),
             "Crop not deducted correctly"
         );
@@ -216,7 +227,7 @@ mod tests {
         let village_repo = mock_uow.villages();
 
         let (player, mut village, config) = setup_village_with_barracks();
-        village.store_resources(ResourceGroup(10, 0, 0, 0));
+        village.store_resources(&ResourceGroup(10, 0, 0, 0));
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
 
@@ -227,6 +238,7 @@ mod tests {
             village_id: village_id,
             unit_idx: 0,
             quantity: 10,
+            building_name: BuildingName::Barracks,
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -256,6 +268,7 @@ mod tests {
             village_id: village.id,
             unit_idx: 0,
             quantity: 1,
+            building_name: BuildingName::Barracks,
         };
         let result = handler.handle(command, &mock_uow, &config).await;
 
@@ -273,8 +286,7 @@ mod tests {
         let village_repo = mock_uow.villages();
 
         let (player, mut village, config) = setup_village_with_barracks();
-
-        village.remove_building_at_slot(20, config.speed).unwrap();
+        village.set_academy_research_for_test(&UnitName::Praetorian, false);
         village_repo.save(&village).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
@@ -283,6 +295,7 @@ mod tests {
             village_id: village.id,
             unit_idx: 1,
             quantity: 1,
+            building_name: BuildingName::Barracks,
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -290,6 +303,68 @@ mod tests {
         assert_eq!(
             result.err().unwrap().to_string(),
             "Unit Praetorian not yet researched in Academy"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_stable_success() {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
+
+        let (player, village, config) = setup_village_with_stable();
+        let village_id = village.id;
+        village_repo.save(&village).await.unwrap();
+
+        let handler = TrainUnitsCommandHandler::new();
+
+        let command = TrainUnits {
+            player_id: player.id,
+            village_id: village_id,
+            unit_idx: 2,
+            quantity: 5,
+            building_name: BuildingName::Stable,
+        };
+
+        // Costo Pathfinder: 170, 150, 20, 40
+        let unit_cost = ResourceGroup(170, 150, 20, 40);
+        let total_cost = ResourceGroup(
+            unit_cost.0 * 5,
+            unit_cost.1 * 5,
+            unit_cost.2 * 5,
+            unit_cost.3 * 5,
+        );
+        let initial_lumber = village.stored_resources().lumber();
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert_handler_success(result);
+
+        // 1. Controlla deduzione risorse
+        let saved_village = village_repo.get_by_id(village_id).await.unwrap();
+        assert_eq!(
+            saved_village.stored_resources().lumber(),
+            initial_lumber - total_cost.0,
+            "Lumber not deducted"
+        );
+        assert_eq!(
+            saved_village.stored_resources().clay(),
+            10000 - total_cost.1
+        );
+
+        // 2. Controlla creazione Job
+        let added_jobs = job_repo.list_by_player_id(player.id).await.unwrap();
+        assert_eq!(added_jobs.len(), 1, "Expected a job for stable");
+
+        let job = &added_jobs[0];
+        assert_eq!(job.task.task_type, "TrainUnits");
+
+        // 3. Controlla il payload del Task
+        let task: TrainUnitsTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        assert_eq!(task.unit, UnitName::Pathfinder, "Expected unit trained");
+        assert_eq!(task.quantity, 5);
+        assert_eq!(
+            task.slot_id, 22,
+            "Task should be linked to the right slot_id"
         );
     }
 }

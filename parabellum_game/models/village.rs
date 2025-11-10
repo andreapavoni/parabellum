@@ -158,7 +158,54 @@ impl Village {
         village
     }
 
-    /// Prepares for adding a new building, does validations, and returns the calculated construction times.
+    /// Prepares for training a new unit, applies validations and withdraws resources. Returns training times.
+    pub fn init_unit_training(
+        &mut self,
+        unit_idx: u8,
+        building_name: &BuildingName,
+        quantity: i32,
+        server_speed: i8,
+    ) -> Result<(u8, UnitName, u32), GameError> {
+        let unit = self
+            .tribe
+            .get_units()
+            .get(unit_idx as usize)
+            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx))?
+            .to_owned();
+
+        if !self.academy_research[unit_idx as usize] && unit.research_cost.time > 0 {
+            return Err(GameError::UnitNotResearched(unit.name.clone()));
+        }
+
+        if !unit.buildings.contains(building_name) {
+            return Err(GameError::InvalidTrainingBuilding(
+                building_name.clone(),
+                unit.name.clone(),
+            ));
+        }
+
+        let building = self
+            .get_building_by_name(&building_name.clone())
+            .ok_or_else(|| GameError::BuildingRequirementsNotMet {
+                building: building_name.clone(),
+                level: 1,
+            })?;
+
+        let cost_per_unit = &(unit.cost);
+        let total_cost = &(cost_per_unit.resources.multi(quantity as u32));
+        self.deduct_resources(&total_cost)?;
+
+        let training_time_bonus_perc = building.building.value as f64 / 1000.0; // Es: 100 -> 1.0, 90 -> 0.9
+        let base_time_per_unit = cost_per_unit.time as f64 / server_speed as f64;
+
+        let time_per_unit = (base_time_per_unit * training_time_bonus_perc)
+            .floor()
+            .max(1.0) as u32;
+
+        Ok((building.slot_id, unit.name.clone(), time_per_unit))
+    }
+
+    /// Prepares for adding a new building, applies validations and withdraws resources. Returns construction times.
     pub fn init_building_construction(
         &mut self,
         slot_id: u8,
@@ -176,11 +223,11 @@ impl Village {
         self.validate_building_construction(&building)?;
 
         self.deduct_resources(&building.cost().resources)?;
-        let mb_level = self.get_main_building_level();
+        let mb_level = self.main_building_level();
         Ok(building.calculate_build_time_secs(&server_speed, &mb_level))
     }
 
-    /// Prepares for starting a research in academy, does validations, and returns research time.
+    /// Prepares for starting a research in academy, applies validations and withdraws resources. Returns research time.
     pub fn init_academy_research(
         &mut self,
         unit: &UnitName,
@@ -205,16 +252,18 @@ impl Village {
         Ok(research_time_secs)
     }
 
+    /// Prepares for starting a research in smithy, applies validations and withdraws resources. Returns research time.
     pub fn init_smithy_research(
         &mut self,
         unit_name: &UnitName,
         server_speed: i8,
     ) -> Result<u32, GameError> {
         let unit_idx = self.tribe.get_unit_idx_by_name(unit_name).unwrap();
-        let tribe_units = self.tribe.get_units();
         let current_level = self.smithy()[unit_idx];
 
-        let unit = tribe_units
+        let unit = self
+            .tribe
+            .get_units()
             .get(unit_idx as usize)
             .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
 
@@ -262,7 +311,7 @@ impl Village {
 
     /// Checks if the village has enough resources.
     pub fn has_enough_resources(&self, cost: &ResourceGroup) -> bool {
-        self.stocks.check_resources(cost)
+        self.stocks.has_availability(cost)
     }
 
     /// Tries to deduct resources. Returns GameError::NotEnoughResources if funds are insufficient.
@@ -276,23 +325,23 @@ impl Village {
     }
 
     /// Stores resources in the village, respecting capacity.
-    pub fn store_resources(&mut self, resources: ResourceGroup) {
-        self.stocks.store_resources(resources);
+    pub fn store_resources(&mut self, resources: &ResourceGroup) {
+        self.stocks.store(&resources);
         self.update_state();
     }
 
     /// Returns a snapshot of the currently stored resources.
-    pub fn get_stored_resources(&self) -> ResourceGroup {
-        self.stocks.stored_resources()
+    pub fn stored_resources(&self) -> ResourceGroup {
+        self.stocks.stored()
     }
 
     /// Gets the current warehouse capacity.
-    pub fn get_warehouse_capacity(&self) -> u32 {
+    pub fn warehouse_capacity(&self) -> u32 {
         self.stocks.warehouse_capacity
     }
 
     /// Gets the current granary capacity.
-    pub fn get_granary_capacity(&self) -> u32 {
+    pub fn granary_capacity(&self) -> u32 {
         self.stocks.granary_capacity
     }
 
@@ -358,11 +407,11 @@ impl Village {
 
     /// Returns a building in the village. Returns None if not present.
     /// In case of multiple buildings of same type, it returns the highest level one.
-    pub fn get_building_by_name(&self, name: BuildingName) -> Option<VillageBuilding> {
+    pub fn get_building_by_name(&self, name: &BuildingName) -> Option<VillageBuilding> {
         if let Some(village_building) = self
             .buildings
             .iter()
-            .filter(|&x| x.building.name == name)
+            .filter(|&x| x.building.name == *name)
             .cloned()
             .max_by(|x, y| x.building.level.cmp(&y.building.level))
         {
@@ -390,43 +439,43 @@ impl Village {
 
     /// Returns either the Palace or Residence, if any.
     pub fn get_palace_or_residence(&self) -> Option<(Building, BuildingName)> {
-        if let Some(palace) = self.get_building_by_name(BuildingName::Palace) {
+        if let Some(palace) = self.get_building_by_name(&BuildingName::Palace) {
             return Some((palace.building, BuildingName::Palace));
         }
-        if let Some(residence) = self.get_building_by_name(BuildingName::Residence) {
+        if let Some(residence) = self.get_building_by_name(&BuildingName::Residence) {
             return Some((residence.building, BuildingName::Residence));
         }
         None
     }
 
     /// Returns the village wall, if any, according to the actual tribe.
-    pub fn get_wall(&self) -> Option<Building> {
+    pub fn wall(&self) -> Option<Building> {
         match self.tribe {
-            Tribe::Roman => self.get_building_by_name(BuildingName::CityWall),
-            Tribe::Teuton => self.get_building_by_name(BuildingName::EarthWall),
-            Tribe::Gaul => self.get_building_by_name(BuildingName::Palisade),
+            Tribe::Roman => self.get_building_by_name(&BuildingName::CityWall),
+            Tribe::Teuton => self.get_building_by_name(&BuildingName::EarthWall),
+            Tribe::Gaul => self.get_building_by_name(&BuildingName::Palisade),
             _ => None,
         }
         .map(|vb| vb.building)
     }
 
     /// Get defense bonus from wall, if any.
-    pub fn get_wall_defense_bonus(&self) -> f64 {
-        if let Some(wall) = self.get_wall() {
+    pub fn wall_defense_bonus(&self) -> f64 {
+        if let Some(wall) = self.wall() {
             return self.tribe.get_wall_factor().powf(wall.level as f64);
         }
         1.0
     }
 
     /// Returns MainBuilding level
-    pub fn get_main_building_level(&self) -> u8 {
-        self.get_building_by_name(BuildingName::MainBuilding)
+    pub fn main_building_level(&self) -> u8 {
+        self.get_building_by_name(&BuildingName::MainBuilding)
             .map_or(0, |vb| vb.building.level)
     }
 
     /// Get buildings durability, considering the level of StonemansionLodge, if any.
-    pub fn get_buildings_durability(&self) -> f64 {
-        match self.get_building_by_name(BuildingName::StonemansionLodge) {
+    pub fn buildings_durability(&self) -> f64 {
+        match self.get_building_by_name(&BuildingName::StonemansionLodge) {
             Some(b) => 1.0 + b.building.level as f64 * 0.1,
             None => 1.0,
         }
@@ -505,7 +554,7 @@ impl Village {
         // Wall damage
         if let Some(wall_damage) = &report.wall_damage {
             if wall_damage.level_after < wall_damage.level_before {
-                if self.get_wall().is_some() {
+                if self.wall().is_some() {
                     // FIXME: assume wall slot_id is always 19
                     self.set_building_level_at_slot(19, wall_damage.level_after, server_speed)?;
                 }
@@ -515,7 +564,7 @@ impl Village {
         // Catapult damages to other buildings
         for damage_report in &report.catapult_damage {
             if damage_report.level_after < damage_report.level_before {
-                if let Some(target) = self.get_building_by_name(damage_report.name.clone()) {
+                if let Some(target) = self.get_building_by_name(&damage_report.name) {
                     self.set_building_level_at_slot(
                         target.slot_id,
                         damage_report.level_after,
@@ -734,7 +783,7 @@ impl Village {
 
     /// Sets total merchants count based on Marketplace level.
     fn update_merchants_count(&mut self) {
-        if let Some(marketplace) = self.get_building_by_name(BuildingName::Marketplace) {
+        if let Some(marketplace) = self.get_building_by_name(&BuildingName::Marketplace) {
             self.total_merchants = marketplace.building.level;
         } else {
             self.total_merchants = 0;
@@ -917,12 +966,12 @@ pub struct VillageStocks {
 
 impl VillageStocks {
     /// Returns the currently stored resources as ResourceGroup
-    pub(crate) fn stored_resources(&self) -> ResourceGroup {
+    pub(crate) fn stored(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }
 
     /// Stores resources into the village stocks, capping at storage capacity.
-    pub(crate) fn store_resources(&mut self, resources: ResourceGroup) {
+    pub(crate) fn store(&mut self, resources: &ResourceGroup) {
         self.lumber = (self.lumber + resources.lumber()).min(self.warehouse_capacity);
         self.clay = (self.clay + resources.clay()).min(self.warehouse_capacity);
         self.iron = (self.iron + resources.iron()).min(self.warehouse_capacity);
@@ -930,7 +979,7 @@ impl VillageStocks {
     }
 
     /// Checks if given resources are present in stocks.
-    pub(crate) fn check_resources(&self, resources: &ResourceGroup) -> bool {
+    pub(crate) fn has_availability(&self, resources: &ResourceGroup) -> bool {
         self.lumber >= resources.lumber()
             && self.clay >= resources.clay()
             && self.iron >= resources.iron()

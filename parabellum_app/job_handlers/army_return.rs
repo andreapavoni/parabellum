@@ -43,7 +43,7 @@ impl JobHandler for ArmyReturnJobHandler {
 
         army_repo.save(&village.army().unwrap()).await?;
         army_repo.remove(returning_army.id).await?;
-        village.store_resources(self.payload.resources.clone());
+        village.store_resources(&self.payload.resources);
         village_repo.save(&village).await?;
 
         Ok(())
@@ -141,7 +141,7 @@ mod tests {
         );
 
         assert_eq!(
-            final_village.get_stored_resources().lumber(),
+            final_village.stored_resources().lumber(),
             bounty.0,
             "Home stocks should be increased with bounty"
         );

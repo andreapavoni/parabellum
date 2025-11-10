@@ -34,7 +34,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
         let mut village = village_repo.get_by_id(command.village_id).await?;
-        let mb_level = village.get_main_building_level();
+        let mb_level = village.main_building_level();
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -110,7 +110,7 @@ mod tests {
         village
             .set_building_level_at_slot(main_building_slot, 1, config.speed)
             .unwrap();
-        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
 
         (player, village, config, main_building_slot)
     }
@@ -122,7 +122,7 @@ mod tests {
 
         let village_id = village.id;
         let player_id = player.id;
-        let initial_lumber = village.get_stored_resources().lumber();
+        let initial_lumber = village.stored_resources().lumber();
         let initial_population = village.population;
 
         mock_uow.villages().save(&village).await.unwrap();
@@ -147,7 +147,7 @@ mod tests {
 
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
         assert_eq!(
-            saved_village.get_stored_resources().lumber(),
+            saved_village.stored_resources().lumber(),
             initial_lumber - cost.resources.0,
             "No resources withdrawn from stocks"
         );

@@ -95,15 +95,16 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Building Upgrades/Downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
 - [x] **Reinforcements**: Sending troops to support other villages.
 - [x] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
+- [x] **Unit Training**: support for all units types in their related buildings.
 
 ### In Progress
-- [ ] **Unit Training**: adding support for all units types in their related buildings.
-### ToDo (Not Started)
 - [ ] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
+### ToDo (Not Started)
 - [ ] **API / UI**: There is **no web server or UI** yet! `parabellum_server` is just a test runner for now. This is the biggest missing piece, but also the least important for now. When the core and app will have enough working features, API and UI will start to come.
+- [ ] **CLI**: to start server, init setup, run periodic tasks, etc...
 - [ ] **Alliances**: Creating and managing alliances.
 - [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not unit training), and conquering.
-- [ ] **Oases**: Capturing and managing oases (models exist, logic does not).
+- [ ] **Oases**: Capturing and managing oases (models exist, logic does not). Nature troops in free oases.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
 
 ---

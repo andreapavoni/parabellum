@@ -52,7 +52,7 @@ impl JobHandler for AttackJobHandler {
         let mut catapult_targets: Vec<Building> = Vec::new();
 
         for ct in &self.payload.catapult_targets {
-            match def_village.get_building_by_name(ct.clone()) {
+            match def_village.get_building_by_name(&ct) {
                 Some(b) => catapult_targets.push(b.building.clone()),
                 None => {
                     def_village

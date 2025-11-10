@@ -156,7 +156,7 @@ impl Battle {
         }
 
         // Wall
-        let wall_bonus = self.defender_village.get_wall_defense_bonus();
+        let wall_bonus = self.defender_village.wall_defense_bonus();
 
         total_defender_infantry_points =
             (total_defender_infantry_points as f64 * wall_bonus) as u32;
@@ -235,11 +235,11 @@ impl Battle {
 
         // Calculate damages to wall and buildings
 
-        let wall_level = self.defender_village.get_wall().map_or(0, |w| w.level);
+        let wall_level = self.defender_village.wall().map_or(0, |w| w.level);
         let mut wall_level_after = wall_level;
 
         // Variables to calculate buildings damages
-        let buildings_durability = self.defender_village.get_buildings_durability();
+        let buildings_durability = self.defender_village.buildings_durability();
 
         // 3.1: Rams damage
         let surviving_rams = attacker_survivors[6];
@@ -292,7 +292,7 @@ impl Battle {
         // Final result
         let wall_report = if wall_level > 0 {
             Some(BuildingDamageReport {
-                name: self.defender_village.get_wall().map(|b| b.name).unwrap(),
+                name: self.defender_village.wall().map(|b| b.name).unwrap(),
                 level_before: wall_level,
                 level_after: wall_level_after,
             })
@@ -328,7 +328,7 @@ impl Battle {
         // bounty
         let bounty = calculate_bounty(
             self.attacker.bounty_capacity_troop_set(&attacker_survivors),
-            &self.defender_village.get_stored_resources(),
+            &self.defender_village.stored_resources(),
         );
 
         BattleReport {
@@ -366,7 +366,7 @@ impl Battle {
         let defender_has_scouts = total_scout_defense_power > 0;
 
         // Apply bonuses and casualties
-        let wall_bonus = self.defender_village.get_wall_defense_bonus();
+        let wall_bonus = self.defender_village.wall_defense_bonus();
 
         // 2.1: Apply wall defense bonus
         total_scout_defense_power = (total_scout_defense_power as f64 * wall_bonus) as u32 + 10;
@@ -413,11 +413,11 @@ impl Battle {
         // Prepare scouting target report
         let target_report = match target {
             ScoutingTarget::Resources => {
-                let resources = self.defender_village.get_stored_resources();
+                let resources = self.defender_village.stored_resources();
                 ScoutingTargetReport::Resources(resources)
             }
             ScoutingTarget::Defenses => {
-                let wall = self.defender_village.get_wall().map(|w| w.level);
+                let wall = self.defender_village.wall().map(|w| w.level);
 
                 let (palace, residence): (Option<u8>, Option<u8>) =
                     match self.defender_village.get_palace_or_residence() {

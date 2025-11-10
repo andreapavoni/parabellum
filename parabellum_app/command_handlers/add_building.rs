@@ -112,7 +112,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        village.store_resources(ResourceGroup(1000, 1000, 1000, 1000));
+        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
 
         mock_uow.villages().save(&village).await.unwrap();
 
@@ -133,7 +133,7 @@ mod tests {
         let cost = Building::new(BuildingName::Barracks, config.speed).cost();
 
         assert_eq!(
-            saved_village.get_stored_resources().lumber(),
+            saved_village.stored_resources().lumber(),
             800 - cost.resources.0,
             "Lumber not deducted correctly"
         );

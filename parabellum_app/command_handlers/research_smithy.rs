@@ -104,7 +104,7 @@ mod tests {
             .unwrap();
         village.add_building_at_slot(granary, 26).unwrap();
         village.research_academy(UnitName::Praetorian).unwrap();
-        village.store_resources(ResourceGroup(2000, 2000, 2000, 2000));
+        village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
         (player, village, config)
     }
 
@@ -133,22 +133,22 @@ mod tests {
 
         // Lvl 1 Praetorian: 800, 1010, 1320, 650
         assert_eq!(
-            saved_village.get_stored_resources().lumber(),
+            saved_village.stored_resources().lumber(),
             2000 - cost.resources.0,
             "Lumber not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().clay(),
+            saved_village.stored_resources().clay(),
             2000 - cost.resources.1,
             "Clay not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().iron(),
+            saved_village.stored_resources().iron(),
             2000 - cost.resources.2,
             "Iron not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().crop(),
+            saved_village.stored_resources().crop(),
             (2000 - cost.resources.3),
             "Crop not deducted"
         );

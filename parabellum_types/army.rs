@@ -18,6 +18,7 @@ pub struct Unit {
     pub cost: Cost,
     pub research_cost: ResearchCost,
     pub requirements: &'static [BuildingRequirement],
+    pub buildings: &'static [BuildingName],
 }
 
 impl Unit {

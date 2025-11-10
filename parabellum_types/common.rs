@@ -31,6 +31,15 @@ impl ResourceGroup {
         Self(lumber, clay, iron, crop)
     }
 
+    pub fn multi(&self, quantity: u32) -> ResourceGroup {
+        Self::new(
+            self.0 * quantity as u32,
+            self.1 * quantity as u32,
+            self.2 * quantity as u32,
+            self.3 * quantity as u32,
+        )
+    }
+
     pub fn total(&self) -> u32 {
         self.0 + self.1 + self.2 + self.3
     }

@@ -144,6 +144,7 @@ pub struct TrainUnits {
     pub village_id: u32,
     pub unit_idx: u8,
     pub quantity: i32,
+    pub building_name: BuildingName,
 }
 
 impl Command for TrainUnits {}

@@ -22,12 +22,10 @@ CREATE TABLE marketplace_offers (
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
 
-    -- Usiamo JSONB per coerenza con le altre tabelle
     offer_resources JSONB NOT NULL,
     seek_resources JSONB NOT NULL,
 
     merchants_required SMALLINT NOT NULL DEFAULT 1,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

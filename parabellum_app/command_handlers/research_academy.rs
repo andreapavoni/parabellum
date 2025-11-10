@@ -113,7 +113,7 @@ mod tests {
         let (player, mut village, config) = setup_village_for_academy();
         let village_id = village.id;
         let player_id = player.id;
-        village.store_resources(ResourceGroup(2000, 2000, 2000, 2000));
+        village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
 
         mock_uow.villages().save(&village).await.unwrap();
 
@@ -129,22 +129,22 @@ mod tests {
         let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
         // Praetorian research cost: 700, 620, 1480, 580
         assert_eq!(
-            saved_village.get_stored_resources().lumber(),
+            saved_village.stored_resources().lumber(),
             2000 - 700,
             "Lumber not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().clay(),
+            saved_village.stored_resources().clay(),
             2000 - 620,
             "Clay not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().iron(),
+            saved_village.stored_resources().iron(),
             2000 - 1480,
             "Iron not deducted"
         );
         assert_eq!(
-            saved_village.get_stored_resources().crop(),
+            saved_village.stored_resources().crop(),
             (2000 - 580),
             "Crop not deducted"
         );
@@ -162,7 +162,7 @@ mod tests {
     async fn test_research_academy_handler_not_enough_resources() {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (player, mut village, config) = setup_village_for_academy();
-        village.store_resources(ResourceGroup::default()); // No resources
+        village.store_resources(&ResourceGroup::default()); // No resources
         let village_id = village.id;
         let player_id = player.id;
 
