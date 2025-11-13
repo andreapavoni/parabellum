@@ -46,25 +46,26 @@ impl JobHandler for ReinforcementJobHandler {
 
         // To switch village, hero should be alone and target village should have HeroMansion
         if target_village.player_id == self.payload.player_id
-            && reinforcement.units.iter().sum::<u32>() == 0
+            && reinforcement.units().iter().sum::<u32>() == 0
             && target_village
                 .get_building_by_name(&BuildingName::HeroMansion)
                 .is_some()
         {
-            if let Some(mut hero) = reinforcement.hero.take() {
+            if let Some(mut hero) = reinforcement.hero() {
+                reinforcement.set_hero(None);
                 hero.village_id = target_village.id;
                 hero_repo.save(&hero).await?;
                 army_repo.save(&reinforcement).await?;
 
                 if let Some(garrison) = target_village.army() {
                     let mut home_army = garrison.clone();
-                    home_army.hero = Some(hero.clone());
+                    home_army.set_hero(Some(hero.clone()));
                     target_village.set_army(Some(&home_army))?;
                     army_repo.remove(reinforcement.id).await?;
                     army_repo.save(&home_army).await?;
                 } else {
                     let mut new_army = Army::new_village_army(&target_village);
-                    new_army.hero = Some(hero.clone());
+                    new_army.set_hero(Some(hero.clone()));
                     army_repo.save(&new_army).await?;
                     target_village.set_army(Some(&new_army))?;
                 }

@@ -1,5 +1,3 @@
-// File: parabellum_server/tests/scout_flow.rs
-
 mod test_utils;
 
 #[cfg(test)]
@@ -49,7 +47,7 @@ pub mod tests {
             )
             .await?
         };
-        let original_home_army_id = scout_army.id; // Salva l'ID originale
+        let original_home_army_id = scout_army.id;
 
         let (_target_player, target_village, _target_army, _) = {
             setup_player_party(
@@ -65,7 +63,7 @@ pub mod tests {
         let command = ScoutVillage {
             player_id: scout_player.id,
             village_id: scout_village.id,
-            army_id: original_home_army_id, // Usa l'ID originale
+            army_id: original_home_army_id,
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
             units: scout_units.clone(),
@@ -100,7 +98,6 @@ pub mod tests {
 
             let scout_village = uow_assert1.villages().get_by_id(scout_village.id).await?;
 
-            // L'armata originale è stata rimossa
             assert!(
                 uow_assert1
                     .armies()
@@ -109,7 +106,7 @@ pub mod tests {
                     .is_err(),
                 "Initial home army should be removed",
             );
-            // L'armata "deployed" ora esiste
+
             assert!(
                 uow_assert1
                     .armies()
@@ -119,7 +116,6 @@ pub mod tests {
                 "Deployed scout army should exist",
             );
 
-            // *** QUESTA È L'ASSERTION CORRETTA ***
             assert!(
                 scout_village.army().is_none(),
                 "Scout village shouldn't have army at home (all troops sent)"
@@ -129,7 +125,6 @@ pub mod tests {
             (job, payload.army_id)
         };
 
-        // 4. ACT (Phase 2): Processare il job di scouting
         let worker = Arc::new(JobWorker::new(
             uow_provider.clone(),
             app_registry.clone(),
@@ -137,7 +132,6 @@ pub mod tests {
         ));
         worker.process_jobs(&vec![scout_job.clone()]).await?;
 
-        // 5. ASSERT (Phase 2): Controllare la creazione del job di RITORNO
         let return_job = {
             let uow_assert2 = uow_provider.begin().await?;
 
@@ -157,10 +151,8 @@ pub mod tests {
             assert_eq!(payload.army_id, deployed_army_id); // Il ritorno è per l'armata "deployed"
             assert_eq!(payload.resources.total(), 0, "Scouts don't carry a bounty");
 
-            // L'armata in viaggio (deployed) è quella che esiste
             let army_status = uow_assert2.armies().get_by_id(deployed_army_id).await?;
-            assert_eq!(army_status.units[3], 10, "Scouts should have survived");
-            // L'armata originale non esiste più
+            assert_eq!(army_status.units()[3], 10, "Scouts should have survived");
             assert!(
                 uow_assert2
                     .armies()
@@ -173,10 +165,7 @@ pub mod tests {
             job
         };
 
-        // 6. ACT (Phase 3): Processare il job di RITORNO
         worker.process_jobs(&vec![return_job.clone()]).await?;
-
-        // 7. ASSERT (Phase 3): Controllare lo stato finale
         {
             let uow_assert3 = uow_provider.begin().await?;
             let original_job = uow_assert3.jobs().get_by_id(return_job.id).await?;
@@ -207,9 +196,10 @@ pub mod tests {
             );
             let home_army = home_village.army().clone().unwrap();
             assert_eq!(
-                home_army.units[3], 10,
+                home_army.units()[3],
+                10,
                 "Expected 10 scouts at home, got {}",
-                home_army.units[3]
+                home_army.units()[3]
             );
 
             assert_ne!(home_army.id, deployed_army_id);

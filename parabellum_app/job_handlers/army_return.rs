@@ -137,7 +137,8 @@ mod tests {
         let final_village = context.uow.villages().get_by_id(village.id).await?;
         let final_home_army = final_village.army().expect("Village should have an army");
         assert_eq!(
-            final_home_army.units[0], 15,
+            final_home_army.units()[0],
+            15,
             "Home army should have 15 units"
         );
 

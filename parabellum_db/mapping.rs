@@ -138,16 +138,16 @@ impl From<db_models::Army> for game_models::army::Army {
             }),
         };
 
-        game_models::army::Army {
-            id: army.id,
-            village_id: army.village_id as u32,
-            current_map_field_id: army.current_map_field_id.map(|id| id as u32),
-            player_id: army.player_id,
-            units: serde_json::from_value(army.units).unwrap_or_default(),
-            smithy: serde_json::from_value(army.smithy).unwrap_or_default(),
+        game_models::army::Army::new(
+            Some(army.id),
+            army.village_id as u32,
+            army.current_map_field_id.map(|id| id as u32),
+            army.player_id,
+            army.tribe.into(),
+            &(serde_json::from_value(army.units).unwrap_or_default()),
+            &(serde_json::from_value(army.smithy).unwrap_or_default()),
             hero,
-            tribe: army.tribe.into(),
-        }
+        )
     }
 }
 

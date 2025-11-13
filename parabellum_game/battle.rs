@@ -107,7 +107,7 @@ impl Battle {
             self.attacker.attack_points();
 
         // 1.2: Hero attack bonus
-        if let Some(hero) = &self.attacker.hero {
+        if let Some(hero) = &self.attacker.hero() {
             let hero_bonus_multiplier = 1.0 + (hero.get_attack_bonus(true) as f64 / 100.0);
             total_attacker_infantry_points =
                 (total_attacker_infantry_points as f64 * hero_bonus_multiplier) as u32;
@@ -136,7 +136,7 @@ impl Battle {
             total_defender_immensity += defender_army.immensity();
 
             // Apply hero defense bonus
-            if let Some(hero) = &defender_army.hero {
+            if let Some(hero) = &defender_army.hero() {
                 let hero_bonus_multiplier = 1.0 + (hero.get_defense_bonus() as f64 / 100.0);
                 total_defender_infantry_points =
                     (total_defender_infantry_points as f64 * hero_bonus_multiplier) as u32;
@@ -243,7 +243,7 @@ impl Battle {
 
         // 3.1: Rams damage
         let surviving_rams = attacker_survivors[6];
-        let smithy_level: u8 = self.attacker.smithy[6];
+        let smithy_level: u8 = self.attacker.smithy()[6];
         if surviving_rams > 0 && wall_level > 0 {
             let ram_damage = calculate_machine_damage(
                 surviving_rams,
@@ -257,7 +257,7 @@ impl Battle {
 
         // 3.2: Catapults damage
         let surviving_catapults = attacker_survivors[7];
-        let smithy_level: u8 = self.attacker.smithy[7];
+        let smithy_level: u8 = self.attacker.smithy()[7];
         let mut buildings_levels: Option<[u8; 2]> = None;
 
         if self.attack_type == AttackType::Normal && surviving_catapults > 0 {
@@ -404,7 +404,7 @@ impl Battle {
                 BattlePartyReport {
                     army_before: reinforcement.clone(),
                     // No losses for defenders in scouting
-                    survivors: reinforcement.units,
+                    survivors: *reinforcement.units(),
                     losses: [0; 10],
                 }
             })

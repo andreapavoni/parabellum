@@ -234,7 +234,7 @@ mod tests {
             units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
-            hero_id: Some(attacker_army.hero.as_ref().unwrap().id),
+            hero_id: Some(attacker_army.hero().unwrap().id),
         };
         handler.handle(command, &mock_uow, &config).await?;
 
@@ -268,16 +268,16 @@ mod tests {
         // The deployed army should include the hero
         let deployed_army = army_repo.get_by_id(deployed_army_id).await?;
         assert!(
-            deployed_army.hero.is_some(),
+            deployed_army.hero().is_some(),
             "Deployed army should include the hero"
         );
         assert_eq!(
-            deployed_army.hero.as_ref().unwrap().id,
-            attacker_army.hero.as_ref().unwrap().id,
+            deployed_army.hero().unwrap().id,
+            attacker_army.hero().unwrap().id,
             "Hero ID should match the one sent with the army"
         );
         assert_eq!(
-            deployed_army.hero.as_ref().unwrap().player_id,
+            deployed_army.hero().unwrap().player_id,
             attacker_player.id,
             "Hero should remain under the attacker's ownership"
         );
@@ -372,7 +372,7 @@ mod tests {
         // Deployed army should NOT have a hero attached (hero_id was ignored)
         let deployed_army = army_repo.get_by_id(deployed_army_id).await?;
         assert!(
-            deployed_army.hero.is_none(),
+            deployed_army.hero().is_none(),
             "Hero ID was not present in the village, so no hero should accompany the army"
         );
 

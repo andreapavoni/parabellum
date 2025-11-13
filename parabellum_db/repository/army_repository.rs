@@ -109,7 +109,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let db_tribe: Tribe = army.tribe.clone().into();
         let current_map_field_id: Option<i32> = army.current_map_field_id.map(|id| id as i32);
-        let hero_id = army.hero.as_ref().map(|h| h.id);
+        let hero_id = army.hero().map(|h| h.id);
 
         sqlx::query!(
                 r#"
@@ -129,8 +129,8 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
                 army.village_id as i32,
                 current_map_field_id,
                 hero_id,
-                Json(&army.units) as _,
-                Json(&army.smithy) as _,
+                Json(&army.units()) as _,
+                Json(&army.smithy()) as _,
                 db_tribe as _,
                 army.player_id
             )

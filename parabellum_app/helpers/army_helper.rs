@@ -30,8 +30,9 @@ pub async fn deploy_army_from_village<'a>(
     let mut home_army = army_repo.get_by_id(home_army_id).await?;
     let attacker_village = village_repo.get_by_id(village.id).await?;
 
-    let hero = if let (Some(id), Some(home_hero)) = (hero_id, home_army.hero.take()) {
+    let hero = if let (Some(id), Some(home_hero)) = (hero_id, home_army.hero()) {
         let hero = hero_repo.get_by_id(id).await?;
+        home_army.set_hero(None);
 
         if !(hero.village_id == attacker_village.id
             && hero.player_id == attacker_village.player_id

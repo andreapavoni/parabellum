@@ -224,7 +224,8 @@ pub mod tests {
             );
             let home_army = home_village.army().unwrap();
             assert_eq!(
-                home_army.units[0], 100,
+                home_army.units()[0],
+                100,
                 "Home army should have 100 troops (assuming 0 losses for simplicity)"
             );
             assert_ne!(

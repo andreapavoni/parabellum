@@ -169,11 +169,11 @@ pub mod tests {
 
             let home_army = target_village.army().unwrap();
             assert!(
-                home_army.hero.is_some(),
+                home_army.hero().is_some(),
                 "Target village should have 0 units at home"
             );
 
-            let hero = home_army.hero.clone().unwrap();
+            let hero = home_army.hero().unwrap();
             assert_eq!(
                 hero.village_id, target_village.id,
                 "Hero should belong to target village"
@@ -223,7 +223,7 @@ pub mod tests {
             let army_repo = uow_attach.armies();
 
             let mut army = army_repo.get_by_id(reinforcer_army.id).await?;
-            army.hero = hero.clone();
+            army.set_hero(hero.clone());
             army_repo.save(&army).await?;
             uow_attach.commit().await?;
         }
@@ -323,7 +323,7 @@ pub mod tests {
             );
 
             assert!(
-                deployed_army.hero.is_some(),
+                deployed_army.hero().is_some(),
                 "Hero should stay with reinforcements in target village"
             );
             uow_final.rollback().await?;

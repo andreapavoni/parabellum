@@ -156,9 +156,9 @@ pub mod tests {
 
             if let Some(id) = hero_id {
                 let hero = Hero::new(Some(id), army.village_id, army.player_id);
-                army.hero = Some(hero);
+                army.set_hero(Some(hero));
             } else {
-                army.hero = None;
+                army.set_hero(None);
             }
 
             Ok(())

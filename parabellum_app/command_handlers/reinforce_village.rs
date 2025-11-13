@@ -195,12 +195,12 @@ mod tests {
         // The deployed reinforcement army should include the hero at dispatch time
         let deployed_army = army_repo.get_by_id(deployed_army_id).await.unwrap();
         assert!(
-            deployed_army.hero.is_some(),
+            deployed_army.hero().is_some(),
             "Hero should accompany the reinforcing army"
         );
         assert_eq!(
-            deployed_army.hero.as_ref().unwrap().id,
-            source_army.hero.as_ref().unwrap().id,
+            deployed_army.hero().unwrap().id,
+            source_army.hero().unwrap().id,
             "Hero ID should match the one sent with the reinforcements"
         );
         assert_eq!(
@@ -265,7 +265,7 @@ mod tests {
             army_id: reinforcer_army.id,
             units: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             target_village_id: target_village.id,
-            hero_id: Some(reinforcer_army.hero.as_ref().unwrap().id),
+            hero_id: Some(reinforcer_army.hero().unwrap().id),
         };
         let result = handler.handle(command, &mock_uow, &config).await;
         assert!(
@@ -297,12 +297,12 @@ mod tests {
         // Deployed army has hero at send time
         let deployed_army = army_repo.get_by_id(deployed_army_id).await.unwrap();
         assert!(
-            deployed_army.hero.is_some(),
+            deployed_army.hero().is_some(),
             "Hero should travel with the reinforcing army"
         );
         assert_eq!(
-            deployed_army.hero.as_ref().unwrap().id,
-            reinforcer_army.hero.as_ref().unwrap().id
+            deployed_army.hero().unwrap().id,
+            reinforcer_army.hero().unwrap().id
         );
         // The hero and army remain under the reinforcer player's ownership
         assert_eq!(

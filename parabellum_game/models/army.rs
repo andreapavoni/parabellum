@@ -19,9 +19,9 @@ pub struct Army {
     pub current_map_field_id: Option<u32>, // this army could have been deployed in some other Village or Oasis
     pub player_id: Uuid,
     pub tribe: Tribe,
-    pub units: TroopSet,
-    pub smithy: SmithyUpgrades,
-    pub hero: Option<Hero>,
+    units: TroopSet,
+    smithy: SmithyUpgrades,
+    hero: Option<Hero>,
 }
 
 impl Army {
@@ -59,6 +59,22 @@ impl Army {
             village.smithy(),
             None,
         )
+    }
+
+    pub fn hero(&self) -> Option<Hero> {
+        self.hero.clone()
+    }
+
+    pub fn set_hero(&mut self, hero: Option<Hero>) {
+        self.hero = hero.clone();
+    }
+
+    pub fn smithy(&self) -> &SmithyUpgrades {
+        &self.smithy
+    }
+
+    pub fn units(&self) -> &TroopSet {
+        &self.units
     }
 
     /// Returns the amount of a given unit.
