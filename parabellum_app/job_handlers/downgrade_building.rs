@@ -73,6 +73,7 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
+    use parabellum_core::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
@@ -85,7 +86,7 @@ mod tests {
     use crate::{
         config::Config,
         jobs::{Job, JobPayload},
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
 
@@ -93,13 +94,13 @@ mod tests {
         start_level: u8,
         slot_id: u8,
         name: BuildingName,
-    ) -> (
+    ) -> Result<(
         Job,
         Arc<Config>,
         Box<dyn UnitOfWork<'static> + 'static>,
         u32,
         u32,
-    ) {
+    )> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -111,16 +112,14 @@ mod tests {
             ..Default::default()
         });
 
-        village
-            .set_building_level_at_slot(slot_id, start_level, config.speed)
-            .unwrap();
+        village.set_building_level_at_slot(slot_id, start_level, config.speed)?;
         let initial_population = village.population;
 
         let village_id = village.id;
         let player_id = player.id;
 
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let payload = BuildingDowngradeTask {
             slot_id,
@@ -130,24 +129,21 @@ mod tests {
         let job_payload = JobPayload::new("DowngradeBuilding", json!(payload.clone()));
         let job = Job::new(player_id, village_id as i32, 0, job_payload);
 
-        (job, config, mock_uow, village_id, initial_population)
+        Ok((job, config, mock_uow, village_id, initial_population))
     }
 
     #[tokio::test]
-    async fn test_downgrade_job_handler_success() {
+    async fn test_downgrade_job_handler_success() -> Result<()> {
         // Test: MainBuilding L2 -> L1 (Slot 19)
         let (job, config, uow, village_id, initial_pop) =
-            setup_job_test(2, 19, BuildingName::MainBuilding).await;
+            setup_job_test(2, 19, BuildingName::MainBuilding).await?;
 
-        let handler = DowngradeBuildingJobHandler::new(
-            serde_json::from_value(job.task.data.clone()).unwrap(),
-        );
+        let handler =
+            DowngradeBuildingJobHandler::new(serde_json::from_value(job.task.data.clone())?);
         let context = JobHandlerContext { uow, config };
 
-        let result = handler.handle(&context, &job).await;
-        assert_handler_success(result);
-
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        handler.handle(&context, &job).await?;
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         let building_in_db = saved_village.get_building_by_slot_id(19).unwrap();
 
         assert_eq!(
@@ -162,22 +158,20 @@ mod tests {
             initial_pop - 1,
             saved_village.population
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_downgrade_job_handler_resource_to_zero() {
+    async fn test_downgrade_job_handler_resource_to_zero() -> Result<()> {
         let (job, config, uow, village_id, _initial_pop) =
-            setup_job_test(1, 1, BuildingName::Woodcutter).await;
+            setup_job_test(1, 1, BuildingName::Woodcutter).await?;
 
-        let handler = DowngradeBuildingJobHandler::new(
-            serde_json::from_value(job.task.data.clone()).unwrap(),
-        );
+        let handler =
+            DowngradeBuildingJobHandler::new(serde_json::from_value(job.task.data.clone())?);
         let context = JobHandlerContext { uow, config };
 
-        let result = handler.handle(&context, &job).await;
-        assert_handler_success(result);
-
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        handler.handle(&context, &job).await?;
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         let building_in_db = saved_village.get_building_by_slot_id(1).unwrap();
 
         assert_eq!(
@@ -186,10 +180,11 @@ mod tests {
             building_in_db.building.level
         );
         assert_eq!(building_in_db.building.group, BuildingGroup::Resources);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_downgrade_job_handler_infra_to_zero_removes_it() {
+    async fn test_downgrade_job_handler_infra_to_zero_removes_it() -> Result<()> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions::default());
         let mut village = village_factory(VillageFactoryOptions {
@@ -202,12 +197,12 @@ mod tests {
             BuildingName::Warehouse,
             config.speed,
         );
-        village.add_building_at_slot(building, slot_id).unwrap();
+        village.add_building_at_slot(building, slot_id)?;
         let initial_pop = village.population;
         let village_id = village.id;
 
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let payload = BuildingDowngradeTask {
             slot_id,
@@ -222,10 +217,9 @@ mod tests {
             uow: mock_uow,
             config,
         };
-        let result = handler.handle(&context, &job).await;
-        assert_handler_success(result);
+        handler.handle(&context, &job).await?;
 
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         let building_in_db = saved_village.get_building_by_slot_id(slot_id);
         assert!(building_in_db.is_none(), "Building should be demolished");
         assert_eq!(
@@ -235,5 +229,6 @@ mod tests {
             initial_pop - 1,
             saved_village.population
         );
+        Ok(())
     }
 }

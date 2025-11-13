@@ -55,6 +55,7 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
+    use parabellum_core::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
@@ -69,7 +70,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_research_academy_job_handler_success() {
+    async fn test_research_academy_job_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
 
@@ -84,7 +85,7 @@ mod tests {
         let village_id = village.id;
 
         village.set_academy_research_for_test(&UnitName::Praetorian, false);
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let unit_to_research = UnitName::Praetorian;
         let payload = ResearchAcademyTask {
@@ -98,15 +99,9 @@ mod tests {
             uow: mock_uow,
             config,
         };
+        handler.handle(&context, &job).await?;
 
-        let result = handler.handle(&context, &job).await;
-        assert!(
-            result.is_ok(),
-            "Job handler should succeed: {:?}",
-            result.err()
-        );
-
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         let unit_idx = saved_village
             .tribe
             .get_unit_idx_by_name(&unit_to_research)
@@ -115,5 +110,6 @@ mod tests {
             saved_village.academy_research()[unit_idx],
             "Unit should be marked as researched"
         );
+        Ok(())
     }
 }

@@ -47,12 +47,32 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let all_armies = sqlx::query_as!(
-                  db_models::Army,
-                  r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _" FROM armies WHERE village_id = $1 OR current_map_field_id = $1"#,
-                  village_id_i32
-              )
-              .fetch_all(&mut *tx_guard.as_mut())
-              .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+            db_models::Army,
+            r#"
+            SELECT
+                a.id,
+                a.village_id,
+                a.player_id,
+                a.current_map_field_id,
+                a.tribe as "tribe: _",
+                a.units,
+                a.smithy,
+                a.hero_id as "hero_id?: Uuid",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+            FROM armies a
+            LEFT JOIN heroes h ON a.hero_id = h.id
+            WHERE a.village_id = $1 OR a.current_map_field_id = $1
+            "#,
+            village_id_i32
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let db_oases = sqlx::query_as!(
             db_models::MapField,
@@ -116,16 +136,35 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         }
 
         let village_ids: Vec<i32> = db_villages.iter().map(|v| v.id).collect();
+
         let all_armies = sqlx::query_as!(
-                db_models::Army,
-                r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _"
-                 FROM armies
-                 WHERE village_id = ANY($1) OR current_map_field_id = ANY($1)"#,
-                &village_ids
-            )
-            .fetch_all(&mut *tx_guard.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+            db_models::Army,
+            r#"
+            SELECT
+                a.id,
+                a.village_id,
+                a.player_id,
+                a.current_map_field_id,
+                a.tribe as "tribe: _",
+                a.units,
+                a.smithy,
+                a.hero_id as "hero_id?: Uuid",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
+                CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+            FROM armies a
+            LEFT JOIN heroes h ON a.hero_id = h.id
+            WHERE a.village_id = ANY($1) OR a.current_map_field_id = ANY($1)
+            "#,
+            &village_ids
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
         let mut armies_map: HashMap<i32, Vec<db_models::Army>> = HashMap::new();
         for army in all_armies {
             armies_map.entry(army.village_id).or_default().push(army);

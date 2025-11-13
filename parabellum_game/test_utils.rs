@@ -117,7 +117,7 @@ pub fn army_factory(options: ArmyFactoryOptions) -> Army {
         Some(village_id),
         options.player_id.unwrap_or(Uuid::new_v4()),
         options.tribe.unwrap_or(Tribe::Teuton),
-        &options.units.unwrap_or([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        &options.units.unwrap_or([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
         &options.smithy.unwrap_or_default(),
         options.hero,
     )

@@ -48,9 +48,7 @@ impl JobHandler for AttackJobHandler {
             .get_by_id(self.payload.target_village_id as u32)
             .await?;
 
-        // Find catapult targets on target village by looking for their name, or return random buildings
         let mut catapult_targets: Vec<Building> = Vec::new();
-
         for ct in &self.payload.catapult_targets {
             match def_village.get_building_by_name(&ct) {
                 Some(b) => catapult_targets.push(b.building.clone()),
@@ -62,7 +60,6 @@ impl JobHandler for AttackJobHandler {
                 }
             };
         }
-
         let catapult_targets: [Building; 2] = catapult_targets.try_into().unwrap();
 
         let battle = Battle::new(
@@ -80,7 +77,6 @@ impl JobHandler for AttackJobHandler {
         def_village.apply_battle_report(&report, ctx.config.speed)?;
         ctx.uow.villages().save(&def_village).await?;
 
-        // Update armies
         if let Some(army) = def_village.army() {
             ctx.uow.armies().save(&army).await?;
         }
@@ -89,7 +85,6 @@ impl JobHandler for AttackJobHandler {
             ctx.uow.armies().save(&reinforcement_army).await?;
         }
 
-        // --- 4. Return job ---
         let return_travel_time = atk_village.position.calculate_travel_time_secs(
             def_village.position,
             atk_army.speed(),
@@ -123,6 +118,3 @@ impl JobHandler for AttackJobHandler {
         Ok(())
     }
 }
-
-// No unit tests here due to too much complexities in the setup.
-// However, you can check `tests/attack_flow.rs` to see how this code is tested.

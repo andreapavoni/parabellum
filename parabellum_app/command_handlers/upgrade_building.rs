@@ -72,6 +72,9 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use parabellum_core::Result;
     use parabellum_game::{
         models::village::Village,
         test_utils::{
@@ -86,15 +89,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config,
-        cqrs::commands::UpgradeBuilding,
-        jobs::tasks::BuildingUpgradeTask,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
-        uow::UnitOfWork,
+        config::Config, cqrs::commands::UpgradeBuilding, jobs::tasks::BuildingUpgradeTask,
+        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
     };
-    use std::sync::Arc;
 
-    fn setup_village_for_upgrade() -> (Player, Village, Arc<Config>, u8) {
+    fn setup_village_for_upgrade() -> Result<(Player, Village, Arc<Config>, u8)> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -112,20 +111,20 @@ mod tests {
             .unwrap();
         village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
 
-        (player, village, config, main_building_slot)
+        Ok((player, village, config, main_building_slot))
     }
 
     #[tokio::test]
-    async fn test_upgrade_building_handler_success() {
+    async fn test_upgrade_building_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config, slot_id) = setup_village_for_upgrade();
+        let (player, village, config, slot_id) = setup_village_for_upgrade()?;
 
         let village_id = village.id;
         let player_id = player.id;
         let initial_lumber = village.stored_resources().lumber();
         let initial_population = village.population;
 
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = UpgradeBuildingCommandHandler::new();
         let command = UpgradeBuilding {
@@ -142,10 +141,8 @@ mod tests {
             .unwrap();
         let cost = l2_building.cost();
 
-        let result = handler.handle(command.clone(), &mock_uow, &config).await;
-        assert_handler_success(result);
-
-        let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
+        handler.handle(command.clone(), &mock_uow, &config).await?;
+        let saved_village = mock_uow.villages().get_by_id(village_id).await?;
         assert_eq!(
             saved_village.stored_resources().lumber(),
             initial_lumber - cost.resources.0,
@@ -164,12 +161,12 @@ mod tests {
             initial_population, saved_village.population
         );
 
-        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await.unwrap();
+        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
         assert_eq!(added_jobs.len(), 1, "Should have created 1 job");
         let job = &added_jobs[0];
         assert_eq!(job.task.task_type, "BuildingUpgrade");
 
-        let task: BuildingUpgradeTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let task: BuildingUpgradeTask = serde_json::from_value(job.task.data.clone())?;
         assert_eq!(task.slot_id, slot_id);
         assert_eq!(task.building_name, BuildingName::MainBuilding);
         assert_eq!(
@@ -177,12 +174,13 @@ mod tests {
             "Expected task having level {}, got {}",
             2, task.level
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_upgrade_building_handler_not_enough_resources() {
+    async fn test_upgrade_building_handler_not_enough_resources() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config, slot_id) = setup_village_for_upgrade();
+        let (player, mut village, config, slot_id) = setup_village_for_upgrade()?;
 
         assert!(
             village
@@ -190,7 +188,7 @@ mod tests {
                 .is_ok(),
             "Village should have enough resources"
         );
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = UpgradeBuildingCommandHandler::new();
         let command = UpgradeBuilding {
@@ -207,7 +205,8 @@ mod tests {
             GameError::NotEnoughResources.to_string()
         );
 
-        let added_jobs = mock_uow.jobs().list_by_player_id(player.id).await.unwrap();
+        let added_jobs = mock_uow.jobs().list_by_player_id(player.id).await?;
         assert_eq!(added_jobs.len(), 0, "No jobs should be created");
+        Ok(())
     }
 }

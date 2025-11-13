@@ -3,6 +3,7 @@ pub mod tests {
     use async_trait::async_trait;
     use parabellum_game::models::{
         army::Army,
+        hero::Hero,
         map::{MapField, MapFieldTopology, MapQuadrant, Valley},
         marketplace::MarketplaceOffer,
         village::Village,
@@ -22,8 +23,8 @@ pub mod tests {
     use crate::{
         jobs::Job,
         repository::{
-            ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
-            VillageRepository,
+            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
+            PlayerRepository, VillageRepository,
         },
         uow::UnitOfWork,
     };
@@ -134,11 +135,41 @@ pub mod tests {
                 .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?)
         }
 
+        async fn get_by_hero_id(&self, hero_id: Uuid) -> Result<Army, ApplicationError> {
+            let armies = self.armies.lock().unwrap();
+            Ok(armies
+                .get(&hero_id)
+                .cloned()
+                .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(hero_id)))?)
+        }
+
+        async fn set_hero(
+            &self,
+            army_id: Uuid,
+            hero_id: Option<Uuid>,
+        ) -> Result<(), ApplicationError> {
+            let armies = self.armies.lock().unwrap();
+            let mut army = armies
+                .get(&army_id)
+                .cloned()
+                .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?;
+
+            if let Some(id) = hero_id {
+                let hero = Hero::new(Some(id), army.village_id, army.player_id);
+                army.hero = Some(hero);
+            } else {
+                army.hero = None;
+            }
+
+            Ok(())
+        }
+
         async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
             let mut armies = self.armies.lock().unwrap();
             armies.insert(army.id, army.clone());
             Ok(())
         }
+
         async fn remove(&self, army_id: Uuid) -> Result<(), ApplicationError> {
             let mut armies = self.armies.lock().unwrap();
             armies.remove(&army_id);
@@ -261,6 +292,36 @@ pub mod tests {
         }
     }
 
+    #[derive(Default, Clone)]
+    pub struct MockHeroRepository {
+        heroes: Arc<Mutex<Vec<Hero>>>,
+    }
+
+    impl MockHeroRepository {
+        pub fn new() -> Self {
+            Self {
+                heroes: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl HeroRepository for MockHeroRepository {
+        async fn save(&self, job: &Hero) -> Result<(), ApplicationError> {
+            self.heroes.lock().unwrap().push(job.clone());
+            Ok(())
+        }
+
+        async fn get_by_id(&self, id: Uuid) -> Result<Hero, ApplicationError> {
+            let jobs = self.heroes.lock().unwrap().clone();
+
+            Ok(jobs
+                .into_iter()
+                .find(|j| j.id == id)
+                .ok_or_else(|| ApplicationError::Db(DbError::HeroNotFound(id)))?)
+        }
+    }
+
     #[derive(Default)]
     pub struct MockUnitOfWork {
         players: Arc<MockPlayerRepository>,
@@ -269,6 +330,7 @@ pub mod tests {
         jobs: Arc<MockJobRepository>,
         map: Arc<MockMapRepository>,
         marketplace: Arc<MockMarketplaceRepository>,
+        heroes: Arc<MockHeroRepository>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -303,6 +365,10 @@ pub mod tests {
             self.marketplace.clone()
         }
 
+        fn heroes(&self) -> Arc<dyn HeroRepository + 'a> {
+            self.heroes.clone()
+        }
+
         // We consume self (Box<Self>) as per the trait definition
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
             *self.committed.lock().unwrap() = true;
@@ -313,13 +379,5 @@ pub mod tests {
             *self.rolled_back.lock().unwrap() = true;
             Ok(())
         }
-    }
-
-    pub fn assert_handler_success(result: Result<(), ApplicationError>) {
-        assert!(
-            result.is_ok(),
-            "Handler should execute successfully: {:?}",
-            result.err().unwrap().to_string()
-        )
     }
 }

@@ -292,7 +292,10 @@ pub mod tests {
         if let Err(ApplicationError::Game(GameError::NotEnoughMerchants)) = result {
             // Success
         } else {
-            panic!("Wrong failure message: {:?}", result.err());
+            panic!(
+                "Wrong failure message: {:?}",
+                result.err().unwrap().to_string()
+            );
         }
 
         let jobs = uow_cmd.jobs().list_by_player_id(player_a.id).await?;
@@ -307,7 +310,7 @@ pub mod tests {
         let (uow_provider, config, _registry, player_a, village_a, village_b) =
             setup_test_env().await?;
 
-        // Tento di inviare 5001 lumber (ne ho 5000)
+        // Sending 5001 lumber while having 5000)
         let command = SendResources {
             player_id: player_a.id,
             village_id: village_a.id,
@@ -320,11 +323,11 @@ pub mod tests {
         let result = handler.handle(command, &uow_cmd, &config).await;
 
         // Verifica l'errore
-        assert!(result.is_err(), "Il comando doveva fallire");
+        assert!(result.is_err(), "Expected failure, got success");
         if let Err(ApplicationError::Game(GameError::NotEnoughResources)) = result {
             // Successo
         } else {
-            panic!("Errore non corretto: {:?}", result.err());
+            panic!("Wrong failure message: {:?}", result.err());
         }
 
         uow_cmd.rollback().await?;

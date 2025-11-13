@@ -48,7 +48,7 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::GameError;
+    use parabellum_core::{GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -64,14 +64,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config,
-        jobs::tasks::ResearchAcademyTask,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        config::Config, jobs::tasks::ResearchAcademyTask, test_utils::tests::MockUnitOfWork,
     };
     use std::sync::Arc;
 
     // Setup helper che crea un villaggio con i requisiti per ricercare Praetorian
-    fn setup_village_for_academy() -> (Player, Village, Arc<Config>) {
+    fn setup_village_for_academy() -> Result<(Player, Village, Arc<Config>)> {
         let config = Config::from_env();
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -83,39 +81,34 @@ mod tests {
             ..Default::default()
         });
 
-        let academy = Building::new(BuildingName::Academy, config.speed)
-            .at_level(1, config.speed)
-            .unwrap();
-        village.add_building_at_slot(academy, 23).unwrap();
+        let academy =
+            Building::new(BuildingName::Academy, config.speed).at_level(1, config.speed)?;
+        village.add_building_at_slot(academy, 23)?;
 
-        let smithy = Building::new(BuildingName::Smithy, config.speed)
-            .at_level(1, config.speed)
-            .unwrap();
-        village.add_building_at_slot(smithy, 24).unwrap();
+        let smithy = Building::new(BuildingName::Smithy, config.speed).at_level(1, config.speed)?;
+        village.add_building_at_slot(smithy, 24)?;
 
-        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-            .at_level(4, config.speed)
-            .unwrap();
-        village.add_building_at_slot(warehouse, 25).unwrap();
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(4, config.speed)?;
+        village.add_building_at_slot(warehouse, 25)?;
 
-        let granary = Building::new(BuildingName::Granary, config.speed)
-            .at_level(4, config.speed)
-            .unwrap();
-        village.add_building_at_slot(granary, 26).unwrap();
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(4, config.speed)?;
+        village.add_building_at_slot(granary, 26)?;
 
         let config = Arc::new(Config::from_env());
-        (player, village, config)
+        Ok((player, village, config))
     }
 
     #[tokio::test]
-    async fn test_research_academy_handler_success() {
+    async fn test_research_academy_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village_for_academy();
+        let (player, mut village, config) = setup_village_for_academy()?;
         let village_id = village.id;
         let player_id = player.id;
         village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
 
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -123,10 +116,9 @@ mod tests {
             village_id,
         };
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command, &mock_uow, &config).await?;
 
-        let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = mock_uow.villages().get_by_id(village_id).await?;
         // Praetorian research cost: 700, 620, 1480, 580
         assert_eq!(
             saved_village.stored_resources().lumber(),
@@ -149,24 +141,25 @@ mod tests {
             "Crop not deducted"
         );
 
-        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await.unwrap();
+        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
         assert_eq!(job.task.task_type, "ResearchAcademy");
-        let task: ResearchAcademyTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let task: ResearchAcademyTask = serde_json::from_value(job.task.data.clone())?;
         assert_eq!(task.unit, UnitName::Praetorian);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_research_academy_handler_not_enough_resources() {
+    async fn test_research_academy_handler_not_enough_resources() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village_for_academy();
+        let (player, mut village, config) = setup_village_for_academy()?;
         village.store_resources(&ResourceGroup::default()); // No resources
         let village_id = village.id;
         let player_id = player.id;
 
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -182,16 +175,17 @@ mod tests {
             GameError::NotEnoughResources.to_string()
         );
 
-        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await.unwrap();
+        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
         assert_eq!(added_jobs.len(), 0, "No job should be created");
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_research_academy_handler_requirements_not_met() {
+    async fn test_research_academy_handler_requirements_not_met() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (_player, mut village, config) = setup_village_for_academy();
-        village.remove_building_at_slot(24, config.speed).unwrap();
-        mock_uow.villages().save(&village).await.unwrap();
+        let (_player, mut village, config) = setup_village_for_academy()?;
+        village.remove_building_at_slot(24, config.speed)?;
+        mock_uow.villages().save(&village).await?;
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -200,7 +194,6 @@ mod tests {
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
-
         assert!(result.is_err(), "Handler should fail");
         assert_eq!(
             result.err().unwrap().to_string(),
@@ -210,17 +203,18 @@ mod tests {
             }
             .to_string()
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_research_academy_handler_already_researched() {
+    async fn test_research_academy_handler_already_researched() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (_player, mut village, config) = setup_village_for_academy();
+        let (_player, mut village, config) = setup_village_for_academy()?;
 
         village.set_academy_research_for_test(&UnitName::Praetorian, true);
 
         let village_id = village.id;
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = ResearchAcademyCommandHandler::new();
         let command = ResearchAcademy {
@@ -229,11 +223,11 @@ mod tests {
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
-
         assert!(result.is_err(), "Handler should fail");
         assert_eq!(
             result.err().unwrap().to_string(),
             GameError::UnitAlreadyResearched(UnitName::Praetorian).to_string()
         );
+        Ok(())
     }
 }

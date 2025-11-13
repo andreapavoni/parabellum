@@ -1,4 +1,4 @@
-use sqlx::{types::Json, Postgres, Transaction};
+use sqlx::{Postgres, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -25,14 +25,84 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
     async fn get_by_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let army = sqlx::query_as!(
-          db_models::Army,
-          r#"SELECT id, village_id, current_map_field_id, hero_id, units, smithy, player_id, tribe AS "tribe: _" FROM armies WHERE id = $1"#,
-          army_id
-      )
-      .fetch_one(&mut *tx_guard.as_mut())
-      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+            db_models::Army,
+            r#"
+            SELECT
+              a.id,
+              a.village_id,
+              a.player_id,
+              a.current_map_field_id,
+              a.tribe as "tribe: _",
+              a.units,
+              a.smithy,
+              a.hero_id                                  as "hero_id?: Uuid",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+            FROM armies a
+            LEFT JOIN heroes h ON a.hero_id = h.id
+            WHERE a.id = $1
+            "#,
+            army_id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(army.into())
+    }
+
+    async fn get_by_hero_id(&self, hero_id: Uuid) -> Result<Army, ApplicationError> {
+        let mut tx = self.tx.lock().await;
+        let army = sqlx::query_as!(
+            db_models::Army,
+            r#"
+            SELECT
+              a.id,
+              a.village_id,
+              a.player_id,
+              a.current_map_field_id,
+              a.tribe as "tribe: _",
+              a.units,
+              a.smithy,
+              a.hero_id                                  as "hero_id?: Uuid",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+            FROM armies a
+            LEFT JOIN heroes h ON a.hero_id = h.id
+            WHERE a.hero_id = $1
+            "#,
+            hero_id
+        )
+        .fetch_optional(&mut *tx.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        if let Some(army) = army {
+            return Ok(army.into());
+        } else {
+            return Err(ApplicationError::Db(DbError::HeroWithoutArmy(hero_id)));
+        }
+    }
+
+    async fn set_hero(&self, army_id: Uuid, hero_id: Option<Uuid>) -> Result<(), ApplicationError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"UPDATE armies SET hero_id = $2 WHERE id = $1"#,
+            army_id,
+            hero_id
+        )
+        .execute(&mut *tx.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 
     async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
@@ -41,7 +111,6 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         let current_map_field_id: Option<i32> = army.current_map_field_id.map(|id| id as i32);
         let hero_id = army.hero.as_ref().map(|h| h.id);
 
-        // Questa è la query UPSERT
         sqlx::query!(
                 r#"
                 INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)
@@ -51,7 +120,6 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
                     units = $5,
                     hero_id = $4,
                     current_map_field_id = $3,
-                    -- Aggiungi altri campi che un 'save' dovrebbe aggiornare se necessario
                     village_id = $2,
                     player_id = $8,
                     tribe = $7,

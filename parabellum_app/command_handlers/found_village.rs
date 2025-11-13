@@ -57,19 +57,18 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
 mod tests {
     use std::sync::Arc;
 
+    use parabellum_core::Result;
     use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
     use parabellum_types::{map::Position, tribe::Tribe};
 
     use super::*;
     use crate::{
-        config::Config,
-        cqrs::commands::FoundVillage,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        config::Config, cqrs::commands::FoundVillage, test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
 
     #[tokio::test]
-    async fn test_found_village_handler_success() {
+    async fn test_found_village_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
         let handler = FoundVillageCommandHandler::new();
@@ -83,14 +82,9 @@ mod tests {
         let position = Position { x: 10, y: 10 };
         let command = FoundVillage::new(player.clone(), position);
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command, &mock_uow, &config).await?;
 
-        let villages = mock_uow
-            .villages()
-            .list_by_player_id(player.id)
-            .await
-            .unwrap();
+        let villages = mock_uow.villages().list_by_player_id(player.id).await?;
         assert_eq!(villages.len(), 1, "One village should be created");
 
         let village = &villages[0];
@@ -98,5 +92,6 @@ mod tests {
         assert_eq!(village.name, "New Village");
         assert_eq!(village.position, Position { x: 10, y: 10 });
         assert_eq!(village.is_capital, false); // Found village is not capital
+        Ok(())
     }
 }

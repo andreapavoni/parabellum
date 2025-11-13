@@ -4,12 +4,14 @@ pub mod tests {
     use rand::Rng;
 
     use parabellum_db::{
-        PostgresArmyRepository, PostgresJobRepository, PostgresMapRepository,
-        PostgresMarketplaceRepository, PostgresPlayerRepository, PostgresVillageRepository,
+        PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
+        PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
+        PostgresVillageRepository,
     };
     use parabellum_game::{
         models::{
             army::{Army, TroopSet},
+            hero::Hero,
             village::Village,
         },
         test_utils::{
@@ -24,8 +26,8 @@ pub mod tests {
 
     use parabellum_app::{
         repository::{
-            ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
-            VillageRepository,
+            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
+            PlayerRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -63,6 +65,10 @@ pub mod tests {
 
         fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'p> {
             Arc::new(PostgresMarketplaceRepository::new(self.tx.clone()))
+        }
+
+        fn heroes(&self) -> Arc<dyn HeroRepository + 'p> {
+            Arc::new(PostgresHeroRepository::new(self.tx.clone()))
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
@@ -105,15 +111,19 @@ pub mod tests {
         position: Option<Position>,
         tribe: Tribe,
         units: TroopSet,
-    ) -> Result<(Player, Village, Army)> {
+        with_hero: bool,
+    ) -> Result<(Player, Village, Army, Option<Hero>)> {
         let uow = uow_provider.begin().await?;
         let player: Player;
         let village: Village;
         let army: Army;
+        let hero: Option<Hero>;
         {
             let player_repo = uow.players();
             let village_repo = uow.villages();
             let army_repo = uow.armies();
+            let hero_repo = uow.heroes();
+
             let position = position.unwrap_or_else(|| {
                 let mut rng = rand::thread_rng();
                 let x = rng.gen_range(1..99);
@@ -138,11 +148,20 @@ pub mod tests {
             });
             village_repo.save(&village).await?;
 
+            hero = if with_hero {
+                let hero = Hero::new(None, village.id, player.id);
+                hero_repo.save(&hero).await.unwrap();
+                Some(hero)
+            } else {
+                None
+            };
+
             army = army_factory(ArmyFactoryOptions {
                 player_id: Some(player.id),
                 village_id: Some(village.id),
                 units: Some(units),
                 tribe: Some(tribe.clone()),
+                hero: hero.clone(),
                 ..Default::default()
             });
             army_repo.save(&army).await?;
@@ -150,6 +169,6 @@ pub mod tests {
 
         uow.commit().await?;
 
-        Ok((player, village, army))
+        Ok((player, village, army, hero))
     }
 }

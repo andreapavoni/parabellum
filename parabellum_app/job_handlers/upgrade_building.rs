@@ -54,6 +54,7 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
+    use parabellum_core::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
@@ -63,18 +64,18 @@ mod tests {
     use crate::{
         config::Config,
         jobs::{Job, JobPayload},
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
 
     // Helper per il setup
-    async fn setup_job_test() -> (
+    async fn setup_job_test() -> Result<(
         Job,
         Arc<Config>,
         Box<dyn UnitOfWork<'static> + 'static>,
         u32,
         u32,
-    ) {
+    )> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -87,16 +88,14 @@ mod tests {
         });
 
         let slot_id = 19;
-        village
-            .set_building_level_at_slot(slot_id, 1, config.speed)
-            .unwrap();
+        village.set_building_level_at_slot(slot_id, 1, config.speed)?;
         let initial_population = village.population;
 
         let village_id = village.id;
         let player_id = player.id;
 
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let payload = BuildingUpgradeTask {
             slot_id,
@@ -106,21 +105,19 @@ mod tests {
         let job_payload = JobPayload::new("BuildingUpgrade", json!(payload.clone()));
         let job = Job::new(player_id, village_id as i32, 0, job_payload);
 
-        (job, config, mock_uow, village_id, initial_population)
+        Ok((job, config, mock_uow, village_id, initial_population))
     }
 
     #[tokio::test]
-    async fn test_upgrade_building_job_handler_success() {
-        let (job, config, uow, village_id, initial_population) = setup_job_test().await;
+    async fn test_upgrade_building_job_handler_success() -> Result<()> {
+        let (job, config, uow, village_id, initial_population) = setup_job_test().await?;
 
         let handler =
-            UpgradeBuildingJobHandler::new(serde_json::from_value(job.task.data.clone()).unwrap());
+            UpgradeBuildingJobHandler::new(serde_json::from_value(job.task.data.clone())?);
         let context = JobHandlerContext { uow, config };
+        handler.handle(&context, &job).await?;
 
-        let result = handler.handle(&context, &job).await;
-        assert_handler_success(result);
-
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         let building_in_db = saved_village.get_building_by_slot_id(19).unwrap();
 
         assert_eq!(
@@ -135,5 +132,6 @@ mod tests {
             initial_population + 1,
             "Village population not updated correctly"
         );
+        Ok(())
     }
 }

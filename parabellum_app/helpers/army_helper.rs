@@ -2,7 +2,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    repository::{ArmyRepository, VillageRepository},
+    repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
 };
 use parabellum_core::{ApplicationError, GameError, Result};
@@ -18,17 +18,36 @@ pub async fn deploy_army_from_village<'a>(
     mut village: Village, // Take ownership to modify
     home_army_id: Uuid,
     units_to_deploy: TroopSet,
+    hero_id: Option<Uuid>,
 ) -> Result<(Village, Army), ApplicationError> {
-    if units_to_deploy.iter().sum::<u32>() == 0 {
-        return Err(ApplicationError::Game(GameError::NotUnitsSelected));
+    if units_to_deploy.iter().sum::<u32>() == 0 && hero_id.is_none() {
+        return Err(ApplicationError::Game(GameError::NoUnitsSelected));
     }
-
     let army_repo: Arc<dyn ArmyRepository + '_> = uow.armies();
     let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
+    let hero_repo: Arc<dyn HeroRepository + '_> = uow.heroes();
 
     let mut home_army = army_repo.get_by_id(home_army_id).await?;
-    let deployed_army = home_army.deploy(units_to_deploy)?;
+    let attacker_village = village_repo.get_by_id(village.id).await?;
 
+    let hero = if let (Some(id), Some(home_hero)) = (hero_id, home_army.hero.take()) {
+        let hero = hero_repo.get_by_id(id).await?;
+
+        if !(hero.village_id == attacker_village.id
+            && hero.player_id == attacker_village.player_id
+            && home_hero.id == hero.id)
+        {
+            return Err(ApplicationError::Game(GameError::HeroNotAtHome {
+                hero_id: hero.id,
+                village_id: attacker_village.id,
+            }));
+        }
+        Some(hero)
+    } else {
+        None
+    };
+
+    let deployed_army = home_army.deploy(units_to_deploy, hero)?;
     if home_army.immensity() == 0 {
         army_repo.remove(home_army_id).await?;
         village.set_army(None)?;

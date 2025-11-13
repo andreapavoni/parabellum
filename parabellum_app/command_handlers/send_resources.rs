@@ -105,14 +105,9 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        config::Config,
-        cqrs::commands::SendResources,
-        jobs::tasks::MerchantGoingTask,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
-        uow::UnitOfWork,
-    };
+    use std::sync::Arc;
+
+    use parabellum_core::Result;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -126,16 +121,21 @@ mod tests {
         map::Position,
         tribe::Tribe,
     };
-    use std::sync::Arc;
+
+    use super::*;
+    use crate::{
+        config::Config, cqrs::commands::SendResources, jobs::tasks::MerchantGoingTask,
+        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
+    };
 
     async fn setup_test_villages(
         config: &Arc<Config>,
-    ) -> (
+    ) -> Result<(
         Box<dyn UnitOfWork<'static> + 'static>,
         Player,
         Village, // Sender
         Village, // Target
-    ) {
+    )> {
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
 
         let player_a = player_factory(PlayerFactoryOptions {
@@ -154,20 +154,17 @@ mod tests {
             ..Default::default()
         });
 
-        let granary = Building::new(BuildingName::Granary, config.speed)
-            .at_level(10, config.speed)
-            .unwrap();
-        village_a.add_building_at_slot(granary, 23).unwrap();
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(10, config.speed)?;
+        village_a.add_building_at_slot(granary, 23)?;
 
-        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-            .at_level(10, config.speed)
-            .unwrap();
-        village_a.add_building_at_slot(warehouse, 24).unwrap();
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(10, config.speed)?;
+        village_a.add_building_at_slot(warehouse, 24)?;
 
-        let marketplace = Building::new(BuildingName::Marketplace, config.speed)
-            .at_level(3, config.speed)
-            .unwrap();
-        village_a.add_building_at_slot(marketplace, 25).unwrap();
+        let marketplace =
+            Building::new(BuildingName::Marketplace, config.speed).at_level(3, config.speed)?;
+        village_a.add_building_at_slot(marketplace, 25)?;
 
         village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
         let player_b = player_factory(PlayerFactoryOptions {
@@ -186,13 +183,13 @@ mod tests {
         mock_uow.villages().save(&village_a).await.unwrap();
         mock_uow.villages().save(&village_b).await.unwrap();
 
-        (mock_uow, player_a, village_a, village_b)
+        Ok((mock_uow, player_a, village_a, village_b))
     }
 
     #[tokio::test]
-    async fn test_send_resources_success() {
+    async fn test_send_resources_success() -> Result<()> {
         let config = Arc::new(Config::from_env());
-        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await;
+        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await?;
 
         let handler = SendResourcesCommandHandler::new();
         let resources_to_send = ResourceGroup(1000, 500, 0, 0);
@@ -203,39 +200,35 @@ mod tests {
             resources: resources_to_send.clone(),
         };
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command, &mock_uow, &config).await?;
 
-        let saved_village_a = mock_uow.villages().get_by_id(village_a.id).await.unwrap();
+        let saved_village_a = mock_uow.villages().get_by_id(village_a.id).await?;
         assert_eq!(saved_village_a.stored_resources().lumber(), 5000 - 1000);
         assert_eq!(saved_village_a.stored_resources().clay(), 5000 - 500);
 
-        let jobs = mock_uow
-            .jobs()
-            .list_by_player_id(player_a.id)
-            .await
-            .unwrap();
+        let jobs = mock_uow.jobs().list_by_player_id(player_a.id).await?;
         assert_eq!(jobs.len(), 1, "Only 'MerchantGoing' should be created");
 
         let job = &jobs[0];
         assert_eq!(job.task.task_type, "MerchantGoing");
 
-        let payload: MerchantGoingTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let payload: MerchantGoingTask = serde_json::from_value(job.task.data.clone())?;
         let expected_merchants = 2;
         assert_eq!(payload.merchants_used, expected_merchants);
         assert_eq!(payload.destination_village_id, village_b.id);
         assert_eq!(payload.resources.0, resources_to_send.0);
         assert_eq!(payload.resources.1, resources_to_send.1);
         assert!(payload.travel_time_secs > 0);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_send_resources_fail_no_marketplace() {
+    async fn test_send_resources_fail_no_marketplace() -> Result<()> {
         let config = Arc::new(Config::from_env());
-        let (mock_uow, player_a, mut village_a, village_b) = setup_test_villages(&config).await;
+        let (mock_uow, player_a, mut village_a, village_b) = setup_test_villages(&config).await?;
 
-        village_a.remove_building_at_slot(25, config.speed).unwrap();
-        mock_uow.villages().save(&village_a).await.unwrap();
+        village_a.remove_building_at_slot(25, config.speed)?;
+        mock_uow.villages().save(&village_a).await?;
 
         let handler = SendResourcesCommandHandler::new();
         let command = SendResources {
@@ -255,12 +248,13 @@ mod tests {
             }
             .to_string()
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_send_resources_fail_not_enough_merchants() {
+    async fn test_send_resources_fail_not_enough_merchants() -> Result<()> {
         let config = Arc::new(Config::from_env());
-        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await;
+        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await?;
 
         let resources_to_send = ResourceGroup(5000, 0, 0, 0); // 11 merchants
         let handler = SendResourcesCommandHandler::new();
@@ -277,12 +271,13 @@ mod tests {
             result.err().unwrap().to_string(),
             GameError::NotEnoughMerchants.to_string()
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_send_resources_fail_not_enough_resources() {
+    async fn test_send_resources_fail_not_enough_resources() -> Result<()> {
         let config = Arc::new(Config::from_env());
-        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await;
+        let (mock_uow, player_a, village_a, village_b) = setup_test_villages(&config).await?;
         let resources_to_send = ResourceGroup(5001, 0, 0, 0);
 
         let handler = SendResourcesCommandHandler::new();
@@ -299,5 +294,6 @@ mod tests {
             result.err().unwrap().to_string(),
             GameError::NotEnoughResources.to_string()
         );
+        Ok(())
     }
 }

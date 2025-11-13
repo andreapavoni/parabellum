@@ -1,5 +1,6 @@
-// File: parabellum_app/src/job_handlers/reinforcement.rs
 use async_trait::async_trait;
+use parabellum_game::models::army::Army;
+use parabellum_types::buildings::BuildingName;
 use tracing::{info, instrument};
 
 use parabellum_core::ApplicationError;
@@ -35,13 +36,49 @@ impl JobHandler for ReinforcementJobHandler {
     ) -> Result<(), ApplicationError> {
         info!("Executing Reinforcement job: Army arriving at village.");
         let army_repo = ctx.uow.armies();
-        let mut army = army_repo.get_by_id(self.payload.army_id).await?;
+        let village_repo = ctx.uow.villages();
+        let hero_repo = ctx.uow.heroes();
 
-        army.current_map_field_id = Some(self.payload.village_id as u32);
-        army_repo.save(&army).await?;
+        let mut target_village = village_repo
+            .get_by_id(self.payload.village_id as u32)
+            .await?;
+        let mut reinforcement = army_repo.get_by_id(self.payload.army_id).await?;
+
+        // To switch village, hero should be alone and target village should have HeroMansion
+        if target_village.player_id == self.payload.player_id
+            && reinforcement.units.iter().sum::<u32>() == 0
+            && target_village
+                .get_building_by_name(&BuildingName::HeroMansion)
+                .is_some()
+        {
+            if let Some(mut hero) = reinforcement.hero.take() {
+                hero.village_id = target_village.id;
+                hero_repo.save(&hero).await?;
+                army_repo.save(&reinforcement).await?;
+
+                if let Some(garrison) = target_village.army() {
+                    let mut home_army = garrison.clone();
+                    home_army.hero = Some(hero.clone());
+                    target_village.set_army(Some(&home_army))?;
+                    army_repo.remove(reinforcement.id).await?;
+                    army_repo.save(&home_army).await?;
+                } else {
+                    let mut new_army = Army::new_village_army(&target_village);
+                    new_army.hero = Some(hero.clone());
+                    army_repo.save(&new_army).await?;
+                    target_village.set_army(Some(&new_army))?;
+                }
+            }
+        } else {
+            // Or everything goes into target village reinforcements
+            reinforcement.current_map_field_id = Some(target_village.id);
+            army_repo.save(&reinforcement).await?;
+        }
+
+        village_repo.save(&target_village).await?;
 
         info!(
-            army_id = %army.id,
+            army_id = %reinforcement.id,
             new_location_id = %self.payload.village_id,
             "Army reinforcement has arrived and is now stationed at new location."
         );

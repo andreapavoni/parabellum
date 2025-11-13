@@ -68,6 +68,9 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use parabellum_core::Result;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -83,11 +86,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::test_utils::tests::{MockUnitOfWork, assert_handler_success};
+    use crate::test_utils::tests::MockUnitOfWork;
 
-    use std::sync::Arc;
-
-    fn setup_village_with_barracks() -> (Player, Village, Arc<Config>) {
+    fn setup_village_with_barracks() -> Result<(Player, Village, Arc<Config>)> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -100,23 +101,17 @@ mod tests {
             valley: Some(valley),
             ..Default::default()
         });
-
         village.set_academy_research_for_test(&UnitName::Legionnaire, true);
 
-        // Add barracks
-        let barracks = Building::new(BuildingName::Barracks, config.speed)
-            .at_level(10, config.speed)
-            .unwrap();
-        village.add_building_at_slot(barracks, 20).unwrap();
-
-        // Add resources
+        let barracks =
+            Building::new(BuildingName::Barracks, config.speed).at_level(10, config.speed)?;
+        village.add_building_at_slot(barracks, 20)?;
         village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
 
-        (player, village, config)
+        Ok((player, village, config))
     }
 
-    // Helper per un villaggio con Scuderia e ricerche per cavalleria
-    fn setup_village_with_stable() -> (Player, Village, Arc<Config>) {
+    fn setup_village_with_stable() -> Result<(Player, Village, Arc<Config>)> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Gaul),
@@ -130,35 +125,29 @@ mod tests {
             ..Default::default()
         });
 
-        // Requisiti per Scuderia (Accademia L5, Fabbro L3)
-        let granary = Building::new(BuildingName::Granary, config.speed)
-            .at_level(20, config.speed)
-            .unwrap();
-        village.add_building_at_slot(granary, 20).unwrap();
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(20, config.speed)?;
+        village.add_building_at_slot(granary, 20)?;
 
-        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-            .at_level(20, config.speed)
-            .unwrap();
-        village.add_building_at_slot(warehouse, 21).unwrap();
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(20, config.speed)?;
+        village.add_building_at_slot(warehouse, 21)?;
 
-        let stable = Building::new(BuildingName::Stable, config.speed)
-            .at_level(1, config.speed)
-            .unwrap();
-        village.add_building_at_slot(stable, 22).unwrap();
-
+        let stable = Building::new(BuildingName::Stable, config.speed).at_level(1, config.speed)?;
+        village.add_building_at_slot(stable, 22)?;
         village.set_academy_research_for_test(&UnitName::Pathfinder, true);
         village.store_resources(&ResourceGroup(10000, 10000, 10000, 10000));
 
-        (player, village, config)
+        Ok((player, village, config))
     }
 
     #[tokio::test]
-    async fn test_train_units_handler_success() {
+    async fn test_train_units_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let job_repo = mock_uow.jobs();
         let village_repo = mock_uow.villages();
 
-        let (player, village, config) = setup_village_with_barracks();
+        let (player, village, config) = setup_village_with_barracks()?;
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
 
@@ -172,10 +161,9 @@ mod tests {
             building_name: BuildingName::Barracks,
         };
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command, &mock_uow, &config).await?;
 
-        let saved_villages = village_repo.list_by_player_id(player.id).await.unwrap();
+        let saved_villages = village_repo.list_by_player_id(player.id).await?;
         assert_eq!(saved_villages.len(), 1, "Village should be saved once");
         let saved_village = &saved_villages[0];
 
@@ -201,7 +189,7 @@ mod tests {
         );
 
         // Check if job was created
-        let added_jobs = job_repo.list_by_player_id(player.id).await.unwrap();
+        let added_jobs = job_repo.list_by_player_id(player.id).await?;
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
@@ -218,15 +206,16 @@ mod tests {
 
         assert_eq!(task.unit, UnitName::Legionnaire);
         assert_eq!(task.quantity, 5);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_train_units_handler_not_enough_resources() {
+    async fn test_train_units_handler_not_enough_resources() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let job_repo = mock_uow.jobs();
         let village_repo = mock_uow.villages();
 
-        let (player, mut village, config) = setup_village_with_barracks();
+        let (player, mut village, config) = setup_village_with_barracks()?;
         village.store_resources(&ResourceGroup(10, 0, 0, 0));
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
@@ -242,25 +231,21 @@ mod tests {
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
-
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(result.err().unwrap().to_string(), "Not enough resources");
-        assert_eq!(
-            job_repo.list_by_player_id(player.id).await.unwrap().len(),
-            0
-        );
+        assert_eq!(job_repo.list_by_player_id(player.id).await?.len(), 0);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_train_units_handler_missing_building() {
+    async fn test_train_units_handler_missing_building() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
 
         let village_repo = mock_uow.villages();
+        let (player, mut village, config) = setup_village_with_barracks()?;
 
-        let (player, mut village, config) = setup_village_with_barracks();
-
-        village.remove_building_at_slot(20, config.speed).unwrap();
-        village_repo.save(&village).await.unwrap();
+        village.remove_building_at_slot(20, config.speed)?;
+        village_repo.save(&village).await?;
 
         let handler = TrainUnitsCommandHandler::new();
         let command = TrainUnits {
@@ -270,24 +255,25 @@ mod tests {
             quantity: 1,
             building_name: BuildingName::Barracks,
         };
-        let result = handler.handle(command, &mock_uow, &config).await;
 
+        let result = handler.handle(command, &mock_uow, &config).await;
         assert!(result.is_err(), "Handler should return an error");
         assert_eq!(
             result.err().unwrap().to_string(),
             "Building requirements not met: requires Barracks at level 1"
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_train_units_handler_missing_research() {
+    async fn test_train_units_handler_missing_research() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
 
         let village_repo = mock_uow.villages();
 
-        let (player, mut village, config) = setup_village_with_barracks();
+        let (player, mut village, config) = setup_village_with_barracks()?;
         village.set_academy_research_for_test(&UnitName::Praetorian, false);
-        village_repo.save(&village).await.unwrap();
+        village_repo.save(&village).await?;
 
         let handler = TrainUnitsCommandHandler::new();
         let command = TrainUnits {
@@ -304,17 +290,18 @@ mod tests {
             result.err().unwrap().to_string(),
             "Unit Praetorian not yet researched in Academy"
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_train_units_handler_stable_success() {
+    async fn test_train_units_handler_stable_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let job_repo = mock_uow.jobs();
         let village_repo = mock_uow.villages();
 
-        let (player, village, config) = setup_village_with_stable();
+        let (player, village, config) = setup_village_with_stable()?;
         let village_id = village.id;
-        village_repo.save(&village).await.unwrap();
+        village_repo.save(&village).await?;
 
         let handler = TrainUnitsCommandHandler::new();
 
@@ -326,7 +313,7 @@ mod tests {
             building_name: BuildingName::Stable,
         };
 
-        // Costo Pathfinder: 170, 150, 20, 40
+        // Pathfinder: 170, 150, 20, 40
         let unit_cost = ResourceGroup(170, 150, 20, 40);
         let total_cost = ResourceGroup(
             unit_cost.0 * 5,
@@ -336,11 +323,8 @@ mod tests {
         );
         let initial_lumber = village.stored_resources().lumber();
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
-
-        // 1. Controlla deduzione risorse
-        let saved_village = village_repo.get_by_id(village_id).await.unwrap();
+        handler.handle(command, &mock_uow, &config).await?;
+        let saved_village = village_repo.get_by_id(village_id).await?;
         assert_eq!(
             saved_village.stored_resources().lumber(),
             initial_lumber - total_cost.0,
@@ -351,20 +335,19 @@ mod tests {
             10000 - total_cost.1
         );
 
-        // 2. Controlla creazione Job
-        let added_jobs = job_repo.list_by_player_id(player.id).await.unwrap();
+        let added_jobs = job_repo.list_by_player_id(player.id).await?;
         assert_eq!(added_jobs.len(), 1, "Expected a job for stable");
 
         let job = &added_jobs[0];
         assert_eq!(job.task.task_type, "TrainUnits");
 
-        // 3. Controlla il payload del Task
-        let task: TrainUnitsTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let task: TrainUnitsTask = serde_json::from_value(job.task.data.clone())?;
         assert_eq!(task.unit, UnitName::Pathfinder, "Expected unit trained");
         assert_eq!(task.quantity, 5);
         assert_eq!(
             task.slot_id, 22,
             "Task should be linked to the right slot_id"
         );
+        Ok(())
     }
 }

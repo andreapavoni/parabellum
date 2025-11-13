@@ -54,6 +54,7 @@ impl CommandHandler<RegisterVillage> for RegisterVillageCommandHandler {
 #[cfg(test)]
 mod tests {
 
+    use parabellum_core::Result;
     use parabellum_game::{
         models::map::MapQuadrant,
         test_utils::{PlayerFactoryOptions, player_factory},
@@ -62,15 +63,13 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config,
-        cqrs::commands::RegisterVillage,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        config::Config, cqrs::commands::RegisterVillage, test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
     use std::sync::Arc;
 
     #[tokio::test]
-    async fn test_register_village_handler_success() {
+    async fn test_register_village_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
         let handler = RegisterVillageCommandHandler::new();
@@ -79,27 +78,18 @@ mod tests {
             tribe: Some(Tribe::Teuton),
             ..Default::default()
         });
-
-        mock_uow.players().save(&player).await.unwrap();
+        mock_uow.players().save(&player).await?;
 
         let command = RegisterVillage::new(player.clone(), MapQuadrant::NorthEast);
+        handler.handle(command, &mock_uow, &config).await?;
 
-        let result = handler.handle(command, &mock_uow, &config).await;
-        assert_handler_success(result);
-
-        let villages = mock_uow
-            .villages()
-            .list_by_player_id(player.id)
-            .await
-            .unwrap();
-
+        let villages = mock_uow.villages().list_by_player_id(player.id).await?;
         assert_eq!(villages.len(), 1, "One village should be created");
 
         let village = &villages[0];
         assert_eq!(village.player_id, player.id);
-        assert_eq!(village.is_capital, true); // First village is capital
-
-        // MockMapRepository (from test_utils) returns a default valley at (10, 10)
+        assert_eq!(village.is_capital, true);
         assert_eq!(village.position, Position { x: 10, y: 10 });
+        Ok(())
     }
 }

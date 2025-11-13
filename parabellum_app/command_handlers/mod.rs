@@ -1,5 +1,6 @@
 mod add_building;
 mod attack_village;
+mod create_hero;
 mod downgrade_building;
 mod found_village;
 mod register_player;
@@ -14,6 +15,7 @@ mod upgrade_building;
 
 pub use add_building::AddBuildingCommandHandler;
 pub use attack_village::AttackVillageCommandHandler;
+pub use create_hero::CreateHeroCommandHandler;
 pub use downgrade_building::DowngradeBuildingCommandHandler;
 pub use found_village::FoundVillageCommandHandler;
 pub use register_player::RegisterPlayerCommandHandler;

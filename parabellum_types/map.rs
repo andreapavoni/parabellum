@@ -53,7 +53,6 @@ impl Position {
         server_speed: u8,
     ) -> u32 {
         let distance = self.distance(&position, world_size);
-
         let travel_time_secs = distance as f64 / speed as f64 * 3600.0;
 
         (travel_time_secs / server_speed as f64).floor() as u32

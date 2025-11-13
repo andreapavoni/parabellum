@@ -52,6 +52,15 @@ impl JobHandler for ResearchSmithyJobHandler {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+    use std::sync::Arc;
+
+    use parabellum_core::Result;
+    use parabellum_game::test_utils::{
+        PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
+    };
+    use parabellum_types::{army::UnitName, tribe::Tribe};
+
     use super::*;
     use crate::{
         config::Config,
@@ -59,15 +68,9 @@ mod tests {
         test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
-    use parabellum_game::test_utils::{
-        PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
-    };
-    use parabellum_types::{army::UnitName, tribe::Tribe};
-    use serde_json::json;
-    use std::sync::Arc;
 
     #[tokio::test]
-    async fn test_research_smithy_job_handler_success() {
+    async fn test_research_smithy_job_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
 
@@ -87,7 +90,7 @@ mod tests {
             .get_unit_idx_by_name(&unit_to_upgrade)
             .unwrap();
         village.set_smithy_level_for_test(&unit_to_upgrade, 1);
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let payload = ResearchSmithyTask {
             unit: unit_to_upgrade.clone(),
@@ -100,19 +103,15 @@ mod tests {
             uow: mock_uow,
             config,
         };
+        handler.handle(&context, &job).await?;
 
-        let result = handler.handle(&context, &job).await;
-        assert!(
-            result.is_ok(),
-            "Job handler should succeed: {:?}",
-            result.err()
-        );
-
-        let saved_village = context.uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = context.uow.villages().get_by_id(village_id).await?;
         assert_eq!(
             saved_village.smithy()[unit_idx],
             2,
             "Unit smithy level should be incremented to 1"
         );
+
+        Ok(())
     }
 }

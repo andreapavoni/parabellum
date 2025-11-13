@@ -5,33 +5,35 @@ use uuid::Uuid;
 pub struct Hero {
     pub id: Uuid,
     pub player_id: Uuid,
+    pub village_id: u32,
     pub health: u16,
     pub experience: u32,
-    /// Attack skill points.
     pub attack_points: u32,
-    /// Defense skill points.
     pub defense_points: u32,
-    /// Attack bonus percent (ex. 0.1 for 10%).
     pub off_bonus: u16,
-    /// Defense bonus percent (ex. 0.1 for 10%).
     pub def_bonus: u16,
 }
 
 impl Hero {
-    /// Calculate bonus by skill points.
-    /// Each point gives a 0.8% bonus, compounded.
-    fn get_bonus_by_points(points: u32) -> f64 {
-        if points == 0 {
-            0.0
-        } else {
-            1.008f64.powi(points as i32) - 1.0
+    /// Returns a new hero instance.
+    pub fn new(id: Option<Uuid>, village_id: u32, player_id: Uuid) -> Self {
+        Hero {
+            id: id.unwrap_or(Uuid::new_v4()),
+            village_id: village_id,
+            player_id,
+            health: 100,
+            experience: 0,
+            attack_points: 0,
+            defense_points: 0,
+            off_bonus: 0,
+            def_bonus: 0,
         }
     }
 
-    /// Returns the total attack bonus (fixed points).
+    /// Returns the total attack bonus.
     pub fn get_attack_bonus(&self, is_attacking_with_army: bool) -> u32 {
         if is_attacking_with_army {
-            let base_attack = 100; // TODO: fix this
+            let base_attack = 100; // FXIME: fix this
             (base_attack as f64 * (1.0 + Self::get_bonus_by_points(self.attack_points))) as u32
         } else {
             0
@@ -40,8 +42,18 @@ impl Hero {
 
     /// Returns the total defense bonus (fixed points).
     pub fn get_defense_bonus(&self) -> u32 {
-        let base_defense = 100; // Esempio
+        let base_defense = 100; // FIXME: change this value
         (base_defense as f64 * (1.0 + Self::get_bonus_by_points(self.defense_points))) as u32
+    }
+
+    /// Calculate bonus by skill points.
+    /// Each point gives a 0.8% bonus, compounded.
+    fn get_bonus_by_points(points: u32) -> f64 {
+        if points == 0 {
+            0.0
+        } else {
+            1.008f64.powi(points as i32) - 1.0
+        }
     }
 }
 

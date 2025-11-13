@@ -42,23 +42,25 @@ pub mod tests {
 
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        let (attacker_player, attacker_village, attacker_army) = {
+        let (attacker_player, attacker_village, attacker_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
                 units_to_send.clone(),
+                false,
             )
             .await?
         };
         let original_home_army_id = attacker_army.id; // Save original ID
 
-        let (_defender_player, defender_village, _defender_army) = {
+        let (_defender_player, defender_village, _defender_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
             )
             .await?
         };
@@ -70,6 +72,7 @@ pub mod tests {
             units: units_to_send.clone(),   // Pass the units
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            hero_id: None,
         };
 
         {
@@ -258,22 +261,24 @@ pub mod tests {
         let attacker_army: Army;
         let mut defender_village: Village;
 
-        (attacker_player, attacker_village, attacker_army) = {
+        (attacker_player, attacker_village, attacker_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
                 [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
+                false,
             )
             .await?
         };
 
-        (_, defender_village, _) = {
+        (_, defender_village, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
             )
             .await?
         };
@@ -314,6 +319,7 @@ pub mod tests {
             units: [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::Warehouse, BuildingName::Granary],
+            hero_id: None,
         };
 
         {

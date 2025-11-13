@@ -19,7 +19,7 @@ CREATE TABLE jobs (
 CREATE INDEX jobs_lookup_idx ON jobs (status, completed_at);
 
 -- Trigger to automatically update `updated_at`
-CREATE TRIGGER set_timestamp
+CREATE TRIGGER set_jobs_timestamp
 BEFORE UPDATE ON jobs
 FOR EACH ROW
 EXECUTE PROCEDURE trigger_set_timestamp();

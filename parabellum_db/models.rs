@@ -42,12 +42,18 @@ pub struct Village {
 pub struct Army {
     pub id: Uuid,
     pub village_id: i32,
+    pub player_id: Uuid,
     pub current_map_field_id: Option<i32>,
-    pub hero_id: Option<Uuid>,
+    pub tribe: Tribe,
     pub units: serde_json::Value,
     pub smithy: serde_json::Value,
-    pub tribe: Tribe,
-    pub player_id: Uuid,
+    pub hero_id: Option<Uuid>,
+    pub hero_health: Option<i16>,
+    pub hero_experience: Option<i32>,
+    pub hero_attack_points: Option<i32>,
+    pub hero_defense_points: Option<i32>,
+    pub hero_off_bonus: Option<i16>,
+    pub hero_def_bonus: Option<i16>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -78,6 +84,19 @@ pub struct Job {
     pub completed_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Hero {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub health: i16,
+    pub experience: i32,
+    pub attack_points: i32,
+    pub defense_points: i32,
+    pub off_bonus: i16,
+    pub def_bonus: i16,
 }
 
 #[derive(Debug, Clone, FromRow)]

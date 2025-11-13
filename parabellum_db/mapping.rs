@@ -123,6 +123,21 @@ impl From<db_models::Player> for Player {
 
 impl From<db_models::Army> for game_models::army::Army {
     fn from(army: db_models::Army) -> Self {
+        let hero = match army.hero_id {
+            None => None,
+            Some(id) => Some(game_models::hero::Hero {
+                id,
+                village_id: army.village_id as u32,
+                player_id: army.player_id,
+                health: army.hero_health.unwrap() as u16,
+                experience: army.hero_experience.unwrap() as u32,
+                attack_points: army.hero_attack_points.unwrap() as u32,
+                defense_points: army.hero_defense_points.unwrap() as u32,
+                off_bonus: army.hero_off_bonus.unwrap() as u16,
+                def_bonus: army.hero_def_bonus.unwrap() as u16,
+            }),
+        };
+
         game_models::army::Army {
             id: army.id,
             village_id: army.village_id as u32,
@@ -130,7 +145,7 @@ impl From<db_models::Army> for game_models::army::Army {
             player_id: army.player_id,
             units: serde_json::from_value(army.units).unwrap_or_default(),
             smithy: serde_json::from_value(army.smithy).unwrap_or_default(),
-            hero: None, // TODO: load hero through join
+            hero,
             tribe: army.tribe.into(),
         }
     }
@@ -178,6 +193,22 @@ impl From<db_models::MarketplaceOffer> for game_models::marketplace::Marketplace
             seek_resources: serde_json::from_value(offer.seek_resources).unwrap(),
             merchants_required: offer.merchants_required as u8,
             created_at: offer.created_at,
+        }
+    }
+}
+
+impl From<db_models::Hero> for game_models::hero::Hero {
+    fn from(db_hero: db_models::Hero) -> Self {
+        Self {
+            id: db_hero.id,
+            player_id: db_hero.player_id,
+            village_id: db_hero.village_id as u32,
+            health: db_hero.health as u16,
+            experience: db_hero.experience as u32,
+            attack_points: db_hero.attack_points as u32,
+            defense_points: db_hero.defense_points as u32,
+            off_bonus: db_hero.off_bonus as u16,
+            def_bonus: db_hero.def_bonus as u16,
         }
     }
 }

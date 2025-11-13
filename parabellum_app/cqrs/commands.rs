@@ -50,6 +50,7 @@ pub struct AttackVillage {
     pub units: TroopSet,
     pub target_village_id: u32,
     pub catapult_targets: [BuildingName; 2],
+    pub hero_id: Option<Uuid>,
 }
 
 impl Command for AttackVillage {}
@@ -72,6 +73,7 @@ pub struct ReinforceVillage {
     pub army_id: Uuid,
     pub units: TroopSet,
     pub target_village_id: u32,
+    pub hero_id: Option<Uuid>,
 }
 impl Command for ReinforceVillage {}
 
@@ -173,3 +175,22 @@ pub struct AcceptMarketplaceOffer {
     pub offer_id: Uuid,
 }
 impl Command for AcceptMarketplaceOffer {}
+
+#[derive(Debug, Clone)]
+pub struct CreateHero {
+    pub id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+}
+
+impl CreateHero {
+    pub fn new(id: Option<Uuid>, player_id: Uuid, village_id: u32) -> Self {
+        Self {
+            id: id.unwrap_or_else(Uuid::new_v4),
+            player_id,
+            village_id,
+        }
+    }
+}
+
+impl Command for CreateHero {}

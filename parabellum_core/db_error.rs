@@ -10,6 +10,12 @@ pub enum DbError {
     #[error("Army with ID {0} not found")]
     ArmyNotFound(Uuid),
 
+    #[error("Hero with ID {0} doen't have an army")]
+    HeroWithoutArmy(Uuid),
+
+    #[error("Hero with ID {0} not found")]
+    HeroNotFound(Uuid),
+
     #[error("Player with ID {0} not found")]
     PlayerNotFound(Uuid),
 

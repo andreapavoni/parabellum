@@ -41,7 +41,8 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
         let attacker_village = village_repo.get_by_id(command.village_id).await?;
 
         let (attacker_village, deployed_army) =
-            deploy_army_from_village(uow, attacker_village, command.army_id, command.units).await?;
+            deploy_army_from_village(uow, attacker_village, command.army_id, command.units, None)
+                .await?;
 
         // Check only army is only scouts
         let tribe_units = attacker_village.tribe.get_units();

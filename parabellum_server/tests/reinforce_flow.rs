@@ -33,23 +33,25 @@ pub mod tests {
 
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        let (reinforcer_player, reinforcer_village, reinforcing_army) = {
+        let (reinforcer_player, reinforcer_village, reinforcing_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
                 units_to_send.clone(),
+                false,
             )
             .await?
         };
         let original_home_army_id = reinforcing_army.id;
 
-        let (_target_player, target_village, _target_army) = {
+        let (_target_player, target_village, _target_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
             )
             .await?
         };
@@ -60,8 +62,8 @@ pub mod tests {
             army_id: original_home_army_id,
             units: units_to_send.clone(),
             target_village_id: target_village.id,
+            hero_id: None,
         };
-
         {
             let uow_cmd = uow_provider.begin().await?;
             let handler = ReinforceVillageCommandHandler::new();

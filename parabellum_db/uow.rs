@@ -1,14 +1,12 @@
-use parabellum_app::{
-    repository::{
-        ArmyRepository, JobRepository, MapRepository, MarketplaceRepository, PlayerRepository,
-        VillageRepository,
-    },
-    uow::{UnitOfWork, UnitOfWorkProvider},
-};
-use parabellum_core::{ApplicationError, DbError};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use parabellum_app::{
+    repository::*,
+    uow::{UnitOfWork, UnitOfWorkProvider},
+};
+use parabellum_core::{ApplicationError, DbError};
 
 use crate::repository::*;
 
@@ -68,6 +66,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
 
     fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a> {
         Arc::new(PostgresMarketplaceRepository::new(self.tx.clone()))
+    }
+
+    fn heroes(&self) -> Arc<dyn HeroRepository + 'a> {
+        Arc::new(PostgresHeroRepository::new(self.tx.clone()))
     }
 
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

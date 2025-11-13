@@ -48,7 +48,9 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::GameError;
+    use std::sync::Arc;
+
+    use parabellum_core::{GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{
@@ -64,15 +66,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config,
-        jobs::tasks::ResearchSmithyTask,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
+        config::Config, jobs::tasks::ResearchSmithyTask, test_utils::tests::MockUnitOfWork,
         uow::UnitOfWork,
     };
-    use std::sync::Arc;
 
     // Setup helper che crea un villaggio con i requisiti per uppare Praetorian
-    fn setup_village_for_smithy() -> (Player, Village, Arc<Config>) {
+    fn setup_village_for_smithy() -> Result<(Player, Village, Arc<Config>)> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -87,49 +86,43 @@ mod tests {
         let academy = Building::new(BuildingName::Academy, config.speed)
             .at_level(1, config.speed)
             .unwrap();
-        village.add_building_at_slot(academy, 23).unwrap();
+        village.add_building_at_slot(academy, 23)?;
 
-        let smithy = Building::new(BuildingName::Smithy, config.speed)
-            .at_level(1, config.speed)
-            .unwrap();
-        village.add_building_at_slot(smithy, 24).unwrap();
+        let smithy = Building::new(BuildingName::Smithy, config.speed).at_level(1, config.speed)?;
+        village.add_building_at_slot(smithy, 24)?;
 
-        let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-            .at_level(4, config.speed)
-            .unwrap();
-        village.add_building_at_slot(warehouse, 25).unwrap();
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(4, config.speed)?;
+        village.add_building_at_slot(warehouse, 25)?;
 
-        let granary = Building::new(BuildingName::Granary, config.speed)
-            .at_level(4, config.speed)
-            .unwrap();
-        village.add_building_at_slot(granary, 26).unwrap();
-        village.research_academy(UnitName::Praetorian).unwrap();
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(4, config.speed)?;
+        village.add_building_at_slot(granary, 26)?;
+        village.research_academy(UnitName::Praetorian)?;
         village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
-        (player, village, config)
+        Ok((player, village, config))
     }
 
     #[tokio::test]
-    async fn test_smithy_handler_success() {
+    async fn test_smithy_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village_for_smithy();
+        let (player, village, config) = setup_village_for_smithy()?;
         let village_id = village.id;
         let player_id = player.id;
 
         let village_repo = mock_uow.villages();
         let job_repo = mock_uow.jobs();
-        village_repo.save(&village).await.unwrap();
+        village_repo.save(&village).await?;
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
             unit: UnitName::Praetorian,
             village_id,
         };
+        handler.handle(command.clone(), &mock_uow, &config).await?;
 
-        let result = handler.handle(command.clone(), &mock_uow, &config).await;
-        assert_handler_success(result);
-
-        let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
-        let cost = smithy_upgrade_cost_for_unit(&command.unit, 0).unwrap();
+        let saved_village = mock_uow.villages().get_by_id(village_id).await?;
+        let cost = smithy_upgrade_cost_for_unit(&command.unit, 0)?;
 
         // Lvl 1 Praetorian: 800, 1010, 1320, 650
         assert_eq!(
@@ -153,25 +146,26 @@ mod tests {
             "Crop not deducted"
         );
 
-        let added_jobs = job_repo.list_by_player_id(player_id).await.unwrap();
+        let added_jobs = job_repo.list_by_player_id(player_id).await?;
         assert_eq!(added_jobs.len(), 1, "One job should be created");
         let job = &added_jobs[0];
 
         assert_eq!(job.task.task_type, "ResearchSmithy");
-        let task: ResearchSmithyTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let task: ResearchSmithyTask = serde_json::from_value(job.task.data.clone())?;
         assert_eq!(task.unit, UnitName::Praetorian);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_smithy_handler_unit_not_researched() {
+    async fn test_smithy_handler_unit_not_researched() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (_player, mut village, config) = setup_village_for_smithy();
+        let (_player, mut village, config) = setup_village_for_smithy()?;
         let village_repo = mock_uow.villages();
 
         village.set_academy_research_for_test(&UnitName::Praetorian, false);
 
         let village_id = village.id;
-        village_repo.save(&village).await.unwrap();
+        village_repo.save(&village).await?;
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
@@ -180,22 +174,22 @@ mod tests {
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
-
         assert!(result.is_err(), "Handler should fail");
         assert_eq!(
             result.err().unwrap().to_string(),
             GameError::UnitNotResearched(UnitName::Praetorian).to_string()
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_smithy_handler_requirements_not_met() {
+    async fn test_smithy_handler_requirements_not_met() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (_player, mut village, config) = setup_village_for_smithy();
+        let (_player, mut village, config) = setup_village_for_smithy()?;
         let village_repo = mock_uow.villages();
 
-        village.remove_building_at_slot(24, config.speed).unwrap();
-        village_repo.save(&village).await.unwrap();
+        village.remove_building_at_slot(24, config.speed)?;
+        village_repo.save(&village).await?;
 
         let handler = ResearchSmithyCommandHandler::new();
         let command = ResearchSmithy {
@@ -214,5 +208,6 @@ mod tests {
             }
             .to_string()
         );
+        Ok(())
     }
 }

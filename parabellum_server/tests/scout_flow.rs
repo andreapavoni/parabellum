@@ -39,23 +39,25 @@ pub mod tests {
 
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0]; // 10 Equites Legati (index 3)
 
-        let (scout_player, scout_village, scout_army) = {
+        let (scout_player, scout_village, scout_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
                 scout_units.clone(),
+                false,
             )
             .await?
         };
         let original_home_army_id = scout_army.id; // Salva l'ID originale
 
-        let (_target_player, target_village, _target_army) = {
+        let (_target_player, target_village, _target_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
                 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
             )
             .await?
         };

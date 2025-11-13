@@ -63,7 +63,7 @@ pub enum GameError {
     NotEnoughUnits,
 
     #[error("No units selected to deploy")]
-    NotUnitsSelected,
+    NoUnitsSelected,
 
     #[error("Only scout units can be used for a scout mission")]
     OnlyScoutUnitsAllowed,
@@ -91,6 +91,9 @@ pub enum GameError {
 
     #[error("Invalid unit index: {0}")]
     InvalidUnitIndex(u8),
+
+    #[error("Hero {hero_id:?} not in the village {village_id}")]
+    HeroNotAtHome { hero_id: Uuid, village_id: u32 },
 
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),

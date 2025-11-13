@@ -21,7 +21,6 @@ pub struct Army {
     pub tribe: Tribe,
     pub units: TroopSet,
     pub smithy: SmithyUpgrades,
-    /// L'eroe è opzionale, potrebbe non essere presente in tutte le armate.
     pub hero: Option<Hero>,
 }
 
@@ -69,7 +68,8 @@ impl Army {
 
     /// Returns the total raw number of troops in the army.
     pub fn immensity(&self) -> u32 {
-        self.units.iter().sum()
+        let hero_count: u32 = self.hero.as_ref().map(|_| 1).unwrap_or(0);
+        self.units.iter().sum::<u32>() + hero_count
     }
 
     /// Returns the total upkeep cost of the army.
@@ -178,7 +178,7 @@ impl Army {
     }
 
     /// Updates the current army and returns new deployed army.
-    pub fn deploy(&mut self, set: TroopSet) -> Result<Self, GameError> {
+    pub fn deploy(&mut self, set: TroopSet, hero: Option<Hero>) -> Result<Self, GameError> {
         for (idx, quantity) in set.iter().enumerate() {
             if *quantity == 0 {
                 continue;
@@ -191,6 +191,10 @@ impl Army {
             }
         }
 
+        if hero.is_some() {
+            self.hero = None;
+        }
+
         let deployed = Self::new(
             None,
             self.village_id,
@@ -199,7 +203,7 @@ impl Army {
             self.tribe.clone(),
             &set,
             &self.smithy,
-            None,
+            hero,
         );
 
         Ok(deployed)

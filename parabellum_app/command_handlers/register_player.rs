@@ -46,19 +46,20 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        config::Config,
-        cqrs::commands::RegisterPlayer,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
-        uow::UnitOfWork,
-    };
-    use parabellum_types::tribe::Tribe;
     use std::sync::Arc;
     use uuid::Uuid;
 
+    use parabellum_core::Result;
+    use parabellum_types::tribe::Tribe;
+
+    use super::*;
+    use crate::{
+        config::Config, cqrs::commands::RegisterPlayer, test_utils::tests::MockUnitOfWork,
+        uow::UnitOfWork,
+    };
+
     #[tokio::test]
-    async fn test_register_player_handler_success() {
+    async fn test_register_player_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
         let handler = RegisterPlayerCommandHandler::new();
@@ -69,18 +70,12 @@ mod tests {
             tribe: Tribe::Roman,
         };
 
-        let result = handler.handle(command.clone(), &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command.clone(), &mock_uow, &config).await?;
 
-        let saved_player_result = mock_uow.players().get_by_id(command.id).await;
-        assert!(
-            saved_player_result.is_ok(),
-            "Player should be found in the repository"
-        );
-
-        let saved_player = saved_player_result.unwrap();
+        let saved_player = mock_uow.players().get_by_id(command.id).await?;
         assert_eq!(saved_player.id, command.id);
         assert_eq!(saved_player.username, command.username);
         assert_eq!(saved_player.tribe, command.tribe);
+        Ok(())
     }
 }

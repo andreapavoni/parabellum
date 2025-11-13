@@ -34,25 +34,11 @@ CREATE TABLE villages (
     UNIQUE(position)
 );
 
--- Heroes
-CREATE TABLE heroes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-
-    health SMALLINT NOT NULL DEFAULT 100,
-    experience INTEGER NOT NULL DEFAULT 0,
-    attack_points INTEGER NOT NULL DEFAULT 0,
-    defense_points INTEGER NOT NULL DEFAULT 0,
-    off_bonus SMALLINT NOT NULL DEFAULT 0,
-    def_bonus SMALLINT NOT NULL DEFAULT 0
-);
-
 -- Armies
 CREATE TABLE armies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
     current_map_field_id INTEGER,
-    hero_id UUID REFERENCES heroes(id) ON DELETE SET NULL,
     units JSONB NOT NULL,
     smithy JSONB NOT NULL,
     tribe tribe NOT NULL,
@@ -79,7 +65,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER set_timestamp
+CREATE TRIGGER set_villages_timestamp
 BEFORE UPDATE ON villages
 FOR EACH ROW
 EXECUTE PROCEDURE trigger_set_timestamp();

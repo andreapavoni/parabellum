@@ -88,6 +88,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_core::Result;
     use parabellum_game::models::village::Village;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
@@ -96,15 +97,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config,
-        cqrs::commands::DowngradeBuilding,
-        jobs::tasks::BuildingDowngradeTask,
-        test_utils::tests::{MockUnitOfWork, assert_handler_success},
-        uow::UnitOfWork,
+        config::Config, cqrs::commands::DowngradeBuilding, jobs::tasks::BuildingDowngradeTask,
+        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
     };
     use std::sync::Arc;
 
-    fn setup_village_for_downgrade() -> (Player, Village, Arc<Config>, u8) {
+    fn setup_village_for_downgrade() -> Result<(Player, Village, Arc<Config>, u8)> {
         let config = Arc::new(Config::from_env());
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -116,17 +114,14 @@ mod tests {
         });
 
         let slot_id = 19;
-        village
-            .set_building_level_at_slot(slot_id, 10, config.speed)
-            .unwrap();
-
-        (player, village, config, slot_id)
+        village.set_building_level_at_slot(slot_id, 10, config.speed)?;
+        Ok((player, village, config, slot_id))
     }
 
     #[tokio::test]
-    async fn test_downgrade_building_handler_success_creates_job() {
+    async fn test_downgrade_building_handler_success_creates_job() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config, slot_id) = setup_village_for_downgrade();
+        let (player, village, config, slot_id) = setup_village_for_downgrade()?;
 
         let village_id = village.id;
         let player_id = player.id;
@@ -134,7 +129,7 @@ mod tests {
 
         let initial_building = village.get_building_by_slot_id(slot_id).unwrap();
 
-        mock_uow.villages().save(&village).await.unwrap();
+        mock_uow.villages().save(&village).await?;
 
         let handler = DowngradeBuildingCommandHandler::new();
         let command = DowngradeBuilding {
@@ -143,10 +138,9 @@ mod tests {
             slot_id,
         };
 
-        let result = handler.handle(command.clone(), &mock_uow, &config).await;
-        assert_handler_success(result);
+        handler.handle(command.clone(), &mock_uow, &config).await?;
 
-        let saved_village = mock_uow.villages().get_by_id(village_id).await.unwrap();
+        let saved_village = mock_uow.villages().get_by_id(village_id).await?;
         let building_in_db = saved_village.get_building_by_slot_id(slot_id).unwrap();
         assert_eq!(
             building_in_db.building.level, initial_building.building.level,
@@ -154,18 +148,19 @@ mod tests {
         );
         assert_eq!(saved_village.population, initial_population);
 
-        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await.unwrap();
+        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
         assert_eq!(added_jobs.len(), 1, "Expected 1 job created");
 
         let job = &added_jobs[0];
         assert_eq!(job.task.task_type, "BuildingDowngrade");
 
-        let task: BuildingDowngradeTask = serde_json::from_value(job.task.data.clone()).unwrap();
+        let task: BuildingDowngradeTask = serde_json::from_value(job.task.data.clone())?;
         assert_eq!(task.slot_id, slot_id);
         assert_eq!(
             task.level,
             building_in_db.building.level - 1,
             "Task should contain target level at N-1"
         );
+        Ok(())
     }
 }
