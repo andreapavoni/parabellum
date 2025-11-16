@@ -6,11 +6,11 @@ use parabellum_core::DbError;
 pub type DbPool = PgPool;
 
 pub async fn establish_connection_pool() -> Result<DbPool, DbError> {
-    Ok(init_connection_pool("DATABASE_URL").await?)
+    init_connection_pool("DATABASE_URL").await
 }
 
 pub async fn establish_test_connection_pool() -> Result<DbPool, DbError> {
-    Ok(init_connection_pool("TEST_DATABASE_URL").await?)
+    init_connection_pool("TEST_DATABASE_URL").await
 }
 
 async fn init_connection_pool(database_env: &'static str) -> Result<DbPool, DbError> {

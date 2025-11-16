@@ -65,7 +65,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         }
         sender_village.deduct_resources(&resources_to_send)?;
 
-        let merchant_stats = sender_village.tribe.get_merchant_stats();
+        let merchant_stats = sender_village.tribe.merchant_stats();
         let merchants_needed =
             Self::calculate_merchants_needed(merchant_stats.capacity, resources_to_send.total())?;
 
@@ -87,7 +87,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
             destination_village_id: command.target_village_id,
             resources: resources_to_send,
             merchants_used: merchants_needed,
-            travel_time_secs: travel_time_secs,
+            travel_time_secs,
         };
         let going_job_payload =
             JobPayload::new("MerchantGoing", serde_json::to_value(&going_payload)?);

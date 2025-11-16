@@ -2,6 +2,7 @@ pub mod add_building;
 pub mod army_return;
 pub mod attack;
 pub mod downgrade_building;
+pub mod hero_revival;
 pub mod merchant_going;
 pub mod merchant_return;
 pub mod reinforcement;

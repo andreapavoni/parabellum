@@ -48,12 +48,16 @@ pub struct Army {
     pub units: serde_json::Value,
     pub smithy: serde_json::Value,
     pub hero_id: Option<Uuid>,
+    pub hero_level: Option<i16>,
+    pub hero_resource_focus: Option<serde_json::Value>,
     pub hero_health: Option<i16>,
     pub hero_experience: Option<i32>,
-    pub hero_attack_points: Option<i32>,
-    pub hero_defense_points: Option<i32>,
-    pub hero_off_bonus: Option<i16>,
-    pub hero_def_bonus: Option<i16>,
+    pub hero_strength_points: Option<i16>,
+    pub hero_off_bonus_points: Option<i16>,
+    pub hero_def_bonus_points: Option<i16>,
+    pub hero_resources_points: Option<i16>,
+    pub hero_regeneration_points: Option<i16>,
+    pub hero_unassigned_points: Option<i16>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -91,12 +95,17 @@ pub struct Hero {
     pub id: Uuid,
     pub player_id: Uuid,
     pub village_id: i32,
+    pub tribe: Tribe,
+    pub level: i16,
     pub health: i16,
     pub experience: i32,
-    pub attack_points: i32,
-    pub defense_points: i32,
-    pub off_bonus: i16,
-    pub def_bonus: i16,
+    pub resource_focus: serde_json::Value,
+    pub strength_points: i32,
+    pub off_bonus_points: i16,
+    pub def_bonus_points: i16,
+    pub regeneration_points: i16,
+    pub resources_points: i16,
+    pub unassigned_points: i16,
 }
 
 #[derive(Debug, Clone, FromRow)]

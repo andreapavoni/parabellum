@@ -35,13 +35,17 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
               a.tribe as "tribe: _",
               a.units,
               a.smithy,
-              a.hero_id                                  as "hero_id?: Uuid",
+              a.hero_id as "hero_id?: Uuid",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.level          END as "hero_level?: i16",
               CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
               CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.resource_focus END as "hero_resource_focus?: _",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.strength_points       END as "hero_strength_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.resources_points      END as "hero_resources_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.regeneration_points   END as "hero_regeneration_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus_points      END as "hero_off_bonus_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus_points      END as "hero_def_bonus_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.unassigned_points      END as "hero_unassigned_points?: i16"
             FROM armies a
             LEFT JOIN heroes h ON a.hero_id = h.id
             WHERE a.id = $1
@@ -68,13 +72,17 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
               a.tribe as "tribe: _",
               a.units,
               a.smithy,
-              a.hero_id                                  as "hero_id?: Uuid",
+              a.hero_id as "hero_id?: Uuid",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.level          END as "hero_level?: i16",
               CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as "hero_health?: i16",
               CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as "hero_experience?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.attack_points  END as "hero_attack_points?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.defense_points END as "hero_defense_points?: i32",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus      END as "hero_off_bonus?: i16",
-              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus      END as "hero_def_bonus?: i16"
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.resource_focus END as "hero_resource_focus?: _",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.strength_points       END as "hero_strength_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.resources_points      END as "hero_resources_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.regeneration_points   END as "hero_regeneration_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus_points      END as "hero_off_bonus_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus_points      END as "hero_def_bonus_points?: i16",
+              CASE WHEN h.id IS NULL THEN NULL ELSE h.unassigned_points      END as "hero_unassigned_points?: i16"
             FROM armies a
             LEFT JOIN heroes h ON a.hero_id = h.id
             WHERE a.hero_id = $1

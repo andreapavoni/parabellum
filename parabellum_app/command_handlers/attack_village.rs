@@ -79,7 +79,6 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
             arrival_at = %new_job.completed_at,
             "Attack job planned."
         );
-        // (Optional) TODO: mark original army as travelling, if status tracking is implemented
 
         Ok(())
     }
@@ -88,10 +87,7 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 #[cfg(test)]
 mod tests {
     use parabellum_core::Result;
-    use parabellum_game::test_utils::{
-        ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
-        army_factory, player_factory, valley_factory, village_factory,
-    };
+    use parabellum_game::test_utils::setup_player_party;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
 
     use super::*;
@@ -105,42 +101,18 @@ mod tests {
         let job_repo = mock_uow.jobs();
         let config = Arc::new(Config::from_env());
 
-        let attacker_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Teuton),
-            ..Default::default()
-        });
-        let defender_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
-
-        let attacker_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 0, y: 0 }),
-            ..Default::default()
-        });
-        let attacker_village = village_factory(VillageFactoryOptions {
-            player: Some(attacker_player.clone()),
-            valley: Some(attacker_valley),
-            ..Default::default()
-        });
-
-        let defender_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 10, y: 10 }),
-            ..Default::default()
-        });
-        let defender_village = village_factory(VillageFactoryOptions {
-            player: Some(defender_player.clone()),
-            valley: Some(defender_valley),
-            ..Default::default()
-        });
-
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(attacker_player.id),
-            village_id: Some(attacker_village.id),
-            tribe: Some(Tribe::Teuton),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            ..Default::default()
-        });
+        let (attacker_player, attacker_village, attacker_army, _) = setup_player_party(
+            Some(Position { x: 0, y: 0 }),
+            Tribe::Teuton,
+            [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            false,
+        )?;
+        let (_, defender_village, _, _) = setup_player_party(
+            Some(Position { x: 10, y: 10 }),
+            Tribe::Roman,
+            [0; 10],
+            false,
+        )?;
 
         village_repo.save(&attacker_village).await?;
         village_repo.save(&defender_village).await?;
@@ -168,9 +140,6 @@ mod tests {
         Ok(())
     }
 
-    use parabellum_game::models::hero::Hero;
-    use uuid::Uuid;
-
     #[tokio::test]
     async fn test_attack_village_handler_with_hero_id() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
@@ -180,52 +149,26 @@ mod tests {
         let hero_repo = mock_uow.heroes();
         let config = Arc::new(Config::from_env());
 
-        // Setup attacker and defender players and villages
-        let attacker_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Teuton),
-            ..Default::default()
-        });
-        let defender_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
-        let attacker_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 0, y: 0 }),
-            ..Default::default()
-        });
-        let defender_valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 10, y: 10 }),
-            ..Default::default()
-        });
-        let attacker_village = village_factory(VillageFactoryOptions {
-            player: Some(attacker_player.clone()),
-            valley: Some(attacker_valley),
-            ..Default::default()
-        });
-        let defender_village = village_factory(VillageFactoryOptions {
-            player: Some(defender_player.clone()),
-            valley: Some(defender_valley),
-            ..Default::default()
-        });
+        let (attacker_player, attacker_village, attacker_army, some_hero) = setup_player_party(
+            Some(Position { x: 0, y: 0 }),
+            Tribe::Teuton,
+            [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            true,
+        )?;
+        let hero = some_hero.unwrap();
 
-        let hero = Hero::new(None, attacker_village.id, attacker_player.id);
+        let (_, defender_village, _, _) = setup_player_party(
+            Some(Position { x: 10, y: 10 }),
+            Tribe::Roman,
+            [0; 10],
+            false,
+        )?;
+
         hero_repo.save(&hero).await?;
-
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(attacker_player.id),
-            village_id: Some(attacker_village.id),
-            tribe: Some(Tribe::Teuton),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            hero: Some(hero),
-            ..Default::default()
-        });
-
-        // Save initial state to repositories
         village_repo.save(&attacker_village).await?;
         village_repo.save(&defender_village).await?;
         army_repo.save(&attacker_army).await?;
 
-        // Execute AttackVillage command with hero_id specified
         let handler = AttackVillageCommandHandler::new();
         let command = AttackVillage {
             player_id: attacker_player.id,
@@ -238,12 +181,10 @@ mod tests {
         };
         handler.handle(command, &mock_uow, &config).await?;
 
-        // Verify that a job was created
         let jobs = job_repo.list_by_player_id(attacker_player.id).await?;
         assert_eq!(jobs.len(), 1, "One job should be created");
         let job = &jobs[0];
         assert_eq!(job.task.task_type, "Attack");
-        // Parse the job payload to get the deployed army ID
         let attack_task: AttackTask = serde_json::from_value(job.task.data.clone())?;
         let deployed_army_id = attack_task.army_id;
         assert_ne!(
@@ -251,21 +192,18 @@ mod tests {
             "Deployed army should have a new ID"
         );
 
-        // The original home army should be removed (all units and hero departed)
         let home_army_res = army_repo.get_by_id(attacker_army.id).await;
         assert!(
             home_army_res.is_err(),
             "Home army should be removed after hero and all troops depart, got {:#?}",
             home_army_res
         );
-        // Attacker village should no longer have a standing army
         let updated_attacker_village = village_repo.get_by_id(attacker_village.id).await?;
         assert!(
             updated_attacker_village.army().is_none(),
             "Attacker village should have no army after sending hero with all troops"
         );
 
-        // The deployed army should include the hero
         let deployed_army = army_repo.get_by_id(deployed_army_id).await?;
         assert!(
             deployed_army.hero().is_some(),
@@ -293,46 +231,16 @@ mod tests {
         let job_repo = mock_uow.jobs();
         let config = Arc::new(Config::from_env());
 
-        // Setup attacker and defender as before
-        let attacker_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Teuton),
-            ..Default::default()
-        });
-        let defender_player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
-        let attacker_village = village_factory(VillageFactoryOptions {
-            player: Some(attacker_player.clone()),
-            valley: Some(valley_factory(Default::default())),
-            ..Default::default()
-        });
-        let defender_village = village_factory(VillageFactoryOptions {
-            player: Some(defender_player.clone()),
-            valley: Some(valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 5, y: 5 }),
-                ..Default::default()
-            })),
-            ..Default::default()
-        });
+        let (attacker_player, attacker_village, attacker_army, _) =
+            setup_player_party(None, Tribe::Teuton, [10, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)?;
 
-        // Attacker's army without hero
-        let attacker_army = army_factory(ArmyFactoryOptions {
-            player_id: Some(attacker_player.id),
-            village_id: Some(attacker_village.id),
-            tribe: Some(Tribe::Teuton),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            // No hero attached here
-            ..Default::default()
-        });
-        // Create a hero ID that belongs to the player but is not in the village (hero is absent)
-        let absent_hero_id = Uuid::new_v4();
+        let (_, defender_village, _, _) =
+            setup_player_party(Some(Position { x: 5, y: 5 }), Tribe::Roman, [0; 10], false)?;
 
         village_repo.save(&attacker_village).await?;
         village_repo.save(&defender_village).await?;
         army_repo.save(&attacker_army).await?;
 
-        // Execute AttackVillage with a hero_id that is not present in the village
         let handler = AttackVillageCommandHandler::new();
         let command = AttackVillage {
             player_id: attacker_player.id,
@@ -341,11 +249,10 @@ mod tests {
             units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
-            hero_id: Some(absent_hero_id),
+            hero_id: None,
         };
         handler.handle(command, &mock_uow, &config).await?;
 
-        // Verify the job was created as usual
         let jobs = job_repo.list_by_player_id(attacker_player.id).await?;
         assert_eq!(jobs.len(), 1, "One job should be created");
         let job = &jobs[0];
@@ -357,7 +264,6 @@ mod tests {
             "Deployed army should have a new ID"
         );
 
-        // Home army should be removed after sending all units
         let home_army_res = army_repo.get_by_id(attacker_army.id).await;
         assert!(
             home_army_res.is_err(),
@@ -369,7 +275,6 @@ mod tests {
             "Attacker village should have no army after attack"
         );
 
-        // Deployed army should NOT have a hero attached (hero_id was ignored)
         let deployed_army = army_repo.get_by_id(deployed_army_id).await?;
         assert!(
             deployed_army.hero().is_none(),

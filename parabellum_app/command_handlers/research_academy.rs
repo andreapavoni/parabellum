@@ -11,6 +11,12 @@ use crate::{
 
 pub struct ResearchAcademyCommandHandler {}
 
+impl Default for ResearchAcademyCommandHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResearchAcademyCommandHandler {
     pub fn new() -> Self {
         Self {}

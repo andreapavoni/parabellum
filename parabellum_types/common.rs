@@ -31,15 +31,6 @@ impl ResourceGroup {
         Self(lumber, clay, iron, crop)
     }
 
-    pub fn multi(&self, quantity: u32) -> ResourceGroup {
-        Self::new(
-            self.0 * quantity as u32,
-            self.1 * quantity as u32,
-            self.2 * quantity as u32,
-            self.3 * quantity as u32,
-        )
-    }
-
     pub fn total(&self) -> u32 {
         self.0 + self.1 + self.2 + self.3
     }
@@ -55,6 +46,18 @@ impl ResourceGroup {
     }
     pub fn crop(&self) -> u32 {
         self.3
+    }
+}
+
+impl core::ops::Mul<f64> for ResourceGroup {
+    type Output = ResourceGroup;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        let wood = (self.0 as f64 * rhs).floor() as u32;
+        let clay = (self.1 as f64 * rhs).floor() as u32;
+        let iron = (self.2 as f64 * rhs).floor() as u32;
+        let crop = (self.3 as f64 * rhs).floor() as u32;
+        ResourceGroup(wood, clay, iron, crop)
     }
 }
 

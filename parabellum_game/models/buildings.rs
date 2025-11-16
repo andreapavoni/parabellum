@@ -173,7 +173,7 @@ fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -
         return (0, 0); // Level 0 has 0 pop and 0 CP
     }
 
-    let building_data = get_building_data(&name).unwrap();
+    let building_data = get_building_data(name).unwrap();
     let mut cumulative_pop = 0;
     let mut cumulative_cp = 0;
 

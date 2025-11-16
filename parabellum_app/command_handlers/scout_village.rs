@@ -45,7 +45,7 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
                 .await?;
 
         // Check only army is only scouts
-        let tribe_units = attacker_village.tribe.get_units();
+        let tribe_units = attacker_village.tribe.units();
         for (idx, &quantity) in command.units.iter().enumerate() {
             if quantity > 0 {
                 let unit = tribe_units

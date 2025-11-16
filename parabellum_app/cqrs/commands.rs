@@ -194,3 +194,13 @@ impl CreateHero {
 }
 
 impl Command for CreateHero {}
+
+#[derive(Debug, Clone)]
+pub struct ReviveHero {
+    pub player_id: Uuid,
+    pub hero_id: Uuid,
+    pub village_id: u32,
+    pub reset: bool,
+}
+
+impl Command for ReviveHero {}

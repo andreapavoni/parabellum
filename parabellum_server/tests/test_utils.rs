@@ -149,7 +149,7 @@ pub mod tests {
             village_repo.save(&village).await?;
 
             hero = if with_hero {
-                let hero = Hero::new(None, village.id, player.id);
+                let hero = Hero::new(None, village.id, player.id, player.tribe.clone(), None);
                 hero_repo.save(&hero).await.unwrap();
                 Some(hero)
             } else {

@@ -77,8 +77,7 @@ pub mod tests {
             village2.add_building_at_slot(mansion, 20)?;
             village_repo.save(&village1).await?;
             village_repo.save(&village2).await?;
-            // Create an army with some troops and a hero in village1
-            let hero = Hero::new(None, village1.id, player.id);
+            let hero = Hero::new(None, village1.id, player.id, player.tribe.clone(), None);
             hero_repo.save(&hero).await?;
 
             let army1 = army_factory(ArmyFactoryOptions {

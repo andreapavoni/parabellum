@@ -11,6 +11,12 @@ use std::sync::Arc;
 
 pub struct ResearchSmithyCommandHandler {}
 
+impl Default for ResearchSmithyCommandHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResearchSmithyCommandHandler {
     pub fn new() -> Self {
         Self {}

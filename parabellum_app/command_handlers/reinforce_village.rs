@@ -130,7 +130,7 @@ mod tests {
         village2.add_building_at_slot(hero_mansion, 20).unwrap(); // assume slot 20 is free for HeroMansion
 
         // Create a hero and an army in village1 (source)
-        let hero = Hero::new(None, village1.id, player.id);
+        let hero = Hero::new(None, village1.id, player.id, player.tribe, None);
         let source_army = army_factory(ArmyFactoryOptions {
             player_id: Some(player.id),
             village_id: Some(village1.id),
@@ -242,7 +242,13 @@ mod tests {
         });
 
         // Create a hero and army in the reinforcer's village
-        let hero = Hero::new(None, reinforcer_village.id, reinforcer_player.id);
+        let hero = Hero::new(
+            None,
+            reinforcer_village.id,
+            reinforcer_player.id,
+            reinforcer_player.tribe,
+            None,
+        );
         let reinforcer_army = army_factory(ArmyFactoryOptions {
             player_id: Some(reinforcer_player.id),
             village_id: Some(reinforcer_village.id),

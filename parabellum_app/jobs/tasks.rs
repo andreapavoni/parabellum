@@ -74,6 +74,15 @@ pub struct TrainBarracks {
     pub quantity: i32,
     pub time_per_unit_secs: i32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeroRevivalTask {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: i32,
+    pub reset: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainGreatBarracksTask {
     pub slot_id: u8,

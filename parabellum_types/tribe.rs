@@ -19,7 +19,7 @@ pub enum Tribe {
 
 impl Tribe {
     /// Returns the army units data for actual tribe.
-    pub fn get_units(&self) -> &TribeUnits {
+    pub fn units(&self) -> &TribeUnits {
         match self {
             Tribe::Roman => &ROMAN_UNITS,
             Tribe::Gaul => &GAUL_UNITS,
@@ -31,14 +31,12 @@ impl Tribe {
 
     /// Returns the army unit index for the given unit name in actual tribe.
     pub fn get_unit_idx_by_name(&self, unit_name: &UnitName) -> Option<usize> {
-        self.get_units()
-            .iter()
-            .position(|unit| unit.name == *unit_name)
+        self.units().iter().position(|unit| unit.name == *unit_name)
     }
 
     /// Returns the army unit for the given unit name in actual tribe.
     pub fn get_unit_by_name(&self, unit_name: &UnitName) -> Option<&Unit> {
-        self.get_units().iter().find(|unit| unit.name == *unit_name)
+        self.units().iter().find(|unit| unit.name == *unit_name)
     }
 
     /// Returns the wall defense factor for actual tribe.
@@ -51,8 +49,18 @@ impl Tribe {
         }
     }
 
+    /// Returns top military unit for actual tribe. Used for hero.
+    pub fn get_top_unit(&self) -> Option<&Unit> {
+        match self {
+            Tribe::Roman => self.get_unit_by_name(&UnitName::EquitesCaesaris),
+            Tribe::Teuton => self.get_unit_by_name(&UnitName::TeutonicKnight),
+            Tribe::Gaul => self.get_unit_by_name(&UnitName::Haeduan),
+            _ => None,
+        }
+    }
+
     /// Returns the merchant stats for actual tribe.
-    pub fn get_merchant_stats(&self) -> MerchantStats {
+    pub fn merchant_stats(&self) -> MerchantStats {
         match self {
             Tribe::Roman => MerchantStats {
                 speed: 16,

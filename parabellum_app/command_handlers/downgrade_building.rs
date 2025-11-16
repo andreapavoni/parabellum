@@ -39,7 +39,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
-            .ok_or_else(|| GameError::EmptySlot {
+            .ok_or(GameError::EmptySlot {
                 slot_id: command.slot_id,
             })?;
 

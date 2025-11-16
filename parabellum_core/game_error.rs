@@ -12,6 +12,15 @@ pub enum GameError {
     #[error("Not enough merchants available")]
     NotEnoughMerchants,
 
+    #[error("Not enough hero points for next level")]
+    NotEnoughHeroPoints,
+
+    #[error("Hero attribute over limit 100")]
+    HeroAttributeOverflow,
+
+    #[error("Hero is not dead")]
+    HeroNotDead,
+
     #[error("Village slots are full")]
     VillageSlotsFull,
 
@@ -52,6 +61,9 @@ pub enum GameError {
 
     #[error("Village {village_id} not owned by player {player_id:?}")]
     VillageNotOwned { village_id: u32, player_id: Uuid },
+
+    #[error("Hero {hero_id:?} not owned by player {player_id:?}")]
+    HeroNotOwned { hero_id: Uuid, player_id: Uuid },
 
     #[error("Building has already reached max level")]
     BuildingMaxLevelReached,

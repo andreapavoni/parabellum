@@ -1,3 +1,4 @@
+use parabellum_core::Result;
 use parabellum_types::{
     common::Player,
     map::{Position, ValleyTopology},
@@ -52,6 +53,19 @@ pub struct ArmyFactoryOptions {
 }
 
 #[derive(Default, Clone)]
+pub struct HeroFactoryOptions {
+    pub id: Option<Uuid>,
+    pub player_id: Option<Uuid>,
+    pub village_id: Option<u32>,
+    pub tribe: Option<Tribe>,
+    pub level: Option<u16>,
+    pub health: Option<u16>,
+    pub strength: Option<u16>,
+    pub off_bonus: Option<u16>,
+    pub def_bonus: Option<u16>,
+}
+
+#[derive(Default, Clone)]
 pub struct MapFieldFactoryOptions {
     pub position: Option<Position>,
     pub topology: Option<MapFieldTopology>,
@@ -65,7 +79,7 @@ pub fn map_field_factory(options: MapFieldFactoryOptions) -> MapField {
     let topology = options
         .topology
         .unwrap_or(MapFieldTopology::Valley(ValleyTopology(4, 4, 4, 6)));
-    let world_size = options.world_size.unwrap_or(100) as i32;
+    let world_size = options.world_size.unwrap_or(100);
 
     MapField {
         id: position.to_id(world_size),
@@ -108,6 +122,20 @@ pub fn village_factory(options: VillageFactoryOptions) -> Village {
     )
 }
 
+pub fn hero_factory(options: HeroFactoryOptions) -> Hero {
+    Hero::new(
+        options.id,
+        options
+            .village_id
+            .unwrap_or(village_factory(Default::default()).id),
+        options
+            .player_id
+            .unwrap_or(player_factory(Default::default()).id),
+        options.tribe.unwrap_or(Tribe::Roman),
+        None,
+    )
+}
+
 pub fn army_factory(options: ArmyFactoryOptions) -> Army {
     let village_id = options.village_id.unwrap_or(1);
 
@@ -116,9 +144,57 @@ pub fn army_factory(options: ArmyFactoryOptions) -> Army {
         village_id,
         Some(village_id),
         options.player_id.unwrap_or(Uuid::new_v4()),
-        options.tribe.unwrap_or(Tribe::Teuton),
+        options.tribe.unwrap_or(Tribe::Roman),
         &options.units.unwrap_or([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
         &options.smithy.unwrap_or_default(),
         options.hero,
     )
+}
+
+pub fn setup_player_party(
+    position: Option<Position>,
+    tribe: Tribe,
+    units: TroopSet,
+    with_hero: bool,
+) -> Result<(Player, Village, Army, Option<Hero>)> {
+    let position = position.unwrap_or_else(|| {
+        let mut rng = rand::thread_rng();
+        let x = rng.gen_range(1..99);
+        let y = rng.gen_range(1..99);
+        Position { x, y }
+    });
+
+    let player = player_factory(PlayerFactoryOptions {
+        tribe: Some(tribe.clone()),
+        ..Default::default()
+    });
+
+    let valley = valley_factory(ValleyFactoryOptions {
+        position: Some(position),
+        ..Default::default()
+    });
+
+    let village = village_factory(VillageFactoryOptions {
+        valley: Some(valley),
+        player: Some(player.clone()),
+        ..Default::default()
+    });
+
+    let hero = if with_hero {
+        let hero = Hero::new(None, village.id, player.id, player.tribe.clone(), None);
+        Some(hero)
+    } else {
+        None
+    };
+
+    let army = army_factory(ArmyFactoryOptions {
+        player_id: Some(player.id),
+        village_id: Some(village.id),
+        units: Some(units),
+        tribe: Some(tribe.clone()),
+        hero: hero.clone(),
+        ..Default::default()
+    });
+
+    Ok((player, village, army, hero))
 }

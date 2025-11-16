@@ -39,24 +39,25 @@ impl JobHandler for AttackJobHandler {
     ) -> Result<(), ApplicationError> {
         info!("Execute Attack Job");
 
-        let mut atk_army = ctx.uow.armies().get_by_id(self.payload.army_id).await?;
-        let atk_village = ctx.uow.villages().get_by_id(atk_army.village_id).await?;
+        let army_repo = ctx.uow.armies();
+        let village_repo = ctx.uow.villages();
+        let hero_repo = ctx.uow.heroes();
 
-        let mut def_village = ctx
-            .uow
-            .villages()
+        let mut atk_army = army_repo.get_by_id(self.payload.army_id).await?;
+        let atk_village = village_repo.get_by_id(atk_army.village_id).await?;
+
+        let mut def_village = village_repo
             .get_by_id(self.payload.target_village_id as u32)
             .await?;
 
         let mut catapult_targets: Vec<Building> = Vec::new();
         for ct in &self.payload.catapult_targets {
-            match def_village.get_building_by_name(&ct) {
+            match def_village.get_building_by_name(ct) {
                 Some(b) => catapult_targets.push(b.building.clone()),
                 None => {
-                    def_village
-                        .get_random_buildings(1)
-                        .pop()
-                        .map(|b| catapult_targets.push(b.clone()));
+                    if let Some(b) = def_village.get_random_buildings(1).pop() {
+                        catapult_targets.push(b.clone())
+                    }
                 }
             };
         }
@@ -71,18 +72,30 @@ impl JobHandler for AttackJobHandler {
         );
         let report = battle.calculate_battle();
 
-        atk_army.update_units(&report.attacker.survivors);
-        ctx.uow.armies().save(&atk_army).await?;
-
+        atk_army.apply_battle_report(&report.attacker);
         def_village.apply_battle_report(&report, ctx.config.speed)?;
-        ctx.uow.villages().save(&def_village).await?;
+
+        if let Some(hero) = atk_army.hero() {
+            hero_repo.save(&hero).await?;
+        }
+
+        army_repo.save(&atk_army).await?;
+        village_repo.save(&def_village).await?;
 
         if let Some(army) = def_village.army() {
-            ctx.uow.armies().save(&army).await?;
+            army_repo.save(army).await?;
+
+            if let Some(hero) = army.hero() {
+                hero_repo.save(&hero).await?;
+            }
         }
 
         for reinforcement_army in def_village.reinforcements() {
-            ctx.uow.armies().save(&reinforcement_army).await?;
+            army_repo.save(reinforcement_army).await?;
+
+            if let Some(hero) = reinforcement_army.hero() {
+                hero_repo.save(&hero).await?;
+            }
         }
 
         let return_travel_time = atk_village.position.calculate_travel_time_secs(

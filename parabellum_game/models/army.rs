@@ -8,7 +8,10 @@ use uuid::Uuid;
 use parabellum_core::GameError;
 
 use super::smithy::SmithyUpgrades;
-use crate::models::{hero::Hero, village::Village};
+use crate::{
+    battle::BattlePartyReport,
+    models::{hero::Hero, village::Village},
+};
 
 pub type TroopSet = [u32; 10];
 
@@ -25,6 +28,7 @@ pub struct Army {
 }
 
 impl Army {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: Option<Uuid>,
         village_id: u32,
@@ -88,9 +92,19 @@ impl Army {
         self.units.iter().sum::<u32>() + hero_count
     }
 
+    /// Update units and hero in the army.
+    pub fn apply_battle_report(&mut self, report: &BattlePartyReport) {
+        self.update_units(&report.survivors);
+        if let Some(mut hero) = self.hero() {
+            hero.apply_battle_damage(report.loss_percentage);
+            hero.gain_experience(report.hero_exp_gained);
+            self.hero = Some(hero);
+        }
+    }
+
     /// Returns the total upkeep cost of the army.
     pub fn upkeep(&self) -> u32 {
-        let units = self.tribe.get_units();
+        let units = self.tribe.units();
         let mut total: u32 = 0;
 
         for (idx, quantity) in self.units.iter().enumerate() {
@@ -108,7 +122,7 @@ impl Army {
     /// Returns the total capacity of a given troop set.
     pub fn bounty_capacity_troop_set(&self, troops: &TroopSet) -> u32 {
         let mut capacity: u32 = 0;
-        let units_data = self.tribe.get_units();
+        let units_data = self.tribe.units();
 
         for (idx, &quantity) in troops.iter().enumerate() {
             if quantity > 0 {
@@ -171,26 +185,6 @@ impl Army {
     /// Returns the scouting defense points of the army.
     pub fn scouting_defense_points(&self) -> u32 {
         self.scouting_points(20)
-    }
-
-    /// Applies losses to the current Army by reducing the quantities of each unit by a given percentage.
-    pub fn apply_losses(&mut self, percent: f64) {
-        for (idx, quantity) in self.units.into_iter().enumerate() {
-            self.units[idx] = quantity - ((quantity as f64) * percent / 100.0).floor() as u32;
-        }
-    }
-
-    /// Calculates the losses of the current Army by a given percentage,
-    pub fn calculate_losses(&self, percent: f64) -> (TroopSet, TroopSet) {
-        let mut survivors: TroopSet = [0; 10];
-        let mut losses: TroopSet = [0; 10];
-
-        for (idx, quantity) in self.units.into_iter().enumerate() {
-            let lost = (quantity as f64 * percent).floor() as u32;
-            survivors[idx] = quantity - lost;
-            losses[idx] = lost;
-        }
-        (survivors, losses)
     }
 
     /// Updates the current army and returns new deployed army.
@@ -285,13 +279,13 @@ impl Army {
     // Returns the data information for a given unit in the army.
     fn get_unit_by_idx(&self, idx: u8) -> Option<Unit> {
         if idx.ge(&0) && idx.lt(&10) {
-            Some(self.tribe.get_units()[idx as usize].clone())
+            Some(self.tribe.units()[idx as usize].clone())
         } else {
             None
         }
     }
 
-    // Returns the scouting points based on a given base points.
+    /// Returns the scouting points based on a given base points.
     fn scouting_points(&self, base_points: u8) -> u32 {
         let idx: usize = 3;
         let quantity = self.units[idx];
@@ -305,7 +299,7 @@ impl Army {
         let level: i32 = self.smithy[idx].into();
         ((combat_value as f64)
             + ((combat_value + 300 * unit.cost.upkeep) as f64 / 7.0)
-                * ((1.007f64).powi(level.try_into().unwrap()) - 1.0).floor()) as u32
+                * ((1.007f64).powi(level) - 1.0).floor()) as u32
     }
 }
 

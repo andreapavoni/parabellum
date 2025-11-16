@@ -41,7 +41,7 @@ impl JobHandler for ArmyReturnJobHandler {
         let returning_army = army_repo.get_by_id(self.payload.army_id).await?;
         village.merge_army(&returning_army)?;
 
-        army_repo.save(&village.army().unwrap()).await?;
+        army_repo.save(village.army().unwrap()).await?;
         army_repo.remove(returning_army.id).await?;
         village.store_resources(&self.payload.resources);
         village_repo.save(&village).await?;

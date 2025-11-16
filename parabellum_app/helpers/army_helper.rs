@@ -13,7 +13,7 @@ use parabellum_game::models::{
 
 /// Handles the logic of deploying an army from a village.
 /// Returns the updated Village and the new deployed Army.
-pub async fn deploy_army_from_village<'a>(
+pub async fn deploy_army_from_village(
     uow: &Box<dyn UnitOfWork<'_> + '_>,
     mut village: Village, // Take ownership to modify
     home_army_id: Uuid,

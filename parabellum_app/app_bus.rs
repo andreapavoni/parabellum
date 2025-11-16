@@ -48,7 +48,7 @@ impl AppBus {
             }
             Err(e) => {
                 uow.rollback().await?; // Rollback on failure
-                Err(e.into())
+                Err(e)
             }
         }
     }
@@ -69,6 +69,6 @@ impl AppBus {
         // Always rollback a query, as it should never write data.
         uow.rollback().await?;
 
-        Ok(result?)
+        result
     }
 }

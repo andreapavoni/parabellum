@@ -18,7 +18,7 @@ pub fn smithy_upgrade_cost_for_unit(unit_name: &UnitName, level: u8) -> Result<R
 
   match smithy_upgrades_for_unit(unit_name) {
     Some(upgrades) =>  Ok(upgrades.costs_per_level[level as usize].clone()),
-    None => return Err(GameError::UnitNotFound(unit_name.clone())),
+    None => Err(GameError::UnitNotFound(unit_name.clone())),
   }
 }
 

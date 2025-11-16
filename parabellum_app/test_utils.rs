@@ -155,7 +155,13 @@ pub mod tests {
                 .ok_or_else(|| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?;
 
             if let Some(id) = hero_id {
-                let hero = Hero::new(Some(id), army.village_id, army.player_id);
+                let hero = Hero::new(
+                    Some(id),
+                    army.village_id,
+                    army.player_id,
+                    army.tribe.clone(),
+                    None,
+                );
                 army.set_hero(Some(hero));
             } else {
                 army.set_hero(None);
@@ -294,31 +300,29 @@ pub mod tests {
 
     #[derive(Default, Clone)]
     pub struct MockHeroRepository {
-        heroes: Arc<Mutex<Vec<Hero>>>,
+        heroes: Arc<Mutex<HashMap<Uuid, Hero>>>,
     }
 
     impl MockHeroRepository {
         pub fn new() -> Self {
             Self {
-                heroes: Arc::new(Mutex::new(Vec::new())),
+                heroes: Arc::new(Mutex::new(HashMap::new())),
             }
         }
     }
 
     #[async_trait]
     impl HeroRepository for MockHeroRepository {
-        async fn save(&self, job: &Hero) -> Result<(), ApplicationError> {
-            self.heroes.lock().unwrap().push(job.clone());
+        async fn save(&self, hero: &Hero) -> Result<(), ApplicationError> {
+            self.heroes.lock().unwrap().insert(hero.id, hero.clone());
             Ok(())
         }
 
         async fn get_by_id(&self, id: Uuid) -> Result<Hero, ApplicationError> {
-            let jobs = self.heroes.lock().unwrap().clone();
-
-            Ok(jobs
-                .into_iter()
-                .find(|j| j.id == id)
-                .ok_or_else(|| ApplicationError::Db(DbError::HeroNotFound(id)))?)
+            if let Some(h) = self.heroes.lock().unwrap().get(&id) {
+                return Ok(h.clone());
+            }
+            Err(ApplicationError::Db(DbError::HeroNotFound(id)))
         }
     }
 

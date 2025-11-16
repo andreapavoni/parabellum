@@ -125,17 +125,27 @@ impl From<db_models::Army> for game_models::army::Army {
     fn from(army: db_models::Army) -> Self {
         let hero = match army.hero_id {
             None => None,
-            Some(id) => Some(game_models::hero::Hero {
-                id,
-                village_id: army.village_id as u32,
-                player_id: army.player_id,
-                health: army.hero_health.unwrap() as u16,
-                experience: army.hero_experience.unwrap() as u32,
-                attack_points: army.hero_attack_points.unwrap() as u32,
-                defense_points: army.hero_defense_points.unwrap() as u32,
-                off_bonus: army.hero_off_bonus.unwrap() as u16,
-                def_bonus: army.hero_def_bonus.unwrap() as u16,
-            }),
+            Some(id) => {
+                let mut hero = game_models::hero::Hero::new(
+                    Some(id),
+                    army.village_id as u32,
+                    army.player_id,
+                    army.tribe.into(),
+                    army.hero_unassigned_points.map(|p| p as u16),
+                );
+
+                hero.level = army.hero_level.unwrap() as u16;
+                hero.health = army.hero_health.unwrap() as u16;
+                hero.experience = army.hero_experience.unwrap() as u32;
+                hero.off_bonus_points = army.hero_off_bonus_points.unwrap() as u16;
+                hero.def_bonus_points = army.hero_def_bonus_points.unwrap() as u16;
+                hero.strength_points = army.hero_strength_points.unwrap() as u16;
+                hero.regeneration_points = army.hero_regeneration_points.unwrap() as u16;
+                hero.resources_points = army.hero_resources_points.unwrap() as u16;
+                hero.unassigned_points = army.hero_unassigned_points.unwrap() as u16;
+
+                Some(hero)
+            }
         };
 
         game_models::army::Army::new(
@@ -203,12 +213,17 @@ impl From<db_models::Hero> for game_models::hero::Hero {
             id: db_hero.id,
             player_id: db_hero.player_id,
             village_id: db_hero.village_id as u32,
+            tribe: db_hero.tribe.into(),
+            level: db_hero.level as u16,
             health: db_hero.health as u16,
             experience: db_hero.experience as u32,
-            attack_points: db_hero.attack_points as u32,
-            defense_points: db_hero.defense_points as u32,
-            off_bonus: db_hero.off_bonus as u16,
-            def_bonus: db_hero.def_bonus as u16,
+            strength_points: db_hero.strength_points as u16,
+            off_bonus_points: db_hero.off_bonus_points as u16,
+            def_bonus_points: db_hero.def_bonus_points as u16,
+            regeneration_points: db_hero.regeneration_points as u16,
+            resources_points: db_hero.resources_points as u16,
+            resource_focus: serde_json::from_value(db_hero.resource_focus).unwrap(),
+            unassigned_points: db_hero.unassigned_points as u16,
         }
     }
 }

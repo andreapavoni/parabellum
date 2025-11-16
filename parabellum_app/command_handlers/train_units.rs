@@ -11,6 +11,12 @@ use crate::{
 
 pub struct TrainUnitsCommandHandler {}
 
+impl Default for TrainUnitsCommandHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TrainUnitsCommandHandler {
     pub fn new() -> Self {
         Self {}
@@ -45,7 +51,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         village_repo.save(&village).await?;
 
         let payload = TrainUnitsTask {
-            slot_id: slot_id,
+            slot_id,
             unit: unit_name,
             quantity: command.quantity,
             time_per_unit: time_per_unit as i32,

@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::f64;
 
-use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
 use crate::models::{
     army::{Army, TroopSet},
@@ -54,7 +54,8 @@ pub struct BattlePartyReport {
     pub army_before: Army,
     pub survivors: TroopSet,
     pub losses: TroopSet,
-    // hero_exp_gained: u32,
+    pub hero_exp_gained: u32,
+    pub loss_percentage: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,18 +107,15 @@ impl Battle {
         let (mut total_attacker_infantry_points, mut total_attacker_cavalry_points): (u32, u32) =
             self.attacker.attack_points();
 
-        // 1.2: Hero attack bonus
         if let Some(hero) = &self.attacker.hero() {
-            let hero_bonus_multiplier = 1.0 + (hero.get_attack_bonus(true) as f64 / 100.0);
             total_attacker_infantry_points =
-                (total_attacker_infantry_points as f64 * hero_bonus_multiplier) as u32;
+                (total_attacker_infantry_points as f64 * hero.off_bonus()) as u32;
             total_attacker_cavalry_points =
-                (total_attacker_cavalry_points as f64 * hero_bonus_multiplier) as u32;
-            // Hero attack points
-            total_attacker_infantry_points += hero.attack_points;
+                (total_attacker_cavalry_points as f64 * hero.off_bonus()) as u32;
+
+            total_attacker_infantry_points += hero.strength();
         }
 
-        // 1.3: Defense points (village troops + reinforcements)
         let mut total_defender_immensity: u32 = 0;
 
         let (mut total_defender_infantry_points, mut total_defender_cavalry_points): (u32, u32) =
@@ -137,13 +135,12 @@ impl Battle {
 
             // Apply hero defense bonus
             if let Some(hero) = &defender_army.hero() {
-                let hero_bonus_multiplier = 1.0 + (hero.get_defense_bonus() as f64 / 100.0);
                 total_defender_infantry_points =
-                    (total_defender_infantry_points as f64 * hero_bonus_multiplier) as u32;
+                    (total_defender_infantry_points as f64 * hero.def_bonus()) as u32;
                 total_defender_cavalry_points =
-                    (total_defender_cavalry_points as f64 * hero_bonus_multiplier) as u32;
-                total_defender_infantry_points += hero.defense_points;
-                total_defender_cavalry_points += hero.defense_points;
+                    (total_defender_cavalry_points as f64 * hero.def_bonus()) as u32;
+                total_defender_infantry_points += hero.strength();
+                total_defender_cavalry_points += hero.strength();
             }
         }
 
@@ -209,26 +206,34 @@ impl Battle {
         );
 
         let (attacker_survivors, attacker_losses) =
-            self.attacker.calculate_losses(attacker_loss_percentage);
+            calculate_army_losses(&self.attacker, attacker_loss_percentage);
 
         let (defender_survivors, defender_losses) = self
             .defender_village
             .army()
             .map_or(([0; 10], [0; 10]), |da| {
-                da.calculate_losses(defender_loss_percentage)
+                calculate_army_losses(da, defender_loss_percentage)
             });
+
+        let mut attacker_hero_xp =
+            calculate_hero_xp(&defender_losses, &self.defender_village.tribe);
 
         let reinforcements_report: Vec<BattlePartyReport> = self
             .defender_village
             .reinforcements()
             .iter()
             .map(|reinforcement| {
-                let (survivors, losses) = reinforcement.calculate_losses(defender_loss_percentage);
+                let (survivors, losses) =
+                    calculate_army_losses(reinforcement, defender_loss_percentage);
+
+                attacker_hero_xp += calculate_hero_xp(&losses, &reinforcement.tribe);
 
                 BattlePartyReport {
                     army_before: reinforcement.clone(),
                     survivors,
                     losses,
+                    loss_percentage: defender_loss_percentage,
+                    hero_exp_gained: calculate_hero_xp(&attacker_losses, &self.attacker.tribe),
                 }
             })
             .collect();
@@ -320,6 +325,8 @@ impl Battle {
                 army_before: self.defender_village.army().unwrap().clone(),
                 survivors: defender_survivors,
                 losses: defender_losses,
+                hero_exp_gained: calculate_hero_xp(&attacker_losses, &self.attacker.tribe),
+                loss_percentage: defender_loss_percentage,
             })
         } else {
             None
@@ -337,6 +344,8 @@ impl Battle {
                 army_before: self.attacker.clone(),
                 survivors: attacker_survivors,
                 losses: attacker_losses,
+                hero_exp_gained: attacker_hero_xp,
+                loss_percentage: attacker_loss_percentage,
             },
             defender: defender_report,
             reinforcements: reinforcements_report,
@@ -394,19 +403,18 @@ impl Battle {
 
         // Calculate casualties in attacker scouts
         let (attacker_survivors, attacker_losses) =
-            self.attacker.calculate_losses(attacker_loss_percentage);
+            calculate_army_losses(&self.attacker, attacker_loss_percentage);
 
         let reinforcements_report: Vec<BattlePartyReport> = self
             .defender_village
             .reinforcements()
             .iter()
-            .map(|reinforcement| {
-                BattlePartyReport {
-                    army_before: reinforcement.clone(),
-                    // No losses for defenders in scouting
-                    survivors: *reinforcement.units(),
-                    losses: [0; 10],
-                }
+            .map(|reinforcement| BattlePartyReport {
+                army_before: reinforcement.clone(),
+                survivors: *reinforcement.units(),
+                losses: [0; 10],
+                hero_exp_gained: calculate_hero_xp(&attacker_losses, &self.attacker.tribe),
+                loss_percentage: 0.0,
             })
             .collect();
 
@@ -440,6 +448,8 @@ impl Battle {
                 army_before: self.attacker.clone(),
                 survivors: attacker_survivors,
                 losses: attacker_losses,
+                hero_exp_gained: 0,
+                loss_percentage: attacker_loss_percentage,
             },
             defender: None,
             reinforcements: reinforcements_report,
@@ -472,7 +482,7 @@ fn calculate_bounty(total_capacity: u32, stored_resources: &ResourceGroup) -> Re
     let available_lumber = stored_resources.lumber();
     let available_clay = stored_resources.clay();
     let available_iron = stored_resources.iron();
-    let available_crop = stored_resources.crop().max(0) as u32;
+    let available_crop = stored_resources.crop();
 
     let total_available = available_lumber + available_clay + available_iron + available_crop;
 
@@ -540,7 +550,7 @@ fn calculate_m_factor(immensity: u32) -> f64 {
     }
 }
 
-// Losses are calculated in percentages and applied to all armies involved, according to a winner/loser logic
+/// Losses are calculated in percentages and applied to all armies involved, according to a winner/loser logic
 fn calculate_losses_percentages(
     attack_type: &AttackType,
     attack_power: f64,
@@ -572,7 +582,19 @@ fn calculate_losses_percentages(
     (attacker_loss_percentage, defender_loss_percentage)
 }
 
-// Loss factor is calculated based on the attack type
+/// Calculates hero xp based on the crop consumption of the killed enemies.
+fn calculate_hero_xp(kills: &TroopSet, tribe: &Tribe) -> u32 {
+    let units = tribe.units();
+    let mut total: u32 = 0;
+
+    for (idx, quantity) in kills.iter().enumerate() {
+        total += units[idx].cost.upkeep * quantity;
+    }
+
+    total
+}
+
+/// Loss factor is calculated based on the attack type
 fn calculate_loss_factor_by_attack_type(
     attack_type: &AttackType,
     winner: f64,
@@ -598,7 +620,7 @@ fn calculate_loss_factor_by_attack_type(
     (winner_losses, loser_losses)
 }
 
-// sigma function from Kirilloid to calculate damages to buildings (catapults) and wall (rams)
+/// Sigma function from Kirilloid to calculate damages to buildings (catapults) and wall (rams)
 // $this->sigma = function($x) { return ($x > 1 ? 2 - $x ** -1.5 : $x ** 1.5) / 2; };
 fn sigma(x: f64) -> f64 {
     if x > 1.0 {
@@ -608,7 +630,7 @@ fn sigma(x: f64) -> f64 {
     }
 }
 
-// Calculates damage for catapults/rams
+/// Calculates damage for catapults/rams
 fn calculate_machine_damage(
     quantity: u32,
     smithy_level: u8,
@@ -622,7 +644,7 @@ fn calculate_machine_damage(
     4.0 * sigma(ad_ratio) * efficiency * upgrades / morale
 }
 
-// Calculates new building level after damages
+/// Calculates new building level after damages
 fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
     let mut current_level = old_level;
     damage -= 0.5;
@@ -635,6 +657,19 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
         current_level -= 1;
     }
     current_level
+}
+
+/// Calculates the losses of the given army by a percentage,
+pub fn calculate_army_losses(army: &Army, percent: f64) -> (TroopSet, TroopSet) {
+    let mut survivors: TroopSet = [0; 10];
+    let mut losses: TroopSet = [0; 10];
+
+    for (idx, quantity) in army.units().iter().enumerate() {
+        let lost = ((*quantity) as f64 * percent).floor() as u32;
+        survivors[idx] = quantity - lost;
+        losses[idx] = lost;
+    }
+    (survivors, losses)
 }
 
 #[cfg(test)]

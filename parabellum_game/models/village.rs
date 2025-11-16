@@ -168,9 +168,9 @@ impl Village {
     ) -> Result<(u8, UnitName, u32), GameError> {
         let unit = self
             .tribe
-            .get_units()
+            .units()
             .get(unit_idx as usize)
-            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx))?
+            .ok_or(GameError::InvalidUnitIndex(unit_idx))?
             .to_owned();
 
         if !self.academy_research[unit_idx as usize] && unit.research_cost.time > 0 {
@@ -192,8 +192,8 @@ impl Village {
             })?;
 
         let cost_per_unit = &(unit.cost);
-        let total_cost = &(cost_per_unit.resources.multi(quantity as u32));
-        self.deduct_resources(&total_cost)?;
+        let total_cost = &(cost_per_unit.resources.clone() * quantity.into());
+        self.deduct_resources(total_cost)?;
 
         let training_time_bonus_perc = building.building.value as f64 / 1000.0; // Es: 100 -> 1.0, 90 -> 0.9
         let base_time_per_unit = cost_per_unit.time as f64 / server_speed as f64;
@@ -213,10 +213,10 @@ impl Village {
         server_speed: i8,
     ) -> Result<u32, GameError> {
         if self.buildings.len() == 40 {
-            return Err(GameError::VillageSlotsFull.into());
+            return Err(GameError::VillageSlotsFull);
         }
         if self.get_building_by_slot_id(slot_id).is_some() {
-            return Err(GameError::SlotOccupied { slot_id }.into());
+            return Err(GameError::SlotOccupied { slot_id });
         }
 
         let building = Building::new(name, server_speed);
@@ -235,8 +235,8 @@ impl Village {
     ) -> Result<u32, GameError> {
         let unit_idx = self.tribe.get_unit_idx_by_name(unit).unwrap();
 
-        if self.academy_research()[unit_idx as usize] {
-            return Err(GameError::UnitAlreadyResearched(unit.clone()).into());
+        if self.academy_research()[unit_idx] {
+            return Err(GameError::UnitAlreadyResearched(unit.clone()));
         }
 
         let tribe = self.tribe.clone();
@@ -263,9 +263,9 @@ impl Village {
 
         let unit = self
             .tribe
-            .get_units()
-            .get(unit_idx as usize)
-            .ok_or_else(|| GameError::InvalidUnitIndex(unit_idx as u8))?;
+            .units()
+            .get(unit_idx)
+            .ok_or(GameError::InvalidUnitIndex(unit_idx as u8))?;
 
         for req in unit.get_requirements() {
             if !self.buildings.iter().any(|b| b.building.name == req.0) {
@@ -280,7 +280,7 @@ impl Village {
             return Err(GameError::UnitNotResearched(unit_name.clone()));
         }
 
-        let research_cost = smithy_upgrade_cost_for_unit(&unit_name, current_level)?;
+        let research_cost = smithy_upgrade_cost_for_unit(unit_name, current_level)?;
         self.deduct_resources(&research_cost.resources)?;
         let research_time_secs = (research_cost.time as f64 / server_speed as f64).floor() as u32;
 
@@ -326,7 +326,7 @@ impl Village {
 
     /// Stores resources in the village, respecting capacity.
     pub fn store_resources(&mut self, resources: &ResourceGroup) {
-        self.stocks.store(&resources);
+        self.stocks.store(resources);
         self.update_state();
     }
 
@@ -368,7 +368,7 @@ impl Village {
             .buildings
             .iter()
             .position(|b| b.slot_id == slot_id)
-            .ok_or_else(|| GameError::EmptySlot { slot_id })?;
+            .ok_or(GameError::EmptySlot { slot_id })?;
 
         let building = self.buildings[idx].building.clone();
         let _ = std::mem::replace(
@@ -388,7 +388,7 @@ impl Village {
         slot_id: u8,
         server_speed: i8,
     ) -> Result<(), GameError> {
-        if slot_id >= 1 && slot_id <= 18 {
+        if (1..=18).contains(&slot_id) {
             return self.set_building_level_at_slot(slot_id, 0, server_speed);
         }
 
@@ -490,7 +490,7 @@ impl Village {
     }
 
     pub fn set_army(&mut self, army: Option<&Army>) -> Result<(), GameError> {
-        self.army = army.map(|a| a.clone());
+        self.army = army.cloned();
         self.update_state();
         Ok(())
     }
@@ -520,19 +520,14 @@ impl Village {
         report: &BattleReport,
         server_speed: i8,
     ) -> Result<(), GameError> {
-        let mut final_home_army = None;
         if let Some(defender_report) = &report.defender {
             if let Some(mut home_army) = self.army.take() {
                 home_army.update_units(&defender_report.survivors);
                 if home_army.immensity() > 0 {
-                    final_home_army = Some(home_army);
+                    self.army = Some(home_army);
                 }
             }
-        } else if self.army.is_some() {
-            // If no defender report but army exists, it means total loss
-            final_home_army = self.army.take();
         }
-        self.army = final_home_army;
 
         for report in &report.reinforcements {
             if let Some(index) = self
@@ -552,30 +547,29 @@ impl Village {
         // Building damages
 
         // Wall damage
-        if let Some(wall_damage) = &report.wall_damage {
-            if wall_damage.level_after < wall_damage.level_before {
-                if self.wall().is_some() {
-                    // FIXME: assume wall slot_id is always 19
-                    self.set_building_level_at_slot(19, wall_damage.level_after, server_speed)?;
-                }
-            }
+        if let Some(wall_damage) = &report.wall_damage
+            && wall_damage.level_after < wall_damage.level_before
+            && self.wall().is_some()
+        {
+            // FIXME: assume wall slot_id is always 19
+            self.set_building_level_at_slot(19, wall_damage.level_after, server_speed)?;
         }
 
         // Catapult damages to other buildings
         for damage_report in &report.catapult_damage {
-            if damage_report.level_after < damage_report.level_before {
-                if let Some(target) = self.get_building_by_name(&damage_report.name) {
-                    self.set_building_level_at_slot(
-                        target.slot_id,
-                        damage_report.level_after,
-                        server_speed,
-                    )?;
+            if damage_report.level_after < damage_report.level_before
+                && let Some(target) = self.get_building_by_name(&damage_report.name)
+            {
+                self.set_building_level_at_slot(
+                    target.slot_id,
+                    damage_report.level_after,
+                    server_speed,
+                )?;
 
-                    if damage_report.level_after == 0
-                        && target.building.group != BuildingGroup::Resources
-                    {
-                        self.remove_building_at_slot(target.slot_id, server_speed)?;
-                    }
+                if damage_report.level_after == 0
+                    && target.building.group != BuildingGroup::Resources
+                {
+                    self.remove_building_at_slot(target.slot_id, server_speed)?;
                 }
             }
         }
@@ -607,10 +601,10 @@ impl Village {
 
     /// Upgrades smithy level for unit name.
     pub fn upgrade_smithy(&mut self, unit: UnitName) -> Result<(), GameError> {
-        if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
-            if self.smithy[idx] < 20 {
-                self.smithy[idx] += 1;
-            }
+        if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit)
+            && self.smithy[idx] < 20
+        {
+            self.smithy[idx] += 1;
         }
 
         Ok(())
@@ -899,16 +893,19 @@ pub struct VillageProduction {
 
 impl VillageProduction {
     pub fn calculate_effective_production(&mut self) {
-        let mut ep: VillageEffectiveProduction = Default::default();
-
-        ep.lumber =
+        let lumber =
             ((self.lumber as f64) * ((self.bonus.lumber as f64 / 100.0) + 1.0)).floor() as u32;
-        ep.clay = (self.clay as f64 * ((self.bonus.clay as f64 / 100.0) + 1.0)).floor() as u32;
-        ep.iron = (self.iron as f64 * ((self.bonus.iron as f64 / 100.0) + 1.0)).floor() as u32;
-        ep.crop = (self.crop as f64 * ((self.bonus.crop as f64 / 100.0) + 1.0)).floor() as i64;
-        ep.crop -= self.upkeep as i64;
+        let clay = (self.clay as f64 * ((self.bonus.clay as f64 / 100.0) + 1.0)).floor() as u32;
+        let iron = (self.iron as f64 * ((self.bonus.iron as f64 / 100.0) + 1.0)).floor() as u32;
+        let mut crop = (self.crop as f64 * ((self.bonus.crop as f64 / 100.0) + 1.0)).floor() as i64;
+        crop -= self.upkeep as i64;
 
-        self.effective = ep;
+        self.effective = VillageEffectiveProduction {
+            lumber,
+            clay,
+            iron,
+            crop,
+        };
     }
 
     pub fn calculate_production_deltas(&self, time_elapsed_secs: f64) -> (f64, f64, f64, f64) {

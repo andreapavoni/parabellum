@@ -167,7 +167,7 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
             let position = Position { x, y };
             let id = position.to_id(world_size);
 
-            if (x == y && x == 0) || (x == y && x == world_size) || (x == y && x == -world_size) {
+            if (x == -world_size || x == 0 || x == world_size) && x == y {
                 map.push(MapField {
                     player_id: None,
                     village_id: None,
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn test_generate_new_map() {
         let world_size = 100;
-        let expected_size = world_size * world_size * 4; // world_size = 10 => 40_000 map fields
+        let expected_size = world_size * world_size * 4; // world_size = 100 => 40_000 map fields
         let map = generate_new_map(world_size);
 
         assert_eq!(map.clone().len(), expected_size as usize);
