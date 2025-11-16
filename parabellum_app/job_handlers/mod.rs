@@ -1,7 +1,8 @@
 pub mod add_building;
 pub mod army_return;
 pub mod attack;
-pub mod downgrade_building;
+pub mod building_downgrade;
+pub mod building_upgrade;
 pub mod hero_revival;
 pub mod merchant_going;
 pub mod merchant_return;
@@ -10,4 +11,3 @@ pub mod research_academy;
 pub mod research_smithy;
 pub mod scout;
 pub mod train_units;
-pub mod upgrade_building;

@@ -6,11 +6,12 @@ use parabellum_core::{AppError, ApplicationError};
 use crate::{
     job_handlers::{
         add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
-        attack::AttackJobHandler, downgrade_building::DowngradeBuildingJobHandler,
+        attack::AttackJobHandler, building_downgrade::DowngradeBuildingJobHandler,
+        building_upgrade::UpgradeBuildingJobHandler, hero_revival::HeroRevivalJobHandler,
         merchant_going::MerchantGoingJobHandler, merchant_return::MerchantReturnJobHandler,
         reinforcement::ReinforcementJobHandler, research_academy::ResearchAcademyJobHandler,
         research_smithy::ResearchSmithyJobHandler, scout::ScoutJobHandler,
-        train_units::TrainUnitsJobHandler, upgrade_building::UpgradeBuildingJobHandler,
+        train_units::TrainUnitsJobHandler,
     },
     jobs::{
         handler::{JobHandler, JobRegistry},
@@ -33,22 +34,24 @@ enum AppTaskType {
     MerchantReturn,
     BuildingUpgrade,
     BuildingDowngrade,
+    HeroRevival,
 }
 
 impl AppTaskType {
     /// Parse &str into enum variant.
     fn from_str(task_type: &str) -> Option<Self> {
         match task_type {
+            "AddBuilding" => Some(Self::AddBuilding),
+            "ArmyReturn" => Some(Self::ArmyReturn),
             "Attack" => Some(Self::Attack),
+            "BuildingDowngrade" => Some(Self::BuildingDowngrade),
+            "HeroRevival" => Some(Self::HeroRevival),
             "Scout" => Some(Self::Scout),
             "Reinforcement" => Some(Self::Reinforcement),
             "TrainUnits" => Some(Self::TrainUnits),
-            "ArmyReturn" => Some(Self::ArmyReturn),
             "ResearchAcademy" => Some(Self::ResearchAcademy),
             "ResearchSmithy" => Some(Self::ResearchSmithy),
-            "AddBuilding" => Some(Self::AddBuilding),
             "BuildingUpgrade" => Some(Self::BuildingUpgrade),
-            "BuildingDowngrade" => Some(Self::BuildingDowngrade),
             "MerchantGoing" => Some(Self::MerchantGoing),
             "MerchantReturn" => Some(Self::MerchantReturn),
             _ => None,
@@ -129,6 +132,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::BuildingDowngrade => {
                 let payload: BuildingDowngradeTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(DowngradeBuildingJobHandler::new(payload)))
+            }
+
+            AppTaskType::HeroRevival => {
+                let payload: HeroRevivalTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(HeroRevivalJobHandler::new(payload)))
             }
         }
     }
