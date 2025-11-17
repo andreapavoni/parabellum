@@ -6,6 +6,7 @@ members = [
     "parabellum_db",
     "parabellum_server",
     "parabellum_types",
+    "parabellum_web"
 ]
 resolver = "2"
 

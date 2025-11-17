@@ -18,7 +18,7 @@
 // StartTownHallCelebration
 // StartBreweryCelebration
 
-pub mod app_bus;
+pub mod app;
 pub mod command_handlers;
 pub mod config;
 pub mod cqrs;

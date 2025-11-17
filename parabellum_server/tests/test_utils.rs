@@ -25,7 +25,7 @@ pub mod tests {
     use tokio::sync::Mutex;
 
     use parabellum_app::{
-        app_bus::AppBus,
+        app::AppBus,
         config::Config,
         job_registry::AppJobRegistry,
         jobs::worker::JobWorker,

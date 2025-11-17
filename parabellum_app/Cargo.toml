@@ -23,3 +23,6 @@ dotenvy  = { workspace = true }
 [dev-dependencies]
 # Enable "test-utils" for parabellum_game
 parabellum_game = { path = "../parabellum_game", features = ["test-utils"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }

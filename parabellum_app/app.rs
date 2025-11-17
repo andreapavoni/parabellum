@@ -8,6 +8,12 @@ use crate::{
     uow::UnitOfWorkProvider,
 };
 
+#[derive(Clone)]
+pub struct AppState {
+    pub app_bus: Arc<AppBus>,
+    // config?
+}
+
 /// AppBus (Mediator)
 /// This struct is the central entry point for all application logic.
 /// It does not contain any business logic itself.

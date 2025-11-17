@@ -28,7 +28,7 @@ pub fn setup_logging() {
         .with_target(true);
 
     // Default EnvFilter: info for everything, debug for our crate
-    let default_filter = "info,parabellum=debug";
+    let default_filter = "info,parabellum=debug,tower_http=debug,sqlx=info";
 
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));

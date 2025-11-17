@@ -1,0 +1,24 @@
+[package]
+name = "parabellum_web"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+parabellum_app = { path = "../parabellum_app" }
+parabellum_core = { path = "../parabellum_core" }
+parabellum_game = { path = "../parabellum_game" }
+parabellum_types = { path = "../parabellum_types" }
+
+axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
+askama = { version = "0.14", features = ["blocks", "serde_json"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }

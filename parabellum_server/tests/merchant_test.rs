@@ -5,7 +5,7 @@ pub mod tests {
     use std::sync::Arc;
 
     use parabellum_app::{
-        app_bus::AppBus,
+        app::AppBus,
         command_handlers::SendResourcesCommandHandler,
         config::Config,
         cqrs::commands::SendResources,
