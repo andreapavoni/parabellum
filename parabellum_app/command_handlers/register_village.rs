@@ -88,7 +88,7 @@ mod tests {
 
         let village = &villages[0];
         assert_eq!(village.player_id, player.id);
-        assert_eq!(village.is_capital, true);
+        assert!(village.is_capital);
         assert_eq!(village.position, Position { x: 10, y: 10 });
         Ok(())
     }

@@ -426,4 +426,133 @@ pub mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_hero_xp_levelup_and_revival() -> Result<()> {
+        let (app, worker, uow_provider, config) = setup_app().await?;
+
+        let uow = uow_provider.begin().await?;
+        let village_repo = uow.villages();
+        let hero_repo = uow.heroes();
+
+        let (player_id, village_id, hero_id) = {
+            let (player, mut village, _, some_hero) =
+                setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
+            let mut hero = some_hero.unwrap();
+
+            let granary =
+                Building::new(BuildingName::Granary, config.speed).at_level(20, config.speed)?;
+            let warehouse =
+                Building::new(BuildingName::Warehouse, config.speed).at_level(20, config.speed)?;
+            village.add_building_at_slot(granary, 21)?;
+            village.add_building_at_slot(warehouse, 20)?;
+
+            village.store_resources(&ResourceGroup(100_000, 100_000, 100_000, 100_000));
+            village_repo.save(&village).await?;
+
+            // lv0, xp0, HP at  (così verifichiamo l'heal on level-up)
+            hero.level = 0;
+            hero.experience = 0;
+            hero.health = 40;
+            hero_repo.save(&hero).await?;
+
+            uow.commit().await?;
+            (player.id, village.id, hero.id)
+        };
+
+        // 2) Battle with enough XP to level-up hero (T3: threshold lv1 = 100 XP)
+        {
+            let uow = uow_provider.begin().await?;
+            let hero_repo = uow.heroes();
+
+            let mut hero = hero_repo.get_by_id(hero_id).await?;
+            assert_eq!(hero.level, 0);
+            assert_eq!(hero.health, 40);
+
+            // simulate hero XP gaining
+            let leveled = hero.gain_experience(150);
+            assert!(leveled >= 1);
+            assert!(hero.level >= 1);
+            assert_eq!(hero.health, 100);
+
+            let xp_after = hero.experience;
+            assert!(xp_after >= 150);
+
+            hero_repo.save(&hero).await?;
+            uow.commit().await?;
+        }
+
+        // 3) Next battle with >= 90% losses → hero dies
+        {
+            let uow = uow_provider.begin().await?;
+            let hero_repo = uow.heroes();
+
+            let mut hero = hero_repo.get_by_id(hero_id).await?;
+            assert!(hero.is_alive());
+
+            hero.apply_battle_damage(0.95);
+            assert!(!hero.is_alive());
+            assert_eq!(hero.health, 0);
+
+            hero_repo.save(&hero).await?;
+            uow.commit().await?;
+        }
+
+        let cmd = ReviveHero {
+            player_id,
+            hero_id,
+            village_id,
+            reset: false,
+        };
+        let handler = ReviveHeroCommandHandler::new();
+        app.execute(cmd, handler).await?;
+
+        // 4) Revive hero
+        let revival_job_id = {
+            let uow = uow_provider.begin().await?;
+            uow.commit().await?;
+
+            let uow = uow_provider.begin().await?;
+            let jobs = uow.jobs().list_by_player_id(player_id).await?;
+            assert_eq!(jobs.len(), 1);
+            let job = jobs[0].clone();
+            assert_eq!(job.task.task_type, "HeroRevival");
+            let job_id = job.id;
+
+            let hero = uow.heroes().get_by_id(hero_id).await?;
+            assert_eq!(hero.health, 0);
+
+            uow.rollback().await?;
+            job_id
+        };
+
+        // 5) Process HeroRevival job
+        {
+            let uow = uow_provider.begin().await?;
+            let job = uow.jobs().get_by_id(revival_job_id).await?;
+            uow.rollback().await?;
+            worker.process_jobs(&vec![job.clone()]).await?;
+        }
+
+        // 6) Final state
+        {
+            let uow = uow_provider.begin().await?;
+            let hero_repo = uow.heroes();
+            let job_repo = uow.jobs();
+
+            let hero = hero_repo.get_by_id(hero_id).await?;
+            assert!(hero.is_alive());
+            assert!(hero.level >= 1);
+            assert!(hero.experience >= 150);
+            assert_eq!(hero.health, 100);
+            assert_eq!(hero.village_id, village_id);
+
+            let job = job_repo.get_by_id(revival_job_id).await?;
+            assert_eq!(job.status, JobStatus::Completed);
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
 }

@@ -50,7 +50,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           job_id
       )
       .fetch_one(&mut *tx_guard.as_mut())
-      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+      .await.map_err(|_| ApplicationError::Db(DbError::JobNotFound(job_id)))?;
 
         Ok(job.into())
     }

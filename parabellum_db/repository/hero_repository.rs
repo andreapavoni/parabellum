@@ -80,7 +80,7 @@ impl<'a> HeroRepository for PostgresHeroRepository<'a> {
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?; // returns error if not found
+        .map_err(|_| ApplicationError::Db(DbError::HeroNotFound(hero_id)))?; // returns error if not found
         Ok(db_hero.into())
     }
 }

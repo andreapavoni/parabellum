@@ -25,7 +25,7 @@ impl Unit {
     pub fn apply_smithy_upgrade(&self, smithy_level: i32, upkeep: u32, combat_value: u32) -> u32 {
         ((combat_value as f64)
             + ((combat_value + 300 * upkeep) as f64 / 7.0)
-                * ((1.007f64).powi(smithy_level.try_into().unwrap()) - 1.0).floor()) as u32
+                * ((1.007f64).powi(smithy_level) - 1.0).floor()) as u32
     }
 
     pub fn get_requirements(&self) -> &'static [BuildingRequirement] {

@@ -21,6 +21,7 @@ mod logs;
 use logs::setup_logging;
 
 #[tokio::main]
+#[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
     setup_logging();
 

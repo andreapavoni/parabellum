@@ -520,12 +520,12 @@ impl Village {
         report: &BattleReport,
         server_speed: i8,
     ) -> Result<(), GameError> {
-        if let Some(defender_report) = &report.defender {
-            if let Some(mut home_army) = self.army.take() {
-                home_army.update_units(&defender_report.survivors);
-                if home_army.immensity() > 0 {
-                    self.army = Some(home_army);
-                }
+        if let Some(defender_report) = &report.defender
+            && let Some(mut home_army) = self.army.take()
+        {
+            home_army.update_units(&defender_report.survivors);
+            if home_army.immensity() > 0 {
+                self.army = Some(home_army);
             }
         }
 

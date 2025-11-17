@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
     use parabellum_game::models::{
@@ -97,7 +98,7 @@ pub mod tests {
         ) -> Result<Vec<Village>, ApplicationError> {
             let mut villages: Vec<Village> = vec![];
 
-            for v in self.villages.lock().unwrap().values().into_iter() {
+            for v in self.villages.lock().unwrap().values() {
                 if v.player_id == player_id {
                     villages.push(v.clone());
                 }
@@ -294,7 +295,7 @@ pub mod tests {
         }
         async fn list_all(&self) -> Result<Vec<MarketplaceOffer>, ApplicationError> {
             let offers = self.offers.lock().unwrap();
-            Ok(offers.values().into_iter().cloned().collect())
+            Ok(offers.values().cloned().collect())
         }
     }
 

@@ -102,6 +102,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **API / UI**: Working on building a basic UI
 
 ### ToDo (Not Started)
+- [ ] **Reports**: reports for armies/merchants.
 - [ ] **CLI**: to start server, init setup, run periodic tasks, etc...
 - [ ] **Alliances**: Creating and managing alliances.
 - [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not unit training), and conquering.

@@ -91,7 +91,7 @@ mod tests {
         assert_eq!(village.player_id, player.id);
         assert_eq!(village.name, "New Village");
         assert_eq!(village.position, Position { x: 10, y: 10 });
-        assert_eq!(village.is_capital, false); // Found village is not capital
+        assert!(!village.is_capital); // Found village is not capital
         Ok(())
     }
 }

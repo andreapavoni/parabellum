@@ -23,7 +23,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                units_to_send.clone(),
+                units_to_send,
                 false,
             )
             .await?
@@ -45,7 +45,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: original_home_army_id,
-            units: units_to_send.clone(),
+            units: units_to_send,
             target_village_id: target_village.id,
             hero_id: None,
         };
@@ -139,9 +139,8 @@ pub mod tests {
                 deployed_army_id, // <-- Check for deployed_army_id
                 "Target village should have reinforcements"
             );
-            assert_eq!(
+            assert!(
                 reinforcer_village.army().is_none(),
-                true,
                 "Reinforcer village shouldn't have army at home"
             );
             uow_assert2.rollback().await?;

@@ -161,7 +161,7 @@ mod tests {
 
         let command = TrainUnits {
             player_id: player.id,
-            village_id: village_id,
+            village_id,
             unit_idx: 0,
             quantity: 5,
             building_name: BuildingName::Barracks,
@@ -230,7 +230,7 @@ mod tests {
 
         let command = TrainUnits {
             player_id: player.id,
-            village_id: village_id,
+            village_id,
             unit_idx: 0,
             quantity: 10,
             building_name: BuildingName::Barracks,
@@ -313,7 +313,7 @@ mod tests {
 
         let command = TrainUnits {
             player_id: player.id,
-            village_id: village_id,
+            village_id,
             unit_idx: 2,
             quantity: 5,
             building_name: BuildingName::Stable,

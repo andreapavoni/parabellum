@@ -26,7 +26,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                scout_units.clone(),
+                scout_units,
                 false,
             )
             .await?
@@ -49,7 +49,7 @@ pub mod tests {
             army_id: original_home_army_id,
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
-            units: scout_units.clone(),
+            units: scout_units,
         };
 
         let handler = ScoutVillageCommandHandler::new();
@@ -163,12 +163,11 @@ pub mod tests {
 
             let home_village = uow_assert3.villages().get_by_id(scout_village.id).await?;
 
-            assert_eq!(
+            assert!(
                 home_village.army().is_some(),
-                true,
                 "Army should be returned at home"
             );
-            let home_army = home_village.army().clone().unwrap();
+            let home_army = home_village.army().unwrap();
             assert_eq!(
                 home_army.units()[3],
                 10,

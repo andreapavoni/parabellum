@@ -26,7 +26,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                units_to_send.clone(),
+                units_to_send,
                 false,
             )
             .await?
@@ -48,7 +48,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: original_home_army_id, // Use original ID
-            units: units_to_send.clone(),   // Pass the units
+            units: units_to_send,   // Pass the units
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,

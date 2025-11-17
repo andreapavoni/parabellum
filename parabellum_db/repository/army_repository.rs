@@ -54,7 +54,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(|_| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?;
 
         Ok(army.into())
     }
@@ -91,7 +91,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
         )
         .fetch_optional(&mut *tx.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(|_| ApplicationError::Db(DbError::HeroNotFound(hero_id)))?;
 
         if let Some(army) = army {
             return Ok(army.into());

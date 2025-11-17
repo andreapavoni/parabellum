@@ -1,4 +1,4 @@
-use sqlx::{types::Json, Postgres, Transaction};
+use sqlx::{Postgres, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;

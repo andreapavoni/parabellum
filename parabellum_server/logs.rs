@@ -1,4 +1,4 @@
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 /// Sets up the logging configuration for the application.
 ///
