@@ -116,6 +116,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 The project is structured as a Cargo workspace with several distinct crates:
 
 * `parabellum_server`: The main binary executable. This is the entry point that ties everything together.
+* `parabellum_web`: The Web UI. All the HTTP communication and web templates can be found here.
 * `parabellum_app`: The application layer. This is the "brain" of the project. It contains all the commands, queries, and handlers that orchestrate the game logic. It also manages the Job Queue system.
 * `parabellum_game`: The core domain layer. This crate knows *nothing* about databases or web servers. It contains the pure game rules, models (Village, Army, Building), and logic (e.g., `battle.rs`).
 * `parabellum_db`: The infrastructure layer. This provides the concrete implementation of the database repositories (using `sqlx` and Postgres).
