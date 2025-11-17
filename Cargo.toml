@@ -23,3 +23,5 @@ tracing = "0.1"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
 rand = "0.8.5"
 dotenvy = "0.15"
+password-hash = { version = "0.5", features = ["std"] }
+argon2 = { version = "0.5", features = ["std"] }

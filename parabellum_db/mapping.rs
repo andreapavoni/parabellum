@@ -1,7 +1,10 @@
 use parabellum_app::jobs::{Job, JobStatus};
 use parabellum_core::DbError;
 use parabellum_game::models::{self as game_models};
-use parabellum_types::{common::Player, tribe::Tribe};
+use parabellum_types::{
+    common::{Player, User},
+    tribe::Tribe,
+};
 
 use crate::models::{self as db_models};
 
@@ -117,6 +120,15 @@ impl From<db_models::Player> for Player {
             id: player.id,
             username: player.username,
             tribe: player.tribe.into(),
+        }
+    }
+}
+
+impl From<db_models::User> for User {
+    fn from(user: db_models::User) -> Self {
+        User {
+            id: user.id,
+            email: user.email,
         }
     }
 }

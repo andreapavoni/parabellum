@@ -68,6 +68,12 @@ pub struct Player {
     pub tribe: Tribe,
 }
 
+#[derive(Debug, Clone)]
+pub struct User {
+    pub id: Uuid,
+    pub email: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

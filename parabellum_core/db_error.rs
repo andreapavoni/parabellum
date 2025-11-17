@@ -7,6 +7,12 @@ pub enum DbError {
     #[error("Village with ID {0} not found")]
     VillageNotFound(u32),
 
+    #[error("User with with email '{0}' not found")]
+    UserByEmailNotFound(String),
+
+    #[error("User with with ID {0} not found")]
+    UserByIdNotFound(Uuid),
+
     #[error("Army with ID {0} not found")]
     ArmyNotFound(Uuid),
 

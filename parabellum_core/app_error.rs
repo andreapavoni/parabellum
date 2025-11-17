@@ -1,16 +1,14 @@
-use std::fmt::{self};
 use thiserror::Error;
 
-/// Errors for app logic (use cases, commands).
+/// Errors for app logic.
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("No job handler for {0}")]
     NoJobHandler(String),
-}
 
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppError::NoJobHandler(job_task) => write!(f, "No job handler for {}", job_task),
-        }
-    }
+    #[error("Wrong password")]
+    PasswordError,
+
+    #[error(transparent)]
+    PasswordHash(#[from] argon2::password_hash::Error),
 }

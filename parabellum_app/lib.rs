@@ -19,6 +19,7 @@
 // StartBreweryCelebration
 
 pub mod app;
+pub mod auth;
 pub mod command_handlers;
 pub mod config;
 pub mod cqrs;

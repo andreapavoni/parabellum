@@ -100,6 +100,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 
 ### In Progress
 - [ ] **API / UI**: Working on building a basic UI
+- [ ] **Users and Auth**: Adding login/signup, link user to player
 
 ### ToDo (Not Started)
 - [ ] **Reports**: reports for armies/merchants.
