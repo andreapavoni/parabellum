@@ -48,12 +48,6 @@ async fn main() -> Result<(), ApplicationError> {
         .await
     {
         Ok(_) => {
-            // NOTE: The command doesn't return the player anymore.
-            // This is a common CQRS pattern. If you *need* the created ID,
-            // the command struct can be modified to return it, or you
-            // make a subsequent query.
-            // For simplicity, let's just query for the player.
-            // This is a separate topic, but let's assume we get the player.
             tracing::info!("Player registered!");
 
             // Fake player for demo

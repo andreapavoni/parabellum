@@ -3,13 +3,12 @@ mod test_utils;
 #[cfg(test)]
 pub mod tests {
     use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     use parabellum_app::{
+        app_bus::AppBus,
         command_handlers::SendResourcesCommandHandler,
         config::Config,
-        cqrs::{CommandHandler, commands::SendResources},
-        job_registry::AppJobRegistry,
+        cqrs::commands::SendResources,
         jobs::{
             JobStatus,
             tasks::{MerchantGoingTask, MerchantReturnTask},
@@ -18,115 +17,73 @@ pub mod tests {
         uow::UnitOfWorkProvider,
     };
     use parabellum_core::{ApplicationError, GameError, Result};
-    use parabellum_db::establish_test_connection_pool;
-    use parabellum_game::{
-        models::{buildings::Building, village::Village},
-        test_utils::{
-            PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
-            valley_factory, village_factory,
-        },
-    };
+
+    use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
-        map::Position,
         tribe::Tribe,
     };
 
-    use super::test_utils::tests::TestUnitOfWorkProvider;
+    use crate::test_utils::tests::{setup_app, setup_player_party};
 
-    /// Helper to set 2 players + 2 villages.
     async fn setup_test_env() -> Result<
         (
             Arc<dyn UnitOfWorkProvider>,
             Arc<Config>,
-            Arc<AppJobRegistry>,
-            Player,  // Sender Player
-            Village, // Sender Village
-            Village, // Target Village
+            AppBus,         // App Bus
+            Arc<JobWorker>, // JobWorker
+            Player,         // Sender Player
+            Village,        // Sender Village
+            Village,        // Target Village
         ),
         ApplicationError,
     > {
-        let pool = establish_test_connection_pool().await?;
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let config = Arc::new(Config::from_env());
+        let (app, worker, uow_provider, config) = setup_app().await?;
 
-        let (player_a, village_a, village_b) = {
-            let uow = uow_provider.begin().await?;
+        let (player_a, mut village_a, _, _) = setup_player_party(
+            uow_provider.clone(),
+            None,
+            Tribe::Teuton,
+            [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            false,
+        )
+        .await?;
+        let (_, mut village_b, _, _) =
+            setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
-            // Player A (Sender) - Gauls (Capacity 750)
-            let player_a = player_factory(PlayerFactoryOptions {
-                tribe: Some(Tribe::Gaul),
-                ..Default::default()
-            });
-            uow.players().save(&player_a).await?;
+        let uow = uow_provider.begin().await?;
 
-            let valley_a = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 1, y: 1 }),
-                ..Default::default()
-            });
-            let mut village_a = village_factory(VillageFactoryOptions {
-                player: Some(player_a.clone()),
-                valley: Some(valley_a),
-                ..Default::default()
-            });
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(10, config.speed)?;
+        village_a.add_building_at_slot(granary, 23).unwrap();
 
-            let granary = Building::new(BuildingName::Granary, config.speed)
-                .at_level(10, config.speed)
-                .unwrap();
-            village_a.add_building_at_slot(granary, 23).unwrap();
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(10, config.speed)?;
+        village_a.add_building_at_slot(warehouse, 24).unwrap();
 
-            let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-                .at_level(10, config.speed)
-                .unwrap();
-            village_a.add_building_at_slot(warehouse, 24).unwrap();
+        let marketplace =
+            Building::new(BuildingName::Marketplace, config.speed).at_level(10, config.speed)?;
+        village_a.add_building_at_slot(marketplace, 25)?;
+        village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
 
-            let marketplace = Building::new(BuildingName::Marketplace, config.speed)
-                .at_level(10, config.speed)?;
-            village_a.add_building_at_slot(marketplace, 25)?;
+        let granary =
+            Building::new(BuildingName::Granary, config.speed).at_level(10, config.speed)?;
+        village_b.add_building_at_slot(granary, 23).unwrap();
 
-            village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
-            uow.villages().save(&village_a).await?;
+        let warehouse =
+            Building::new(BuildingName::Warehouse, config.speed).at_level(10, config.speed)?;
+        village_b.add_building_at_slot(warehouse, 24).unwrap();
 
-            // Player B (Receiver)
-            let player_b = player_factory(PlayerFactoryOptions {
-                tribe: Some(Tribe::Roman),
-                ..Default::default()
-            });
-            uow.players().save(&player_b).await?;
-
-            let valley_b = valley_factory(ValleyFactoryOptions {
-                position: Some(Position { x: 2, y: 2 }),
-                ..Default::default()
-            });
-            let mut village_b = village_factory(VillageFactoryOptions {
-                player: Some(player_b.clone()),
-                valley: Some(valley_b),
-                ..Default::default()
-            });
-            let granary = Building::new(BuildingName::Granary, config.speed)
-                .at_level(10, config.speed)
-                .unwrap();
-            village_b.add_building_at_slot(granary, 23).unwrap();
-
-            let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-                .at_level(10, config.speed)
-                .unwrap();
-            village_b.add_building_at_slot(warehouse, 24).unwrap();
-
-            uow.villages().save(&village_b).await?;
-            uow.commit().await?;
-            (player_a, village_a, village_b)
-        };
+        uow.villages().save(&village_a).await?;
+        uow.villages().save(&village_b).await?;
+        uow.commit().await?;
 
         Ok((
             uow_provider,
             config,
-            app_registry,
+            app,
+            worker,
             player_a,
             village_a,
             village_b,
@@ -134,8 +91,8 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn test_full_merchant_flow() -> Result<()> {
-        let (uow_provider, config, app_registry, player_a, village_a, village_b) =
+    async fn test_full_merchant_exchange() -> Result<()> {
+        let (uow_provider, _config, app, worker, player_a, village_a, village_b) =
             setup_test_env().await?;
 
         let resources_to_send = ResourceGroup(1000, 500, 0, 0); // 1500
@@ -149,13 +106,8 @@ pub mod tests {
             target_village_id: village_b.id,
             resources: resources_to_send.clone(),
         };
-
-        {
-            let uow_cmd = uow_provider.begin().await?;
-            let handler = SendResourcesCommandHandler::new();
-            handler.handle(command, &uow_cmd, &config).await?;
-            uow_cmd.commit().await?;
-        }
+        let handler = SendResourcesCommandHandler::new();
+        app.execute(command, handler).await?;
 
         let going_job = {
             let uow_assert1 = uow_provider.begin().await?;
@@ -196,11 +148,6 @@ pub mod tests {
             job
         };
 
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry.clone(),
-            config.clone(),
-        ));
         worker.process_jobs(&vec![going_job.clone()]).await?;
 
         let return_job = {
@@ -266,7 +213,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_send_resources_fail_not_enough_merchants() -> Result<()> {
-        let (uow_provider, config, _registry, player_a, village_a, village_b) =
+        let (uow_provider, config, app, _worker, player_a, village_a, village_b) =
             setup_test_env().await?;
 
         {
@@ -277,20 +224,19 @@ pub mod tests {
             uow.commit().await?;
         }
 
+        let uow_cmd = uow_provider.begin().await?;
         let command = SendResources {
             player_id: player_a.id,
             village_id: village_a.id,
             target_village_id: village_b.id,
             resources: ResourceGroup(1500, 0, 0, 0),
         };
-
-        let uow_cmd = uow_provider.begin().await?;
         let handler = SendResourcesCommandHandler::new();
-        let result = handler.handle(command, &uow_cmd, &config).await;
-
+        let result = app.execute(command, handler).await;
         assert!(result.is_err(), "Expected failure, got success");
+
         if let Err(ApplicationError::Game(GameError::NotEnoughMerchants)) = result {
-            // Success
+            // Expected
         } else {
             panic!(
                 "Wrong failure message: {:?}",
@@ -307,7 +253,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_send_resources_fail_not_enough_resources() -> Result<()> {
-        let (uow_provider, config, _registry, player_a, village_a, village_b) =
+        let (_uow_provider, _config, app, _worker, player_a, village_a, village_b) =
             setup_test_env().await?;
 
         // Sending 5001 lumber while having 5000)
@@ -317,10 +263,8 @@ pub mod tests {
             target_village_id: village_b.id,
             resources: ResourceGroup(5001, 0, 0, 0),
         };
-
-        let uow_cmd = uow_provider.begin().await?;
         let handler = SendResourcesCommandHandler::new();
-        let result = handler.handle(command, &uow_cmd, &config).await;
+        let result = app.execute(command, handler).await;
 
         // Verifica l'errore
         assert!(result.is_err(), "Expected failure, got success");
@@ -329,8 +273,6 @@ pub mod tests {
         } else {
             panic!("Wrong failure message: {:?}", result.err());
         }
-
-        uow_cmd.rollback().await?;
         Ok(())
     }
 }

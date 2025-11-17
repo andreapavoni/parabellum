@@ -2,41 +2,25 @@ mod test_utils;
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
     use parabellum_app::{
         command_handlers::ScoutVillageCommandHandler,
-        config::Config,
-        cqrs::{CommandHandler, commands::ScoutVillage},
-        job_registry::AppJobRegistry,
+        cqrs::commands::ScoutVillage,
         jobs::{
             JobStatus,
             tasks::{ArmyReturnTask, ScoutTask},
-            worker::JobWorker,
         },
-        uow::UnitOfWorkProvider,
     };
     use parabellum_core::Result;
-    use parabellum_db::establish_test_connection_pool;
     use parabellum_game::battle::ScoutingTarget;
     use parabellum_types::tribe::Tribe;
 
-    use super::test_utils::tests::{TestUnitOfWorkProvider, setup_player_party};
+    use super::test_utils::tests::setup_player_party;
+    use crate::test_utils::tests::setup_app;
 
     #[tokio::test]
-    async fn test_full_scout_flow() -> Result<()> {
-        let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let config = Arc::new(Config::from_env());
-
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-
+    async fn test_scout_village() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app().await?;
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0]; // 10 Equites Legati (index 3)
-
         let (scout_player, scout_village, scout_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
@@ -48,7 +32,6 @@ pub mod tests {
             .await?
         };
         let original_home_army_id = scout_army.id;
-
         let (_target_player, target_village, _target_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
@@ -69,12 +52,8 @@ pub mod tests {
             units: scout_units.clone(),
         };
 
-        {
-            let uow_cmd = uow_provider.begin().await?;
-            let handler = ScoutVillageCommandHandler::new();
-            handler.handle(command, &uow_cmd, &config).await?;
-            uow_cmd.commit().await?;
-        };
+        let handler = ScoutVillageCommandHandler::new();
+        app.execute(command, handler).await?;
 
         let (scout_job, deployed_army_id) = {
             let uow_assert1 = uow_provider.begin().await?;
@@ -125,11 +104,6 @@ pub mod tests {
             (job, payload.army_id)
         };
 
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry.clone(),
-            config.clone(),
-        ));
         worker.process_jobs(&vec![scout_job.clone()]).await?;
 
         let return_job = {
@@ -148,7 +122,7 @@ pub mod tests {
             assert_eq!(job.task.task_type, "ArmyReturn");
 
             let payload: ArmyReturnTask = serde_json::from_value(job.task.data.clone())?;
-            assert_eq!(payload.army_id, deployed_army_id); // Il ritorno è per l'armata "deployed"
+            assert_eq!(payload.army_id, deployed_army_id);
             assert_eq!(payload.resources.total(), 0, "Scouts don't carry a bounty");
 
             let army_status = uow_assert2.armies().get_by_id(deployed_army_id).await?;
@@ -205,7 +179,7 @@ pub mod tests {
             assert_ne!(home_army.id, deployed_army_id);
             assert_ne!(
                 home_army.id, original_home_army_id,
-                "L'armata a casa deve avere un nuovo ID dopo il merge"
+                "Home army has a new ID after merge"
             );
 
             uow_assert3.rollback().await?;

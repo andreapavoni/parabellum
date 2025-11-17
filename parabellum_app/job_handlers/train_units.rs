@@ -92,7 +92,6 @@ mod tests {
         uow::UnitOfWork,
     };
 
-    // Helper function to set up a standard test environment
     async fn setup_test(
         quantity: i32,
     ) -> Result<(
@@ -119,7 +118,7 @@ mod tests {
 
         let config = Arc::new(Config::from_env());
         let payload = TrainUnitsTask {
-            slot_id: 20, // Mock Barracks slot
+            slot_id: 20,
             unit: UnitName::Legionnaire,
             quantity,
             time_per_unit: 100,

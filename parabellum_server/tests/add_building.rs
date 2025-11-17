@@ -2,69 +2,34 @@ mod test_utils;
 
 use parabellum_app::{
     command_handlers::AddBuildingCommandHandler,
-    config::Config,
-    cqrs::{CommandHandler, commands::AddBuilding},
-    job_registry::AppJobRegistry,
-    jobs::{JobStatus, tasks::AddBuildingTask, worker::JobWorker},
-    uow::UnitOfWorkProvider,
+    cqrs::commands::AddBuilding,
+    jobs::{JobStatus, tasks::AddBuildingTask},
 };
 use parabellum_core::Result;
-use parabellum_db::establish_test_connection_pool;
-use parabellum_game::{
-    models::buildings::Building,
-    test_utils::{
-        PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
-        valley_factory, village_factory,
-    },
-};
-use parabellum_types::{
-    buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
-};
+use parabellum_game::models::buildings::Building;
+use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
-use std::sync::Arc;
-use test_utils::tests::TestUnitOfWorkProvider;
-use tokio::sync::Mutex;
+use crate::test_utils::tests::{setup_app, setup_player_party};
 
 #[tokio::test]
-async fn test_full_build_flow() -> Result<()> {
-    let pool = establish_test_connection_pool().await.unwrap();
-    let master_tx = pool.begin().await.unwrap();
-    let master_tx_arc = Arc::new(Mutex::new(master_tx));
-    let app_registry = Arc::new(AppJobRegistry::new());
-    let config = Arc::new(Config::from_env());
+async fn test_build() -> Result<()> {
+    let (app, worker, uow_provider, config) = setup_app().await?;
+    let (player, mut village, _, _) =
+        setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
-    let uow_provider: Arc<dyn UnitOfWorkProvider> =
-        Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-
-    let (player, village) = {
+    {
         let uow = uow_provider.begin().await?;
-        let player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
-        uow.players().save(&player).await?;
-
-        let valley = valley_factory(ValleyFactoryOptions {
-            position: Some(Position { x: 1, y: 1 }),
-            ..Default::default()
-        });
-        let mut village = village_factory(VillageFactoryOptions {
-            player: Some(player.clone()),
-            valley: Some(valley),
-            ..Default::default()
-        });
 
         village.set_building_level_at_slot(19, 3, config.speed)?;
         let rally_point =
             Building::new(BuildingName::RallyPoint, config.speed).at_level(1, config.speed)?;
         village.add_building_at_slot(rally_point, 39).unwrap();
-
         village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
+
         uow.villages().save(&village).await?;
 
         uow.commit().await?;
-        (player, village)
-    };
+    }
 
     let cost = Building::new(BuildingName::Barracks, config.speed).cost();
     let initial_lumber = village.stored_resources().lumber();
@@ -76,13 +41,8 @@ async fn test_full_build_flow() -> Result<()> {
         slot_id: slot_to_build,
         name: BuildingName::Barracks,
     };
-
-    {
-        let uow_command = uow_provider.begin().await?;
-        let handler = AddBuildingCommandHandler::new();
-        handler.handle(command, &uow_command, &config).await?;
-        uow_command.commit().await?;
-    }
+    let handler = AddBuildingCommandHandler::new();
+    app.execute(command, handler).await?;
 
     let (job_to_run, village_id) = {
         let uow_assert1 = uow_provider.begin().await?;
@@ -113,13 +73,7 @@ async fn test_full_build_flow() -> Result<()> {
         (job.clone(), village.id)
     };
 
-    let worker = Arc::new(JobWorker::new(
-        uow_provider.clone(),
-        app_registry,
-        config.clone(),
-    ));
     worker.process_jobs(&vec![job_to_run.clone()]).await?;
-
     {
         let uow_assert2 = uow_provider.begin().await?;
         let final_village = uow_assert2.villages().get_by_id(village_id).await?;

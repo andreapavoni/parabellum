@@ -2,35 +2,20 @@ mod test_utils;
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
     use parabellum_app::{
         command_handlers::ReinforceVillageCommandHandler,
-        config::Config,
-        cqrs::{CommandHandler, commands::ReinforceVillage},
-        job_registry::AppJobRegistry,
-        jobs::{JobStatus, tasks::ReinforcementTask, worker::JobWorker},
-        uow::UnitOfWorkProvider,
+        cqrs::commands::ReinforceVillage,
+        jobs::{JobStatus, tasks::ReinforcementTask},
     };
     use parabellum_core::Result;
-    use parabellum_db::establish_test_connection_pool;
     use parabellum_types::tribe::Tribe;
 
-    use super::test_utils::tests::TestUnitOfWorkProvider;
     use super::test_utils::tests::setup_player_party;
+    use crate::test_utils::tests::setup_app;
 
     #[tokio::test]
-    async fn test_full_reinforce_flow() -> Result<()> {
-        let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let config = Arc::new(Config::from_env());
-
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-
+    async fn test_reinforce_village() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app().await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let (reinforcer_player, reinforcer_village, reinforcing_army, _) = {
@@ -64,12 +49,9 @@ pub mod tests {
             target_village_id: target_village.id,
             hero_id: None,
         };
-        {
-            let uow_cmd = uow_provider.begin().await?;
-            let handler = ReinforceVillageCommandHandler::new();
-            handler.handle(command, &uow_cmd, &config).await?;
-            uow_cmd.commit().await?;
-        };
+
+        let handler = ReinforceVillageCommandHandler::new();
+        app.execute(command, handler).await?;
 
         let (reinforce_job, deployed_army_id) = {
             let uow_assert1 = uow_provider.begin().await?;
@@ -125,13 +107,7 @@ pub mod tests {
             (job, payload.army_id)
         };
 
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry,
-            config.clone(),
-        ));
         worker.process_jobs(&vec![reinforce_job.clone()]).await?;
-
         {
             let uow_assert2 = uow_provider.begin().await?;
 
@@ -168,10 +144,8 @@ pub mod tests {
                 true,
                 "Reinforcer village shouldn't have army at home"
             );
-
             uow_assert2.rollback().await?;
         }
-
         Ok(())
     }
 }

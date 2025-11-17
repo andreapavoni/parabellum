@@ -68,7 +68,6 @@ mod tests {
         uow::UnitOfWork,
     };
 
-    // Helper per il setup
     async fn setup_job_test() -> Result<(
         Job,
         Arc<Config>,

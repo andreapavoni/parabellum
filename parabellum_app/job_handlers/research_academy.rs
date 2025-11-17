@@ -48,7 +48,6 @@ impl JobHandler for ResearchAcademyJobHandler {
         Ok(())
     }
 }
-// In src/app/job_handlers/research_academy.rs
 
 #[cfg(test)]
 mod tests {

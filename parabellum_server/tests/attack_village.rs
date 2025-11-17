@@ -4,42 +4,21 @@ mod test_utils;
 pub mod tests {
     use parabellum_app::{
         command_handlers::AttackVillageCommandHandler,
-        config::Config,
-        cqrs::{CommandHandler, commands::AttackVillage},
-        job_registry::AppJobRegistry,
+        cqrs::commands::AttackVillage,
         jobs::{
             JobStatus,
             tasks::{ArmyReturnTask, AttackTask},
-            worker::JobWorker,
         },
-        uow::UnitOfWorkProvider,
     };
     use parabellum_core::Result;
-    use parabellum_db::establish_test_connection_pool;
-    use parabellum_game::models::{army::Army, buildings::Building, village::Village};
-    use parabellum_types::{
-        buildings::BuildingName,
-        common::{Player, ResourceGroup},
-        tribe::Tribe,
-    };
+    use parabellum_game::models::{buildings::Building, village::Village};
+    use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
-    use crate::test_utils::tests::setup_player_party;
-
-    use super::test_utils::tests::TestUnitOfWorkProvider;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    use crate::test_utils::tests::{setup_app, setup_player_party};
 
     #[tokio::test]
-    async fn test_full_attack_flow() -> Result<()> {
-        let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let config = Arc::new(Config::from_env());
-
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-
+    async fn test_simple_attack() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app().await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let (attacker_player, attacker_village, attacker_army, _) = {
@@ -52,8 +31,8 @@ pub mod tests {
             )
             .await?
         };
-        let original_home_army_id = attacker_army.id; // Save original ID
 
+        let original_home_army_id = attacker_army.id;
         let (_defender_player, defender_village, _defender_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
@@ -74,19 +53,8 @@ pub mod tests {
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
         };
-
-        {
-            let uow_attack = uow_provider.begin().await?;
-            {
-                let handler = AttackVillageCommandHandler::new();
-                handler
-                    .handle(attack_command, &uow_attack, &config)
-                    .await
-                    .unwrap();
-            }
-
-            uow_attack.commit().await?;
-        };
+        let handler = AttackVillageCommandHandler::new();
+        app.execute(attack_command, handler).await?;
 
         let (attack_job, deployed_army_id) = {
             let uow_assert1 = uow_provider.begin().await?;
@@ -122,7 +90,6 @@ pub mod tests {
                     attack_job.status
                 );
 
-                // Check village and army state
                 let home_village = uow_assert1
                     .villages()
                     .get_by_id(attacker_village.id)
@@ -151,15 +118,7 @@ pub mod tests {
             (cloned_job, deployed_id)
         };
 
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry,
-            config.clone(),
-        ));
-        worker
-            .process_jobs(&vec![attack_job.clone()])
-            .await
-            .unwrap();
+        worker.process_jobs(&vec![attack_job.clone()]).await?;
 
         let return_job = {
             let uow_assert2 = uow_provider.begin().await?;
@@ -193,6 +152,7 @@ pub mod tests {
             uow_assert2.rollback().await?;
             return_job
         };
+
         worker.process_jobs(&vec![return_job.clone()]).await?;
         {
             let uow_assert3 = uow_provider.begin().await?;
@@ -245,24 +205,9 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
-        // setup().await?;
+        let (app, worker, uow_provider, config) = setup_app().await?;
 
-        // --- 1. SETUP ---
-        let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let config = Arc::new(Config::from_env());
-
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
-
-        let attacker_player: Player;
-        let attacker_village: Village;
-        let attacker_army: Army;
-        let mut defender_village: Village;
-
-        (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -273,7 +218,7 @@ pub mod tests {
             .await?
         };
 
-        (_, defender_village, _, _) = {
+        let (_, mut defender_village, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -286,21 +231,18 @@ pub mod tests {
 
         {
             let uow_update = uow_provider.begin().await?;
+            let village_repo = uow_update.villages();
 
-            {
-                let village_repo = uow_update.villages();
-                let granary =
-                    Building::new(BuildingName::Granary, config.speed).at_level(1, config.speed)?;
-                let warehouse = Building::new(BuildingName::Warehouse, config.speed)
-                    .at_level(1, config.speed)?;
+            let granary =
+                Building::new(BuildingName::Granary, config.speed).at_level(1, config.speed)?;
+            let warehouse =
+                Building::new(BuildingName::Warehouse, config.speed).at_level(1, config.speed)?;
 
-                defender_village.add_building_at_slot(granary, 21)?;
-                defender_village.add_building_at_slot(warehouse, 20)?;
-                defender_village.store_resources(&ResourceGroup::new(800, 800, 800, 800));
+            defender_village.add_building_at_slot(granary, 21)?;
+            defender_village.add_building_at_slot(warehouse, 20)?;
+            defender_village.store_resources(&ResourceGroup::new(800, 800, 800, 800));
 
-                village_repo.save(&defender_village).await?;
-            }
-
+            village_repo.save(&defender_village).await?;
             uow_update.commit().await?;
         };
 
@@ -309,10 +251,8 @@ pub mod tests {
             .unwrap()
             .building
             .level;
-
         let initial_defender_resources = defender_village.stored_resources().total();
 
-        // --- 2. ACT (Phase 1): Execute attack command ---
         let attack_command = AttackVillage {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
@@ -322,41 +262,20 @@ pub mod tests {
             catapult_targets: [BuildingName::Warehouse, BuildingName::Granary],
             hero_id: None,
         };
+        let handler = AttackVillageCommandHandler::new();
+        app.execute(attack_command, handler).await?;
 
-        {
-            let uow_attack = uow_provider.begin().await?;
-
-            {
-                let handler = AttackVillageCommandHandler::new();
-                handler
-                    .handle(attack_command, &uow_attack, &config)
-                    .await
-                    .unwrap();
-            }
-
-            uow_attack.commit().await?; // OK
-        };
-
-        // --- 3. ACT (Phase 2): Process job ---
         let jobs = {
             let uow_read_jobs = uow_provider.begin().await?;
             let jobs = uow_read_jobs
                 .jobs()
                 .list_by_player_id(attacker_player.id)
-                .await
-                .unwrap();
+                .await?;
             uow_read_jobs.rollback().await?;
             jobs
         };
 
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry,
-            config.clone(),
-        ));
-        worker.process_jobs(&jobs).await.unwrap();
-
-        // --- 4. ASSERT ---
+        worker.process_jobs(&jobs).await?;
         {
             let uow_assert = uow_provider.begin().await?;
             let village_repo = uow_assert.villages();
@@ -386,7 +305,6 @@ pub mod tests {
             );
 
             // Bounty
-
             assert_eq!(return_job.task.task_type, "ArmyReturn".to_string());
             let return_payload: ArmyReturnTask =
                 serde_json::from_value(return_job.task.data.clone())?;

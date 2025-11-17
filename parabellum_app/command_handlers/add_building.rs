@@ -61,9 +61,7 @@ mod tests {
     use parabellum_core::{GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village},
-        test_utils::{
-            PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
-        },
+        test_utils::setup_player_party,
     };
     use parabellum_types::{
         buildings::BuildingName,
@@ -75,37 +73,26 @@ mod tests {
     use crate::{jobs::tasks::AddBuildingTask, test_utils::tests::MockUnitOfWork};
     use std::sync::Arc;
 
-    fn setup_village(config: &Config) -> (Player, Village, Arc<Config>) {
-        let player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Roman),
-            ..Default::default()
-        });
+    fn setup_village(config: &Config) -> Result<(Player, Village, Arc<Config>)> {
+        let (player, mut village, _, _) =
+            setup_player_party(None, Tribe::Roman, [0; 10], false).unwrap();
 
-        let mut village = village_factory(VillageFactoryOptions {
-            player: Some(player.clone()),
-            ..Default::default()
-        });
+        // main building is level 1 in slot 19 by default
+        village.set_building_level_at_slot(19, 3, config.speed)?;
 
-        // Add Main Building Lvl 3 (requirement for Barracks)
-        village
-            .set_building_level_at_slot(19, 3, config.speed)
-            .unwrap();
-
-        // Add Rally Point Lvl 1 (requirement for Barracks)
-        let rally_point = Building::new(BuildingName::RallyPoint, config.speed)
-            .at_level(1, config.speed)
-            .unwrap();
-        village.add_building_at_slot(rally_point, 39).unwrap(); // Slot 39 for Rally Point
+        let rally_point =
+            Building::new(BuildingName::RallyPoint, config.speed).at_level(1, config.speed)?;
+        village.add_building_at_slot(rally_point, 39)?;
 
         let config = Arc::new(Config::from_env());
-        (player, village, config)
+        Ok((player, village, config))
     }
 
     #[tokio::test]
     async fn test_add_building_handler_success() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Config::from_env();
-        let (player, mut village, config) = setup_village(&config);
+        let (player, mut village, config) = setup_village(&config)?;
         let village_id = village.id;
         let player_id = player.id;
 
@@ -155,7 +142,7 @@ mod tests {
     async fn test_add_building_handler_not_enough_resources() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village(&config);
+        let (player, village, config) = setup_village(&config)?;
 
         mock_uow.villages().save(&village).await?;
 
@@ -186,7 +173,7 @@ mod tests {
     async fn test_add_building_handler_slot_occupied() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village(&config);
+        let (player, mut village, config) = setup_village(&config)?;
         let village_id = village.id;
         let player_id = player.id;
 
@@ -218,7 +205,7 @@ mod tests {
     async fn test_add_building_handler_requirements_not_met() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, mut village, config) = setup_village(&config);
+        let (player, mut village, config) = setup_village(&config)?;
 
         // Remove Rally Point at slot 39 (requirement for Barracks)
         village.remove_building_at_slot(39, config.speed)?;

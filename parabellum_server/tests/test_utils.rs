@@ -6,7 +6,7 @@ pub mod tests {
     use parabellum_db::{
         PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
         PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresVillageRepository,
+        PostgresVillageRepository, establish_test_connection_pool,
     };
     use parabellum_game::{
         models::{
@@ -25,6 +25,10 @@ pub mod tests {
     use tokio::sync::Mutex;
 
     use parabellum_app::{
+        app_bus::AppBus,
+        config::Config,
+        job_registry::AppJobRegistry,
+        jobs::worker::JobWorker,
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
             PlayerRepository, VillageRepository,
@@ -103,6 +107,31 @@ pub mod tests {
 
             Ok(Box::new(test_uow))
         }
+    }
+
+    #[allow(dead_code)]
+    pub async fn setup_app() -> Result<(
+        AppBus,
+        Arc<JobWorker>,
+        Arc<dyn UnitOfWorkProvider>,
+        Arc<Config>,
+    )> {
+        let config = Arc::new(Config::from_env());
+        let pool = establish_test_connection_pool().await.unwrap();
+        let master_tx = pool.begin().await.unwrap();
+        let master_tx_arc = Arc::new(Mutex::new(master_tx));
+        let uow_provider: Arc<dyn UnitOfWorkProvider> =
+            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
+
+        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
+        let app_registry = Arc::new(AppJobRegistry::new());
+        let worker = Arc::new(JobWorker::new(
+            uow_provider.clone(),
+            app_registry,
+            config.clone(),
+        ));
+
+        Ok((app_bus, worker, uow_provider, config))
     }
 
     #[allow(dead_code)]
