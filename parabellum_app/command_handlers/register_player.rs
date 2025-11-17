@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use parabellum_core::Result;
+use parabellum_game::models::village::Village;
 use parabellum_types::common::Player;
 
 use crate::{
+    auth::hash_password,
     config::Config,
     cqrs::{CommandHandler, commands::RegisterPlayer},
     uow::UnitOfWork,
@@ -29,16 +31,35 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
         &self,
         command: RegisterPlayer,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<()> {
+        let player_repo = uow.players();
+        let user_repo = uow.users();
+        let village_repo = uow.villages();
+        let map_repo = uow.map();
+
         let player = Player {
             id: command.id,
             username: command.username,
             tribe: command.tribe,
         };
+        player_repo.save(&player).await?;
 
-        let repo = uow.players();
-        repo.save(&player).await?;
+        let password_hash = hash_password(&command.password)?;
+        user_repo.save(command.email, password_hash).await?;
+
+        let valley = map_repo.find_unoccupied_valley(&command.quadrant).await?;
+
+        let village = Village::new(
+            "New Village".to_string(),
+            &valley,
+            &player,
+            true,
+            config.world_size as i32,
+            config.speed,
+        );
+
+        village_repo.save(&village).await?;
 
         Ok(())
     }
@@ -46,6 +67,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_game::models::map::MapQuadrant;
     use std::sync::Arc;
     use uuid::Uuid;
 
@@ -64,10 +86,15 @@ mod tests {
         let config = Arc::new(Config::from_env());
         let handler = RegisterPlayerCommandHandler::new();
 
+        let email = "player@example.com".to_string();
+
         let command = RegisterPlayer {
             id: Uuid::new_v4(),
             username: "TestPlayer".to_string(),
             tribe: Tribe::Roman,
+            email: email.clone(),
+            password: "some_password".to_string(),
+            quadrant: MapQuadrant::NorthEast,
         };
 
         handler.handle(command.clone(), &mock_uow, &config).await?;
@@ -76,6 +103,16 @@ mod tests {
         assert_eq!(saved_player.id, command.id);
         assert_eq!(saved_player.username, command.username);
         assert_eq!(saved_player.tribe, command.tribe);
+
+        mock_uow.users().get_by_email(email).await?;
+
+        let saved_villages = mock_uow.villages().list_by_player_id(command.id).await?;
+        let saved_village = saved_villages.first().unwrap();
+
+        assert!(saved_village.position.x > 0);
+        assert!(saved_village.position.y > 0);
+        assert_eq!(saved_village.tribe, command.tribe);
+
         Ok(())
     }
 }

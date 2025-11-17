@@ -95,34 +95,32 @@ impl Command for FoundVillage {}
 pub struct RegisterPlayer {
     pub id: Uuid,
     pub username: String,
+    pub email: String,
+    pub password: String,
     pub tribe: Tribe,
+    pub quadrant: MapQuadrant,
 }
 
 impl RegisterPlayer {
-    pub fn new(id: Option<Uuid>, username: String, tribe: Tribe) -> Self {
+    pub fn new(
+        username: String,
+        email: String,
+        password: String,
+        tribe: Tribe,
+        quadrant: MapQuadrant,
+    ) -> Self {
         Self {
-            id: id.unwrap_or(Uuid::new_v4()),
+            id: Uuid::new_v4(),
             username,
             tribe,
+            quadrant,
+            email,
+            password,
         }
     }
 }
 
 impl Command for RegisterPlayer {}
-
-#[derive(Debug, Clone)]
-pub struct RegisterVillage {
-    pub player: Player,
-    pub quadrant: MapQuadrant,
-}
-
-impl RegisterVillage {
-    pub fn new(player: Player, quadrant: MapQuadrant) -> Self {
-        Self { player, quadrant }
-    }
-}
-
-impl Command for RegisterVillage {}
 
 #[derive(Debug, Clone)]
 pub struct ResearchAcademy {

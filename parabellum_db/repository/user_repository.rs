@@ -44,7 +44,7 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
         Ok(())
     }
 
-    async fn find_by_email(&self, email: String) -> Result<User, ApplicationError> {
+    async fn get_by_email(&self, email: String) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let rec = sqlx::query_as!(
             db_models::User,
@@ -62,7 +62,7 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
         Ok(rec.into())
     }
 
-    async fn find_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
+    async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let rec = sqlx::query_as!(
             db_models::User,

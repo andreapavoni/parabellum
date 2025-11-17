@@ -6,7 +6,7 @@ pub mod tests {
     use parabellum_db::{
         PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
         PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresVillageRepository, establish_test_connection_pool,
+        PostgresUserRepository, PostgresVillageRepository, establish_test_connection_pool,
     };
     use parabellum_game::{
         models::{
@@ -31,7 +31,7 @@ pub mod tests {
         jobs::worker::JobWorker,
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, VillageRepository,
+            PlayerRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -73,6 +73,10 @@ pub mod tests {
 
         fn heroes(&self) -> Arc<dyn HeroRepository + 'p> {
             Arc::new(PostgresHeroRepository::new(self.tx.clone()))
+        }
+
+        fn users(&self) -> Arc<dyn UserRepository + 'p> {
+            Arc::new(PostgresUserRepository::new(self.tx.clone()))
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

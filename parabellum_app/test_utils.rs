@@ -10,7 +10,7 @@ pub mod tests {
         village::Village,
     };
     use parabellum_types::{
-        common::Player,
+        common::{Player, User},
         map::{Position, ValleyTopology},
     };
     use std::{
@@ -25,7 +25,7 @@ pub mod tests {
         jobs::Job,
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, VillageRepository,
+            PlayerRepository, UserRepository, VillageRepository,
         },
         uow::UnitOfWork,
     };
@@ -327,6 +327,57 @@ pub mod tests {
         }
     }
 
+    #[derive(Default, Clone)]
+    pub struct MockUserRepository {
+        users: Arc<Mutex<HashMap<Uuid, User>>>,
+    }
+
+    impl MockUserRepository {
+        pub fn new() -> Self {
+            Self {
+                users: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl UserRepository for MockUserRepository {
+        async fn save(
+            &self,
+            email: String,
+            _password_hash: String,
+        ) -> Result<(), ApplicationError> {
+            let user = User {
+                id: Uuid::new_v4(),
+                email,
+            };
+            self.users.lock().unwrap().insert(user.id, user.clone());
+            Ok(())
+        }
+
+        async fn get_by_email(&self, email: String) -> Result<User, ApplicationError> {
+            if let Some(user) = self
+                .users
+                .lock()
+                .unwrap()
+                .values()
+                .into_iter()
+                .find(|&u| u.email == email)
+            {
+                return Ok(user.clone());
+            }
+
+            Err(ApplicationError::Db(DbError::UserByEmailNotFound(email)))
+        }
+
+        async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
+            if let Some(h) = self.users.lock().unwrap().get(&id) {
+                return Ok(h.clone());
+            }
+            Err(ApplicationError::Db(DbError::UserByIdNotFound(id)))
+        }
+    }
+
     #[derive(Default)]
     pub struct MockUnitOfWork {
         players: Arc<MockPlayerRepository>,
@@ -336,6 +387,7 @@ pub mod tests {
         map: Arc<MockMapRepository>,
         marketplace: Arc<MockMarketplaceRepository>,
         heroes: Arc<MockHeroRepository>,
+        users: Arc<MockUserRepository>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -374,7 +426,10 @@ pub mod tests {
             self.heroes.clone()
         }
 
-        // We consume self (Box<Self>) as per the trait definition
+        fn users(&self) -> Arc<dyn UserRepository + 'a> {
+            self.users.clone()
+        }
+
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
             *self.committed.lock().unwrap() = true;
             Ok(())

@@ -72,6 +72,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresHeroRepository::new(self.tx.clone()))
     }
 
+    fn users(&self) -> Arc<dyn UserRepository + 'a> {
+        Arc::new(PostgresUserRepository::new(self.tx.clone()))
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
         // If this fails, it means there are other references to the Arc,
