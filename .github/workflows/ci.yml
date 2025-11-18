@@ -31,6 +31,7 @@ jobs:
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost/parabellum_test
+      PARABELLUM_COOKIE_SECRET: 4OZ+ZW10mf3+rstw1BZdCKsofkYXACC7iNtjvG1UZkou1oepg86gDXRfb3Q9sH4N
 
     steps:
       - name: Checkout code
