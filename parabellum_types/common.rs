@@ -66,6 +66,7 @@ pub struct Player {
     pub id: Uuid,
     pub username: String,
     pub tribe: Tribe,
+    pub user_id: Uuid,
 }
 
 #[derive(Debug, Clone)]

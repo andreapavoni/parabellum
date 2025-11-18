@@ -19,13 +19,18 @@ pub mod tests {
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
-    use parabellum_types::{common::Player, map::Position, tribe::Tribe};
+    use parabellum_types::{
+        common::{Player, User},
+        map::Position,
+        tribe::Tribe,
+    };
     use sqlx::{Postgres, Transaction};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
     use parabellum_app::{
         app::AppBus,
+        auth::hash_password,
         config::Config,
         job_registry::AppJobRegistry,
         jobs::worker::JobWorker,
@@ -151,21 +156,30 @@ pub mod tests {
         let village: Village;
         let army: Army;
         let hero: Option<Hero>;
+        let user: User;
         {
             let player_repo = uow.players();
             let village_repo = uow.villages();
             let army_repo = uow.armies();
             let hero_repo = uow.heroes();
+            let user_repo = uow.users();
 
+            let mut rng = rand::thread_rng();
             let position = position.unwrap_or_else(|| {
-                let mut rng = rand::thread_rng();
                 let x = rng.gen_range(1..99);
                 let y = rng.gen_range(1..99);
                 Position { x, y }
             });
 
+            let email = format!("travian-{}@example.com", rng.gen_range(1..99999));
+            user_repo
+                .save(email.clone(), hash_password("parabellum!")?)
+                .await?;
+            user = user_repo.get_by_email(email).await?;
+
             player = player_factory(PlayerFactoryOptions {
                 tribe: Some(tribe.clone()),
+                user_id: Some(user.id),
                 ..Default::default()
             });
             player_repo.save(&player).await?;

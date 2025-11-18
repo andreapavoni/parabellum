@@ -67,7 +67,8 @@ Want to get the server running locally? Here’s how.
     ```sh
     cargo run
     ```
-    The server will start and begin processing jobs. Right now, it runs a small demo script in `main.rs` to show the systems working.
+
+  From now, you can go to `http://localhost:8080` and see the progress.
 
 ---
 
@@ -103,6 +104,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **Users and Auth**: Adding login/signup, link user to player
 
 ### ToDo (Not Started)
+- [ ] **Map**: bootstrap the whole game map.
 - [ ] **Reports**: reports for armies/merchants.
 - [ ] **CLI**: to start server, init setup, run periodic tasks, etc...
 - [ ] **Alliances**: Creating and managing alliances.

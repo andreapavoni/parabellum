@@ -1,6 +1,6 @@
 use parabellum_core::Result;
 use parabellum_types::{
-    common::Player,
+    common::{Player, User},
     map::{Position, ValleyTopology},
     tribe::Tribe,
 };
@@ -22,6 +22,13 @@ pub struct PlayerFactoryOptions<'a> {
     pub id: Option<Uuid>,
     pub username: Option<&'a str>,
     pub tribe: Option<Tribe>,
+    pub user_id: Option<Uuid>,
+}
+
+#[derive(Default, Clone)]
+pub struct UserFactoryOptions {
+    pub id: Option<Uuid>,
+    pub email: Option<String>,
 }
 
 #[derive(Default, Clone)]
@@ -90,12 +97,22 @@ pub fn map_field_factory(options: MapFieldFactoryOptions) -> MapField {
     }
 }
 
+pub fn user_factory(options: UserFactoryOptions) -> User {
+    let default_email: String = format!("user_{}@example.com", rand::thread_rng().r#gen::<u32>());
+    User::new(
+        options.id.unwrap_or_else(Uuid::new_v4),
+        options.email.map_or(default_email, |s| s.to_string()),
+        Uuid::new_v4().to_string(),
+    )
+}
+
 pub fn player_factory(options: PlayerFactoryOptions) -> Player {
     let default_username: String = format!("user_{}", rand::thread_rng().r#gen::<u32>());
     Player {
         id: options.id.unwrap_or_else(Uuid::new_v4),
         username: options.username.map_or(default_username, |s| s.to_string()),
         tribe: options.tribe.unwrap_or(Tribe::Roman),
+        user_id: options.user_id.unwrap_or_else(Uuid::new_v4),
     }
 }
 

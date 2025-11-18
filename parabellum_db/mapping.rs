@@ -120,6 +120,7 @@ impl From<db_models::Player> for Player {
             id: player.id,
             username: player.username,
             tribe: player.tribe.into(),
+            user_id: player.user_id,
         }
     }
 }

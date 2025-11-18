@@ -9,7 +9,7 @@ use parabellum_core::{ApplicationError, DbError, Result};
 
 use crate::models::{self as db_models};
 
-// Implements PlayerRepository and operates on transactions.
+/// Implements PlayerRepository and operates on transactions.
 #[derive(Clone)]
 pub struct PostgresPlayerRepository<'a> {
     tx: Arc<Mutex<Transaction<'a, Postgres>>>,
@@ -29,8 +29,8 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         sqlx::query!(
             r#"
-              INSERT INTO players (id, username, tribe)
-              VALUES ($1, $2, $3)
+              INSERT INTO players (id, username, tribe, user_id)
+              VALUES ($1, $2, $3, $4)
               ON CONFLICT (id) DO UPDATE
               SET
                   username = $2,
@@ -38,7 +38,8 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
               "#,
             player.id,
             player.username,
-            tribe as _
+            tribe as _,
+            player.user_id,
         )
         .execute(&mut *tx_guard.as_mut())
         .await
@@ -51,7 +52,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _" FROM players WHERE id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE  1=1 AND id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())

@@ -38,15 +38,17 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
         let village_repo = uow.villages();
         let map_repo = uow.map();
 
+        let password_hash = hash_password(&command.password)?;
+        user_repo.save(command.email.clone(), password_hash).await?;
+        let user = user_repo.get_by_email(command.email).await?;
+
         let player = Player {
             id: command.id,
             username: command.username,
             tribe: command.tribe,
+            user_id: user.id,
         };
         player_repo.save(&player).await?;
-
-        let password_hash = hash_password(&command.password)?;
-        user_repo.save(command.email, password_hash).await?;
 
         let valley = map_repo.find_unoccupied_valley(&command.quadrant).await?;
 
