@@ -1,7 +1,7 @@
 <nav>
   <a href="/">Parabellum</a>
   {% if current_user %}
-    <span>Hi, {{ current_user_email }}</span>
+    <span>Hi, {{ current_user_email.as_deref().unwrap_or("Anonymous") }}</span>
     <a href="/logout">Logout</a>
   {% else %}
     <a href="/login">Login</a>

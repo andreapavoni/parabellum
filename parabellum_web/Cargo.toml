@@ -26,4 +26,4 @@ axum-extra = { version = "0.12", features = ["cached", "cookie", "cookie-signed"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 
 # Templates
-askama = { version = "0.14", features = ["blocks", "serde_json"] }
+askama = { version = "0.14", features = ["blocks", "full", "serde_json"] }

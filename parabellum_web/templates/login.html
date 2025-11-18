@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Login – Parabellum{% endblock %}
+{% block body %}
+<h1>Login</h1>
+{% if error.is_some() %}
+<p class="error" style="color:red;">{{ error.as_deref().unwrap() }}</p>
+{% endif %}
+<form action="/login" method="post">
+  <p>
+    <label>Email:<br>
+      <input type="email" name="email" value="{{ email_value }}" required>
+    </label>
+  </p>
+  <p>
+    <label>Password:<br>
+      <input type="password" name="password" required>
+    </label>
+  </p>
+  <button type="submit">Login</button>
+</form>
+{% endblock %}

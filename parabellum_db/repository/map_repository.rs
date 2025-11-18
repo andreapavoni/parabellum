@@ -44,7 +44,7 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
         let random_unoccupied_field: db_models::MapField = sqlx::query_as(query)
             .fetch_one(&mut *tx_guard.as_mut())
             .await
-            .map_err(|_| ApplicationError::Db(DbError::MapFieldNotFound(0)))?; // use id zero because of randomization
+            .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;
 
         let game_map_field: MapField = random_unoccupied_field.into();
         let valley = Valley::try_from(game_map_field.clone())

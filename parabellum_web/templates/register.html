@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+{% block title %}Sign Up – Parabellum{% endblock %}
+{% block body %}
+<h1>Create an Account</h1>
+{% if error.is_some() %}
+  <p class="error" style="color:red;">{{ error.as_deref().unwrap() }}</p>
+{% endif %}
+<form action="/register" method="post">
+  <p>
+    <label>Username:<br>
+      <input type="text" name="username" value="{{ username_value }}" required>
+    </label>
+  </p>
+  <p>
+    <label>Email:<br>
+      <input type="email" name="email" value="{{ email_value }}" required>
+    </label>
+  </p>
+  <p>
+    <label>Password:<br>
+      <input type="password" name="password" required>
+    </label>
+  </p>
+  <p>
+    <label>Tribe:<br>
+      <select name="tribe">
+        <option value="Roman" {% if selected_tribe == "Roman" %}selected{% endif %}>Roman</option>
+        <option value="Gaul" {% if selected_tribe == "Gaul" %}selected{% endif %}>Gaul</option>
+        <option value="Teuton" {% if selected_tribe == "Teuton" %}selected{% endif %}>Teuton</option>
+      </select>
+    </label>
+  </p>
+  <p>
+    <label>Quadrant:<br>
+      <select name="quadrant">
+        <option value="NorthEast" {% if selected_quadrant == "NorthEast" %}selected{% endif %}>NorthEast</option>
+        <option value="NorthWest" {% if selected_quadrant == "NorthWest" %}selected{% endif %}>NorthWest</option>
+        <option value="SouthEast" {% if selected_quadrant == "SouthEast" %}selected{% endif %}>SouthEast</option>
+        <option value="SouthWest" {% if selected_quadrant == "SouthWest" %}selected{% endif %}>SouthWest</option>
+      </select>
+    </label>
+  </p>
+  <button type="submit">Sign Up</button>
+</form>
+{% endblock %}
