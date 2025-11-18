@@ -34,7 +34,7 @@ impl JobWorker {
         }
     }
 
-    /// Run worker loop inside a tokio task.
+    /// Start job worker process.
     pub fn run(self: Arc<Self>) {
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_secs(1));
@@ -50,6 +50,7 @@ impl JobWorker {
     }
 
     #[instrument(skip_all)]
+    /// Process due jobs.
     pub async fn process_due_jobs(&self) -> Result<()> {
         let uow = self.uow_provider.begin().await?;
         let due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
@@ -60,6 +61,7 @@ impl JobWorker {
     }
 
     #[instrument(skip_all, fields(job_count = jobs.len()))]
+    /// Process given jobs.
     pub async fn process_jobs(&self, jobs: &Vec<Job>) -> Result<()> {
         for job in jobs {
             let uow = self.uow_provider.begin().await?;
@@ -84,7 +86,7 @@ impl JobWorker {
                 match self.registry.get_handler(&job_type, &job.task.data) {
                     Ok(handler) => handler,
                     Err(e) => {
-                        error!(error = ?e, "Failed to create handler for job");
+                        error!(job_id = %job.id, error = ?e, "Failed to create handler for job");
                         // This error could be due to deserialization
                         // or an unregistered task_type.
                         // Mark the job as failed and continue.
@@ -98,19 +100,16 @@ impl JobWorker {
                         continue; // Go to the next job
                     }
                 };
-
-            // 3. Execute handler
             let task_result = handler.handle(&context, job).await;
 
-            // 4. Handle transaction and job state
             match task_result {
                 Ok(_) => {
                     context.uow.jobs().mark_as_completed(job_id).await?;
                     context.uow.commit().await?;
-                    info!("Job completed successfully");
+                    info!(job_id = %job.id, "Job completed successfully");
                 }
                 Err(e) => {
-                    error!(error = ?e, "Job failed");
+                    error!(job_id = %job.id, error = ?e, "Job failed");
                     context.uow.rollback().await?;
 
                     let uow_fail = self.uow_provider.begin().await?;

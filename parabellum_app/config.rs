@@ -4,6 +4,7 @@ use std::env;
 pub struct Config {
     pub world_size: i16,
     pub speed: i8,
+    pub auth_cookie_secret: String,
 }
 
 impl Config {
@@ -20,6 +21,15 @@ impl Config {
             Err(_) => 1,
         };
 
-        Self { world_size, speed }
+        let auth_cookie_secret = match env::var("PARABELLUM_COOKIE_SECRET") {
+            Ok(val) => val,
+            Err(_) => panic!("You need to set env PARABELLUM_COOKIE_SECRET"),
+        };
+
+        Self {
+            world_size,
+            speed,
+            auth_cookie_secret,
+        }
     }
 }

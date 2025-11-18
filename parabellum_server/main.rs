@@ -5,6 +5,7 @@ use parabellum_app::{
 };
 use parabellum_core::{ApplicationError, Result};
 use parabellum_db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider};
+use parabellum_web::AppState;
 use parabellum_web::WebRouter;
 
 mod logs;
@@ -13,18 +14,11 @@ use logs::setup_logging;
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
-    use parabellum_app::app::AppState;
-
     setup_logging();
-    let (_config, app_bus, worker) = setup_app().await?;
+    let (config, app_bus, worker) = setup_app().await?;
+    let state = AppState::new(app_bus, &config);
 
     worker.run();
-
-    let state = AppState {
-        app_bus: app_bus,
-        // ...config?
-    };
-
     WebRouter::serve(state, 8080).await
 }
 

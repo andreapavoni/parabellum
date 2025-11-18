@@ -1,4 +1,5 @@
 use parabellum_game::models::map::{MapQuadrant, Valley};
+use parabellum_types::common::User;
 
 use crate::cqrs::Query;
 
@@ -17,4 +18,13 @@ impl GetUnoccupiedValley {
 
 impl Query for GetUnoccupiedValley {
     type Output = Valley;
+}
+
+pub struct AuthenticateUser {
+    pub email: String,
+    pub password: String,
+}
+
+impl Query for AuthenticateUser {
+    type Output = User;
 }

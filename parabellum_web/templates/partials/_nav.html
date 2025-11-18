@@ -1,0 +1,10 @@
+<nav>
+  <a href="/">Parabellum</a>
+  {% if current_user %}
+    <span>Hi, {{ current_user_email }}</span>
+    <a href="/logout">Logout</a>
+  {% else %}
+    <a href="/login">Login</a>
+    <a href="/register">Register</a>
+  {% endif %}
+</nav>

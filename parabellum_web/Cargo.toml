@@ -13,12 +13,17 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+async-trait = { workspace = true }
 
 parabellum_app = { path = "../parabellum_app" }
 parabellum_core = { path = "../parabellum_core" }
 parabellum_game = { path = "../parabellum_game" }
 parabellum_types = { path = "../parabellum_types" }
 
+# HTTP stuff
 axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
-askama = { version = "0.14", features = ["blocks", "serde_json"] }
+axum-extra = { version = "0.12", features = ["cached", "cookie", "cookie-signed", "handler", "middleware", "multipart", "query", "routing", "with-rejection"] }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
+
+# Templates
+askama = { version = "0.14", features = ["blocks", "serde_json"] }

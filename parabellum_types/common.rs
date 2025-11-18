@@ -72,6 +72,21 @@ pub struct Player {
 pub struct User {
     pub id: Uuid,
     pub email: String,
+    password_hash: String,
+}
+
+impl User {
+    pub fn new(id: Uuid, email: String, hashed_password: String) -> Self {
+        Self {
+            id,
+            email,
+            password_hash: hashed_password,
+        }
+    }
+
+    pub fn password_hash(&self) -> &String {
+        &self.password_hash
+    }
 }
 
 #[cfg(test)]

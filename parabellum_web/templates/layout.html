@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}Parabellum{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/style.css">
+  </head>
+  <body>
+    {% include "partials/_nav.html" %}
+    <main>
+      {% block body %}{% endblock %}
+    </main>
+  </body>
+</html>

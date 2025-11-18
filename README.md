@@ -109,6 +109,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not unit training), and conquering.
 - [ ] **Oases**: Capturing and managing oases (models exist, logic does not). Nature troops in free oases.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
+- [ ] **i18n**: add translations in several languages.
 
 ---
 

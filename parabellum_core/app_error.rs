@@ -6,6 +6,9 @@ pub enum AppError {
     #[error("No job handler for {0}")]
     NoJobHandler(String),
 
+    #[error("Wrong authentication credentials")]
+    WrongAuthCredentials,
+
     #[error("Wrong password")]
     PasswordError,
 

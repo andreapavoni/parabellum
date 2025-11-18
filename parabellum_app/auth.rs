@@ -3,16 +3,18 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 
-use parabellum_core::AppError;
+use parabellum_core::{AppError, Result};
 
-pub fn hash_password(plain: &str) -> Result<String, AppError> {
+pub fn hash_password(password: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    let hash = argon2.hash_password(plain.as_bytes(), &salt)?.to_string();
-    Ok(hash)
+    let hashed = argon2
+        .hash_password(password.as_bytes(), &salt)?
+        .to_string();
+    Ok(hashed)
 }
 
-pub fn verify_password(hash: &str, candidate: &str) -> Result<(), AppError> {
+pub fn verify_password(hash: &str, password: &str) -> Result<(), AppError> {
     let parsed_hash = PasswordHash::new(hash)?;
-    Ok(Argon2::default().verify_password(candidate.as_bytes(), &parsed_hash)?)
+    Ok(Argon2::default().verify_password(password.as_bytes(), &parsed_hash)?)
 }

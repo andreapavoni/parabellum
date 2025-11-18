@@ -126,10 +126,7 @@ impl From<db_models::Player> for Player {
 
 impl From<db_models::User> for User {
     fn from(user: db_models::User) -> Self {
-        User {
-            id: user.id,
-            email: user.email,
-        }
+        User::new(user.id, user.email, user.password_hash)
     }
 }
 

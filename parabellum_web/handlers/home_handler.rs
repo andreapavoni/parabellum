@@ -2,9 +2,7 @@ use askama::Template;
 use axum::response::{Html, IntoResponse};
 use axum::{extract::State, http::StatusCode};
 
-use parabellum_app::app::AppState;
-
-use crate::templates::HelloTemplate;
+use crate::{http::AppState, templates::HelloTemplate};
 
 pub async fn home_handler(State(_state): State<AppState>) -> impl IntoResponse {
     let template = HelloTemplate {};

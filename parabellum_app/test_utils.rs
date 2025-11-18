@@ -347,10 +347,7 @@ pub mod tests {
             email: String,
             _password_hash: String,
         ) -> Result<(), ApplicationError> {
-            let user = User {
-                id: Uuid::new_v4(),
-                email,
-            };
+            let user = User::new(Uuid::new_v4(), email, "123".to_string());
             self.users.lock().unwrap().insert(user.id, user.clone());
             Ok(())
         }
