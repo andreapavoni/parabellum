@@ -1,3 +1,5 @@
+use parabellum_db::bootstrap_world_map;
+use sqlx::PgPool;
 use std::sync::Arc;
 
 use parabellum_app::{
@@ -25,8 +27,10 @@ async fn main() -> Result<(), ApplicationError> {
 async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), ApplicationError> {
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
-    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
 
+    setup_world_map(&db_pool, &config).await?;
+
+    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
     let app_bus = Arc::new(AppBus::new(config.clone(), uow_provider.clone()));
     let app_registry = Arc::new(AppJobRegistry::new());
     let worker = Arc::new(JobWorker::new(
@@ -36,4 +40,17 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), Appli
     ));
 
     Ok((config, app_bus, worker))
+}
+
+async fn setup_world_map(pool: &PgPool, config: &Config) -> Result<(), ApplicationError> {
+    match bootstrap_world_map(pool, config.world_size).await {
+        Ok(true) => tracing::info!("World Map successfully bootstrapped."),
+        Ok(false) => tracing::info!("World Map already set. Skipping bootstrap."),
+        Err(e) => {
+            tracing::error!("Error during World Map initialization: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    Ok(())
 }

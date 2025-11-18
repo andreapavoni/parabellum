@@ -1,10 +1,13 @@
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use parabellum_app::repository::MapRepository;
-use parabellum_core::{ApplicationError, DbError};
-use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
+use parabellum_core::{
+    ApplicationError,
+    DbError::{self},
+};
+use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
 
 use crate::models as db_models;
 
@@ -66,4 +69,47 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
 
         Ok(field.into())
     }
+}
+
+/// Populates the World Map.
+pub async fn bootstrap_world_map(pool: &PgPool, world_size: i16) -> Result<bool, ApplicationError> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM map_fields")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+    if count > 0 {
+        return Ok(false);
+    }
+
+    tracing::info!("Generating new World Map");
+    let map_fields = generate_new_map(world_size as i32);
+
+    const BATCH_SIZE: usize = 10_000;
+    for chunk in map_fields.chunks(BATCH_SIZE) {
+        let mut tx = pool.begin().await.map_err(DbError::Database)?;
+        let mut query_builder = QueryBuilder::new(
+            "INSERT INTO map_fields (id, village_id, player_id, position, topology) ",
+        );
+
+        query_builder.push_values(chunk.iter(), |mut q, field| {
+            q.push_bind(field.id as i32)
+                .push_bind(field.village_id.map(|id| id as i32))
+                .push_bind(field.player_id)
+                .push_bind(Json(&field.position))
+                .push_bind(Json(&field.topology));
+        });
+
+        let query = query_builder.build();
+        query
+            .execute(&mut *tx.as_mut())
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    }
+
+    Ok(true)
 }

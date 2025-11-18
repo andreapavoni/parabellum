@@ -91,25 +91,39 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Battle**: Core battle logic (attacker vs. defender calculation) is implemented.
 - [x] **Attack Cycle**: Full "Attack" -> "Battle" -> "Army Return" job chain.
 - [x] **Battle Features**: Ram/Catapult damage and resource bounty calculation.
-- [x] **Merchants**: Sending resources between villages.
+- [x] **Merchants**: Marketplace offers, sending resources between villages.
 - [x] **Server Speed**: Full support for different server speeds influencing times and stocks/merchants capacities.
 - [x] **Building Upgrades/Downgrades**: Upgrading/Downgrading buildings, also considering MainBuilding levels and server speed as well.
 - [x] **Reinforcements**: Sending troops to support other villages.
 - [x] **Scouting**: The "Scout" attack type (logic exists, but no command/job).
 - [x] **Unit Training**: support for all units types in their related buildings.
 - [x] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
+- [x] **Users and Auth**: Login/register/logout, needs password recovery
+- [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 
 ### In Progress
-- [ ] **API / UI**: Working on building a basic UI
-- [ ] **Users and Auth**: Adding login/signup, link user to player
+- [ ] **API / UI**: Getting the minimal viable views to navigate the game
+  - [x] Layout, basic navbar
+  - [x] Login, Register
+  - [ ] Village Overview (Resources + Buildings)
+  - [ ] Generic building (info + upgrade)
+  - [ ] Special buildings (info + upgrade actions)
+    - [ ] Barracks, Stable, Workshop,
+    - [ ] Rally Point
+    - [ ] Merchant, Marketplace
+    - [ ] Hero Mansion (hero stuff)
+    - [ ] Castle/Residence
+    - [ ] Town Hall (party)
+    - [ ] Main Building (downgrades)
+  - [ ] Map
 
 ### ToDo (Not Started)
-- [ ] **Map**: bootstrap the whole game map.
 - [ ] **Reports**: reports for armies/merchants.
-- [ ] **CLI**: to start server, init setup, run periodic tasks, etc...
 - [ ] **Alliances**: Creating and managing alliances.
-- [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not unit training), and conquering.
+- [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not settlers training), and conquering.
 - [ ] **Oases**: Capturing and managing oases (models exist, logic does not). Nature troops in free oases.
+- [ ] **User Password recovery**: using email? Switching to OAuth?
+- [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
 - [ ] **i18n**: add translations in several languages.
 

@@ -10,7 +10,7 @@ mod village_repository;
 pub use army_repository::PostgresArmyRepository;
 pub use hero_repository::PostgresHeroRepository;
 pub use job_repository::PostgresJobRepository;
-pub use map_repository::PostgresMapRepository;
+pub use map_repository::{PostgresMapRepository, bootstrap_world_map};
 pub use marketplace_repository::PostgresMarketplaceRepository;
 pub use player_repository::PostgresPlayerRepository;
 pub use user_repository::PostgresUserRepository;

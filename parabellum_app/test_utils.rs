@@ -210,12 +210,13 @@ pub mod tests {
 
     #[derive(Default, Clone)]
     pub struct MockMapRepository {
-        fields: HashMap<u32, MapField>,
+        fields: Arc<Mutex<HashMap<u32, MapField>>>,
     }
 
     impl MockMapRepository {
         pub fn add_map_field(&mut self, field: MapField) {
-            self.fields.insert(field.id, field);
+            let mut fields = self.fields.lock().unwrap();
+            fields.insert(field.id, field);
         }
     }
 
