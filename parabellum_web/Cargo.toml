@@ -7,6 +7,11 @@ edition = "2024"
 path = "lib.rs"
 
 [dependencies]
+parabellum_app = { path = "../parabellum_app" }
+parabellum_game = { path = "../parabellum_game" }
+parabellum_core = { path = "../parabellum_core" }
+parabellum_types = { path = "../parabellum_types" }
+
 tokio = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
@@ -14,16 +19,14 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 async-trait = { workspace = true }
-
-parabellum_app = { path = "../parabellum_app" }
-parabellum_core = { path = "../parabellum_core" }
-parabellum_game = { path = "../parabellum_game" }
-parabellum_types = { path = "../parabellum_types" }
-
 # HTTP stuff
-axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
-axum-extra = { version = "0.12", features = ["cached", "cookie", "cookie-signed", "handler", "middleware", "multipart", "query", "routing", "with-rejection"] }
+axum = { workspace = true }
+axum-extra = { workspace = true }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 
 # Templates
 askama = { version = "0.14", features = ["blocks", "full", "serde_json"] }
+
+[dev-dependencies]
+# Enable "test-utils" for parabellum_app
+parabellum_app = { path = "../parabellum_app", features = ["test-utils"] }

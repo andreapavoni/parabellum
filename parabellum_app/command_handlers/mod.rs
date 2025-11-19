@@ -13,6 +13,8 @@ mod send_resources;
 mod train_units;
 mod upgrade_building;
 
+mod helpers;
+
 pub use add_building::AddBuildingCommandHandler;
 pub use attack_village::AttackVillageCommandHandler;
 pub use create_hero::CreateHeroCommandHandler;

@@ -39,7 +39,7 @@ pub mod tests {
         ),
         ApplicationError,
     > {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let (player_a, mut village_a, _, _) = setup_player_party(
             uow_provider.clone(),

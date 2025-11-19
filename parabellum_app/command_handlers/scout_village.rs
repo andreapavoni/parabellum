@@ -5,9 +5,9 @@ use tracing::info;
 use parabellum_core::{ApplicationError, GameError, Result};
 
 use crate::{
+    command_handlers::helpers::deploy_army_from_village,
     config::Config,
     cqrs::{CommandHandler, commands::ScoutVillage},
-    helpers::army_helper::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::ScoutTask},
     uow::UnitOfWork,
 };

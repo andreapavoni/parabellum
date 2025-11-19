@@ -9,4 +9,7 @@ pub trait PlayerRepository: Send + Sync {
 
     /// Returns a player by id.
     async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError>;
+
+    /// Returns a player by user id.
+    async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError>;
 }

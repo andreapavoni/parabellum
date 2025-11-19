@@ -18,7 +18,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_simple_attack() -> Result<()> {
-        let (app, worker, uow_provider, _) = setup_app().await?;
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let (attacker_player, attacker_village, attacker_army, _) = {
@@ -205,7 +205,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let (attacker_player, attacker_village, attacker_army, _) = {
             setup_player_party(

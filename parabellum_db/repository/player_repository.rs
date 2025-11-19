@@ -52,12 +52,26 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE  1=1 AND id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
+
+        Ok(player.into())
+    }
+
+    async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+        let player = sqlx::query_as!(
+            db_models::Player,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(user_id)))?;
 
         Ok(player.into())
     }

@@ -4,9 +4,9 @@ use tracing::info;
 use parabellum_core::ApplicationError;
 
 use crate::{
+    command_handlers::helpers::deploy_army_from_village,
     config::Config,
     cqrs::{CommandHandler, commands::AttackVillage},
-    helpers::army_helper::deploy_army_from_village,
     jobs::{Job, JobPayload, tasks::AttackTask},
     repository::{JobRepository, VillageRepository},
     uow::UnitOfWork,

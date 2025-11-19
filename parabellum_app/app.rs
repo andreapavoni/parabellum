@@ -14,6 +14,7 @@ use crate::{
 /// Its primary roles are:
 /// 1. Managing Unit of Work (transaction) lifecycles.
 /// 2. Dispatching Commands and Queries to their respective handlers.
+#[derive(Clone)]
 pub struct AppBus {
     config: Arc<Config>,
     uow_provider: Arc<dyn UnitOfWorkProvider>,

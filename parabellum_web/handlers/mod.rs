@@ -8,4 +8,4 @@ pub(crate) use helpers::*;
 pub use home_handler::home_handler;
 pub use login_handler::{login, login_page};
 pub use logout_handler::logout;
-pub use register_handler::{register, register_page};
+pub use register_handler::{RegisterForm, register, register_page};

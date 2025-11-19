@@ -17,7 +17,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_transfer_hero_other_village() -> Result<()> {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let (player, village1, army1, some_hero) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
@@ -126,7 +126,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_hero_reinforce_other_player() -> Result<()> {
-        let (app, worker, uow_provider, _) = setup_app().await?;
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
 
         let (reinforcer_player, reinforcer_village, reinforcer_army, hero) = setup_player_party(
             uow_provider.clone(),
@@ -236,7 +236,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_resurrect_existing_hero() -> Result<()> {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let (player, mut village, _, some_hero) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
@@ -339,7 +339,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_resurrect_new_hero() -> Result<()> {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let uow = uow_provider.begin().await?;
         let village_repo = uow.villages();
@@ -429,7 +429,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_hero_xp_levelup_and_revival() -> Result<()> {
-        let (app, worker, uow_provider, config) = setup_app().await?;
+        let (app, worker, uow_provider, config) = setup_app(false).await?;
 
         let uow = uow_provider.begin().await?;
         let village_repo = uow.villages();

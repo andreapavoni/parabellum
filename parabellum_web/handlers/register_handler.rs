@@ -14,7 +14,7 @@ use parabellum_types::tribe::Tribe;
 use crate::{handlers::render_template, http::AppState, templates::RegisterTemplate};
 
 // Form for registration.
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct RegisterForm {
     pub username: String,
     pub email: String,
@@ -50,7 +50,9 @@ pub async fn register(
     jar: SignedCookieJar,
     Form(form): Form<RegisterForm>,
 ) -> impl IntoResponse {
-    // Map tribe string to Tribe enum
+    if let Some(_) = jar.get("user_email") {
+        return Redirect::to("/").into_response();
+    }
     let tribe_enum = match form.tribe.as_str() {
         "Roman" => Tribe::Roman,
         "Gaul" => Tribe::Gaul,
@@ -66,7 +68,6 @@ pub async fn register(
         _ => MapQuadrant::NorthEast,
     };
 
-    // Prepare the RegisterPlayer command (generate a new player/user ID internally)
     let command = RegisterPlayer::new(
         form.username.clone(),
         form.email.clone(),
@@ -74,14 +75,12 @@ pub async fn register(
         tribe_enum,
         quadrant_enum,
     );
-    // Execute the registration command
     match state
         .app_bus
         .execute(command, RegisterPlayerCommandHandler::new())
         .await
     {
         Ok(()) => {
-            // Registration successful – set auth cookie and redirect to home
             let cookie = Cookie::new("user_email", form.email.clone());
             let updated_jar = jar.add(cookie);
             return (updated_jar, Redirect::to("/")).into_response();
@@ -129,5 +128,52 @@ pub async fn register(
             tracing::error!("Registration error: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{Form, extract::State, http::StatusCode, response::IntoResponse};
+    use axum_extra::extract::SignedCookieJar;
+    use std::sync::Arc;
+
+    use parabellum_app::{app::AppBus, config::Config, test_utils::tests::MockUnitOfWorkProvider};
+
+    use crate::{
+        AppState,
+        handlers::{register, register_handler::RegisterForm},
+    };
+
+    #[tokio::test]
+    async fn test_register_success() {
+        let config = Arc::new(Config::from_env());
+
+        let uow_provider = Arc::new(MockUnitOfWorkProvider::new());
+        let app_bus = Arc::new(AppBus::new(config.clone(), uow_provider));
+        let state = AppState::new(app_bus.clone(), &config);
+
+        let form = RegisterForm {
+            username: "TestUser".into(),
+            email: "test@example.com".into(),
+            password: "P@ssw0rd!".into(),
+            tribe: "Roman".into(),
+            quadrant: "NorthEast".into(),
+        };
+
+        let jar = SignedCookieJar::new(state.cookie_key.clone());
+        let response = register(State(state.clone()), jar, Form(form.clone())).await;
+
+        // Response should be a redirect (303) with cookie
+        let (jar_response, _redirect) = response.into_response().into_parts();
+        assert_eq!(jar_response.status, StatusCode::SEE_OTHER);
+
+        assert!(jar_response.headers.get("set-cookie").is_some());
+        let cookie = jar_response
+            .headers
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie.starts_with("user_email"));
     }
 }

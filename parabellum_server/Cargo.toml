@@ -23,6 +23,9 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 sqlx = { workspace = true }
 rand = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+
 
 std_prelude = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -30,3 +33,6 @@ tracing-appender = "0.2"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
+
+[dev-dependencies]
+reqwest = "0.12"

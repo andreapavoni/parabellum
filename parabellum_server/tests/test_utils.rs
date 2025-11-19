@@ -1,29 +1,9 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
+    use parabellum_web::{AppState, WebRouter};
     use rand::Rng;
-
-    use parabellum_db::{
-        PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
-        PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresUserRepository, PostgresVillageRepository, establish_test_connection_pool,
-    };
-    use parabellum_game::{
-        models::{
-            army::{Army, TroopSet},
-            hero::Hero,
-            village::Village,
-        },
-        test_utils::{
-            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
-            army_factory, player_factory, valley_factory, village_factory,
-        },
-    };
-    use parabellum_types::{
-        common::{Player, User},
-        map::Position,
-        tribe::Tribe,
-    };
+    use reqwest::Client;
     use sqlx::{Postgres, Transaction};
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -41,6 +21,28 @@ pub mod tests {
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
     use parabellum_core::{ApplicationError, Result};
+    use parabellum_db::{
+        PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
+        PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
+        PostgresUserRepository, PostgresVillageRepository, bootstrap_world_map,
+        establish_test_connection_pool,
+    };
+    use parabellum_game::{
+        models::{
+            army::{Army, TroopSet},
+            hero::Hero,
+            village::Village,
+        },
+        test_utils::{
+            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            army_factory, player_factory, valley_factory, village_factory,
+        },
+    };
+    use parabellum_types::{
+        common::{Player, User},
+        map::Position,
+        tribe::Tribe,
+    };
 
     #[derive(Clone)]
     pub struct TestUnitOfWork<'a> {
@@ -119,7 +121,9 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_app() -> Result<(
+    pub async fn setup_app(
+        world_map: bool,
+    ) -> Result<(
         AppBus,
         Arc<JobWorker>,
         Arc<dyn UnitOfWorkProvider>,
@@ -132,6 +136,10 @@ pub mod tests {
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
             Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
 
+        if world_map {
+            bootstrap_world_map(&pool, config.world_size).await?;
+        }
+
         let app_bus = AppBus::new(config.clone(), uow_provider.clone());
         let app_registry = Arc::new(AppJobRegistry::new());
         let worker = Arc::new(JobWorker::new(
@@ -141,6 +149,18 @@ pub mod tests {
         ));
 
         Ok((app_bus, worker, uow_provider, config))
+    }
+
+    #[allow(dead_code)]
+    pub async fn setup_web_app() -> Result<(Client, Arc<dyn UnitOfWorkProvider>)> {
+        let (app_bus, _, uow_provider, config) = setup_app(true).await?;
+        let app = Arc::new(app_bus);
+        let state = AppState::new(app, &config);
+        tokio::spawn(WebRouter::serve(state.clone(), 8088));
+
+        let client = Client::new();
+
+        Ok((client, uow_provider))
     }
 
     #[allow(dead_code)]

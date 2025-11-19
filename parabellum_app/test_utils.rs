@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
@@ -27,7 +27,7 @@ pub mod tests {
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
             PlayerRepository, UserRepository, VillageRepository,
         },
-        uow::UnitOfWork,
+        uow::{UnitOfWork, UnitOfWorkProvider},
     };
 
     #[derive(Default, Clone)]
@@ -204,6 +204,20 @@ pub mod tests {
                 Ok(player.clone())
             } else {
                 Err(ApplicationError::Db(DbError::PlayerNotFound(player_id)))
+            }
+        }
+
+        async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
+            if let Some(player) = self
+                .players
+                .lock()
+                .unwrap()
+                .values()
+                .find(|p| p.user_id == user_id)
+            {
+                Ok(player.clone())
+            } else {
+                Err(ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))
             }
         }
     }
@@ -436,6 +450,22 @@ pub mod tests {
         async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
             *self.rolled_back.lock().unwrap() = true;
             Ok(())
+        }
+    }
+
+    pub struct MockUnitOfWorkProvider {}
+
+    impl MockUnitOfWorkProvider {
+        pub fn new() -> Self {
+            Self {}
+        }
+    }
+
+    #[async_trait]
+    impl UnitOfWorkProvider for MockUnitOfWorkProvider {
+        async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+            let uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+            Ok(uow)
         }
     }
 }

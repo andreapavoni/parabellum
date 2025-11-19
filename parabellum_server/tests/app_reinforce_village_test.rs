@@ -15,7 +15,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_reinforce_village() -> Result<()> {
-        let (app, worker, uow_provider, _) = setup_app().await?;
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let (reinforcer_player, reinforcer_village, reinforcing_army, _) = {

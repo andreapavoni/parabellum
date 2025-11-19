@@ -1,3 +1,6 @@
+use rand::Rng;
+use uuid::Uuid;
+
 use parabellum_core::Result;
 use parabellum_types::{
     common::{Player, User},
@@ -14,8 +17,6 @@ use super::models::{
     smithy::SmithyUpgrades,
     village::Village,
 };
-use rand::Rng;
-use uuid::Uuid;
 
 #[derive(Default, Clone)]
 pub struct PlayerFactoryOptions<'a> {

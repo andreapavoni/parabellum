@@ -28,6 +28,9 @@ pub enum DbError {
     #[error("Player with ID {0} not found")]
     PlayerNotFound(Uuid),
 
+    #[error("Player with User ID {0} not found")]
+    UserPlayerNotFound(Uuid),
+
     #[error("Job with ID {0} not found")]
     JobNotFound(Uuid),
 
