@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Map - PARABELLUM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="/assets/style.css">
+      <!--style>
+        body {
+            font-family: 'Verdana', sans-serif;
+            background-color: #fff;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* --- NAVIGAZIONE (Identica alle altre pagine) --- */
+        .nav-icon {
+            width: 45px; height: 45px;
+            min-width: 45px;
+            border-radius: 50%;
+            border: 3px solid #ccc;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .nav-icon:hover { transform: translateY(-2px); }
+        .nav-active { border-color: #80ba34; }
+
+        .res-item { display: flex; align-items: center; margin: 0 8px 8px 0; font-size: 11px; font-weight: bold; white-space: nowrap; }
+        .res-icon { width: 15px; height: 15px; margin-right: 4px; border-radius: 50%; flex-shrink: 0;}
+
+        /* --- MAPPA 15x15 CONTAINER --- */
+        .map-container-main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 100%;
+            overflow: visible;
+        }
+
+        .large-map-wrapper {
+            position: relative;
+            width: 560px; /* Larghezza fissa base */
+            height: 560px;
+            margin: 10px auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+
+        @media (max-width: 600px) {
+            .large-map-wrapper {
+                /* FIX MOBILE: Scala ridotta a 0.55 per matchare visivamente i 360px del villaggio */
+                position: relative;
+                left: 50%;
+                margin-left: -280px; /* Centratura perfetta: -1 * (560 / 2) */
+
+                transform: scale(0.55);
+                transform-origin: top center;
+
+                margin-top: 0px;
+                margin-bottom: -240px; /* Compensa lo spazio vuoto sotto */
+            }
+        }
+
+        /* GRIGLIA CENTRALE */
+        .map-grid-container {
+            position: relative;
+            width: 488px;
+            height: 488px;
+            background-color: #8ebf42;
+            border: 4px solid #9acd32;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(15, 32px);
+            grid-template-rows: repeat(15, 32px);
+            gap: 1px;
+            background-color: #a9d16f;
+            border: 1px solid #a9d16f;
+        }
+
+        /* CELLE */
+        .tile {
+            width: 32px; height: 32px;
+            background-color: #f1f8e9;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: background-color 0.1s;
+        }
+        .tile:hover {
+            background-color: #fff;
+            z-index: 50;
+            outline: 2px solid #ff9800;
+        }
+
+        .is-village { box-shadow: inset 0 0 0 2px #d32f2f; background-color: #ffebee; }
+        .is-own-village { box-shadow: inset 0 0 0 2px #fff; background-color: #e8f5e9; border: 2px solid #2e7d32; }
+
+        .oasis-wood { background-color: #c5e1a5; }
+        .oasis-clay { background-color: #ffe0b2; }
+        .oasis-iron { background-color: #e0e0e0; }
+        .oasis-crop { background-color: #fff9c4; }
+
+        .tile-content {
+            pointer-events: none;
+            filter: drop-shadow(1px 1px 0px rgba(0,0,0,0.2));
+            line-height: 1;
+        }
+
+        /* --- COORDINATE (Font armonizzati) --- */
+        .y-axis {
+            position: absolute;
+            left: -35px; top: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8px 0;
+            height: 488px;
+        }
+        .y-label {
+            height: 32px;
+            display: flex; align-items: center; justify-content: flex-end;
+            width: 30px;
+            font-size: 11px; font-weight: bold; color: #555;
+        }
+
+        .x-axis {
+            position: absolute;
+            bottom: -25px; left: 0; right: 0;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            width: 488px;
+            padding: 0 1px;
+        }
+        .x-label {
+            width: 32px;
+            display: flex; justify-content: center;
+            font-size: 11px; font-weight: bold; color: #555;
+        }
+
+        .highlight-axis { color: #2e7d32; font-size: 12px; font-weight: 900; }
+
+        /* FRECCE NAVIGAZIONE */
+        .nav-arrow {
+            position: absolute;
+            width: 0; height: 0;
+            border-style: solid;
+            cursor: pointer;
+            z-index: 5;
+        }
+        .nav-arrow:hover { transform: scale(1.1); }
+
+        .arrow-n {
+            top: -25px; left: 50%; transform: translateX(-50%);
+            border-width: 0 20px 25px 20px;
+            border-color: transparent transparent #8ebf42 transparent;
+        }
+        .arrow-s {
+            bottom: -50px; left: 50%; transform: translateX(-50%);
+            border-width: 25px 20px 0 20px;
+            border-color: #8ebf42 transparent transparent transparent;
+        }
+        .arrow-w {
+            left: -60px; top: 50%; transform: translateY(-50%);
+            border-width: 20px 25px 20px 0;
+            border-color: transparent #8ebf42 transparent transparent;
+        }
+        .arrow-e {
+            right: -25px; top: 50%; transform: translateY(-50%);
+            border-width: 20px 0 20px 25px;
+            border-color: transparent transparent transparent #8ebf42;
+        }
+
+        /* INPUT BOX */
+        .coords-input-container {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-top: 15px;
+        }
+
+        /* Tooltip */
+        #tile-info {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            white-space: nowrap;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+    </style-->
+</head>
+<body>
+
+    <!-- HEADER NAVIGAZIONE -->
+    <div class="bg-white shadow-sm pb-2 w-full relative z-20">
+        <div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
+            <div class="font-serif font-bold text-lg text-gray-700 tracking-wide">PARABELLUM</div>
+            <div class="flex items-center gap-3 text-gray-600">
+                <span class="font-bold text-gray-800">Gedric</span>
+                <span class="cursor-pointer hover:text-red-600 hover:underline">Logout</span>
+                <span class="hidden sm:inline text-[10px] text-gray-500">09:34:20</span>
+            </div>
+        </div>
+
+        <div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
+            <div class="nav-icon" title="Fields"><a href="travian_fields.html">🌾</a></div>
+            <div class="nav-icon" title="Village Center"><a href="travian_village_v2.html">🏠</a></div>
+            <div class="nav-icon nav-active" title="Map"><a href="travian_map_v6.html">🗺️</a></div>
+            <div class="nav-icon" title="Stats">📊</div>
+            <div class="nav-icon" title="Reports">📜</div>
+            <div class="nav-icon" title="Messages">✉️</div>
+        </div>
+
+        <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
+            <div class="res-item"><div class="res-icon bg-green-700"></div> 518/800</div>
+            <div class="res-item"><div class="res-icon bg-orange-700"></div> 498/800</div>
+            <div class="res-item"><div class="res-icon bg-gray-600"></div> 575/800</div>
+            <div class="res-item"><div class="res-icon bg-yellow-500"></div> 581/800</div>
+            <div class="res-item"><div class="res-icon bg-red-800"></div> 9/12</div>
+        </div>
+    </div>
+
+    <!-- CORPO PRINCIPALE -->
+    <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
+
+        <!-- COLONNA SINISTRA: MAPPA -->
+        <div class="map-container-main w-full md:w-auto">
+
+            <!-- Titolo Allineato -->
+            <div class="flex flex-col md:flex-row justify-between items-center w-full max-w-[560px] mb-4 px-2 md:pl-4">
+                <h1 class="text-xl font-bold text-left w-full md:w-auto">Map <span id="header-coords" class="text-gray-700">(125|25)</span></h1>
+            </div>
+
+            <!-- WRAPPER MAPPA -->
+            <div class="large-map-wrapper">
+
+                <div class="map-grid-container">
+
+                    <!-- Frecce Navigazione -->
+                    <div class="nav-arrow arrow-n" onclick="moveMap(0, 1)" title="Nord (Y+)"></div>
+                    <div class="nav-arrow arrow-s" onclick="moveMap(0, -1)" title="Sud (Y-)"></div>
+                    <div class="nav-arrow arrow-w" onclick="moveMap(-1, 0)" title="Ovest (X-)"></div>
+                    <div class="nav-arrow arrow-e" onclick="moveMap(1, 0)" title="Est (X+)"></div>
+
+                    <!-- Asse Y -->
+                    <div id="y-axis-container" class="y-axis"></div>
+
+                    <!-- Griglia 15x15 -->
+                    <div id="map-grid" class="map-grid"></div>
+
+                    <!-- Asse X -->
+                    <div id="x-axis-container" class="x-axis"></div>
+
+                </div>
+
+                <div id="tile-info"></div>
+            </div>
+
+            <!-- INPUT COORDINATE -->
+            <div class="coords-input-container z-20">
+                <span class="font-bold text-sm text-gray-700">x</span>
+                <input type="text" id="input-x" value="125" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
+                <span class="font-bold text-sm text-gray-700">y</span>
+                <input type="text" id="input-y" value="25" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
+                <button onclick="goToCoords()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-1.5 rounded text-xs font-bold text-green-700 ml-3 cursor-pointer shadow-sm transition-colors">OK</button>
+            </div>
+
+        </div>
+
+        <!-- COLONNA DESTRA: DETTAGLI (Dimensioni Armonizzate) -->
+        <!-- Larghezza md:w-56 per matchare le altre pagine. Stili testo identici. -->
+        <div class="w-full max-w-[560px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
+            <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Dettagli Cella</h3>
+
+            <div id="details-panel">
+                <p class="text-xs text-gray-500 italic mb-4 text-center py-8">Select a field</p>
+            </div>
+
+            <div class="mt-8 border border-gray-300 h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-xs rounded shadow-inner">
+                [Mini Map]
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT PER GENERARE LA MAPPA 15x15 -->
+    <script>
+        let currentX = 125;
+        let currentY = 25;
+        const radius = 7;
+
+        const gridEl = document.getElementById('map-grid');
+        const yAxisEl = document.getElementById('y-axis-container');
+        const xAxisEl = document.getElementById('x-axis-container');
+        const headerCoordsEl = document.getElementById('header-coords');
+        const inputX = document.getElementById('input-x');
+        const inputY = document.getElementById('input-y');
+        const detailsPanel = document.getElementById('details-panel');
+        const tooltip = document.getElementById('tile-info');
+
+        function renderMap(centerX, centerY) {
+            gridEl.innerHTML = '';
+            yAxisEl.innerHTML = '';
+            xAxisEl.innerHTML = '';
+
+            headerCoordsEl.innerText = `(${centerX}|${centerY})`;
+            inputX.value = centerX;
+            inputY.value = centerY;
+
+            for (let y = centerY + radius; y >= centerY - radius; y--) {
+                const div = document.createElement('div');
+                div.className = `y-label ${y === centerY ? 'highlight-axis' : ''}`;
+                div.innerText = y;
+                yAxisEl.appendChild(div);
+            }
+
+            for (let x = centerX - radius; x <= centerX + radius; x++) {
+                const div = document.createElement('div');
+                div.className = `x-label ${x === centerX ? 'highlight-axis' : ''}`;
+                div.innerText = x;
+                xAxisEl.appendChild(div);
+            }
+
+            for (let y = centerY + radius; y >= centerY - radius; y--) {
+                for (let x = centerX - radius; x <= centerX + radius; x++) {
+                    const tile = document.createElement('div');
+                    const isCenter = (x === centerX && y === centerY);
+
+                    const seed = Math.abs((x * 123) + (y * 456));
+                    let content = '';
+                    let typeClass = '';
+                    let title = `Abandoned Valley (${x}|${y})`;
+
+                    if (isCenter) {
+                        typeClass = 'is-own-village';
+                        content = '🏠';
+                        title = `MyVillage (${x}|${y})`;
+                    } else if (seed % 17 === 0) {
+                        typeClass = 'is-village';
+                        content = '🏠';
+                        title = `Village (${x}|${y})`;
+                    } else if (seed % 23 === 0) {
+                        typeClass = 'oasis-wood';
+                        content = '🌲';
+                        title = `Lumber Oasis (${x}|${y})`;
+                    } else if (seed % 29 === 0) {
+                        typeClass = 'oasis-clay';
+                        content = '🧱';
+                        title = `Clay Oasis (${x}|${y})`;
+                    } else if (seed % 31 === 0) {
+                        typeClass = 'oasis-iron';
+                        content = '⛰️';
+                        title = `Iron Oasis (${x}|${y})`;
+                    } else if (seed % 37 === 0) {
+                        typeClass = 'oasis-crop';
+                        content = '🌾';
+                        title = `Crop Oasis (${x}|${y})`;
+                    }
+
+                    tile.className = `tile ${typeClass}`;
+                    tile.innerHTML = `<span class="tile-content">${content}</span>`;
+
+                    tile.onmouseenter = (e) => showTooltip(e, title);
+                    tile.onmouseleave = () => hideTooltip();
+                    tile.onmouseover = () => showDetails(title, x, y, content);
+
+                    gridEl.appendChild(tile);
+                }
+            }
+        }
+
+        function moveMap(dx, dy) {
+            currentX += dx;
+            currentY += dy;
+            renderMap(currentX, currentY);
+        }
+
+        function goToCoords() {
+            const x = parseInt(inputX.value) || 0;
+            const y = parseInt(inputY.value) || 0;
+            currentX = x;
+            currentY = y;
+            renderMap(currentX, currentY);
+        }
+
+        function showDetails(title, x, y, icon) {
+            let html = `
+                <div class="text-center mb-4">
+                    <div class="text-4xl mb-2">${icon || '🌲'}</div>
+                    <div class="font-bold text-sm text-gray-800">${title}</div>
+                    <div class="text-xs text-gray-500 mt-1">Coordinate: <span class="font-mono font-bold text-black">${x}|${y}</span></div>
+                </div>
+                <table class="w-full text-xs">
+                    <tr class="border-b border-gray-200"><td class="py-2 text-gray-600">Giocatore</td><td class="py-2 text-right font-bold text-black">${icon === '🏠' ? 'Giocatore_' + Math.abs(x+y) : '-'}</td></tr>
+                    <tr class="border-b border-gray-200"><td class="py-2 text-gray-600">Popolazione</td><td class="py-2 text-right text-black font-semibold">${icon === '🏠' ? Math.floor(Math.random()*500) : '-'}</td></tr>
+                    <tr><td class="py-2 text-gray-600">Alleanza</td><td class="py-2 text-right text-blue-600 hover:underline cursor-pointer">${icon === '🏠' ? 'Alleanza_Alpha' : '-'}</td></tr>
+                </table>
+            `;
+            detailsPanel.innerHTML = html;
+        }
+
+        function showTooltip(e, text) {
+            tooltip.style.display = 'block';
+            tooltip.innerText = text;
+
+            const rect = gridEl.getBoundingClientRect();
+            let left = e.pageX + 15;
+            let top = e.pageY + 15;
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        renderMap(currentX, currentY);
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resource Fields - PARABELLUM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/style.css">
+      <!--style>
+        body {
+            font-family: 'Verdana', sans-serif;
+            background-color: #fff;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .map-container-responsive {
+            width: 360px;
+            height: 320px;
+            margin: 0 auto;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        /* Small screens (< 380px) */
+        @media (max-width: 380px) {
+            .map-container-responsive {
+                transform: scale(0.85);
+                transform-origin: top center;
+                margin-bottom: -40px;
+            }
+        }
+
+        .hex {
+            position: absolute;
+            width: 60px;
+            height: 69px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: filter 0.2s, transform 0.2s;
+            z-index: 1;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .hex::before {
+            content: '';
+            position: absolute;
+            top: 1px; left: 1px; right: 1px; bottom: 1px;
+            background: inherit;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            z-index: -1;
+        }
+
+        .hex:hover, .hex:active {
+            transform: scale(1.1);
+            z-index: 10;
+            filter: brightness(1.1);
+        }
+
+        /* Testo Livello */
+        .level {
+            font-weight: bold;
+            font-size: 11px;
+            color: #000;
+            text-shadow: 0px 0px 2px rgba(255,255,255,0.8);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* Colori Risorse */
+        .wood { background: radial-gradient(circle, #6c9a34 30%, #4b7d26 100%); }
+        .clay { background: radial-gradient(circle, #d68636 30%, #b36119 100%); }
+        .iron { background: radial-gradient(circle, #a6a6a6 30%, #808080 100%); }
+        .crop { background: radial-gradient(circle, #f2d349 30%, #e6be25 100%); }
+
+        /* --- VILLAGGIO CENTRALE --- */
+        .village {
+            position: absolute;
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+                        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            background: #6c1a34;
+            border: 3px solid #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.4);
+            z-index: 20;
+            top: 43.2%;
+            left: 41.6%;
+            transform: translate(-50%, -50%);
+            overflow: hidden;
+        }
+
+        .village img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .nav-icon {
+            width: 45px; height: 45px;
+            min-width: 45px;
+            border-radius: 50%;
+            border: 3px solid #ccc;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .nav-icon:hover { transform: translateY(-2px); }
+        .nav-active { border-color: #80ba34; }
+
+        .res-item { display: flex; align-items: center; margin: 0 8px 8px 0; font-size: 11px; font-weight: bold; white-space: nowrap; }
+        .res-icon { width: 15px; height: 15px; margin-right: 4px; border-radius: 50%; flex-shrink: 0;}
+
+        </style-->
+</head>
+<body>
+
+    <div class="bg-white shadow-sm pb-2 w-full">
+      <div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
+                  <div class="font-serif font-bold text-lg text-gray-700 tracking-wide">PARABELLUM</div>
+                  <div class="flex items-center gap-3 text-gray-600">
+                      <span class="font-bold text-gray-800">Gedric</span>
+                      <span class="cursor-pointer hover:text-red-600 hover:underline">Logout</span>
+                      <span class="sm:inline text-[10px] text-gray-500">09:34:20</span>
+                  </div>
+              </div>
+        <div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
+            <div class="nav-icon nav-active" title="Fields">🌾</div>
+            <div class="nav-icon" title="Village Center"><a href="travian_village_v2.html">🏠</a></div>
+            <div class="nav-icon" title="Map"><a href="travian_map_v6.html">🗺️</a></div>
+            <div class="nav-icon" title="Stats">📊</div>
+            <div class="nav-icon" title="Reports">📜</div>
+            <div class="nav-icon" title="Messages">✉️</div>
+        </div>
+
+        <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
+            <div class="res-item"><div class="res-icon bg-green-700"></div> 108/1200</div>
+            <div class="res-item"><div class="res-icon bg-orange-700"></div> 81/1200</div>
+            <div class="res-item"><div class="res-icon bg-gray-600"></div> 45/1200</div>
+            <div class="res-item"><div class="res-icon bg-yellow-500"></div> 20/800</div>
+            <div class="res-item"><div class="res-icon bg-red-800"></div> 32/34</div>
+        </div>
+    </div>
+
+    <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
+
+        <div class="flex flex-col items-center w-full md:w-auto">
+            <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left">Pavonz's Village</h1>
+
+            <div class="map-container-responsive">
+                <div class="hex wood" style="top: 0px; left: 60px;"><span class="level">1</span></div>
+                <div class="hex crop" style="top: 0px; left: 120px;"><span class="level">1</span></div>
+                <div class="hex iron" style="top: 0px; left: 180px;"><span class="level">1</span></div>
+
+
+                <div class="hex crop" style="top: 52px; left: 30px;"><span class="level">1</span></div>
+                <div class="hex wood" style="top: 52px; left: 90px;"><span class="level">1</span></div>
+                <div class="hex iron" style="top: 52px; left: 150px;"><span class="level">1</span></div>
+                <div class="hex crop" style="top: 52px; left: 210px;"><span class="level">2</span></div>
+
+
+                <div class="hex wood" style="top: 104px; left: 0px;"><span class="level">1</span></div>
+                <div class="hex clay" style="top: 104px; left: 60px;"><span class="level">1</span></div>
+
+
+                <div class="village">
+                    <!--<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/it.svg" style="opacity:0; width:100%; height:100%; background: url('https://thumbs.dreamstime.com/b/cartoon-medieval-village-top-view-houses-fountain-vector-illustration-216652605.jpg') center/cover no-repeat;" alt="Village">-->
+                </div>
+
+                <div class="hex wood" style="top: 104px; left: 180px;"><span class="level">1</span></div>
+                <div class="hex crop" style="top: 104px; left: 240px;"><span class="level">2</span></div>
+
+                <div class="hex clay" style="top: 156px; left: 30px;"><span class="level">1</span></div>
+                <div class="hex clay" style="top: 156px; left: 90px;"><span class="level">1</span></div>
+                <div class="hex crop" style="top: 156px; left: 150px;"><span class="level">1</span></div>
+                <div class="hex iron" style="top: 156px; left: 210px;"><span class="level">2</span></div>
+
+                <div class="hex clay" style="top: 208px; left: 60px;"><span class="level">1</span></div>
+                <div class="hex iron" style="top: 208px; left: 120px;"><span class="level">1</span></div>
+                <div class="hex crop" style="top: 208px; left: 180px;"><span class="level">2</span></div>
+
+            </div>
+
+
+            <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
+                <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Costruzioni in corso:</div>
+                <div class="flex justify-between w-full">
+                    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Warehouse (Lv 15)</span>
+                    <span>0:45:12</span>
+                </div>
+                <div class="flex justify-between w-full">
+                    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Granaio (Lv 12)</span>
+                    <span>1:20:05</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
+            <div class="flex flex-row md:flex-col justify-between md:justify-start gap-8 md:gap-0">
+
+                <div class="flex-1">
+                    <h3 class="font-bold mb-3 text-sm">Production:</h3>
+                    <div class="text-xs space-y-2">
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                            <span>🌲 Legno:</span>
+                            <span class="font-bold">20</span>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                            <span>🧱 Argilla:</span>
+                            <span class="font-bold">24</span>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                            <span>⛏️ Ferro:</span>
+                            <span class="font-bold">20</span>
+                        </div>
+                        <div class="flex justify-between border-b border-gray-100 pb-1">
+                            <span>🌾 Grano:</span>
+                            <span class="font-bold">2</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-[12px] font-bold text-gray-400 text-right">/hour</div>
+                </div>
+
+                <div class="flex-1 md:mt-8">
+                    <h3 class="font-bold mb-2 text-sm md:mt-6">Troops:</h3>
+                    <div class="text-xs text-gray-500 italic">
+                      No units in the village
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
