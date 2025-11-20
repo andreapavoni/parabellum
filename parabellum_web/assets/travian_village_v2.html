@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Village Center - PARABELLUM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="/assets/style.css">
+      <!--style>
+        body {
+            font-family: 'Verdana', sans-serif;
+            background-color: #fff;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* --- VILLAGE MAP WRAPPER --- */
+        .village-container-responsive {
+            width: 400px;
+            height: 350px;
+            margin: 0 auto;
+            position: relative;
+            background-color: #8ebf42;
+            background-image: radial-gradient(circle, #9acd56 10%, #8ebf42 90%);
+            border-radius: 20px;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.1);
+            border: 4px solid #e0e0e0;
+            transition: transform 0.3s ease;
+            overflow: hidden;
+        }
+
+        @media (max-width: 420px) {
+            .village-container-responsive {
+                transform: scale(0.85);
+                transform-origin: top center;
+                margin-bottom: -50px;
+            }
+        }
+
+        /* --- ELEMENTI DECORATIVI --- */
+        .wall-ring {
+            position: absolute;
+            top: 12px; left: 12px; right: 12px; bottom: 12px;
+            border: 5px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.8;
+            z-index: 1;
+        }
+
+        .river {
+            position: absolute;
+            top: -50px; left: 44%;
+            width: 55px; height: 500px;
+            background: #a3d5ff;
+            transform: rotate(12deg);
+            opacity: 0.5;
+            filter: blur(1px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* --- SLOT EDIFICI --- */
+        .building-slot {
+            position: absolute;
+            width: 36px; height: 36px;
+            background-color: rgba(139, 69, 19, 0.15);
+            border: 1px dashed rgba(139, 69, 19, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 10;
+            font-size: 9px;
+            font-weight: bold;
+            color: rgba(0,0,0,0.5);
+            /* Anchor point centrale per precisione */
+            transform: translate(-50%, -50%);
+        }
+
+        .building-slot:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+            border-color: #fff;
+            /*transform: translate(-50%, -50%) scale(1.2);*/
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            color: #333;
+            z-index: 10;
+        }
+
+        .building-slot.main-building {
+            width: 60px; height: 60px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            z-index: 15;
+            font-size: 10px;
+        }
+
+        /* Punto di Raduno: spostato per non collidere con slot 4 e 3 */
+        .rally-point {
+            width: 70px; height: 85px;
+            border-radius: 10px 50px 10px 0px;
+            background-color: rgba(200, 200, 200, 0.4);
+            transform: translate(-50%, -50%) rotate(60deg);
+        }
+
+        /* --- NAVIGAZIONE --- */
+        .nav-icon {
+            width: 45px; height: 45px;
+            min-width: 45px;
+            border-radius: 50%;
+            border: 3px solid #ccc;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .nav-icon:hover { transform: translateY(-2px); }
+        .nav-active { border-color: #80ba34; }
+
+        .res-item { display: flex; align-items: center; margin: 0 8px 8px 0; font-size: 11px; font-weight: bold; white-space: nowrap; }
+        .res-icon { width: 15px; height: 15px; margin-right: 4px; border-radius: 50%; flex-shrink: 0;}
+    </style-->
+</head>
+<body>
+
+  <div class="bg-white shadow-sm pb-2 w-full">
+    <div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
+                <div class="font-serif font-bold text-lg text-gray-700 tracking-wide">PARABELLUM</div>
+                <div class="flex items-center gap-3 text-gray-600">
+                    <span class="font-bold text-gray-800">Gedric</span>
+                    <span class="cursor-pointer hover:text-red-600 hover:underline">Logout</span>
+                    <span class="sm:inline text-[10px] text-gray-500">09:34:20</span>
+                </div>
+            </div>
+      <div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
+          <div class="nav-icon" title="Fields"><a href="travian_fields.html">🌾</a></div>
+          <div class="nav-icon nav-active" title="Village Center">🏠</div>
+          <div class="nav-icon" title="Map"><a href="travian_map_v6.html">🗺️</a></div>
+          <div class="nav-icon" title="Stats">📊</div>
+          <div class="nav-icon" title="Reports">📜</div>
+          <div class="nav-icon" title="Messages">✉️</div>
+      </div>
+
+      <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
+          <div class="res-item"><div class="res-icon bg-green-700"></div> 108/1200</div>
+          <div class="res-item"><div class="res-icon bg-orange-700"></div> 81/1200</div>
+          <div class="res-item"><div class="res-icon bg-gray-600"></div> 45/1200</div>
+          <div class="res-item"><div class="res-icon bg-yellow-500"></div> 20/800</div>
+          <div class="res-item"><div class="res-icon bg-red-800"></div> 32/34</div>
+      </div>
+  </div>
+
+    <!-- CORPO PRINCIPALE -->
+    <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
+
+        <!-- SEZIONE CENTRO VILLAGGIO -->
+        <div class="flex flex-col items-center w-full md:w-auto">
+            <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">Karthago (Capital)</h1>
+
+            <div class="village-container-responsive relative">
+                <div class="wall-ring" title="Mura cittadine"></div>
+
+                <!-- CENTRO -->
+                <div class="building-slot main-building" style="top: 50%; left: 50%;" title="Main Building">Main</div>
+
+                <!-- PUNTO DI RADUNO -->
+                <div class="building-slot rally-point" style="top: 55%; left: 67%;" title="Rally Point"></div>
+
+
+                <!-- === ANELLO INTERNO (1-6) === -->
+                <div class="building-slot" style="top: 28%; left: 47%;">1</div>
+                <div class="building-slot" style="top: 35%; left: 63%;">2</div>
+                <div class="building-slot" style="top: 37%; left: 32%;">3</div>
+                <div class="building-slot" style="top: 72%; left: 53%;">4</div>
+                <div class="building-slot" style="top: 63%; left: 38%;">5</div>
+                <div class="building-slot" style="top: 52%; left: 27%;">6</div>
+
+
+                <!-- === ANELLO ESTERNO (7-21) === -->
+
+                <!-- Lato Ovest (Sinistra) -->
+                <div class="building-slot" style="top: 22%; left: 24%;">7</div>
+                <div class="building-slot" style="top: 36%; left: 15%;">8</div>
+                <div class="building-slot" style="top: 52%; left: 12%;">19</div> <!-- Molto esterno -->
+                <div class="building-slot" style="top: 67%; left: 18%;">9</div>
+                <div class="building-slot" style="top: 77%; left: 28%;">10</div>
+                <div class="building-slot" style="top: 13%; left: 40%;">21</div> <!-- Estremo Nord-Ovest -->
+
+                <!-- Lato Sud (Sotto) -->
+                <div class="building-slot" style="top: 86%; left: 43%;">20</div>
+                <div class="building-slot" style="top: 85%; left: 60%;">14</div>
+
+                <!-- Lato Est (Destra) -->
+                <div class="building-slot" style="top: 76%; left: 75%;">13</div>
+                <div class="building-slot" style="top: 63%; left: 85%;">12</div>
+                <div class="building-slot" style="top: 45%; left: 88%;">18</div> <!-- Molto esterno -->
+                <div class="building-slot" style="top: 30%; left: 80%;">11</div>
+
+                <!-- Lato Nord (Sopra) -->
+                <!--<div class="building-slot" style="top: 20%; left: 70%;">16</div>-->
+                <!--<div class="building-slot" style="top: 12%; left: 65%;">17</div>-->
+                <div class="building-slot" style="top: 15%; left: 62%;">15</div>
+
+
+                <!-- Mura Label -->
+
+            </div>
+
+            <!-- Coda Costruzione -->
+            <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
+                <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Costruzioni in corso:</div>
+                <div class="flex justify-between w-full">
+                    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Warehouse (Lv 15)</span>
+                    <span>0:45:12</span>
+                </div>
+                <div class="flex justify-between w-full">
+                    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Granaio (Lv 12)</span>
+                    <span>1:20:05</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR LISTA VILLAGGI -->
+        <div class="w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
+            <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Villaggi:</h3>
+            <ul class="text-xs space-y-2 list-none pl-0">
+                <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Cannae</span>
+                    <span class="text-gray-500">(116|-318)</span>
+                </li>
+                <li class="flex justify-between items-center font-bold bg-gray-100 p-1 rounded cursor-default">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-orange-500 mr-2"></span> Karthago</span>
+                    <span class="text-gray-600">(32|-160)</span>
+                </li>
+                <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Mediana</span>
+                    <span class="text-gray-500">(34|-163)</span>
+                </li>
+                <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Sabrata</span>
+                    <span class="text-gray-500">(112|-316)</span>
+                </li>
+                <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Tharros</span>
+                    <span class="text-gray-500">(112|-218)</span>
+                </li>
+            </ul>
+
+            <div class="mt-8 text-xs space-y-2 text-gray-600">
+                <div class="hover:underline cursor-pointer text-blue-600">Mappa</div>
+                <div class="hover:underline cursor-pointer text-blue-600">Statistiche</div>
+                <div class="hover:underline cursor-pointer text-blue-600">Report</div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
