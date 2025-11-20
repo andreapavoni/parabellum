@@ -29,29 +29,33 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         sqlx::query!(
             r#"
-              INSERT INTO players (id, username, tribe, user_id,
+              INSERT INTO players (id, username, tribe, user_id, alliance_id, alliance_join_time,
                   current_alliance_training_contributions, current_alliance_armor_contributions,
                   current_alliance_cp_contributions, current_alliance_trade_contributions,
                   total_alliance_training_contributions, total_alliance_armor_contributions,
                   total_alliance_cp_contributions, total_alliance_trade_contributions)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
               ON CONFLICT (id) DO UPDATE
               SET
                   username = $2,
                   tribe = $3,
-                  current_alliance_training_contributions = $5,
-                  current_alliance_armor_contributions = $6,
-                  current_alliance_cp_contributions = $7,
-                  current_alliance_trade_contributions = $8,
-                  total_alliance_training_contributions = $9,
-                  total_alliance_armor_contributions = $10,
-                  total_alliance_cp_contributions = $11,
-                  total_alliance_trade_contributions = $12
+                  alliance_id = $5,
+                  alliance_join_time = $6,
+                  current_alliance_training_contributions = $7,
+                  current_alliance_armor_contributions = $8,
+                  current_alliance_cp_contributions = $9,
+                  current_alliance_trade_contributions = $10,
+                  total_alliance_training_contributions = $11,
+                  total_alliance_armor_contributions = $12,
+                  total_alliance_cp_contributions = $13,
+                  total_alliance_trade_contributions = $14
               "#,
             player.id,
             player.username,
             tribe as _,
             player.user_id,
+            player.alliance_id,
+            player.alliance_join_time,
             player.current_alliance_training_contributions,
             player.current_alliance_armor_contributions,
             player.current_alliance_cp_contributions,

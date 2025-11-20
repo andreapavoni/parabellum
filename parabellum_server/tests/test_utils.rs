@@ -31,6 +31,7 @@ pub mod tests {
     };
     use parabellum_game::{
         models::{
+            alliance::Alliance,
             army::{Army, TroopSet},
             hero::Hero,
             village::Village,
@@ -45,6 +46,7 @@ pub mod tests {
         map::Position,
         tribe::Tribe,
     };
+    use uuid::Uuid;
 
     #[derive(Clone)]
     pub struct TestUnitOfWork<'a> {
@@ -255,5 +257,53 @@ pub mod tests {
         uow.commit().await?;
 
         Ok((player, village, army, hero))
+    }
+
+    /// Sets up an alliance with a specific armor bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_armor_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        armor_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.begin().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        );
+        alliance.armor_bonus_level = armor_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
+    }
+
+    /// Assigns a player to an alliance with an old join time to bypass cooldowns
+    #[allow(dead_code)]
+    pub async fn assign_player_to_alliance(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        mut player: Player,
+        alliance_id: Uuid,
+    ) -> Result<Player> {
+        let uow = uow_provider.begin().await?;
+
+        player.alliance_id = Some(alliance_id);
+        // Set join time to 100000 seconds ago to bypass any cooldown checks
+        // Use current unix timestamp - 100000
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i32;
+        player.alliance_join_time = Some(current_time - 100000);
+
+        let player_repo = uow.players();
+        player_repo.save(&player).await?;
+        uow.commit().await?;
+
+        Ok(player)
     }
 }
