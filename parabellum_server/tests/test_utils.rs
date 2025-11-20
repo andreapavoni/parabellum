@@ -306,4 +306,50 @@ pub mod tests {
 
         Ok(player)
     }
+
+    /// Sets up an alliance with a specific training bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_training_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        training_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.begin().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        );
+        alliance.training_bonus_level = training_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
+    }
+
+    /// Sets up an alliance with a specific trade bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_trade_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        trade_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.begin().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        );
+        alliance.trade_bonus_level = trade_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
+    }
 }

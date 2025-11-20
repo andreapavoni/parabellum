@@ -496,3 +496,130 @@ impl AlliancePermission {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_armor_bonus_multiplier() {
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            Uuid::new_v4(),
+        );
+
+        // Test level 0
+        alliance.armor_bonus_level = 0;
+        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.0);
+
+        // Test level 1 = 1%
+        alliance.armor_bonus_level = 1;
+        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.01);
+
+        // Test level 3 = 3%
+        alliance.armor_bonus_level = 3;
+        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.03);
+
+        // Test level 5 = 5%
+        alliance.armor_bonus_level = 5;
+        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.05);
+    }
+
+    #[test]
+    fn test_get_training_bonus_multiplier() {
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            Uuid::new_v4(),
+        );
+
+        // Test level 0
+        alliance.training_bonus_level = 0;
+        assert_eq!(alliance.get_training_bonus_multiplier(), 0.0);
+
+        // Test level 2 = 2%
+        alliance.training_bonus_level = 2;
+        assert_eq!(alliance.get_training_bonus_multiplier(), 0.02);
+
+        // Test level 4 = 4%
+        alliance.training_bonus_level = 4;
+        assert_eq!(alliance.get_training_bonus_multiplier(), 0.04);
+
+        // Test level 5 = 5%
+        alliance.training_bonus_level = 5;
+        assert_eq!(alliance.get_training_bonus_multiplier(), 0.05);
+    }
+
+    #[test]
+    fn test_get_cp_bonus_multiplier() {
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            Uuid::new_v4(),
+        );
+
+        // Test level 0
+        alliance.cp_bonus_level = 0;
+        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.0);
+
+        // Test level 1 = 1%
+        alliance.cp_bonus_level = 1;
+        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.01);
+
+        // Test level 3 = 3%
+        alliance.cp_bonus_level = 3;
+        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.03);
+    }
+
+    #[test]
+    fn test_get_trade_bonus_multiplier() {
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            Uuid::new_v4(),
+        );
+
+        // Test level 0
+        alliance.trade_bonus_level = 0;
+        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.0);
+
+        // Test level 2 = 2%
+        alliance.trade_bonus_level = 2;
+        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.02);
+
+        // Test level 4 = 4%
+        alliance.trade_bonus_level = 4;
+        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.04);
+
+        // Test level 5 = 5%
+        alliance.trade_bonus_level = 5;
+        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.05);
+    }
+
+    #[test]
+    fn test_all_bonus_multipliers_together() {
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            Uuid::new_v4(),
+        );
+
+        // Set all bonuses to different levels
+        alliance.armor_bonus_level = 3;
+        alliance.training_bonus_level = 2;
+        alliance.cp_bonus_level = 1;
+        alliance.trade_bonus_level = 4;
+
+        // Verify each returns correct multiplier
+        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.03);
+        assert_eq!(alliance.get_training_bonus_multiplier(), 0.02);
+        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.01);
+        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.04);
+    }
+}
+
