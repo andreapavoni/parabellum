@@ -4,6 +4,9 @@
 -- Medal period type enum
 CREATE TYPE medal_period_type AS ENUM ('Hour', 'Day', 'Week');
 
+-- Medal category type enum
+CREATE TYPE medal_category AS ENUM ('Attack', 'Defense', 'Climbers', 'Robber');
+
 -- Main alliance table
 CREATE TABLE alliance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,26 +77,13 @@ CREATE TABLE alliance_medal (
     period_type medal_period_type NOT NULL,
     period_number INTEGER NOT NULL,
     rank INTEGER NOT NULL,
-    category SMALLINT NOT NULL,
-    count INTEGER DEFAULT 1,
+    category medal_category NOT NULL,
+    points INTEGER DEFAULT 1, -- Number of medals
     UNIQUE(alliance_id, period_type, period_number, category)
 );
 
 CREATE INDEX idx_alliance_medal_alliance_id ON alliance_medal(alliance_id);
 CREATE INDEX idx_alliance_medal_period ON alliance_medal(period_type, period_number);
-
--- Alliance notifications
-CREATE TABLE alliance_notification (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    alliance_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
-    player_id UUID NOT NULL,
-    type SMALLINT NOT NULL,
-    data TEXT,
-    time INTEGER NOT NULL,
-    read BOOLEAN DEFAULT FALSE
-);
-
-CREATE INDEX idx_alliance_notification_player ON alliance_notification(player_id);
 
 -- Alliance map flags/marks
 CREATE TABLE alliance_map_flag (

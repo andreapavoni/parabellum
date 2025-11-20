@@ -23,12 +23,14 @@ ALTER TABLE players DROP COLUMN IF EXISTS alliance_id;
 
 -- Drop all alliance tables
 DROP TABLE IF EXISTS alliance_map_flag CASCADE;
-DROP TABLE IF EXISTS alliance_notification CASCADE;
 DROP TABLE IF EXISTS alliance_medal CASCADE;
 DROP TABLE IF EXISTS alliance_diplomacy CASCADE;
 DROP TABLE IF EXISTS alliance_log CASCADE;
 DROP TABLE IF EXISTS alliance_invite CASCADE;
 DROP TABLE IF EXISTS alliance CASCADE;
+
+-- Drop the medal category enum
+DROP TYPE IF EXISTS medal_category;
 
 -- Drop the medal period type enum
 DROP TYPE IF EXISTS medal_period_type;
