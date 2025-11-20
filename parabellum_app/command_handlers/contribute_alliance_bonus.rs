@@ -39,7 +39,7 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
 
         // Get current time for cooldown check
         use chrono::Utc;
-        let current_time = Utc::now().timestamp() as i32;
+        let current_time = Utc::now();
 
         // Process contribution (includes all validations: donation limit, cooldown, etc.)
         let contribution_result = alliance.add_contribution(
@@ -292,9 +292,9 @@ mod tests {
         mock_uow.alliances().save(&alliance).await?;
 
         // Set player as having just joined (1 second ago)
-        use chrono::Utc;
-        let current_time = Utc::now().timestamp() as i32;
-        player.alliance_join_time = Some(current_time - 1);
+        use chrono::{Utc, Duration};
+        let join_time = Utc::now() - Duration::seconds(1);
+        player.alliance_join_time = Some(join_time);
         mock_uow.players().save(&player).await?;
 
         let handler = ContributeToAllianceBonusCommandHandler;

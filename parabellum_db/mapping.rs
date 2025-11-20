@@ -261,3 +261,23 @@ impl From<db_models::Hero> for game_models::hero::Hero {
         }
     }
 }
+
+impl From<db_models::MapFlag> for game_models::map_flag::MapFlag {
+    fn from(db_flag: db_models::MapFlag) -> Self {
+        let position = db_flag.position.and_then(|v| serde_json::from_value(v).ok());
+
+        Self {
+            id: db_flag.id,
+            alliance_id: db_flag.alliance_id,
+            player_id: db_flag.player_id,
+            target_id: db_flag.target_id,
+            position,
+            flag_type: db_flag.flag_type,
+            color: db_flag.color,
+            text: db_flag.text,
+            created_by: db_flag.created_by,
+            created_at: db_flag.created_at,
+            updated_at: db_flag.updated_at,
+        }
+    }
+}

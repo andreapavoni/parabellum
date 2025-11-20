@@ -78,13 +78,12 @@ impl CommandHandler<AcceptAllianceInvite> for AcceptAllianceInviteCommandHandler
         }
 
         // Update player's alliance_id and alliance_join_time
-        let current_time = Utc::now().timestamp() as i32;
         player_repo
             .update_alliance_fields(
                 command.player_id,
                 Some(command.alliance_id),
                 Some(0), // Set alliance_role to 0 (no permissions initially)
-                Some(current_time),
+                Some(Utc::now()),
             )
             .await?;
 
@@ -96,7 +95,6 @@ impl CommandHandler<AcceptAllianceInvite> for AcceptAllianceInviteCommandHandler
             command.alliance_id,
             AllianceLogType::PlayerJoined,
             Some(format!("Player {} joined the alliance", player.username)),
-            current_time,
         );
         alliance_log_repo.save(&log).await?;
 

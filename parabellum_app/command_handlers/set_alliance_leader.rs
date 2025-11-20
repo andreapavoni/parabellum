@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{AllianceLog, AllianceLogType, AlliancePermission};
@@ -71,7 +70,6 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
             .await?;
 
         // Log leadership transfer
-        let current_time = Utc::now().timestamp() as i32;
         let log = AllianceLog::new(
             command.alliance_id,
             AllianceLogType::RoleChanged,
@@ -79,7 +77,6 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
                 "Leadership transferred from {} to {}",
                 executor.username, new_leader.username
             )),
-            current_time,
         );
         uow.alliance_logs().save(&log).await?;
 
@@ -91,6 +88,7 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
 mod tests {
     use std::sync::Arc;
 
+    use chrono::{Utc, Duration};
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, player_factory,
     };
@@ -122,7 +120,7 @@ mod tests {
 
         current_leader.alliance_id = Some(alliance.id);
         current_leader.alliance_role = Some(AlliancePermission::all_permissions());
-        current_leader.alliance_join_time = Some(1000);
+        current_leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Create new leader member
         let mut new_leader = player_factory(PlayerFactoryOptions {
@@ -131,7 +129,7 @@ mod tests {
         });
         new_leader.alliance_id = Some(alliance.id);
         new_leader.alliance_role = Some(0);
-        new_leader.alliance_join_time = Some(2000);
+        new_leader.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&current_leader).await.unwrap();
@@ -205,7 +203,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&executor).await.unwrap();
@@ -248,7 +246,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Create member trying to transfer leadership (not leader)
         let mut member = player_factory(PlayerFactoryOptions {
@@ -257,7 +255,7 @@ mod tests {
         });
         member.alliance_id = Some(alliance.id);
         member.alliance_role = Some(0);
-        member.alliance_join_time = Some(2000);
+        member.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         // Create another member to be new leader
         let mut new_leader = player_factory(PlayerFactoryOptions {
@@ -266,7 +264,7 @@ mod tests {
         });
         new_leader.alliance_id = Some(alliance.id);
         new_leader.alliance_role = Some(0);
-        new_leader.alliance_join_time = Some(3000);
+        new_leader.alliance_join_time = Some(Utc::now() - Duration::days(10));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -311,7 +309,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Create player not in alliance
         let new_leader = player_factory(PlayerFactoryOptions {
@@ -361,7 +359,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();

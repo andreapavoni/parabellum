@@ -1,5 +1,14 @@
 -- Alliance System Migration
--- Consolidates all alliance-related tables and player fields
+-- Consolidates all alliance-related tables and player fields with proper TIMESTAMPTZ support
+
+-- Create function to automatically update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
 
 -- Medal period type enum
 CREATE TYPE medal_period_type AS ENUM ('Hour', 'Day', 'Week');
@@ -46,6 +55,7 @@ CREATE TABLE alliance_invite (
     from_player_id UUID NOT NULL,
     alliance_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
     to_player_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(alliance_id, to_player_id)
 );
 
@@ -55,7 +65,7 @@ CREATE TABLE alliance_log (
     alliance_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
     type SMALLINT NOT NULL,
     data TEXT,
-    time INTEGER NOT NULL
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alliance_log_alliance_id ON alliance_log(alliance_id);
@@ -67,8 +77,16 @@ CREATE TABLE alliance_diplomacy (
     alliance2_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
     type SMALLINT NOT NULL,
     accepted SMALLINT DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(alliance1_id, alliance2_id)
 );
+
+-- Create trigger for alliance_diplomacy
+CREATE TRIGGER update_alliance_diplomacy_updated_at
+    BEFORE UPDATE ON alliance_diplomacy
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- Alliance medals (achievements for different time periods)
 CREATE TABLE alliance_medal (
@@ -85,25 +103,50 @@ CREATE TABLE alliance_medal (
 CREATE INDEX idx_alliance_medal_alliance_id ON alliance_medal(alliance_id);
 CREATE INDEX idx_alliance_medal_period ON alliance_medal(period_type, period_number);
 
--- Alliance map flags/marks
-CREATE TABLE alliance_map_flag (
+-- Map flags/marks (unified table for both player and alliance marks)
+--   Type 0: Player marks (track specific players)
+--   Type 1: Alliance marks (track entire alliances)
+--   Type 2: Custom flags (labeled markers on map tiles)
+CREATE TABLE map_flag (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    alliance_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
-    x INTEGER NOT NULL,
-    y INTEGER NOT NULL,
-    type SMALLINT NOT NULL,
-    description TEXT,
-    created_by UUID NOT NULL,
-    created_at INTEGER NOT NULL
+    alliance_id UUID REFERENCES alliance(id) ON DELETE CASCADE,
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+    target_id UUID,
+    position JSONB,
+    flag_type SMALLINT NOT NULL,
+    color SMALLINT NOT NULL,
+    text VARCHAR(50),             
+    created_by UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_ownership CHECK (
+        (alliance_id IS NOT NULL AND player_id IS NULL) OR
+        (alliance_id IS NULL AND player_id IS NOT NULL)
+    ),
+    CONSTRAINT chk_target_or_position CHECK (
+        (flag_type IN (0, 1) AND target_id IS NOT NULL) OR
+        (flag_type = 2 AND position IS NOT NULL)
+    )
 );
 
-CREATE INDEX idx_alliance_map_flag_alliance_id ON alliance_map_flag(alliance_id);
+CREATE INDEX idx_map_flag_alliance_id ON map_flag(alliance_id) WHERE alliance_id IS NOT NULL;
+CREATE INDEX idx_map_flag_player_id ON map_flag(player_id) WHERE player_id IS NOT NULL;
+CREATE INDEX idx_map_flag_target_id ON map_flag(target_id) WHERE target_id IS NOT NULL;
+CREATE INDEX idx_map_flag_position ON map_flag USING gin(position) WHERE position IS NOT NULL;
+CREATE INDEX idx_map_flag_type ON map_flag(flag_type);
+
+-- Create trigger for map_flag
+CREATE TRIGGER update_map_flag_updated_at
+    BEFORE UPDATE ON map_flag
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- Add alliance fields to players table
 ALTER TABLE players ADD COLUMN alliance_id UUID REFERENCES alliance(id) ON DELETE SET NULL;
 ALTER TABLE players ADD COLUMN alliance_role_name VARCHAR(255);
 ALTER TABLE players ADD COLUMN alliance_role INTEGER;
-ALTER TABLE players ADD COLUMN alliance_join_time INTEGER;
+ALTER TABLE players ADD COLUMN alliance_join_time TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE players ADD COLUMN alliance_contributions BIGINT DEFAULT 0;
 
 -- Current Week Contributions

@@ -161,4 +161,32 @@ pub enum GameError {
 
     #[error("New player cooldown active - cannot contribute yet")]
     AllianceNewPlayerCooldown,
+
+    // Map flag errors
+    #[error("Invalid map flag type: {0}")]
+    InvalidMapFlagType(i16),
+
+    #[error("Invalid map flag color: {color} (must be between {min} and {max})")]
+    InvalidMapFlagColor { color: i16, min: i16, max: i16 },
+
+    #[error("Map flag missing target ID for multi-mark")]
+    MapFlagMissingTarget,
+
+    #[error("Map flag has invalid coordinates for multi-mark")]
+    MapFlagInvalidCoordinates,
+
+    #[error("Map flag missing coordinates for custom flag")]
+    MapFlagMissingCoordinates,
+
+    #[error("Map flag has invalid target ID for custom flag")]
+    MapFlagInvalidTarget,
+
+    #[error("Map flag ownership invalid - must have either alliance_id or player_id")]
+    MapFlagInvalidOwnership,
+
+    #[error("Map flag limit exceeded")]
+    MapFlagLimitExceeded,
+
+    #[error("No permission to manage alliance map flags")]
+    NoManageMarksPermission,
 }

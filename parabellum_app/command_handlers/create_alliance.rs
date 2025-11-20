@@ -65,13 +65,12 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
         uow.alliances().save(&alliance).await?;
 
         // Set player as alliance leader
-        let current_time = Utc::now().timestamp() as i32;
         uow.players()
             .update_alliance_fields(
                 command.player_id,
                 Some(alliance.id),
                 Some(AlliancePermission::all_permissions()),
-                Some(current_time),
+                Some(Utc::now()),
             )
             .await?;
 
@@ -83,7 +82,6 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
                 "Alliance '{}' [{}] created by {}",
                 command.name, command.tag, player.username
             )),
-            current_time,
         );
         uow.alliance_logs().save(&log).await?;
 

@@ -1,6 +1,13 @@
 -- Rollback: Alliance System Migration
 -- Removes all alliance-related tables and player fields
 
+-- Drop triggers
+DROP TRIGGER IF EXISTS update_alliance_diplomacy_updated_at ON alliance_diplomacy;
+DROP TRIGGER IF EXISTS update_map_flag_updated_at ON map_flag;
+
+-- Drop the update function
+DROP FUNCTION IF EXISTS update_updated_at_column();
+
 -- Remove created_at column from players table
 ALTER TABLE players DROP COLUMN IF EXISTS created_at;
 
@@ -22,7 +29,7 @@ ALTER TABLE players DROP COLUMN IF EXISTS alliance_role_name;
 ALTER TABLE players DROP COLUMN IF EXISTS alliance_id;
 
 -- Drop all alliance tables
-DROP TABLE IF EXISTS alliance_map_flag CASCADE;
+DROP TABLE IF EXISTS map_flag CASCADE;
 DROP TABLE IF EXISTS alliance_medal CASCADE;
 DROP TABLE IF EXISTS alliance_diplomacy CASCADE;
 DROP TABLE IF EXISTS alliance_log CASCADE;

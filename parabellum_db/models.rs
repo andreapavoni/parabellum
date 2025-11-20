@@ -36,7 +36,7 @@ pub struct Player {
     pub alliance_id: Option<Uuid>,
     pub alliance_role_name: Option<String>,
     pub alliance_role: Option<i32>,
-    pub alliance_join_time: Option<i32>,
+    pub alliance_join_time: Option<DateTime<Utc>>,
     pub alliance_contributions: Option<i64>,
     pub current_alliance_training_contributions: Option<i64>,
     pub current_alliance_armor_contributions: Option<i64>,
@@ -155,4 +155,19 @@ pub struct MarketplaceOffer {
     pub seek_resources: serde_json::Value,
     pub merchants_required: i16,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MapFlag {
+    pub id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub player_id: Option<Uuid>,
+    pub target_id: Option<Uuid>,
+    pub position: Option<serde_json::Value>,
+    pub flag_type: i16,
+    pub color: i16,
+    pub text: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }

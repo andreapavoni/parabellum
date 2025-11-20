@@ -230,7 +230,7 @@ impl Alliance {
         player: &mut Player,
         embassy_level: u8,
         speed: i32,
-        current_time: i32,
+        current_time: chrono::DateTime<chrono::Utc>,
     ) -> Result<ContributionResult, GameError> {
         // Calculate contribution points first (before deducting resources)
         let contribution_points = Self::calculate_contribution_points(resources);
@@ -256,8 +256,8 @@ impl Alliance {
             let cooldown_seconds = Self::get_new_player_cooldown(current_bonus_level, speed);
 
             if cooldown_seconds > 0 {
-                let time_since_join = current_time - join_time;
-                if time_since_join < cooldown_seconds as i32 {
+                let time_since_join = (current_time - join_time).num_seconds();
+                if time_since_join < cooldown_seconds as i64 {
                     return Err(GameError::AllianceNewPlayerCooldown);
                 }
             }
@@ -436,17 +436,17 @@ pub struct AllianceLog {
     #[serde(rename = "type")]
     pub type_: i16,
     pub data: Option<String>,
-    pub time: i32,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl AllianceLog {
-    pub fn new(alliance_id: Uuid, type_: AllianceLogType, data: Option<String>, time: i32) -> Self {
+    pub fn new(alliance_id: Uuid, type_: AllianceLogType, data: Option<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             alliance_id,
             type_: type_.as_i16(),
             data,
-            time,
+            created_at: chrono::Utc::now(),
         }
     }
 }

@@ -61,6 +61,9 @@ pub enum DbError {
     #[error("Alliance invite with ID {0} not found")]
     AllianceInviteNotFound(Uuid),
 
+    #[error("Map flag with ID {0} not found")]
+    MapFlagNotFound(Uuid),
+
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 

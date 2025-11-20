@@ -7,6 +7,7 @@ pub mod tests {
         army::Army,
         hero::Hero,
         map::{MapField, MapFieldTopology, MapQuadrant, Valley},
+        map_flag::MapFlag,
         marketplace::MarketplaceOffer,
         village::Village,
     };
@@ -26,7 +27,7 @@ pub mod tests {
         jobs::Job,
         repository::{
             AllianceRepository, AllianceInviteRepository, AllianceLogRepository, AllianceDiplomacyRepository,
-            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
+            ArmyRepository, HeroRepository, JobRepository, MapRepository, MapFlagRepository, MarketplaceRepository,
             PlayerRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
@@ -238,7 +239,7 @@ pub mod tests {
             player_id: Uuid,
             alliance_id: Option<Uuid>,
             alliance_role: Option<i32>,
-            alliance_join_time: Option<i32>,
+            alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
         ) -> Result<(), ApplicationError> {
             let mut players = self.players.lock().unwrap();
             if let Some(player) = players.get_mut(&player_id) {
@@ -647,6 +648,126 @@ pub mod tests {
     }
 
     #[derive(Default, Clone)]
+    pub struct MockMapFlagRepository {
+        flags: Arc<Mutex<HashMap<Uuid, MapFlag>>>,
+    }
+
+    impl MockMapFlagRepository {
+        pub fn new() -> Self {
+            Self {
+                flags: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl MapFlagRepository for MockMapFlagRepository {
+        async fn save(&self, flag: &MapFlag) -> Result<(), ApplicationError> {
+            self.flags.lock().unwrap().insert(flag.id, flag.clone());
+            Ok(())
+        }
+
+        async fn get_by_id(&self, id: Uuid) -> Result<MapFlag, ApplicationError> {
+            self.flags
+                .lock()
+                .unwrap()
+                .get(&id)
+                .cloned()
+                .ok_or_else(|| ApplicationError::Db(DbError::MapFlagNotFound(id)))
+        }
+
+        async fn get_by_player_id(&self, player_id: Uuid) -> Result<Vec<MapFlag>, ApplicationError> {
+            let result = self.flags
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|f| f.player_id == Some(player_id))
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+
+        async fn get_by_alliance_id(&self, alliance_id: Uuid) -> Result<Vec<MapFlag>, ApplicationError> {
+            let result = self.flags
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|f| f.alliance_id == Some(alliance_id))
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+
+        async fn get_by_coordinates(&self, x: i32, y: i32) -> Result<Vec<MapFlag>, ApplicationError> {
+            let result = self.flags
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|f| f.position.as_ref().map_or(false, |p| p.x == x && p.y == y))
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+
+        async fn get_by_target_id(&self, target_id: Uuid) -> Result<Vec<MapFlag>, ApplicationError> {
+            let result = self.flags
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|f| f.target_id == Some(target_id))
+                .cloned()
+                .collect();
+            Ok(result)
+        }
+
+        async fn count_by_owner(
+            &self,
+            player_id: Option<Uuid>,
+            alliance_id: Option<Uuid>,
+            flag_type: Option<i16>,
+        ) -> Result<i64, ApplicationError> {
+            let count = self.flags
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|f| {
+                    let owner_match = if let Some(pid) = player_id {
+                        f.player_id == Some(pid)
+                    } else if let Some(aid) = alliance_id {
+                        f.alliance_id == Some(aid)
+                    } else {
+                        false
+                    };
+
+                    let type_match = if let Some(ftype) = flag_type {
+                        f.flag_type == ftype
+                    } else {
+                        true
+                    };
+
+                    owner_match && type_match
+                })
+                .count() as i64;
+            Ok(count)
+        }
+
+        async fn update(&self, flag: &MapFlag) -> Result<(), ApplicationError> {
+            let mut flags = self.flags.lock().unwrap();
+            if flags.contains_key(&flag.id) {
+                flags.insert(flag.id, flag.clone());
+                Ok(())
+            } else {
+                Err(ApplicationError::Db(DbError::MapFlagNotFound(flag.id)))
+            }
+        }
+
+        async fn delete(&self, id: Uuid) -> Result<(), ApplicationError> {
+            self.flags.lock().unwrap().remove(&id);
+            Ok(())
+        }
+    }
+
+    #[derive(Default, Clone)]
     pub struct MockUnitOfWork {
         players: Arc<MockPlayerRepository>,
         villages: Arc<MockVillageRepository>,
@@ -660,6 +781,7 @@ pub mod tests {
         alliance_invites: Arc<MockAllianceInviteRepository>,
         alliance_logs: Arc<MockAllianceLogRepository>,
         alliance_diplomacy: Arc<MockAllianceDiplomacyRepository>,
+        map_flags: Arc<MockMapFlagRepository>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -721,6 +843,10 @@ pub mod tests {
 
         fn alliance_diplomacy(&self) -> Arc<dyn AllianceDiplomacyRepository + 'a> {
             self.alliance_diplomacy.clone()
+        }
+
+        fn map_flags(&self) -> Arc<dyn MapFlagRepository + 'a> {
+            self.map_flags.clone()
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

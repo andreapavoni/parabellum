@@ -17,7 +17,7 @@ pub mod tests {
         repository::{
             AllianceRepository, AllianceInviteRepository, AllianceLogRepository, AllianceDiplomacyRepository,
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, UserRepository, VillageRepository,
+            PlayerRepository, UserRepository, VillageRepository, MapFlagRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -27,7 +27,7 @@ pub mod tests {
         PostgresAllianceDiplomacyRepository, PostgresArmyRepository, PostgresHeroRepository,
         PostgresJobRepository, PostgresMapRepository, PostgresMarketplaceRepository,
         PostgresPlayerRepository, PostgresUserRepository, PostgresVillageRepository,
-        bootstrap_world_map, establish_test_connection_pool,
+        PostgresMapFlagRepository, bootstrap_world_map, establish_test_connection_pool,
     };
     use parabellum_game::{
         models::{
@@ -104,6 +104,10 @@ pub mod tests {
 
         fn alliance_diplomacy(&self) -> Arc<dyn AllianceDiplomacyRepository + 'p> {
             Arc::new(PostgresAllianceDiplomacyRepository::new(self.tx.clone()))
+        }
+
+        fn map_flags(&self) -> Arc<dyn MapFlagRepository + 'p> {
+            Arc::new(PostgresMapFlagRepository::new(self.tx.clone()))
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
@@ -293,12 +297,9 @@ pub mod tests {
 
         player.alliance_id = Some(alliance_id);
         // Set join time to 100000 seconds ago to bypass any cooldown checks
-        // Use current unix timestamp - 100000
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i32;
-        player.alliance_join_time = Some(current_time - 100000);
+        // Set join time to 100000 seconds ago
+        use chrono::{Utc, Duration};
+        player.alliance_join_time = Some(Utc::now() - Duration::seconds(100000));
 
         let player_repo = uow.players();
         player_repo.save(&player).await?;

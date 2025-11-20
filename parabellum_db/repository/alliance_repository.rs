@@ -483,12 +483,12 @@ impl<'a> AllianceLogRepository for PostgresAllianceLogRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
 
         sqlx::query!(
-            "INSERT INTO alliance_log (id, alliance_id, type, data, time) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET alliance_id = $2, type = $3, data = $4, time = $5",
+            "INSERT INTO alliance_log (id, alliance_id, type, data, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO UPDATE SET alliance_id = $2, type = $3, data = $4, created_at = $5",
             log.id,
             log.alliance_id,
             log.type_,
             log.data.as_deref(),
-            log.time,
+            log.created_at,
         )
         .execute(&mut *tx_guard.as_mut())
         .await
@@ -500,7 +500,7 @@ impl<'a> AllianceLogRepository for PostgresAllianceLogRepository<'a> {
     async fn get_by_alliance_id(&self, alliance_id: Uuid, limit: i32, offset: i32) -> Result<Vec<AllianceLog>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let rows = sqlx::query("SELECT * FROM alliance_log WHERE alliance_id = $1 ORDER BY time DESC LIMIT $2 OFFSET $3")
+        let rows = sqlx::query("SELECT * FROM alliance_log WHERE alliance_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
             .bind(alliance_id)
             .bind(limit as i64)
             .bind(offset as i64)
@@ -513,7 +513,7 @@ impl<'a> AllianceLogRepository for PostgresAllianceLogRepository<'a> {
             alliance_id: row.get("alliance_id"),
             type_: row.get("type"),
             data: row.get("data"),
-            time: row.get("time"),
+            created_at: row.get("created_at"),
         }).collect())
     }
 }

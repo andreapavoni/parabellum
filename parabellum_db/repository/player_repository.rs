@@ -103,7 +103,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         player_id: Uuid,
         alliance_id: Option<Uuid>,
         alliance_role: Option<i32>,
-        alliance_join_time: Option<i32>,
+        alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 

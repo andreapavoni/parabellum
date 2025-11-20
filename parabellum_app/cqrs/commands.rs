@@ -267,3 +267,48 @@ pub struct ContributeToAllianceBonus {
 
 impl Command for ContributeToAllianceBonus {}
 
+// Map Flag Commands
+
+#[derive(Debug, Clone)]
+pub struct CreateCustomFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,  // None for player-owned, Some for alliance-owned
+    pub x: i32,
+    pub y: i32,
+    pub color: i16,
+    pub text: String,
+}
+
+impl Command for CreateCustomFlag {}
+
+#[derive(Debug, Clone)]
+pub struct CreateMultiMark {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,  // None for player-owned, Some for alliance-owned
+    pub target_id: Uuid,  // Target player or alliance ID
+    pub mark_type: i16,  // 0 = player mark, 1 = alliance mark
+    pub color: i16,
+}
+
+impl Command for CreateMultiMark {}
+
+#[derive(Debug, Clone)]
+pub struct UpdateMapFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub flag_id: Uuid,
+    pub color: i16,
+    pub text: Option<String>,
+}
+
+impl Command for UpdateMapFlag {}
+
+#[derive(Debug, Clone)]
+pub struct DeleteMapFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub flag_id: Uuid,
+}
+
+impl Command for DeleteMapFlag {}
+

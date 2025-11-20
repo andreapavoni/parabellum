@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{AllianceLog, AllianceLogType, AlliancePermission};
@@ -65,7 +64,6 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
             .await?;
 
         // Log kick
-        let current_time = Utc::now().timestamp() as i32;
         let log = AllianceLog::new(
             command.alliance_id,
             AllianceLogType::PlayerKicked,
@@ -73,7 +71,6 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
                 "Player {} kicked by {}",
                 target_player.username, kicker.username
             )),
-            current_time,
         );
         uow.alliance_logs().save(&log).await?;
 
@@ -85,6 +82,7 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
 mod tests {
     use std::sync::Arc;
 
+    use chrono::{Utc, Duration};
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, player_factory,
     };
@@ -118,7 +116,7 @@ mod tests {
         // Set leader's alliance fields
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000); // Earliest
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30)); // Earliest
 
         // Create kicker player with KickPlayer permission
         let mut kicker = player_factory(PlayerFactoryOptions {
@@ -127,7 +125,7 @@ mod tests {
         });
         kicker.alliance_id = Some(alliance.id);
         kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
-        kicker.alliance_join_time = Some(2000);
+        kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         // Create target player
         let mut target = player_factory(PlayerFactoryOptions {
@@ -136,7 +134,7 @@ mod tests {
         });
         target.alliance_id = Some(alliance.id);
         target.alliance_role = Some(0);
-        target.alliance_join_time = Some(3000);
+        target.alliance_join_time = Some(Utc::now() - Duration::days(10));
 
         // Save to mock repos
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
@@ -199,7 +197,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Create kicker without KickPlayer permission
         let mut kicker = player_factory(PlayerFactoryOptions {
@@ -208,7 +206,7 @@ mod tests {
         });
         kicker.alliance_id = Some(alliance.id);
         kicker.alliance_role = Some(0); // No permissions
-        kicker.alliance_join_time = Some(2000);
+        kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         let mut target = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Teuton),
@@ -216,7 +214,7 @@ mod tests {
         });
         target.alliance_id = Some(alliance.id);
         target.alliance_role = Some(0);
-        target.alliance_join_time = Some(3000);
+        target.alliance_join_time = Some(Utc::now() - Duration::days(10));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -260,7 +258,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Kicker is not in the alliance
         let kicker = player_factory(PlayerFactoryOptions {
@@ -275,7 +273,7 @@ mod tests {
         });
         target.alliance_id = Some(alliance.id);
         target.alliance_role = Some(0);
-        target.alliance_join_time = Some(3000);
+        target.alliance_join_time = Some(Utc::now() - Duration::days(10));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -319,7 +317,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         let mut kicker = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Gaul),
@@ -327,7 +325,7 @@ mod tests {
         });
         kicker.alliance_id = Some(alliance.id);
         kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
-        kicker.alliance_join_time = Some(2000);
+        kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         // Target is not in the alliance
         let target = player_factory(PlayerFactoryOptions {
@@ -381,7 +379,7 @@ mod tests {
         // Set leader's alliance fields
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000); // Earliest join time = leader
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30)); // Earliest join time = leader
 
         // Create kicker with kick permission
         let mut kicker = player_factory(PlayerFactoryOptions {
@@ -390,7 +388,7 @@ mod tests {
         });
         kicker.alliance_id = Some(alliance.id);
         kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
-        kicker.alliance_join_time = Some(2000);
+        kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -434,7 +432,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         let mut kicker = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Gaul),
@@ -442,7 +440,7 @@ mod tests {
         });
         kicker.alliance_id = Some(alliance.id);
         kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
-        kicker.alliance_join_time = Some(2000);
+        kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();

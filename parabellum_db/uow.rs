@@ -92,6 +92,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresAllianceDiplomacyRepository::new(self.tx.clone()))
     }
 
+    fn map_flags(&self) -> Arc<dyn MapFlagRepository + 'a> {
+        Arc::new(PostgresMapFlagRepository::new(self.tx.clone()))
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
         // If this fails, it means there are other references to the Arc,

@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{AllianceLog, AllianceLogType};
@@ -62,12 +61,10 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
                 .await?;
 
             // Log leave
-            let current_time = Utc::now().timestamp() as i32;
             let log = AllianceLog::new(
                 alliance_id,
                 AllianceLogType::PlayerLeft,
                 Some(format!("Player {} left the alliance", player.username)),
-                current_time,
             );
             uow.alliance_logs().save(&log).await?;
         }
@@ -80,6 +77,7 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
 mod tests {
     use std::sync::Arc;
 
+    use chrono::{Utc, Duration};
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, player_factory,
     };
@@ -111,7 +109,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         // Create member player
         let mut member = player_factory(PlayerFactoryOptions {
@@ -120,7 +118,7 @@ mod tests {
         });
         member.alliance_id = Some(alliance.id);
         member.alliance_role = Some(0);
-        member.alliance_join_time = Some(2000);
+        member.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -179,7 +177,7 @@ mod tests {
 
         member.alliance_id = Some(alliance.id);
         member.alliance_role = Some(0);
-        member.alliance_join_time = Some(1000);
+        member.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&member).await.unwrap();
@@ -223,7 +221,7 @@ mod tests {
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
-        leader.alliance_join_time = Some(1000);
+        leader.alliance_join_time = Some(Utc::now() - Duration::days(30));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();

@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{AllianceInvite, AlliancePermission, AllianceLog, AllianceLogType};
@@ -56,7 +55,6 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
         );
         uow.alliance_invites().save(&invite).await?;
 
-        let current_time = Utc::now().timestamp() as i32;
         let log = AllianceLog::new(
             command.alliance_id,
             AllianceLogType::PlayerJoined,
@@ -64,7 +62,6 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
                 "Invitation sent to {} by {}",
                 target_player.username, inviter.username
             )),
-            current_time,
         );
         uow.alliance_logs().save(&log).await?;
 

@@ -7,5 +7,6 @@ edition = "2024"
 path = "lib.rs"
 
 [dependencies]
+chrono = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }

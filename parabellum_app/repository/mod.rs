@@ -1,6 +1,7 @@
 mod army_repository;
 mod hero_repository;
 mod job_repository;
+mod map_flag_repository;
 mod map_repository;
 mod marketplace_repository;
 mod player_repository;
@@ -11,6 +12,7 @@ mod alliance_repository;
 pub use army_repository::ArmyRepository;
 pub use hero_repository::HeroRepository;
 pub use job_repository::JobRepository;
+pub use map_flag_repository::MapFlagRepository;
 pub use map_repository::MapRepository;
 pub use marketplace_repository::MarketplaceRepository;
 pub use player_repository::PlayerRepository;

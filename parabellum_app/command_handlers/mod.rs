@@ -19,6 +19,10 @@ mod kick_from_alliance;
 mod leave_alliance;
 mod set_alliance_leader;
 mod contribute_alliance_bonus;
+mod create_custom_flag;
+mod create_multi_mark;
+mod update_map_flag;
+mod delete_map_flag;
 
 mod helpers;
 
@@ -43,3 +47,7 @@ pub use kick_from_alliance::KickFromAllianceCommandHandler;
 pub use leave_alliance::LeaveAllianceCommandHandler;
 pub use set_alliance_leader::SetAllianceLeaderCommandHandler;
 pub use contribute_alliance_bonus::ContributeToAllianceBonusCommandHandler;
+pub use create_custom_flag::CreateCustomFlagCommandHandler;
+pub use create_multi_mark::CreateMultiMarkCommandHandler;
+pub use update_map_flag::UpdateMapFlagCommandHandler;
+pub use delete_map_flag::DeleteMapFlagCommandHandler;

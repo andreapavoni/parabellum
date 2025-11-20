@@ -8,14 +8,6 @@ pub enum AllianceBonusType {
     Trade = 4,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AllianceBonusUpgradeQueue {
-    pub id: i32,
-    pub aid: i32,
-    pub type_: i16,
-    pub time: i32,
-}
-
 impl AllianceBonusType {
     pub fn from_i16(val: i16) -> Option<Self> {
         match val {
