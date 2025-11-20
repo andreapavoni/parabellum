@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(sqlx::Type, Debug, Clone, Serialize, Deserialize)]
 #[sqlx(type_name = "tribe", rename_all = "PascalCase")]
 pub enum Tribe {
     Roman,
@@ -13,12 +13,41 @@ pub enum Tribe {
     Nature,
 }
 
+impl From<String> for Tribe {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Roman" => Tribe::Roman,
+            "Gaul" => Tribe::Gaul,
+            "Teuton" => Tribe::Teuton,
+            "Natar" => Tribe::Natar,
+            "Nature" => Tribe::Nature,
+            _ => Tribe::Roman, // Default fallback
+        }
+    }
+}
+
 #[derive(Debug, FromRow, Clone)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,
-    pub tribe: Tribe,
+    pub tribe: String,
     pub user_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub alliance_id: Option<Uuid>,
+    pub alliance_role_name: Option<String>,
+    pub alliance_role: Option<i32>,
+    pub alliance_join_time: Option<i32>,
+    pub alliance_contributions: Option<i64>,
+    pub current_alliance_training_contributions: Option<i64>,
+    pub current_alliance_armor_contributions: Option<i64>,
+    pub current_alliance_cp_contributions: Option<i64>,
+    pub current_alliance_trade_contributions: Option<i64>,
+    pub total_alliance_training_contributions: Option<i64>,
+    pub total_alliance_armor_contributions: Option<i64>,
+    pub total_alliance_cp_contributions: Option<i64>,
+    pub total_alliance_trade_contributions: Option<i64>,
+    pub alliance_notification_enabled: Option<bool>,
+    pub alliance_settings: Option<String>,
 }
 
 #[derive(Debug, FromRow, Clone)]
@@ -26,6 +55,7 @@ pub struct User {
     pub id: Uuid,
     pub email: String,
     pub password_hash: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]

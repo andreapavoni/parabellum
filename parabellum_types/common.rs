@@ -67,7 +67,11 @@ pub struct Player {
     pub username: String,
     pub tribe: Tribe,
     pub user_id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub alliance_role: Option<i32>,
+    pub alliance_join_time: Option<i32>,
 }
+
 
 #[derive(Debug, Clone)]
 pub struct User {

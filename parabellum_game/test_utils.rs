@@ -114,6 +114,9 @@ pub fn player_factory(options: PlayerFactoryOptions) -> Player {
         username: options.username.map_or(default_username, |s| s.to_string()),
         tribe: options.tribe.unwrap_or(Tribe::Roman),
         user_id: options.user_id.unwrap_or_else(Uuid::new_v4),
+        alliance_id: None,
+        alliance_role: None,
+        alliance_join_time: None,
     }
 }
 

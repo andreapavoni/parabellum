@@ -36,11 +36,10 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         .await
         .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id_u32)))?;
 
-        let db_player = sqlx::query_as!(
-            db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE  2=2 AND id = $1"#,
-            db_village.player_id
+        let db_player = sqlx::query_as::<_, db_models::Player>(
+            r#"SELECT id, username, tribe::text as tribe, user_id, created_at, alliance_id, alliance_role_name, alliance_role, alliance_join_time, alliance_contributions, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions, alliance_notification_enabled, alliance_settings FROM players WHERE id = $1"#
         )
+        .bind(db_village.player_id)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -116,11 +115,10 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let db_player = sqlx::query_as!(
-            db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE 3=3 AND id = $1"#,
-            player_id
+        let db_player = sqlx::query_as::<_, db_models::Player>(
+            r#"SELECT id, username, tribe::text as tribe, user_id, created_at, alliance_id, alliance_role_name, alliance_role, alliance_join_time, alliance_contributions, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions, alliance_notification_enabled, alliance_settings FROM players WHERE id = $1"#
         )
+        .bind(player_id)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
@@ -243,6 +241,14 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         }
 
         Ok(game_villages)
+    }
+
+    async fn get_capital_by_player_id(&self, player_id: Uuid) -> Result<Village, ApplicationError> {
+        let villages = self.list_by_player_id(player_id).await?;
+
+        villages.into_iter()
+            .find(|v| v.is_capital)
+            .ok_or_else(|| ApplicationError::Unknown("No capital village found".to_string()))
     }
 
     async fn save(&self, village: &Village) -> Result<(), ApplicationError> {

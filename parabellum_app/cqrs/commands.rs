@@ -202,3 +202,57 @@ pub struct ReviveHero {
 }
 
 impl Command for ReviveHero {}
+
+// Alliance Commands
+
+#[derive(Debug, Clone)]
+pub struct CreateAlliance {
+    pub player_id: Uuid,
+    pub name: String,
+    pub tag: String,
+}
+
+impl Command for CreateAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct InviteToAlliance {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub target_player_id: Uuid,
+}
+
+impl Command for InviteToAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct AcceptAllianceInvite {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+}
+
+impl Command for AcceptAllianceInvite {}
+
+#[derive(Debug, Clone)]
+pub struct LeaveAlliance {
+    pub player_id: Uuid,
+}
+
+impl Command for LeaveAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct KickFromAlliance {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub target_player_id: Uuid,
+}
+
+impl Command for KickFromAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct SetAllianceLeader {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub new_leader_id: Uuid,
+}
+
+impl Command for SetAllianceLeader {}
+

@@ -12,4 +12,13 @@ pub trait PlayerRepository: Send + Sync {
 
     /// Returns a player by user id.
     async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError>;
+
+    /// Updates alliance-related fields for a player.
+    async fn update_alliance_fields(
+        &self,
+        player_id: Uuid,
+        alliance_id: Option<Uuid>,
+        alliance_role: Option<i32>,
+        alliance_join_time: Option<i32>,
+    ) -> Result<(), ApplicationError>;
 }

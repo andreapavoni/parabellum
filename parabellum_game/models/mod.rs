@@ -5,3 +5,6 @@ pub mod map;
 pub mod marketplace;
 pub mod smithy;
 pub mod village;
+pub mod alliance;
+pub mod alliance_bonus;
+

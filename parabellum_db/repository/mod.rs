@@ -15,3 +15,11 @@ pub use marketplace_repository::PostgresMarketplaceRepository;
 pub use player_repository::PostgresPlayerRepository;
 pub use user_repository::PostgresUserRepository;
 pub use village_repository::PostgresVillageRepository;
+
+mod alliance_repository;
+pub use alliance_repository::{
+    PostgresAllianceRepository,
+    PostgresAllianceInviteRepository,
+    PostgresAllianceLogRepository,
+    PostgresAllianceDiplomacyRepository
+};

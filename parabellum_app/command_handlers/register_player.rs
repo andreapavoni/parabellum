@@ -47,6 +47,9 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
             username: command.username,
             tribe: command.tribe,
             user_id: user.id,
+            alliance_id: None,
+            alliance_role: None,
+            alliance_join_time: None,
         };
         player_repo.save(&player).await?;
 

@@ -50,11 +50,10 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
     async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let player = sqlx::query_as!(
-            db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
-            player_id
+        let player = sqlx::query_as::<_, db_models::Player>(
+            r#"SELECT id, username, tribe::text as tribe, user_id, created_at, alliance_id, alliance_role_name, alliance_role, alliance_join_time, alliance_contributions, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions, alliance_notification_enabled, alliance_settings FROM players WHERE id = $1"#
         )
+        .bind(player_id)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
@@ -64,15 +63,42 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
     async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let player = sqlx::query_as!(
-            db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
-            user_id
+        let player = sqlx::query_as::<_, db_models::Player>(
+            r#"SELECT id, username, tribe::text as tribe, user_id, created_at, alliance_id, alliance_role_name, alliance_role, alliance_join_time, alliance_contributions, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions, alliance_notification_enabled, alliance_settings FROM players WHERE user_id = $1"#
         )
+        .bind(user_id)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(user_id)))?;
 
         Ok(player.into())
     }
+    
+    async fn update_alliance_fields(
+        &self,
+        player_id: Uuid,
+        alliance_id: Option<Uuid>,
+        alliance_role: Option<i32>,
+        alliance_join_time: Option<i32>,
+    ) -> Result<(), ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        sqlx::query!(
+            r#"
+            UPDATE players
+            SET alliance_id = $1, alliance_role = $2, alliance_join_time = $3
+            WHERE id = $4
+            "#,
+            alliance_id,
+            alliance_role,
+            alliance_join_time,
+            player_id,
+        )
+        .execute(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(())
+    }
+
 }

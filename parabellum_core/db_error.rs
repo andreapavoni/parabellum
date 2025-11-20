@@ -43,6 +43,24 @@ pub enum DbError {
     #[error("Player with ID {0} does not own village with ID {1}")]
     PlayerDoesNotOwnVillage(Uuid, u32),
 
+    #[error("Capital village for player with ID {0} not found")]
+    CapitalVillageNotFound(Uuid),
+
+    #[error("Alliance with ID {0} not found")]
+    AllianceNotFound(Uuid),
+
+    #[error("Alliance with tag '{0}' not found")]
+    AllianceByTagNotFound(String),
+
+    #[error("Alliance with name '{0}' not found")]
+    AllianceByNameNotFound(String),
+
+    #[error("Alliance leader for alliance with ID {0} not found")]
+    AllianceLeaderNotFound(Uuid),
+
+    #[error("Alliance invite with ID {0} not found")]
+    AllianceInviteNotFound(Uuid),
+
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 

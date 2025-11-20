@@ -76,6 +76,22 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresUserRepository::new(self.tx.clone()))
     }
 
+    fn alliances(&self) -> Arc<dyn AllianceRepository + 'a> {
+        Arc::new(PostgresAllianceRepository::new(self.tx.clone()))
+    }
+
+    fn alliance_invites(&self) -> Arc<dyn AllianceInviteRepository + 'a> {
+        Arc::new(PostgresAllianceInviteRepository::new(self.tx.clone()))
+    }
+
+    fn alliance_logs(&self) -> Arc<dyn AllianceLogRepository + 'a> {
+        Arc::new(PostgresAllianceLogRepository::new(self.tx.clone()))
+    }
+
+    fn alliance_diplomacy(&self) -> Arc<dyn AllianceDiplomacyRepository + 'a> {
+        Arc::new(PostgresAllianceDiplomacyRepository::new(self.tx.clone()))
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
         // If this fails, it means there are other references to the Arc,

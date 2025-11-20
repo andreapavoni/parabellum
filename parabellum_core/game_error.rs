@@ -109,4 +109,41 @@ pub enum GameError {
 
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),
+
+    // Alliance errors
+    #[error("Player is already in an alliance")]
+    PlayerAlreadyInAlliance,
+
+    #[error("Player is not in an alliance")]
+    PlayerNotInAlliance,
+
+    #[error("No invitation found for this player and alliance")]
+    InvitationNotFound,
+
+    #[error("Player already has a pending invitation from this alliance")]
+    InvitationAlreadyExists,
+
+    #[error("Alliance is full")]
+    AllianceFull,
+
+    #[error("Alliance tag already exists")]
+    AllianceTagAlreadyExists,
+
+    #[error("Alliance name already exists")]
+    AllianceNameAlreadyExists,
+
+    #[error("Player does not have permission to invite")]
+    NoInvitePermission,
+
+    #[error("Player does not have permission to kick")]
+    NoKickPermission,
+
+    #[error("Cannot kick the alliance leader")]
+    CannotKickLeader,
+
+    #[error("Player is not the alliance leader")]
+    NotAllianceLeader,
+
+    #[error("Player is already the alliance leader")]
+    PlayerAlreadyLeader,
 }

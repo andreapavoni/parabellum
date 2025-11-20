@@ -12,6 +12,12 @@ mod scout_village;
 mod send_resources;
 mod train_units;
 mod upgrade_building;
+mod accept_alliance_invite;
+mod create_alliance;
+mod invite_to_alliance;
+mod kick_from_alliance;
+mod leave_alliance;
+mod set_alliance_leader;
 
 mod helpers;
 
@@ -29,3 +35,9 @@ pub use scout_village::ScoutVillageCommandHandler;
 pub use send_resources::SendResourcesCommandHandler;
 pub use train_units::TrainUnitsCommandHandler;
 pub use upgrade_building::UpgradeBuildingCommandHandler;
+pub use accept_alliance_invite::AcceptAllianceInviteCommandHandler;
+pub use create_alliance::CreateAllianceCommandHandler;
+pub use invite_to_alliance::InviteToAllianceCommandHandler;
+pub use kick_from_alliance::KickFromAllianceCommandHandler;
+pub use leave_alliance::LeaveAllianceCommandHandler;
+pub use set_alliance_leader::SetAllianceLeaderCommandHandler;
