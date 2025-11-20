@@ -135,6 +135,14 @@ impl From<db_models::Player> for Player {
             alliance_id: db_player.alliance_id,
             alliance_role: db_player.alliance_role,
             alliance_join_time: db_player.alliance_join_time,
+            current_alliance_training_contributions: db_player.current_alliance_training_contributions.unwrap_or(0),
+            current_alliance_armor_contributions: db_player.current_alliance_armor_contributions.unwrap_or(0),
+            current_alliance_cp_contributions: db_player.current_alliance_cp_contributions.unwrap_or(0),
+            current_alliance_trade_contributions: db_player.current_alliance_trade_contributions.unwrap_or(0),
+            total_alliance_training_contributions: db_player.total_alliance_training_contributions.unwrap_or(0),
+            total_alliance_armor_contributions: db_player.total_alliance_armor_contributions.unwrap_or(0),
+            total_alliance_cp_contributions: db_player.total_alliance_cp_contributions.unwrap_or(0),
+            total_alliance_trade_contributions: db_player.total_alliance_trade_contributions.unwrap_or(0),
         }
     }
 }

@@ -95,16 +95,6 @@ CREATE TABLE alliance_notification (
 
 CREATE INDEX idx_alliance_notification_player ON alliance_notification(player_id);
 
--- Alliance bonus upgrade queue
-CREATE TABLE alliance_bonus_upgrade_queue (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    alliance_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
-    bonus_type SMALLINT NOT NULL,
-    finish_time INTEGER NOT NULL
-);
-
-CREATE INDEX idx_alliance_bonus_queue_alliance_id ON alliance_bonus_upgrade_queue(alliance_id);
-
 -- Alliance map flags/marks
 CREATE TABLE alliance_map_flag (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

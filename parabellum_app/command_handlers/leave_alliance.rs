@@ -32,33 +32,27 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let alliance_repo = uow.alliances();
-        let player_repo = uow.players();
-        let alliance_log_repo = uow.alliance_logs();
-
-        let player = player_repo.get_by_id(command.player_id).await?;
+        let player = uow.players().get_by_id(command.player_id).await?;
 
         // Verify player is in an alliance
         let alliance_id = player.alliance_id.ok_or(GameError::PlayerNotInAlliance)?;
 
-        // Get the alliance
-        let alliance = alliance_repo.get_by_id(alliance_id).await?;
+        let alliance = uow.alliances().get_by_id(alliance_id).await?;
 
         // Prevent leader from leaving (must transfer leadership first)
-        if alliance.leader_id == Some(command.player_id) {
+        if alliance.is_leader(command.player_id) {
             return Err(GameError::NotAllianceLeader.into());
         }
 
         // Check if player is the last member
-        let member_count = alliance_repo.count_members(alliance_id).await?;
+        let member_count = uow.alliances().count_members(alliance_id).await?;
 
         if member_count == 1 {
-            // Last member leaving - delete the alliance and all related data
-            // Database cascade delete handles related tables
-            alliance_repo.delete(alliance_id).await?;
+            // Last member leaving - delete the alliance
+            uow.alliances().delete(alliance_id).await?;
         } else {
-            // Nullify player's alliance fields
-            player_repo
+            // Remove player from alliance
+            uow.players()
                 .update_alliance_fields(
                     command.player_id,
                     None,
@@ -67,7 +61,7 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
                 )
                 .await?;
 
-            // Log leave event
+            // Log leave
             let current_time = Utc::now().timestamp() as i32;
             let log = AllianceLog::new(
                 alliance_id,
@@ -75,7 +69,7 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
                 Some(format!("Player {} left the alliance", player.username)),
                 current_time,
             );
-            alliance_log_repo.save(&log).await?;
+            uow.alliance_logs().save(&log).await?;
         }
 
         Ok(())

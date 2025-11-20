@@ -32,41 +32,30 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let alliance_repo = uow.alliances();
-        let player_repo = uow.players();
-        let alliance_log_repo = uow.alliance_logs();
-
-        let kicker = player_repo.get_by_id(command.player_id).await?;
-        let target_player = player_repo.get_by_id(command.target_player_id).await?;
+        let kicker = uow.players().get_by_id(command.player_id).await?;
+        let target_player = uow.players().get_by_id(command.target_player_id).await?;
 
         // Verify kicker is in the alliance
         if kicker.alliance_id != Some(command.alliance_id) {
             return Err(GameError::PlayerNotInAlliance.into());
         }
 
-        // Verify kicker has KICK_PLAYER permission
-        if !AlliancePermission::has_permission(
-            kicker.alliance_role.unwrap_or(0),
-            AlliancePermission::KickPlayer,
-        ) {
-            return Err(GameError::NoKickPermission.into());
-        }
+        // Verify kicker has permission to kick players
+        AlliancePermission::verify_permission(&kicker, AlliancePermission::KickPlayer)?;
 
         // Verify target player is in the same alliance
         if target_player.alliance_id != Some(command.alliance_id) {
             return Err(GameError::PlayerNotInAlliance.into());
         }
 
-        // Get the alliance leader (player with earliest join time)
-        let leader = alliance_repo.get_leader(command.alliance_id).await?;
-
-        // Verify target player is not the leader (founder)
+        // Verify target is not the alliance leader
+        let leader = uow.alliances().get_leader(command.alliance_id).await?;
         if target_player.id == leader.id {
             return Err(GameError::CannotKickLeader.into());
         }
 
-        // Nullify target player's alliance fields
-        player_repo
+        // Remove player from alliance
+        uow.players()
             .update_alliance_fields(
                 command.target_player_id,
                 None,
@@ -75,7 +64,7 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
             )
             .await?;
 
-        // Log kick event
+        // Log kick
         let current_time = Utc::now().timestamp() as i32;
         let log = AllianceLog::new(
             command.alliance_id,
@@ -86,7 +75,7 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
             )),
             current_time,
         );
-        alliance_log_repo.save(&log).await?;
+        uow.alliance_logs().save(&log).await?;
 
         Ok(())
     }

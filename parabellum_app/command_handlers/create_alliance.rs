@@ -5,7 +5,6 @@ use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{
     Alliance, AllianceLog, AllianceLogType, AlliancePermission,
 };
-use parabellum_types::buildings::BuildingName;
 
 use crate::{
     config::Config,
@@ -35,59 +34,39 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let alliance_repo = uow.alliances();
-        let alliance_log_repo = uow.alliance_logs();
-        let player_repo = uow.players();
-        let village_repo = uow.villages();
-
-        // Verify player exists
-        let player = player_repo.get_by_id(command.player_id).await?;
+        let player = uow.players().get_by_id(command.player_id).await?;
 
         // Verify player is not already in an alliance
         if player.alliance_id.is_some() {
             return Err(GameError::PlayerAlreadyInAlliance.into());
         }
 
-        // Get capital village and verify embassy level 3+
-        let capital = village_repo
-            .get_capital_by_player_id(command.player_id)
-            .await?;
+        // Verify player has embassy level 3+ in capital
+        let capital = uow.villages().get_capital_by_player_id(command.player_id).await?;
+        let embassy_level = capital.can_create_alliance()?;
 
-        let embassy = capital
-            .get_building_by_name(&BuildingName::Embassy)
-            .ok_or_else(|| GameError::BuildingNotFound(BuildingName::Embassy))?;
-
-        if embassy.building.level < 3 {
-            return Err(GameError::BuildingRequirementsNotMet {
-                building: BuildingName::Embassy,
-                level: 3,
-            }
-            .into());
-        }
-
-        // Verify alliance name and tag are unique
-        if alliance_repo.get_by_tag(command.tag.clone()).await.is_ok() {
+        // Check alliance name and tag are unique
+        if uow.alliances().get_by_tag(command.tag.clone()).await.is_ok() {
             return Err(GameError::AllianceTagAlreadyExists.into());
         }
 
-        if alliance_repo.get_by_name(command.name.clone()).await.is_ok() {
+        if uow.alliances().get_by_name(command.name.clone()).await.is_ok() {
             return Err(GameError::AllianceNameAlreadyExists.into());
         }
 
-        // Create alliance with max members based on embassy level
-        // The creator becomes the initial leader
-        let alliance = Alliance::new(
+        // Create alliance
+        let alliance = Alliance::create_with_founder(
             command.name.clone(),
             command.tag.clone(),
-            embassy.building.level as i32,
+            embassy_level,
             command.player_id,
         );
 
-        // Persist alliance and update player
-        alliance_repo.save(&alliance).await?;
+        uow.alliances().save(&alliance).await?;
 
+        // Set player as alliance leader
         let current_time = Utc::now().timestamp() as i32;
-        player_repo
+        uow.players()
             .update_alliance_fields(
                 command.player_id,
                 Some(alliance.id),
@@ -106,7 +85,7 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
             )),
             current_time,
         );
-        alliance_log_repo.save(&log).await?;
+        uow.alliance_logs().save(&log).await?;
 
         Ok(())
     }

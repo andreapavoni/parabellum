@@ -1,4 +1,5 @@
 use crate::{
+    command_handlers::helpers::get_player_alliance_trade_bonus,
     config::Config,
     cqrs::{CommandHandler, commands::SendResources},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -66,8 +67,16 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         sender_village.deduct_resources(&resources_to_send)?;
 
         let merchant_stats = sender_village.tribe.merchant_stats();
+        let mut merchant_capacity = merchant_stats.capacity;
+
+        // Apply alliance trade bonus
+        let trade_bonus = get_player_alliance_trade_bonus(uow, command.player_id).await?;
+        if trade_bonus > 0.0 {
+            merchant_capacity = (merchant_capacity as f64 * (1.0 + trade_bonus)) as u32;
+        }
+
         let merchants_needed =
-            Self::calculate_merchants_needed(merchant_stats.capacity, resources_to_send.total())?;
+            Self::calculate_merchants_needed(merchant_capacity, resources_to_send.total())?;
 
         if sender_village.get_available_merchants() < merchants_needed {
             return Err(ApplicationError::Game(GameError::NotEnoughMerchants));

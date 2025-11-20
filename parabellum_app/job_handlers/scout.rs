@@ -10,6 +10,7 @@ use crate::jobs::{
     handler::{JobHandler, JobHandlerContext},
     tasks::{ArmyReturnTask, ScoutTask},
 };
+use crate::job_handlers::helpers::get_defender_alliance_armor_bonus;
 
 pub struct ScoutJobHandler {
     payload: ScoutTask,
@@ -50,12 +51,15 @@ impl JobHandler for ScoutJobHandler {
             .get_by_id(self.payload.target_village_id as u32)
             .await?;
 
+        let defender_alliance_bonus = get_defender_alliance_armor_bonus(&ctx.uow, &defender_village).await?;
+
         let battle = Battle::new(
             AttackType::Raid,
             attacker_army.clone(),
             attacker_village.clone(),
             defender_village.clone(),
             None,
+            defender_alliance_bonus,
         );
         let battle_report = battle.calculate_scout_battle(self.payload.target.clone());
 

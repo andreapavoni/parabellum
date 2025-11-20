@@ -81,6 +81,7 @@ pub struct Battle {
     attacker_village: Village,
     defender_village: Village,
     catapult_targets: Option<[Building; 2]>,
+    defender_alliance_bonus: f64,
 }
 
 impl Battle {
@@ -90,6 +91,7 @@ impl Battle {
         attacker_village: Village,
         defender_village: Village,
         catapult_targets: Option<[Building; 2]>,
+        defender_alliance_bonus: f64,
     ) -> Self {
         Self {
             attack_type,
@@ -97,6 +99,7 @@ impl Battle {
             attacker_village,
             defender_village,
             catapult_targets,
+            defender_alliance_bonus,
         }
     }
 
@@ -158,6 +161,14 @@ impl Battle {
         total_defender_infantry_points =
             (total_defender_infantry_points as f64 * wall_bonus) as u32;
         total_defender_cavalry_points = (total_defender_cavalry_points as f64 * wall_bonus) as u32;
+
+        // Alliance Armor Bonus
+        if self.defender_alliance_bonus > 0.0 {
+            total_defender_infantry_points =
+                (total_defender_infantry_points as f64 * (1.0 + self.defender_alliance_bonus)) as u32;
+            total_defender_cavalry_points =
+                (total_defender_cavalry_points as f64 * (1.0 + self.defender_alliance_bonus)) as u32;
+        }
 
         // Calculate total power and casualties
 
@@ -379,6 +390,10 @@ impl Battle {
 
         // 2.1: Apply wall defense bonus
         total_scout_defense_power = (total_scout_defense_power as f64 * wall_bonus) as u32 + 10;
+
+        if self.defender_alliance_bonus > 0.0 {
+            total_scout_defense_power = (total_scout_defense_power as f64 * (1.0 + self.defender_alliance_bonus)) as u32;
+        }
 
         let mut attacker_loss_percentage = 0.0;
 
@@ -750,6 +765,7 @@ mod tests {
             attacker_village,
             defender_village,
             None,
+            0.0,
         );
         let report = battle.calculate_battle();
         let defender_report = report.defender.expect("Defender report should exist");

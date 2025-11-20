@@ -126,7 +126,6 @@ mod tests {
         let handler = AcceptAllianceInviteCommandHandler::new();
 
         // Create alliance
-        let alliance_id = Uuid::new_v4();
         let leader_id = Uuid::new_v4();
         let alliance = Alliance::new(
             "Test Alliance".to_string(),

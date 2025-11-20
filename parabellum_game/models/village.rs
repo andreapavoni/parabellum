@@ -590,6 +590,47 @@ impl Village {
         self.total_merchants.saturating_sub(self.busy_merchants)
     }
 
+    /// Validates that the village is owned by the specified player.
+    pub fn verify_ownership(&self, player_id: Uuid) -> Result<(), GameError> {
+        if self.player_id != player_id {
+            return Err(GameError::VillageNotOwnedByPlayer);
+        }
+        Ok(())
+    }
+
+    /// Returns the embassy level if present, otherwise None.
+    pub fn get_embassy_level(&self) -> Option<u8> {
+        self.get_building_by_name(&BuildingName::Embassy)
+            .map(|vb| vb.building.level)
+    }
+
+    /// Validates that the village has an embassy at level 3 or higher (required to create an alliance).
+    pub fn can_create_alliance(&self) -> Result<u8, GameError> {
+        let embassy = self
+            .get_building_by_name(&BuildingName::Embassy)
+            .ok_or_else(|| GameError::BuildingNotFound(BuildingName::Embassy))?;
+
+        if embassy.building.level < 3 {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Embassy,
+                level: 3,
+            });
+        }
+
+        Ok(embassy.building.level)
+    }
+
+    /// Calculates total culture points production per day, including alliance bonus.
+    pub fn calculate_culture_points(&self, alliance_cp_bonus_level: u8) -> u32 {
+        let mut total_cp: u32 = self.buildings.iter().map(|b| b.building.culture_points as u32).sum();
+
+        if alliance_cp_bonus_level > 0 {
+            total_cp = (total_cp as f64 * (1.0 + (alliance_cp_bonus_level as f64 * 0.01))) as u32;
+        }
+
+        total_cp
+    }
+
     /// Marks a unit name as researched in the academy.
     pub fn research_academy(&mut self, unit: UnitName) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {

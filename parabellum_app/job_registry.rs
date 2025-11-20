@@ -5,8 +5,9 @@ use parabellum_core::{AppError, ApplicationError};
 
 use crate::{
     job_handlers::{
-        add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
-        attack::AttackJobHandler, building_downgrade::DowngradeBuildingJobHandler,
+        add_building::AddBuildingJobHandler, alliance_bonus_upgrade::AllianceBonusUpgradeJobHandler,
+        army_return::ArmyReturnJobHandler, attack::AttackJobHandler,
+        building_downgrade::DowngradeBuildingJobHandler,
         building_upgrade::UpgradeBuildingJobHandler, hero_revival::HeroRevivalJobHandler,
         merchant_going::MerchantGoingJobHandler, merchant_return::MerchantReturnJobHandler,
         reinforcement::ReinforcementJobHandler, research_academy::ResearchAcademyJobHandler,
@@ -30,6 +31,7 @@ enum AppTaskType {
     ResearchAcademy,
     ResearchSmithy,
     AddBuilding,
+    AllianceBonusUpgrade,
     MerchantGoing,
     MerchantReturn,
     BuildingUpgrade,
@@ -42,6 +44,7 @@ impl AppTaskType {
     fn from_str(task_type: &str) -> Option<Self> {
         match task_type {
             "AddBuilding" => Some(Self::AddBuilding),
+            "AllianceBonusUpgrade" => Some(Self::AllianceBonusUpgrade),
             "ArmyReturn" => Some(Self::ArmyReturn),
             "Attack" => Some(Self::Attack),
             "BuildingDowngrade" => Some(Self::BuildingDowngrade),
@@ -137,6 +140,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::HeroRevival => {
                 let payload: HeroRevivalTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(HeroRevivalJobHandler::new(payload)))
+            }
+
+            AppTaskType::AllianceBonusUpgrade => {
+                let payload: AllianceBonusUpgradeTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(AllianceBonusUpgradeJobHandler::new(payload)))
             }
         }
     }

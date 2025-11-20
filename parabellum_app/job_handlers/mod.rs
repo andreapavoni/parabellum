@@ -1,8 +1,10 @@
 pub mod add_building;
+pub mod alliance_bonus_upgrade;
 pub mod army_return;
 pub mod attack;
 pub mod building_downgrade;
 pub mod building_upgrade;
+pub mod helpers;
 pub mod hero_revival;
 pub mod merchant_going;
 pub mod merchant_return;

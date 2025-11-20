@@ -283,7 +283,12 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
 
         // Get the leader player
         let row = sqlx::query(
-            r#"SELECT id, username, user_id, tribe::text as tribe, alliance_id, alliance_role, alliance_join_time FROM players WHERE id = $1"#
+            r#"SELECT id, username, user_id, tribe::text as tribe, alliance_id, alliance_role, alliance_join_time,
+               current_alliance_training_contributions, current_alliance_armor_contributions,
+               current_alliance_cp_contributions, current_alliance_trade_contributions,
+               total_alliance_training_contributions, total_alliance_armor_contributions,
+               total_alliance_cp_contributions, total_alliance_trade_contributions
+               FROM players WHERE id = $1"#
         )
         .bind(leader_id)
         .fetch_one(&mut *tx_guard.as_mut())
@@ -301,6 +306,14 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             alliance_id: row.get("alliance_id"),
             alliance_role: row.get("alliance_role"),
             alliance_join_time: row.get("alliance_join_time"),
+            current_alliance_training_contributions: row.get("current_alliance_training_contributions"),
+            current_alliance_armor_contributions: row.get("current_alliance_armor_contributions"),
+            current_alliance_cp_contributions: row.get("current_alliance_cp_contributions"),
+            current_alliance_trade_contributions: row.get("current_alliance_trade_contributions"),
+            total_alliance_training_contributions: row.get("total_alliance_training_contributions"),
+            total_alliance_armor_contributions: row.get("total_alliance_armor_contributions"),
+            total_alliance_cp_contributions: row.get("total_alliance_cp_contributions"),
+            total_alliance_trade_contributions: row.get("total_alliance_trade_contributions"),
         })
     }
 
@@ -319,14 +332,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
 
         let rows = sqlx::query(
-            r#"SELECT id, username, user_id, tribe, alliance_id, alliance_role, alliance_join_time FROM players WHERE alliance_id = $1"#
+            r#"SELECT id, username, user_id, tribe::text as tribe, alliance_id, alliance_role, alliance_join_time,
+               current_alliance_training_contributions, current_alliance_armor_contributions,
+               current_alliance_cp_contributions, current_alliance_trade_contributions,
+               total_alliance_training_contributions, total_alliance_armor_contributions,
+               total_alliance_cp_contributions, total_alliance_trade_contributions
+               FROM players WHERE alliance_id = $1"#
         )
         .bind(alliance_id)
         .fetch_all(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let mut players = Vec::new();
+        let mut players: Vec<Player> = Vec::new();
+
         for row in rows {
             let tribe_str: String = row.get("tribe");
             let tribe = parse_tribe(&tribe_str)?;
@@ -339,6 +358,14 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
                 alliance_id: row.get("alliance_id"),
                 alliance_role: row.get("alliance_role"),
                 alliance_join_time: row.get("alliance_join_time"),
+                current_alliance_training_contributions: row.get("current_alliance_training_contributions"),
+                current_alliance_armor_contributions: row.get("current_alliance_armor_contributions"),
+                current_alliance_cp_contributions: row.get("current_alliance_cp_contributions"),
+                current_alliance_trade_contributions: row.get("current_alliance_trade_contributions"),
+                total_alliance_training_contributions: row.get("total_alliance_training_contributions"),
+                total_alliance_armor_contributions: row.get("total_alliance_armor_contributions"),
+                total_alliance_cp_contributions: row.get("total_alliance_cp_contributions"),
+                total_alliance_trade_contributions: row.get("total_alliance_trade_contributions"),
             });
         }
 

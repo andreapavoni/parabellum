@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parabellum_core::{ApplicationError, GameError};
 
 use crate::{
+    command_handlers::helpers::get_player_alliance_training_bonus,
     config::Config,
     cqrs::{CommandHandler, commands::TrainUnits},
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
@@ -33,6 +34,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
     ) -> Result<(), ApplicationError> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
+
         let mut village = village_repo.get_by_id(command.village_id).await?;
 
         if village.player_id != command.player_id {
@@ -42,13 +44,20 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             }));
         }
 
-        let (slot_id, unit_name, time_per_unit) = village.init_unit_training(
+        let (slot_id, unit_name, mut time_per_unit) = village.init_unit_training(
             command.unit_idx,
             &command.building_name,
             command.quantity,
             config.speed,
         )?;
         village_repo.save(&village).await?;
+
+        // Apply alliance training bonus
+        let training_bonus = get_player_alliance_training_bonus(uow, command.player_id).await?;
+        if training_bonus > 0.0 {
+            let new_time = (time_per_unit as f64 * (1.0 - training_bonus)).floor().max(1.0);
+            time_per_unit = new_time as u32;
+        }
 
         let payload = TrainUnitsTask {
             slot_id,

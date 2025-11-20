@@ -29,17 +29,37 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         sqlx::query!(
             r#"
-              INSERT INTO players (id, username, tribe, user_id)
-              VALUES ($1, $2, $3, $4)
+              INSERT INTO players (id, username, tribe, user_id,
+                  current_alliance_training_contributions, current_alliance_armor_contributions,
+                  current_alliance_cp_contributions, current_alliance_trade_contributions,
+                  total_alliance_training_contributions, total_alliance_armor_contributions,
+                  total_alliance_cp_contributions, total_alliance_trade_contributions)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
               ON CONFLICT (id) DO UPDATE
               SET
                   username = $2,
-                  tribe = $3
+                  tribe = $3,
+                  current_alliance_training_contributions = $5,
+                  current_alliance_armor_contributions = $6,
+                  current_alliance_cp_contributions = $7,
+                  current_alliance_trade_contributions = $8,
+                  total_alliance_training_contributions = $9,
+                  total_alliance_armor_contributions = $10,
+                  total_alliance_cp_contributions = $11,
+                  total_alliance_trade_contributions = $12
               "#,
             player.id,
             player.username,
             tribe as _,
             player.user_id,
+            player.current_alliance_training_contributions,
+            player.current_alliance_armor_contributions,
+            player.current_alliance_cp_contributions,
+            player.current_alliance_trade_contributions,
+            player.total_alliance_training_contributions,
+            player.total_alliance_armor_contributions,
+            player.total_alliance_cp_contributions,
+            player.total_alliance_trade_contributions,
         )
         .execute(&mut *tx_guard.as_mut())
         .await

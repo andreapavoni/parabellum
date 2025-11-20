@@ -32,24 +32,14 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let alliance_invite_repo = uow.alliance_invites();
-        let player_repo = uow.players();
-        let alliance_log_repo = uow.alliance_logs();
+        let inviter = uow.players().get_by_id(command.player_id).await?;
+        let target_player = uow.players().get_by_id(command.target_player_id).await?;
 
-        // Verify alliance and players exist
-        let inviter = player_repo.get_by_id(command.player_id).await?;
-        let target_player = player_repo.get_by_id(command.target_player_id).await?;
-
-        // Verify inviter has INVITE_PLAYER permission
-        if !AlliancePermission::has_permission(
-            inviter.alliance_role.unwrap_or(0),
-            AlliancePermission::InvitePlayer,
-        ) {
-            return Err(GameError::NoInvitePermission.into());
-        }
+        AlliancePermission::verify_permission(&inviter, AlliancePermission::InvitePlayer)?;
 
         // Check if invitation already exists
-        let existing_invites = alliance_invite_repo
+        let existing_invites = uow
+            .alliance_invites()
             .get_by_alliance_id(command.alliance_id)
             .await?;
         if existing_invites
@@ -59,15 +49,13 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
             return Err(GameError::InvitationAlreadyExists.into());
         }
 
-        // Create and save invitation
         let invite = AllianceInvite::new(
             command.player_id,
             command.alliance_id,
             command.target_player_id,
         );
-        alliance_invite_repo.save(&invite).await?;
+        uow.alliance_invites().save(&invite).await?;
 
-        // Log invite event
         let current_time = Utc::now().timestamp() as i32;
         let log = AllianceLog::new(
             command.alliance_id,
@@ -78,7 +66,7 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
             )),
             current_time,
         );
-        alliance_log_repo.save(&log).await?;
+        uow.alliance_logs().save(&log).await?;
 
         Ok(())
     }

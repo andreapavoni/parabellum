@@ -146,4 +146,19 @@ pub enum GameError {
 
     #[error("Player is already the alliance leader")]
     PlayerAlreadyLeader,
+
+    #[error("Player is not in an alliance")]
+    NotInAlliance,
+
+    #[error("Village not owned by player")]
+    VillageNotOwnedByPlayer,
+
+    #[error("Invalid bonus type: {0}")]
+    InvalidBonusType(i16),
+
+    #[error("Alliance donation limit exceeded")]
+    AllianceDonationLimitExceeded,
+
+    #[error("New player cooldown active - cannot contribute yet")]
+    AllianceNewPlayerCooldown,
 }

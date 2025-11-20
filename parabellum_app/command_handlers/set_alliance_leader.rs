@@ -32,22 +32,13 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let alliance_repo = uow.alliances();
-        let player_repo = uow.players();
-        let alliance_log_repo = uow.alliance_logs();
-
-        let executor = player_repo.get_by_id(command.player_id).await?;
-        let new_leader = player_repo.get_by_id(command.new_leader_id).await?;
-        let mut alliance = alliance_repo.get_by_id(command.alliance_id).await?;
+        let executor = uow.players().get_by_id(command.player_id).await?;
+        let new_leader = uow.players().get_by_id(command.new_leader_id).await?;
+        let mut alliance = uow.alliances().get_by_id(command.alliance_id).await?;
 
         // Verify executor is in the alliance
         if executor.alliance_id != Some(command.alliance_id) {
             return Err(GameError::PlayerNotInAlliance.into());
-        }
-
-        // Verify executor is the current leader
-        if alliance.leader_id != Some(command.player_id) {
-            return Err(GameError::NotAllianceLeader.into());
         }
 
         // Verify new leader is in the same alliance
@@ -55,17 +46,12 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
             return Err(GameError::PlayerNotInAlliance.into());
         }
 
-        // Verify new leader is not already the leader
-        if alliance.leader_id == Some(command.new_leader_id) {
-            return Err(GameError::PlayerAlreadyLeader.into());
-        }
-
-        // Update alliance with new leader
-        alliance.leader_id = Some(command.new_leader_id);
-        alliance_repo.update(&alliance).await?;
+        // Transfer leadership
+        alliance.transfer_leadership(command.player_id, command.new_leader_id)?;
+        uow.alliances().update(&alliance).await?;
 
         // Grant new leader full permissions
-        player_repo
+        uow.players()
             .update_alliance_fields(
                 command.new_leader_id,
                 Some(command.alliance_id),
@@ -74,8 +60,8 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
             )
             .await?;
 
-        // Remove permissions from old leader (set to 0)
-        player_repo
+        // Remove permissions from old leader
+        uow.players()
             .update_alliance_fields(
                 command.player_id,
                 Some(command.alliance_id),
@@ -95,7 +81,7 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
             )),
             current_time,
         );
-        alliance_log_repo.save(&log).await?;
+        uow.alliance_logs().save(&log).await?;
 
         Ok(())
     }

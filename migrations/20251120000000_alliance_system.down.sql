@@ -23,7 +23,6 @@ ALTER TABLE players DROP COLUMN IF EXISTS alliance_id;
 
 -- Drop all alliance tables
 DROP TABLE IF EXISTS alliance_map_flag CASCADE;
-DROP TABLE IF EXISTS alliance_bonus_upgrade_queue CASCADE;
 DROP TABLE IF EXISTS alliance_notification CASCADE;
 DROP TABLE IF EXISTS alliance_medal CASCADE;
 DROP TABLE IF EXISTS alliance_diplomacy CASCADE;

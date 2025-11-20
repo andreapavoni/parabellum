@@ -13,6 +13,7 @@ use crate::jobs::{
     handler::{JobHandler, JobHandlerContext},
     tasks::{ArmyReturnTask, AttackTask},
 };
+use crate::job_handlers::helpers::get_defender_alliance_armor_bonus;
 
 pub struct AttackJobHandler {
     payload: AttackTask,
@@ -63,12 +64,15 @@ impl JobHandler for AttackJobHandler {
         }
         let catapult_targets: [Building; 2] = catapult_targets.try_into().unwrap();
 
+        let defender_alliance_bonus = get_defender_alliance_armor_bonus(&ctx.uow, &def_village).await?;
+
         let battle = Battle::new(
             AttackType::Normal,
             atk_army.clone(),
             atk_village.clone(),
             def_village.clone(),
             Some(catapult_targets),
+            defender_alliance_bonus,
         );
         let report = battle.calculate_battle();
 

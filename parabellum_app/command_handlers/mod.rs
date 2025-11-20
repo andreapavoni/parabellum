@@ -18,6 +18,7 @@ mod invite_to_alliance;
 mod kick_from_alliance;
 mod leave_alliance;
 mod set_alliance_leader;
+mod contribute_alliance_bonus;
 
 mod helpers;
 
@@ -41,3 +42,4 @@ pub use invite_to_alliance::InviteToAllianceCommandHandler;
 pub use kick_from_alliance::KickFromAllianceCommandHandler;
 pub use leave_alliance::LeaveAllianceCommandHandler;
 pub use set_alliance_leader::SetAllianceLeaderCommandHandler;
+pub use contribute_alliance_bonus::ContributeToAllianceBonusCommandHandler;

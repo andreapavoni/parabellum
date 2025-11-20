@@ -62,3 +62,37 @@ pub async fn deploy_army_from_village(
 
     Ok((village, deployed_army))
 }
+
+/// Fetches the player's alliance training bonus multiplier.
+/// Returns 0.0 if the player has no alliance or if the alliance fetch fails.
+pub async fn get_player_alliance_training_bonus(
+    uow: &Box<dyn UnitOfWork<'_> + '_>,
+    player_id: Uuid,
+) -> Result<f64, ApplicationError> {
+    let player = uow.players().get_by_id(player_id).await?;
+
+    if let Some(alliance_id) = player.alliance_id {
+        if let Ok(alliance) = uow.alliances().get_by_id(alliance_id).await {
+            return Ok(alliance.get_training_bonus_multiplier());
+        }
+    }
+
+    Ok(0.0)
+}
+
+/// Fetches the player's alliance trade bonus multiplier.
+/// Returns 0.0 if the player has no alliance or if the alliance fetch fails.
+pub async fn get_player_alliance_trade_bonus(
+    uow: &Box<dyn UnitOfWork<'_> + '_>,
+    player_id: Uuid,
+) -> Result<f64, ApplicationError> {
+    let player = uow.players().get_by_id(player_id).await?;
+
+    if let Some(alliance_id) = player.alliance_id {
+        if let Ok(alliance) = uow.alliances().get_by_id(alliance_id).await {
+            return Ok(alliance.get_trade_bonus_multiplier());
+        }
+    }
+
+    Ok(0.0)
+}

@@ -159,3 +159,9 @@ pub struct CelebrationTownHallTask {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CelebrationBreweryTask {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllianceBonusUpgradeTask {
+    pub alliance_id: Uuid,
+    pub bonus_type: i16,
+}

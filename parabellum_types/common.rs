@@ -70,6 +70,14 @@ pub struct Player {
     pub alliance_id: Option<Uuid>,
     pub alliance_role: Option<i32>,
     pub alliance_join_time: Option<i32>,
+    pub current_alliance_training_contributions: i64,
+    pub current_alliance_armor_contributions: i64,
+    pub current_alliance_cp_contributions: i64,
+    pub current_alliance_trade_contributions: i64,
+    pub total_alliance_training_contributions: i64,
+    pub total_alliance_armor_contributions: i64,
+    pub total_alliance_cp_contributions: i64,
+    pub total_alliance_trade_contributions: i64,
 }
 
 

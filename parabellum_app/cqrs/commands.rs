@@ -256,3 +256,14 @@ pub struct SetAllianceLeader {
 
 impl Command for SetAllianceLeader {}
 
+#[derive(Debug, Clone)]
+pub struct ContributeToAllianceBonus {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub alliance_id: Uuid,
+    pub bonus_type: i16,
+    pub resources: ResourceGroup,
+}
+
+impl Command for ContributeToAllianceBonus {}
+
