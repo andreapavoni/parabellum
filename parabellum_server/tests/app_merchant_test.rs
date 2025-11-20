@@ -41,7 +41,7 @@ pub mod tests {
     > {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player_a, mut village_a, _, _) = setup_player_party(
+        let (player_a, mut village_a, _, _, _) = setup_player_party(
             uow_provider.clone(),
             None,
             Tribe::Teuton,
@@ -49,7 +49,7 @@ pub mod tests {
             false,
         )
         .await?;
-        let (_, mut village_b, _, _) =
+        let (_, mut village_b, _, _, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         let uow = uow_provider.begin().await?;

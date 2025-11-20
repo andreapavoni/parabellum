@@ -14,7 +14,7 @@ use crate::test_utils::tests::{setup_app, setup_player_party};
 #[tokio::test]
 async fn test_build() -> Result<()> {
     let (app, worker, uow_provider, config) = setup_app(false).await?;
-    let (player, mut village, _, _) =
+    let (player, mut village, _, _, _) =
         setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
     {

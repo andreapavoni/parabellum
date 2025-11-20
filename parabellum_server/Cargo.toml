@@ -35,4 +35,4 @@ tracing-appender = "0.2"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [dev-dependencies]
-reqwest = "0.12"
+reqwest = { version = "0.12", features = ["cookies"] }

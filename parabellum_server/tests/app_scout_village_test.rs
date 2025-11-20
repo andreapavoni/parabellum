@@ -21,11 +21,11 @@ pub mod tests {
     async fn test_scout_village() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0]; // 10 Equites Legati (index 3)
-        let (scout_player, scout_village, scout_army, _) = {
+        let (scout_player, scout_village, scout_army, _, _) = {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
         };
         let original_home_army_id = scout_army.id;
-        let (_target_player, target_village, _target_army, _) = {
+        let (_target_player, target_village, _target_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

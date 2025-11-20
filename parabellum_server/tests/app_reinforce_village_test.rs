@@ -18,7 +18,7 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        let (reinforcer_player, reinforcer_village, reinforcing_army, _) = {
+        let (reinforcer_player, reinforcer_village, reinforcing_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -30,7 +30,7 @@ pub mod tests {
         };
         let original_home_army_id = reinforcing_army.id;
 
-        let (_target_player, target_village, _target_army, _) = {
+        let (_target_player, target_village, _target_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

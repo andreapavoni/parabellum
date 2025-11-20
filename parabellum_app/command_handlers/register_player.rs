@@ -40,7 +40,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
 
         let password_hash = hash_password(&command.password)?;
         user_repo.save(command.email.clone(), password_hash).await?;
-        let user = user_repo.get_by_email(command.email).await?;
+        let user = user_repo.get_by_email(&command.email).await?;
 
         let player = Player {
             id: command.id,
@@ -106,7 +106,7 @@ mod tests {
         assert_eq!(saved_player.username, command.username);
         assert_eq!(saved_player.tribe, command.tribe);
 
-        mock_uow.users().get_by_email(email).await?;
+        mock_uow.users().get_by_email(&email).await?;
 
         let saved_villages = mock_uow.villages().list_by_player_id(command.id).await?;
         let saved_village = saved_villages.first().unwrap();

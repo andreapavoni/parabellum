@@ -1,11 +1,12 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
+    use axum::http::HeaderValue;
     use parabellum_web::{AppState, WebRouter};
     use rand::Rng;
-    use reqwest::Client;
+    use reqwest::{Client, header, redirect::Policy};
     use sqlx::{Postgres, Transaction};
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
     use tokio::sync::Mutex;
 
     use parabellum_app::{
@@ -152,15 +153,64 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<(Client, Arc<dyn UnitOfWorkProvider>)> {
+    pub async fn setup_web_app() -> Result<Arc<dyn UnitOfWorkProvider>> {
         let (app_bus, _, uow_provider, config) = setup_app(true).await?;
         let app = Arc::new(app_bus);
         let state = AppState::new(app, &config);
         tokio::spawn(WebRouter::serve(state.clone(), 8088));
 
-        let client = Client::new();
+        Ok(uow_provider)
+    }
 
-        Ok((client, uow_provider))
+    #[allow(dead_code)]
+    pub async fn setup_user_cookie(user: User) -> HeaderValue {
+        let client = setup_http_client(None, None).await;
+        let mut form = HashMap::new();
+        form.insert("email", user.email.as_str());
+        form.insert("password", "parabellum!");
+        let res = client
+            .post("http://localhost:8088/login")
+            .form(&form)
+            .send()
+            .await
+            .unwrap();
+
+        if let Some(cookie) = res.headers().get("set-cookie") {
+            return cookie.clone();
+        } else {
+            println!(
+                "======== setup cookie {:#?} ====",
+                res.text().await.unwrap().to_string()
+            );
+            HeaderValue::from_str("ok=ok").unwrap()
+        }
+
+        //let cookie = res.headers().get("set-cookie");
+        // println!(
+        //     "======== setup client {:#?} ====",
+        //     res.text().await.unwrap().to_string()
+        // );
+
+        // res.headers().get("set-cookie").unwrap().clone()
+        // cookie.map(|c| c.clone()).unwrap();
+        // HeaderValue::from_str("ok=ok").unwrap()
+    }
+
+    #[allow(dead_code)]
+    pub async fn setup_http_client(cookie: Option<HeaderValue>, redirects: Option<u8>) -> Client {
+        let redirect_policy = redirects.map_or(Policy::none(), |n| Policy::limited(n as usize));
+        let client = Client::builder()
+            .redirect(redirect_policy)
+            .cookie_store(true);
+
+        if cookie.is_none() {
+            return client.build().unwrap();
+        }
+
+        let cookie = cookie.unwrap();
+        let mut request_headers = header::HeaderMap::new();
+        request_headers.insert(header::COOKIE, cookie);
+        client.default_headers(request_headers).build().unwrap()
     }
 
     #[allow(dead_code)]
@@ -170,7 +220,7 @@ pub mod tests {
         tribe: Tribe,
         units: TroopSet,
         with_hero: bool,
-    ) -> Result<(Player, Village, Army, Option<Hero>)> {
+    ) -> Result<(Player, Village, Army, Option<Hero>, User)> {
         let uow = uow_provider.begin().await?;
         let player: Player;
         let village: Village;
@@ -191,11 +241,11 @@ pub mod tests {
                 Position { x, y }
             });
 
-            let email = format!("travian-{}@example.com", rng.gen_range(1..99999));
+            let email = format!("parabellum-{}@example.com", rng.gen_range(1..99999));
             user_repo
                 .save(email.clone(), hash_password("parabellum!")?)
                 .await?;
-            user = user_repo.get_by_email(email).await?;
+            user = user_repo.get_by_email(&email).await?;
 
             player = player_factory(PlayerFactoryOptions {
                 tribe: Some(tribe.clone()),
@@ -236,6 +286,6 @@ pub mod tests {
 
         uow.commit().await?;
 
-        Ok((player, village, army, hero))
+        Ok((player, village, army, hero, user))
     }
 }

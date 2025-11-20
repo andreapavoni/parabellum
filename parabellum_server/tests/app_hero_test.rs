@@ -19,7 +19,7 @@ pub mod tests {
     async fn test_transfer_hero_other_village() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, village1, army1, some_hero) =
+        let (player, village1, army1, some_hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
         let hero = some_hero.unwrap();
 
@@ -128,7 +128,7 @@ pub mod tests {
     async fn test_hero_reinforce_other_player() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
 
-        let (reinforcer_player, reinforcer_village, reinforcer_army, hero) = setup_player_party(
+        let (reinforcer_player, reinforcer_village, reinforcer_army, hero, _) = setup_player_party(
             uow_provider.clone(),
             None,
             Tribe::Teuton,
@@ -136,7 +136,7 @@ pub mod tests {
             true,
         )
         .await?;
-        let (_target_player, target_village, _target_army, _target_hero) = setup_player_party(
+        let (_target_player, target_village, _target_army, _target_hero, _) = setup_player_party(
             uow_provider.clone(),
             None,
             Tribe::Gaul,
@@ -238,7 +238,7 @@ pub mod tests {
     async fn test_resurrect_existing_hero() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, mut village, _, some_hero) =
+        let (player, mut village, _, some_hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
         let mut hero = some_hero.unwrap();
 
@@ -346,7 +346,7 @@ pub mod tests {
         let hero_repo = uow.heroes();
 
         let (player_id, village_id, hero_id) = {
-            let (player, mut village, _, some_hero) =
+            let (player, mut village, _, some_hero, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
             let mut hero = some_hero.unwrap();
 
@@ -436,7 +436,7 @@ pub mod tests {
         let hero_repo = uow.heroes();
 
         let (player_id, village_id, hero_id) = {
-            let (player, mut village, _, some_hero) =
+            let (player, mut village, _, some_hero, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
             let mut hero = some_hero.unwrap();
 

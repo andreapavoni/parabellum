@@ -6,7 +6,7 @@ use axum::{
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 
 use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
-use parabellum_core::{AppError, ApplicationError};
+use parabellum_core::{AppError, ApplicationError, DbError};
 
 use crate::{handlers::render_template, http::AppState, templates::LoginTemplate};
 
@@ -23,8 +23,7 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/").into_response();
     }
-    // Render login form with no error and no pre-filled email
-    render_template(LoginTemplate::default()).into_response()
+    render_template(LoginTemplate::default(), None).into_response()
 }
 
 /// POST /login – Handle login form submission.
@@ -33,35 +32,44 @@ pub async fn login(
     jar: SignedCookieJar,
     Form(form): Form<LoginForm>,
 ) -> impl IntoResponse {
-    // Attempt to authenticate user via the application layer
     let query = AuthenticateUser {
         email: form.email.clone(),
         password: form.password.clone(),
     };
-    match state
+
+    let (status, err_msg) = match state
         .app_bus
         .query(query, AuthenticateUserHandler::new())
         .await
     {
         Ok(user) => {
-            // Authentication successful – set a signed cookie and redirect to home
             let cookie = Cookie::new("user_email", user.email.clone());
             let jar = jar.add(cookie);
             return (jar, Redirect::to("/")).into_response();
         }
-        Err(ApplicationError::App(AppError::WrongAuthCredentials)) => {
-            // Invalid credentials – re-render login form with error message
-            let template = LoginTemplate {
-                email_value: form.email.clone(),
-                error: Some("Invalid email or password.".to_string()),
-                ..Default::default()
-            };
-            return render_template(template).into_response();
-        }
+
+        Err(ApplicationError::App(AppError::WrongAuthCredentials)) => (
+            Some(StatusCode::UNAUTHORIZED),
+            Some("Invalid email or password.".to_string()),
+        ),
+
+        Err(ApplicationError::Db(DbError::UserByEmailNotFound(_))) => (
+            Some(StatusCode::UNAUTHORIZED),
+            Some("User not found.".to_string()),
+        ),
         Err(e) => {
-            // Other errors (e.g., database issues)
             tracing::error!("Login error: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response();
+            (
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+                Some("Internal server error.".to_string()),
+            )
         }
-    }
+    };
+
+    let template = LoginTemplate {
+        email_value: form.email.clone(),
+        error: err_msg,
+        ..Default::default()
+    };
+    render_template(template, status).into_response()
 }

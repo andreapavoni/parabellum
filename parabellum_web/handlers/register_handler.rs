@@ -41,7 +41,7 @@ pub async fn register_page(
         selected_quadrant: "NorthEast".to_string(),
         error: None,
     };
-    render_template(template).into_response()
+    render_template(template, None).into_response()
 }
 
 /// POST /register – Handle signup form submission.
@@ -96,7 +96,8 @@ pub async fn register(
                 selected_quadrant: form.quadrant.clone(),
                 error: Some("Invalid password or internal error.".to_string()),
             };
-            return render_template(template).into_response();
+            return render_template(template, Some(StatusCode::INTERNAL_SERVER_ERROR))
+                .into_response();
         }
         Err(ApplicationError::Db(db_err)) => {
             // Likely a database error (e.g., duplicate email constraint)
@@ -105,9 +106,8 @@ pub async fn register(
                 || err_msg.contains("UNIQUE constraint")
             {
                 "An account with this email already exists."
-            } else if err_msg.contains("null value in column \"user_id\"") {
-                // If the player->user link was not set (internal error due to missing user_id)
-                "Internal error creating account (user link failed)."
+            } else if err_msg.contains("null value in column") {
+                "Missing required fields."
             } else {
                 "Registration failed due to an internal error."
             };
@@ -121,59 +121,13 @@ pub async fn register(
                 selected_quadrant: form.quadrant.clone(),
                 error: Some(user_message.to_string()),
             };
-            return render_template(template).into_response();
+            return render_template(template, Some(StatusCode::UNPROCESSABLE_ENTITY))
+                .into_response();
         }
         Err(e) => {
             // Other errors (should be rare)
             tracing::error!("Registration error: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use axum::{Form, extract::State, http::StatusCode, response::IntoResponse};
-    use axum_extra::extract::SignedCookieJar;
-    use std::sync::Arc;
-
-    use parabellum_app::{app::AppBus, config::Config, test_utils::tests::MockUnitOfWorkProvider};
-
-    use crate::{
-        AppState,
-        handlers::{register, register_handler::RegisterForm},
-    };
-
-    #[tokio::test]
-    async fn test_register_success() {
-        let config = Arc::new(Config::from_env());
-
-        let uow_provider = Arc::new(MockUnitOfWorkProvider::new());
-        let app_bus = Arc::new(AppBus::new(config.clone(), uow_provider));
-        let state = AppState::new(app_bus.clone(), &config);
-
-        let form = RegisterForm {
-            username: "TestUser".into(),
-            email: "test@example.com".into(),
-            password: "P@ssw0rd!".into(),
-            tribe: "Roman".into(),
-            quadrant: "NorthEast".into(),
-        };
-
-        let jar = SignedCookieJar::new(state.cookie_key.clone());
-        let response = register(State(state.clone()), jar, Form(form.clone())).await;
-
-        // Response should be a redirect (303) with cookie
-        let (jar_response, _redirect) = response.into_response().into_parts();
-        assert_eq!(jar_response.status, StatusCode::SEE_OTHER);
-
-        assert!(jar_response.headers.get("set-cookie").is_some());
-        let cookie = jar_response
-            .headers
-            .get("set-cookie")
-            .unwrap()
-            .to_str()
-            .unwrap();
-        assert!(cookie.starts_with("user_email"));
     }
 }
