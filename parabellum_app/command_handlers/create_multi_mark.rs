@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_game::models::alliance::AlliancePermission;
 use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
 
 use crate::{
@@ -8,9 +9,6 @@ use crate::{
     cqrs::{CommandHandler, commands::CreateMultiMark},
     uow::UnitOfWork,
 };
-
-// Alliance permission constant for managing map flags
-const MANAGE_MARKS: i32 = 128;
 
 pub struct CreateMultiMarkCommandHandler {}
 
@@ -50,10 +48,7 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
             }
 
             // Verify player has MANAGE_MARKS permission
-            let alliance_role = player.alliance_role.unwrap_or(0);
-            if (alliance_role & MANAGE_MARKS) == 0 {
-                return Err(GameError::NoManageMarksPermission.into());
-            }
+            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
         }
 
         // Validate mark type (0 = player mark, 1 = alliance mark)

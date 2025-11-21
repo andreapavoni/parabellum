@@ -2,6 +2,7 @@ use std::sync::Arc;
 use parabellum_types::map::Position;
 
 use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_game::models::alliance::AlliancePermission;
 use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
 
 use crate::{
@@ -9,9 +10,6 @@ use crate::{
     cqrs::{CommandHandler, commands::CreateCustomFlag},
     uow::UnitOfWork,
 };
-
-// Alliance permission constant for managing map flags
-const MANAGE_MARKS: i32 = 128;
 
 pub struct CreateCustomFlagCommandHandler {}
 
@@ -51,10 +49,7 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
             }
 
             // Verify player has MANAGE_MARKS permission
-            let alliance_role = player.alliance_role.unwrap_or(0);
-            if (alliance_role & MANAGE_MARKS) == 0 {
-                return Err(GameError::NoManageMarksPermission.into());
-            }
+            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
         }
 
         // Check custom flag limit (5 per owner)

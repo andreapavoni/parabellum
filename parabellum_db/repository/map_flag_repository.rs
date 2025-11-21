@@ -26,7 +26,7 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
     async fn save(&self, flag: &MapFlag) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let position_json = flag.position.as_ref().map(|p| serde_json::to_value(p).unwrap());
+        let position_json = flag.position.as_ref().map(|p| serde_json::to_value(p).expect("Failed to serialize position"));
 
         sqlx::query!(
             r#"

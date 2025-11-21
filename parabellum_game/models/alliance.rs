@@ -489,6 +489,7 @@ impl AlliancePermission {
             return Err(match permission {
                 AlliancePermission::InvitePlayer => GameError::NoInvitePermission,
                 AlliancePermission::KickPlayer => GameError::NoKickPermission,
+                AlliancePermission::ManageMarks => GameError::NoManageMarksPermission,
                 _ => GameError::NoInvitePermission, // Generic fallback
             });
         }
