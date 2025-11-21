@@ -246,6 +246,14 @@ pub mod tests {
                 player.alliance_id = alliance_id;
                 player.alliance_role = alliance_role;
                 player.alliance_join_time = alliance_join_time;
+                player.current_alliance_training_contributions = 0;
+                player.current_alliance_armor_contributions = 0;
+                player.current_alliance_cp_contributions = 0;
+                player.current_alliance_trade_contributions = 0;
+                player.total_alliance_training_contributions = 0;
+                player.total_alliance_armor_contributions = 0;
+                player.total_alliance_cp_contributions = 0;
+                player.total_alliance_trade_contributions = 0;
                 Ok(())
             } else {
                 Err(ApplicationError::Db(DbError::PlayerNotFound(player_id)))

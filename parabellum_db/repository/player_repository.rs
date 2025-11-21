@@ -110,7 +110,17 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         sqlx::query!(
             r#"
             UPDATE players
-            SET alliance_id = $1, alliance_role = $2, alliance_join_time = $3
+            SET alliance_id = $1,
+                alliance_role = $2,
+                alliance_join_time = $3,
+                current_alliance_training_contributions = 0,
+                current_alliance_armor_contributions = 0,
+                current_alliance_cp_contributions = 0,
+                current_alliance_trade_contributions = 0,
+                total_alliance_training_contributions = 0,
+                total_alliance_armor_contributions = 0,
+                total_alliance_cp_contributions = 0,
+                total_alliance_trade_contributions = 0
             WHERE id = $4
             "#,
             alliance_id,
