@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use parabellum_types::map::Position;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 
@@ -86,10 +85,10 @@ impl CommandHandler<DeleteMapFlag> for DeleteMapFlagCommandHandler {
 mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
-    use chrono::Utc;
 
     use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
     use parabellum_types::tribe::Tribe;
+    use parabellum_types::map::Position;
     use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
 
     use super::*;
@@ -116,7 +115,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test flag".to_string());
+        .with_text("Test flag".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -163,7 +162,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Alliance flag".to_string());
+        .with_text("Alliance flag".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -209,7 +208,7 @@ mod tests {
             other_player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test".to_string());
+        .with_text("Test".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -258,7 +257,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test".to_string());
+        .with_text("Test".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 

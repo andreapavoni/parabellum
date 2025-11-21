@@ -32,7 +32,7 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
         &self,
         command: CreateMultiMark,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         // Get player to verify they exist
         let player = uow.players().get_by_id(command.player_id).await?;
@@ -87,15 +87,6 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
             return Err(GameError::MapFlagLimitExceeded.into());
         }
 
-        // Validate color range (0-9 for multi-marks)
-        if command.color < 0 || command.color > 9 {
-            return Err(GameError::InvalidMapFlagColor {
-                color: command.color,
-                min: 0,
-                max: 9,
-            }.into());
-        }
-
         // Verify target exists
         match flag_type {
             MapFlagType::PlayerMark => {
@@ -130,7 +121,7 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
         flag = flag.with_target(command.target_id);
 
         // Validate the flag
-        flag.validate()?;
+        flag.validate(config.world_size)?;
 
         // Save to database
         uow.map_flags().save(&flag).await?;

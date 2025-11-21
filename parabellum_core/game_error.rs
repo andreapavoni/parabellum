@@ -189,4 +189,19 @@ pub enum GameError {
 
     #[error("No permission to manage alliance map flags")]
     NoManageMarksPermission,
+
+    #[error("Map flag position ({x}, {y}) is out of world bounds (±{world_size})")]
+    MapFlagPositionOutOfBounds { x: i32, y: i32, world_size: i16 },
+
+    #[error("Map flag missing required text for custom flag")]
+    MapFlagMissingText,
+
+    #[error("Map flag text too long (max 50 characters, got {length})")]
+    MapFlagTextTooLong { length: usize },
+
+    #[error("Map flag is not owned by player")]
+    MapFlagNotOwnedByPlayer,
+
+    #[error("Map flag is not owned by alliance")]
+    MapFlagNotOwnedByAlliance,
 }

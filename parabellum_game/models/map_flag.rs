@@ -114,18 +114,13 @@ impl MapFlag {
     }
 
     /// Sets the text label for custom flags (type 2)
-    pub fn with_text(mut self, text: String) -> Self {
-        self.text = Some(Self::truncate_text(text));
-        self
-    }
-
-    /// Truncates text to maximum 50 characters
-    fn truncate_text(text: String) -> String {
+    /// Returns error if text exceeds 50 characters
+    pub fn with_text(mut self, text: String) -> Result<Self, GameError> {
         if text.len() > 50 {
-            text.chars().take(50).collect()
-        } else {
-            text
+            return Err(GameError::MapFlagTextTooLong { length: text.len() });
         }
+        self.text = Some(text);
+        Ok(self)
     }
 
     /// Validates color range based on flag type and ownership
@@ -210,11 +205,55 @@ impl MapFlag {
         }
     }
 
+    /// Validates position is within world bounds
+    pub fn validate_position_bounds(&self, world_size: i16) -> Result<(), GameError> {
+        if let Some(pos) = &self.position {
+            let max_coord = world_size as i32;
+            if pos.x.abs() > max_coord || pos.y.abs() > max_coord {
+                return Err(GameError::MapFlagPositionOutOfBounds {
+                    x: pos.x,
+                    y: pos.y,
+                    world_size,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates text requirements for custom flags
+    pub fn validate_text(&self) -> Result<(), GameError> {
+        let flag_type = MapFlagType::from_i16(self.flag_type)?;
+
+        if flag_type == MapFlagType::CustomFlag && self.text.is_none() {
+            return Err(GameError::MapFlagMissingText);
+        }
+
+        Ok(())
+    }
+
+    /// Verifies ownership by a specific player
+    pub fn verify_ownership_by_player(&self, player_id: Uuid) -> Result<(), GameError> {
+        if self.player_id != Some(player_id) {
+            return Err(GameError::MapFlagNotOwnedByPlayer);
+        }
+        Ok(())
+    }
+
+    /// Verifies ownership by a specific alliance
+    pub fn verify_ownership_by_alliance(&self, alliance_id: Uuid) -> Result<(), GameError> {
+        if self.alliance_id != Some(alliance_id) {
+            return Err(GameError::MapFlagNotOwnedByAlliance);
+        }
+        Ok(())
+    }
+
     /// Full validation of the map flag
-    pub fn validate(&self) -> Result<(), GameError> {
+    pub fn validate(&self, world_size: i16) -> Result<(), GameError> {
         self.validate_ownership()?;
         self.validate_color()?;
         self.validate_target()?;
+        self.validate_position_bounds(world_size)?;
+        self.validate_text()?;
         Ok(())
     }
 
@@ -250,7 +289,6 @@ mod tests {
     fn test_validate_color_range_multi_marks() {
         let player_id = Uuid::new_v4();
         let created_by = Uuid::new_v4();
-        let now = Utc::now();
 
         // Player mark with valid color (0-9)
         let flag = MapFlag::new_player_flag(
@@ -369,19 +407,25 @@ mod tests {
     }
 
     #[test]
-    fn test_truncate_text() {
+    fn test_text_too_long() {
         let player_id = Uuid::new_v4();
         let created_by = Uuid::new_v4();
-        
+
         let long_text = "This is a very long text that exceeds fifty characters limit";
-        let flag = MapFlag::new_player_flag(
+        let result = MapFlag::new_player_flag(
             player_id,
             MapFlagType::CustomFlag,
             2,
             created_by,
         ).with_text(long_text.to_string());
-        
-        assert_eq!(flag.text.as_ref().unwrap().len(), 50);
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            GameError::MapFlagTextTooLong { length } => {
+                assert_eq!(length, long_text.len());
+            },
+            _ => panic!("Expected MapFlagTextTooLong error"),
+        }
     }
 
     #[test]

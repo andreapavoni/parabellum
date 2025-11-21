@@ -33,7 +33,7 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
         &self,
         command: CreateCustomFlag,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         // Get player to verify they exist
         let player = uow.players().get_by_id(command.player_id).await?;
@@ -70,27 +70,6 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
             return Err(GameError::MapFlagLimitExceeded.into());
         }
 
-        // Validate color range
-        if is_alliance_owned {
-            // Alliance flags: 10-20
-            if command.color < 10 || command.color > 20 {
-                return Err(GameError::InvalidMapFlagColor {
-                    color: command.color,
-                    min: 10,
-                    max: 20,
-                }.into());
-            }
-        } else {
-            // Player flags: 0-10
-            if command.color < 0 || command.color > 10 {
-                return Err(GameError::InvalidMapFlagColor {
-                    color: command.color,
-                    min: 0,
-                    max: 10,
-                }.into());
-            }
-        }
-
         // Create the custom flag
         let mut flag = if is_alliance_owned {
             MapFlag::new_alliance_flag(
@@ -111,10 +90,10 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
         // Set coordinates and text
         flag = flag
             .with_position(Position { x: command.x, y: command.y })
-            .with_text(command.text);  // with_text automatically truncates to 50 chars
+            .with_text(command.text)?;
 
         // Validate the flag
-        flag.validate()?;
+        flag.validate(config.world_size)?;
 
         // Save to database
         uow.map_flags().save(&flag).await?;
@@ -194,8 +173,8 @@ mod tests {
         let command = CreateCustomFlag {
             player_id: player.id,
             alliance_id: Some(alliance_id),
-            x: 200,
-            y: -100,
+            x: 50,
+            y: -50,
             color: 15,
             text: "Alliance flag".to_string(),
         };
@@ -272,7 +251,7 @@ mod tests {
                 player.id,
             )
             .with_position(Position { x: i * 10, y: i * 10 })
-            .with_text(format!("Flag {}", i));
+            .with_text(format!("Flag {}", i)).unwrap();
 
             mock_uow.map_flags().save(&flag).await.unwrap();
         }

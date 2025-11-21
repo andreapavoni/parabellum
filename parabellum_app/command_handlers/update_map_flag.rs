@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use parabellum_types::map::Position;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::map_flag::MapFlagType;
@@ -33,7 +32,7 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
         &self,
         command: UpdateMapFlag,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
-        _config: &Arc<Config>,
+        config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         // Get player to verify they exist
         let player = uow.players().get_by_id(command.player_id).await?;
@@ -79,48 +78,16 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
         // Determine flag type
         let flag_type = MapFlagType::from_i16(flag.flag_type)?;
 
-        // Validate color range based on flag type and ownership
-        match flag_type {
-            MapFlagType::PlayerMark | MapFlagType::AllianceMark => {
-                // Multi-marks: 0-9
-                if command.color < 0 || command.color > 9 {
-                    return Err(GameError::InvalidMapFlagColor {
-                        color: command.color,
-                        min: 0,
-                        max: 9,
-                    }.into());
-                }
-            },
-            MapFlagType::CustomFlag => {
-                if is_alliance_owned {
-                    // Alliance custom flags: 10-20
-                    if command.color < 10 || command.color > 20 {
-                        return Err(GameError::InvalidMapFlagColor {
-                            color: command.color,
-                            min: 10,
-                            max: 20,
-                        }.into());
-                    }
-                } else {
-                    // Player custom flags: 0-10
-                    if command.color < 0 || command.color > 10 {
-                        return Err(GameError::InvalidMapFlagColor {
-                            color: command.color,
-                            min: 0,
-                            max: 10,
-                        }.into());
-                    }
-                }
-            },
-        }
-
         // Update the flag
         flag.color = command.color;
 
         // Update text only for custom flags
         if flag_type == MapFlagType::CustomFlag && command.text.is_some() {
-            flag = flag.with_text(command.text.unwrap());
+            flag = flag.with_text(command.text.unwrap())?;
         }
+
+        // Validate the updated flag
+        flag.validate(config.world_size)?;
 
         // Save the updated flag
         uow.map_flags().update(&flag).await?;
@@ -133,10 +100,10 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
 mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
-    use chrono::Utc;
 
     use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
     use parabellum_types::tribe::Tribe;
+    use parabellum_types::map::Position;
     use parabellum_game::models::map_flag::MapFlag;
 
     use super::*;
@@ -163,7 +130,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Original text".to_string());
+        .with_text("Original text".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -259,7 +226,7 @@ mod tests {
             other_player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test".to_string());
+        .with_text("Test".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -306,7 +273,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test".to_string());
+        .with_text("Test".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
@@ -348,7 +315,7 @@ mod tests {
             player.id,
         )
         .with_position(Position { x: 100, y: 50 })
-        .with_text("Test".to_string());
+        .with_text("Test".to_string()).unwrap();
 
         mock_uow.map_flags().save(&flag).await.unwrap();
 
