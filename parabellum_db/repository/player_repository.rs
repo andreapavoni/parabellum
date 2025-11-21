@@ -97,6 +97,4 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         Ok(player.into())
     }
-    
-
 }

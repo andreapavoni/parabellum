@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::tribe::Tribe;
-
 #[derive(Debug, Clone)]
 pub struct MerchantStats {
     pub speed: u8,
@@ -59,14 +57,6 @@ impl core::ops::Mul<f64> for ResourceGroup {
         let crop = (self.3 as f64 * rhs).floor() as u32;
         ResourceGroup(wood, clay, iron, crop)
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Player {
-    pub id: Uuid,
-    pub username: String,
-    pub tribe: Tribe,
-    pub user_id: Uuid,
 }
 
 #[derive(Debug, Clone)]

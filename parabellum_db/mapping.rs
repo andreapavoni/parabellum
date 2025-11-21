@@ -2,7 +2,7 @@ use parabellum_app::jobs::{Job, JobStatus};
 use parabellum_core::DbError;
 use parabellum_game::models::{self as game_models};
 use parabellum_types::{
-    common::{Player, User},
+    common::User,
     tribe::Tribe,
 };
 
@@ -114,13 +114,24 @@ impl From<Tribe> for db_models::Tribe {
     }
 }
 
-impl From<db_models::Player> for Player {
+impl From<db_models::Player> for game_models::player::Player {
     fn from(player: db_models::Player) -> Self {
-        Player {
+        Self {
             id: player.id,
             username: player.username,
             tribe: player.tribe.into(),
             user_id: player.user_id,
+            alliance_id: player.alliance_id,
+            alliance_role: player.alliance_role,
+            alliance_join_time: player.alliance_join_time,
+            current_alliance_training_contributions: player.current_alliance_training_contributions.unwrap_or(0),
+            current_alliance_armor_contributions: player.current_alliance_armor_contributions.unwrap_or(0),
+            current_alliance_cp_contributions: player.current_alliance_cp_contributions.unwrap_or(0),
+            current_alliance_trade_contributions: player.current_alliance_trade_contributions.unwrap_or(0),
+            total_alliance_training_contributions: player.total_alliance_training_contributions.unwrap_or(0),
+            total_alliance_armor_contributions: player.total_alliance_armor_contributions.unwrap_or(0),
+            total_alliance_cp_contributions: player.total_alliance_cp_contributions.unwrap_or(0),
+            total_alliance_trade_contributions: player.total_alliance_trade_contributions.unwrap_or(0),
         }
     }
 }

@@ -34,6 +34,7 @@ pub mod tests {
             alliance::Alliance,
             army::{Army, TroopSet},
             hero::Hero,
+            player::Player,
             village::Village,
         },
         test_utils::{
@@ -42,7 +43,7 @@ pub mod tests {
         },
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::User,
         map::Position,
         tribe::Tribe,
     };

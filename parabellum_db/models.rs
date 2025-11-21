@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Debug, Clone, Serialize, Deserialize)]
+#[derive(sqlx::Type, Debug, Clone, Copy, Serialize, Deserialize)]
 #[sqlx(type_name = "tribe", rename_all = "PascalCase")]
 pub enum Tribe {
     Roman,
@@ -30,7 +30,7 @@ impl From<String> for Tribe {
 pub struct Player {
     pub id: Uuid,
     pub username: String,
-    pub tribe: String,
+    pub tribe: Tribe,
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub alliance_id: Option<Uuid>,
