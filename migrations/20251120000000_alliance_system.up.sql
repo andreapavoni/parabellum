@@ -32,9 +32,12 @@ CREATE TABLE alliance (
     -- Battle Statistics
     total_attack_points BIGINT DEFAULT 0,
     total_defense_points BIGINT DEFAULT 0,
+    total_roober_points BIGINT DEFAULT 0,
+    total_climber_points BIGINT DEFAULT 0,
     current_attack_points BIGINT DEFAULT 0,
     current_defense_points BIGINT DEFAULT 0,
     current_robber_points BIGINT DEFAULT 0,
+    current_climber_points BIGINT DEFAULT 0,
 
     -- Alliance Bonuses
     training_bonus_level INTEGER DEFAULT 0,
@@ -45,8 +48,6 @@ CREATE TABLE alliance (
     cp_bonus_contributions BIGINT DEFAULT 0,
     trade_bonus_level INTEGER DEFAULT 0,
     trade_bonus_contributions BIGINT DEFAULT 0,
-
-    old_pop INTEGER DEFAULT 0
 );
 
 -- Alliance invitations
