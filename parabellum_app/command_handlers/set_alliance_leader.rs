@@ -59,12 +59,12 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
             )
             .await?;
 
-        // Remove permissions from old leader
+        // Demote old leader to officer role (can still invite, manage marks, send messages)
         uow.players()
             .update_alliance_fields(
                 command.player_id,
                 Some(command.alliance_id),
-                Some(0),
+                Some(AlliancePermission::officer_permissions()),
                 executor.alliance_join_time,
             )
             .await?;
@@ -159,9 +159,9 @@ mod tests {
         let updated_new_leader = mock_uow_impl.players().get_by_id(new_leader.id).await.unwrap();
         assert_eq!(updated_new_leader.alliance_role, Some(AlliancePermission::all_permissions()));
 
-        // Verify old leader has no permissions
+        // Verify old leader has officer permissions (invite, manage marks, send messages)
         let updated_old_leader = mock_uow_impl.players().get_by_id(current_leader.id).await.unwrap();
-        assert_eq!(updated_old_leader.alliance_role, Some(0));
+        assert_eq!(updated_old_leader.alliance_role, Some(AlliancePermission::officer_permissions()));
 
         // Verify alliance log was created
         let logs = mock_uow_impl

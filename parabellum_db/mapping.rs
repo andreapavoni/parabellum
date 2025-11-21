@@ -1,5 +1,5 @@
 use parabellum_app::jobs::{Job, JobStatus};
-use parabellum_core::DbError;
+use parabellum_core::{ApplicationError, DbError};
 use parabellum_game::models::{self as game_models};
 use parabellum_types::{
     common::{Player, User},
@@ -8,7 +8,9 @@ use parabellum_types::{
 
 use crate::models::{self as db_models};
 
-fn parse_tribe_str(tribe_str: &str) -> Tribe {
+/// Parses a tribe string from the database into a Tribe enum
+/// Returns the tribe if valid, otherwise returns Roman as fallback
+pub fn parse_tribe_str(tribe_str: &str) -> Tribe {
     match tribe_str {
         "Roman" => Tribe::Roman,
         "Gaul" => Tribe::Gaul,
@@ -16,6 +18,21 @@ fn parse_tribe_str(tribe_str: &str) -> Tribe {
         "Natar" => Tribe::Natar,
         "Nature" => Tribe::Nature,
         _ => Tribe::Roman, // Default fallback
+    }
+}
+
+/// Parses a tribe string from the database into a Tribe enum, returning an error for invalid values
+/// This should be used when strict validation is required and invalid tribes should cause failures
+pub fn parse_tribe_strict(tribe_str: &str) -> Result<Tribe, ApplicationError> {
+    match tribe_str {
+        "Roman" => Ok(Tribe::Roman),
+        "Gaul" => Ok(Tribe::Gaul),
+        "Teuton" => Ok(Tribe::Teuton),
+        "Natar" => Ok(Tribe::Natar),
+        "Nature" => Ok(Tribe::Nature),
+        _ => Err(ApplicationError::Db(DbError::Database(
+            sqlx::Error::ColumnNotFound(format!("Invalid tribe: {}", tribe_str))
+        ))),
     }
 }
 

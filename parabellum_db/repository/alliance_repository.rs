@@ -3,22 +3,12 @@ use parabellum_core::{ApplicationError, DbError};
 use parabellum_game::models::alliance::{Alliance, AllianceInvite, AllianceLog, AllianceDiplomacy};
 use parabellum_app::repository::{AllianceRepository, AllianceInviteRepository, AllianceLogRepository, AllianceDiplomacyRepository};
 use parabellum_types::common::Player;
-use parabellum_types::tribe::Tribe;
 use sqlx::{Postgres, Transaction, Row};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-fn parse_tribe(tribe_str: &str) -> Result<Tribe, ApplicationError> {
-    match tribe_str {
-        "Roman" => Ok(Tribe::Roman),
-        "Gaul" => Ok(Tribe::Gaul),
-        "Teuton" => Ok(Tribe::Teuton),
-        "Natar" => Ok(Tribe::Natar),
-        "Nature" => Ok(Tribe::Nature),
-        _ => Err(ApplicationError::Db(DbError::Database(sqlx::Error::ColumnNotFound(format!("Invalid tribe: {}", tribe_str))))),
-    }
-}
+use crate::mapping::parse_tribe_strict;
 
 #[derive(Clone)]
 pub struct PostgresAllianceRepository<'a> {
@@ -296,7 +286,7 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(leader_id)))?;
 
         let tribe_str: String = row.get("tribe");
-        let tribe = parse_tribe(&tribe_str)?;
+        let tribe = parse_tribe_strict(&tribe_str)?;
 
         Ok(Player {
             id: row.get("id"),
@@ -348,7 +338,7 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
 
         for row in rows {
             let tribe_str: String = row.get("tribe");
-            let tribe = parse_tribe(&tribe_str)?;
+            let tribe = parse_tribe_strict(&tribe_str)?;
 
             players.push(Player {
                 id: row.get("id"),

@@ -483,6 +483,12 @@ impl AlliancePermission {
         255
     }
 
+    /// Returns bitfield with standard officer permissions (invite, manage marks, send messages)
+    /// Typically given to demoted leaders or trusted officers
+    pub fn officer_permissions() -> i32 {
+        (Self::InvitePlayer as i32) | (Self::ManageMarks as i32) | (Self::IgmMessage as i32)
+    }
+
     /// Verifies that a player has the specified permission.
     pub fn verify_permission(player: &Player, permission: AlliancePermission) -> Result<(), GameError> {
         if !Self::has_permission(player.alliance_role.unwrap_or(0), permission) {
