@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 
-use parabellum_game::models::alliance::AlliancePermission;
+use parabellum_game::models::alliance::{AlliancePermission, verify_permission};
 
 use crate::{
     config::Config,
@@ -56,8 +56,8 @@ impl CommandHandler<DeleteMapFlag> for DeleteMapFlagCommandHandler {
                 return Err(GameError::NotInAlliance.into());
             }
 
-            // Verify player has MANAGE_MARKS permission
-            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
+            // Verify player        // Verify permissions
+        verify_permission(&player, AlliancePermission::ManageMarks)?;
 
             // Verify alliance ID matches
             if Some(alliance_id) != command.alliance_id {
@@ -85,7 +85,8 @@ mod tests {
     use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
     use parabellum_types::tribe::Tribe;
     use parabellum_types::map::Position;
-    use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
+    use parabellum_types::map_flag::MapFlagType;
+    use parabellum_game::models::map_flag::MapFlag;
 
     use super::*;
     use crate::{config::Config, test_utils::tests::MockUnitOfWork};

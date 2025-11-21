@@ -67,19 +67,7 @@ pub struct Player {
     pub username: String,
     pub tribe: Tribe,
     pub user_id: Uuid,
-    pub alliance_id: Option<Uuid>,
-    pub alliance_role: Option<i32>,
-    pub alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
-    pub current_alliance_training_contributions: i64,
-    pub current_alliance_armor_contributions: i64,
-    pub current_alliance_cp_contributions: i64,
-    pub current_alliance_trade_contributions: i64,
-    pub total_alliance_training_contributions: i64,
-    pub total_alliance_armor_contributions: i64,
-    pub total_alliance_cp_contributions: i64,
-    pub total_alliance_trade_contributions: i64,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct User {

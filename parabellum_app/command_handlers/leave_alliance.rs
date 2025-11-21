@@ -31,7 +31,7 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let player = uow.players().get_by_id(command.player_id).await?;
+        let mut player = uow.players().get_by_id(command.player_id).await?;
 
         // Verify player is in an alliance
         let alliance_id = player.alliance_id.ok_or(GameError::PlayerNotInAlliance)?;
@@ -46,20 +46,14 @@ impl CommandHandler<LeaveAlliance> for LeaveAllianceCommandHandler {
         // Check if player is the last member
         let member_count = uow.alliances().count_members(alliance_id).await?;
 
+        // Remove player from alliance
+        player.leave_alliance();
+        uow.players().save(&player).await?;
+
         if member_count == 1 {
             // Last member leaving - delete the alliance
             uow.alliances().delete(alliance_id).await?;
         } else {
-            // Remove player from alliance
-            uow.players()
-                .update_alliance_fields(
-                    command.player_id,
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-
             // Log leave
             let log = AllianceLog::new(
                 alliance_id,
@@ -105,7 +99,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -187,7 +181,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(), // Different from member.id
-        );
+        ).unwrap();
 
         member.alliance_id = Some(alliance.id);
         member.alliance_role = Some(0);
@@ -231,7 +225,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());

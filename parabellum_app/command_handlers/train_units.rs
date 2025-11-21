@@ -87,7 +87,7 @@ mod tests {
 
     use parabellum_core::Result;
     use parabellum_game::{
-        models::{buildings::Building, village::Village},
+        models::{buildings::Building, player::Player, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, valley_factory,
             village_factory,
@@ -96,7 +96,7 @@ mod tests {
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         tribe::Tribe,
     };
 
@@ -165,6 +165,7 @@ mod tests {
         let (player, village, config) = setup_village_with_barracks()?;
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
+        mock_uow.players().save(&player).await.unwrap();
 
         let handler = TrainUnitsCommandHandler::new();
 
@@ -317,6 +318,7 @@ mod tests {
         let (player, village, config) = setup_village_with_stable()?;
         let village_id = village.id;
         village_repo.save(&village).await?;
+        mock_uow.players().save(&player).await?;
 
         let handler = TrainUnitsCommandHandler::new();
 

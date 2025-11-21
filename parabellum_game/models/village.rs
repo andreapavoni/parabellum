@@ -6,7 +6,7 @@ use parabellum_core::GameError;
 use parabellum_types::{
     army::UnitName,
     buildings::{BuildingGroup, BuildingName, BuildingRequirement},
-    common::{Player, ResourceGroup},
+    common::ResourceGroup,
     map::Position,
     tribe::Tribe,
 };
@@ -14,6 +14,7 @@ use parabellum_types::{
 use crate::{
     battle::BattleReport,
     models::{
+        player::Player,
         buildings::{BuildingConstraint, get_building_data},
         smithy::smithy_upgrade_cost_for_unit,
     },
@@ -618,6 +619,22 @@ impl Village {
         }
 
         Ok(embassy.building.level)
+    }
+
+    /// Validates that the village has an embassy at level 3 or higher (required to join an alliance).
+    pub fn can_join_alliance(&self) -> Result<(), GameError> {
+        let embassy = self
+            .get_building_by_name(&BuildingName::Embassy)
+            .ok_or_else(|| GameError::BuildingNotFound(BuildingName::Embassy))?;
+
+        if embassy.building.level < 3 {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Embassy,
+                level: 3,
+            });
+        }
+
+        Ok(())
     }
 
     /// Calculates total culture points production per day, including alliance bonus.

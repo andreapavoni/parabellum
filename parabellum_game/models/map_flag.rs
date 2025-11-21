@@ -4,33 +4,7 @@ use uuid::Uuid;
 
 use parabellum_core::GameError;
 use parabellum_types::map::Position;
-
-/// Type of map flag/mark
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum MapFlagType {
-    /// Type 0: Player mark - tracks all villages owned by a specific player
-    PlayerMark = 0,
-    /// Type 1: Alliance mark - tracks all villages owned by all members of an alliance
-    AllianceMark = 1,
-    /// Type 2: Custom flag - static marker at specific map coordinates with custom text
-    CustomFlag = 2,
-}
-
-impl MapFlagType {
-    pub fn from_i16(value: i16) -> Result<Self, GameError> {
-        match value {
-            0 => Ok(MapFlagType::PlayerMark),
-            1 => Ok(MapFlagType::AllianceMark),
-            2 => Ok(MapFlagType::CustomFlag),
-            _ => Err(GameError::InvalidMapFlagType(value)),
-        }
-    }
-
-    pub fn as_i16(self) -> i16 {
-        self as i16
-    }
-}
+use parabellum_types::map_flag::MapFlagType;
 
 /// Map flag/mark that can be owned by either a player or an alliance
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +101,8 @@ impl MapFlag {
     /// Multi-marks (types 0 & 1): 0-9
     /// Custom flags (type 2): 0-10 (player) or 10-20 (alliance)
     pub fn validate_color(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)?;
+        let flag_type = MapFlagType::from_i16(self.flag_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
         
         match flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {
@@ -169,7 +144,8 @@ impl MapFlag {
 
     /// Validates that the flag has correct target/coordinates based on type
     pub fn validate_target(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)?;
+        let flag_type = MapFlagType::from_i16(self.flag_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
         
         match flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {
@@ -222,7 +198,8 @@ impl MapFlag {
 
     /// Validates text requirements for custom flags
     pub fn validate_text(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)?;
+        let flag_type = MapFlagType::from_i16(self.flag_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
 
         if flag_type == MapFlagType::CustomFlag && self.text.is_none() {
             return Err(GameError::MapFlagMissingText);
@@ -270,20 +247,13 @@ impl MapFlag {
     /// Gets the flag type as enum
     pub fn get_flag_type(&self) -> Result<MapFlagType, GameError> {
         MapFlagType::from_i16(self.flag_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_map_flag_type_conversion() {
-        assert_eq!(MapFlagType::from_i16(0).unwrap(), MapFlagType::PlayerMark);
-        assert_eq!(MapFlagType::from_i16(1).unwrap(), MapFlagType::AllianceMark);
-        assert_eq!(MapFlagType::from_i16(2).unwrap(), MapFlagType::CustomFlag);
-        assert!(MapFlagType::from_i16(3).is_err());
-    }
 
     #[test]
     fn test_validate_color_range_multi_marks() {

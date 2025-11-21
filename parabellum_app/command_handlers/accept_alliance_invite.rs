@@ -1,8 +1,6 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_types::buildings::BuildingName;
 
 use crate::{
     config::Config,
@@ -41,7 +39,7 @@ impl CommandHandler<AcceptAllianceInvite> for AcceptAllianceInviteCommandHandler
 
         // Verify alliance and player exist
         let alliance = alliance_repo.get_by_id(command.alliance_id).await?;
-        let player = player_repo.get_by_id(command.player_id).await?;
+        let mut player = player_repo.get_by_id(command.player_id).await?;
 
         // Verify player is not already in an alliance
         if player.alliance_id.is_some() {
@@ -61,31 +59,13 @@ impl CommandHandler<AcceptAllianceInvite> for AcceptAllianceInviteCommandHandler
             return Err(GameError::AllianceFull.into());
         }
 
-        // Verify player has Embassy level 3+
+        // Verify player has Embassy level 3+ (domain rule)
         let capital = village_repo.get_capital_by_player_id(command.player_id).await?;
-        let embassy = capital
-            .get_building_by_name(&BuildingName::Embassy)
-            .ok_or_else(|| {
-                GameError::BuildingNotFound(BuildingName::Embassy)
-            })?;
-
-        if embassy.building.level < 3 {
-            return Err(GameError::BuildingRequirementsNotMet {
-                building: BuildingName::Embassy,
-                level: 3,
-            }
-            .into());
-        }
+        capital.can_join_alliance()?;
 
         // Update player's alliance_id and alliance_join_time
-        player_repo
-            .update_alliance_fields(
-                command.player_id,
-                Some(command.alliance_id),
-                Some(0), // Set alliance_role to 0 (no permissions initially)
-                Some(Utc::now()),
-            )
-            .await?;
+        player.join_alliance(command.alliance_id, 0).map_err(GameError::from)?;
+        player_repo.save(&player).await?;
 
         // Delete invitation from alliance_invite
         alliance_invite_repo.delete(invite.id).await?;
@@ -130,7 +110,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader_id,
-        );
+        ).unwrap();
 
         // Create player being invited
         let player = player_factory(PlayerFactoryOptions {
@@ -217,7 +197,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let mut player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -255,7 +235,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -292,7 +272,7 @@ mod tests {
             "TEST".to_string(),
             1, // max_members = 1 (only leader)
             leader_id,
-        );
+        ).unwrap();
 
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -359,7 +339,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader_id,
-        );
+        ).unwrap();
 
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -410,7 +390,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader_id,
-        );
+        ).unwrap();
 
         let player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),

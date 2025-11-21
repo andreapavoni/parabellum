@@ -1,5 +1,5 @@
 use parabellum_app::jobs::{Job, JobStatus};
-use parabellum_core::{ApplicationError, DbError};
+use parabellum_core::DbError;
 use parabellum_game::models::{self as game_models};
 use parabellum_types::{
     common::{Player, User},
@@ -7,34 +7,6 @@ use parabellum_types::{
 };
 
 use crate::models::{self as db_models};
-
-/// Parses a tribe string from the database into a Tribe enum
-/// Returns the tribe if valid, otherwise returns Roman as fallback
-pub fn parse_tribe_str(tribe_str: &str) -> Tribe {
-    match tribe_str {
-        "Roman" => Tribe::Roman,
-        "Gaul" => Tribe::Gaul,
-        "Teuton" => Tribe::Teuton,
-        "Natar" => Tribe::Natar,
-        "Nature" => Tribe::Nature,
-        _ => Tribe::Roman, // Default fallback
-    }
-}
-
-/// Parses a tribe string from the database into a Tribe enum, returning an error for invalid values
-/// This should be used when strict validation is required and invalid tribes should cause failures
-pub fn parse_tribe_strict(tribe_str: &str) -> Result<Tribe, ApplicationError> {
-    match tribe_str {
-        "Roman" => Ok(Tribe::Roman),
-        "Gaul" => Ok(Tribe::Gaul),
-        "Teuton" => Ok(Tribe::Teuton),
-        "Natar" => Ok(Tribe::Natar),
-        "Nature" => Ok(Tribe::Nature),
-        _ => Err(ApplicationError::Db(DbError::Database(
-            sqlx::Error::ColumnNotFound(format!("Invalid tribe: {}", tribe_str))
-        ))),
-    }
-}
 
 pub struct VillageAggregate {
     pub village: db_models::Village,
@@ -48,7 +20,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
 
     fn try_from(agg: VillageAggregate) -> Result<Self, Self::Error> {
         let db_village = agg.village;
-        let tribe: Tribe = parse_tribe_str(&agg.player.tribe);
+        let tribe: Tribe = agg.player.tribe.into();
 
         let mut home_army: Option<game_models::army::Army> = None;
         let mut reinforcements = Vec::new();
@@ -143,23 +115,12 @@ impl From<Tribe> for db_models::Tribe {
 }
 
 impl From<db_models::Player> for Player {
-    fn from(db_player: db_models::Player) -> Self {
+    fn from(player: db_models::Player) -> Self {
         Player {
-            id: db_player.id,
-            username: db_player.username,
-            tribe: parse_tribe_str(&db_player.tribe),
-            user_id: db_player.user_id,
-            alliance_id: db_player.alliance_id,
-            alliance_role: db_player.alliance_role,
-            alliance_join_time: db_player.alliance_join_time,
-            current_alliance_training_contributions: db_player.current_alliance_training_contributions.unwrap_or(0),
-            current_alliance_armor_contributions: db_player.current_alliance_armor_contributions.unwrap_or(0),
-            current_alliance_cp_contributions: db_player.current_alliance_cp_contributions.unwrap_or(0),
-            current_alliance_trade_contributions: db_player.current_alliance_trade_contributions.unwrap_or(0),
-            total_alliance_training_contributions: db_player.total_alliance_training_contributions.unwrap_or(0),
-            total_alliance_armor_contributions: db_player.total_alliance_armor_contributions.unwrap_or(0),
-            total_alliance_cp_contributions: db_player.total_alliance_cp_contributions.unwrap_or(0),
-            total_alliance_trade_contributions: db_player.total_alliance_trade_contributions.unwrap_or(0),
+            id: player.id,
+            username: player.username,
+            tribe: player.tribe.into(),
+            user_id: player.user_id,
         }
     }
 }
@@ -172,8 +133,6 @@ impl From<db_models::User> for User {
 
 impl From<db_models::Army> for game_models::army::Army {
     fn from(army: db_models::Army) -> Self {
-        let tribe: Tribe = army.tribe.clone().into();
-
         let hero = match army.hero_id {
             None => None,
             Some(id) => {
@@ -181,7 +140,7 @@ impl From<db_models::Army> for game_models::army::Army {
                     Some(id),
                     army.village_id as u32,
                     army.player_id,
-                    tribe.clone(),
+                    army.tribe.into(),
                     army.hero_unassigned_points.map(|p| p as u16),
                 );
 
@@ -204,7 +163,7 @@ impl From<db_models::Army> for game_models::army::Army {
             army.village_id as u32,
             army.current_map_field_id.map(|id| id as u32),
             army.player_id,
-            tribe,
+            army.tribe.into(),
             &(serde_json::from_value(army.units).unwrap_or_default()),
             &(serde_json::from_value(army.smithy).unwrap_or_default()),
             hero,

@@ -45,8 +45,9 @@ pub mod tests {
             assert_eq!(flags.len(), 1);
             assert_eq!(flags[0].player_id, Some(player.id));
             assert_eq!(flags[0].alliance_id, None);
-            assert_eq!(flags[0].x, Some(100));
-            assert_eq!(flags[0].y, Some(50));
+            assert!(flags[0].position.is_some());
+            assert_eq!(flags[0].position.as_ref().unwrap().x, 100);
+            assert_eq!(flags[0].position.as_ref().unwrap().y, 50);
             assert_eq!(flags[0].color, 5);
             assert_eq!(flags[0].text, Some("My Custom Flag".to_string()));
             assert_eq!(flags[0].flag_type, MapFlagType::CustomFlag.as_i16());

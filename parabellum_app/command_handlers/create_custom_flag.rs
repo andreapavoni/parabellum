@@ -1,9 +1,10 @@
-use std::sync::Arc;
 use parabellum_types::map::Position;
+use parabellum_types::map_flag::MapFlagType;
+use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_game::models::alliance::AlliancePermission;
-use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
+use parabellum_game::models::alliance::{AlliancePermission, verify_permission};
+use parabellum_game::models::map_flag::MapFlag;
 
 use crate::{
     config::Config,
@@ -48,15 +49,24 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
                 return Err(GameError::NotInAlliance.into());
             }
 
-            // Verify player has MANAGE_MARKS permission
-            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
+            // Verify permissions
+            verify_permission(&player, AlliancePermission::ManageMarks)?;
         }
 
         // Check custom flag limit (5 per owner)
-        let custom_flag_count = uow.map_flags()
+        let custom_flag_count = uow
+            .map_flags()
             .count_by_owner(
-                if is_alliance_owned { None } else { Some(command.player_id) },
-                if is_alliance_owned { command.alliance_id } else { None },
+                if is_alliance_owned {
+                    None
+                } else {
+                    Some(command.player_id)
+                },
+                if is_alliance_owned {
+                    command.alliance_id
+                } else {
+                    None
+                },
                 Some(MapFlagType::CustomFlag.as_i16()),
             )
             .await?;
@@ -84,7 +94,10 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
 
         // Set coordinates and text
         flag = flag
-            .with_position(Position { x: command.x, y: command.y })
+            .with_position(Position {
+                x: command.x,
+                y: command.y,
+            })
             .with_text(command.text)?;
 
         // Validate the flag
@@ -138,7 +151,11 @@ mod tests {
         );
 
         // Verify flag was created
-        let flags = mock_uow.map_flags().get_by_player_id(player.id).await.unwrap();
+        let flags = mock_uow
+            .map_flags()
+            .get_by_player_id(player.id)
+            .await
+            .unwrap();
         assert_eq!(flags.len(), 1);
         assert_eq!(flags[0].player_id, Some(player.id));
         assert_eq!(flags[0].alliance_id, None);
@@ -182,7 +199,11 @@ mod tests {
         );
 
         // Verify flag was created
-        let flags = mock_uow.map_flags().get_by_alliance_id(alliance_id).await.unwrap();
+        let flags = mock_uow
+            .map_flags()
+            .get_by_alliance_id(alliance_id)
+            .await
+            .unwrap();
         assert_eq!(flags.len(), 1);
         assert_eq!(flags[0].alliance_id, Some(alliance_id));
         assert_eq!(flags[0].player_id, None);
@@ -219,7 +240,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            ApplicationError::Game(GameError::NoManageMarksPermission) => {},
+            ApplicationError::Game(GameError::NoManageMarksPermission) => {}
             e => panic!("Expected NoManageMarksPermission error, got: {:?}", e),
         }
     }
@@ -239,14 +260,13 @@ mod tests {
 
         // Create 5 existing flags (limit)
         for i in 0..5 {
-            let flag = MapFlag::new_player_flag(
-                player.id,
-                MapFlagType::CustomFlag,
-                5,
-                player.id,
-            )
-            .with_position(Position { x: i * 10, y: i * 10 })
-            .with_text(format!("Flag {}", i)).unwrap();
+            let flag = MapFlag::new_player_flag(player.id, MapFlagType::CustomFlag, 5, player.id)
+                .with_position(Position {
+                    x: i * 10,
+                    y: i * 10,
+                })
+                .with_text(format!("Flag {}", i))
+                .unwrap();
 
             mock_uow.map_flags().save(&flag).await.unwrap();
         }
@@ -264,7 +284,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            ApplicationError::Game(GameError::MapFlagLimitExceeded) => {},
+            ApplicationError::Game(GameError::MapFlagLimitExceeded) => {}
             e => panic!("Expected MapFlagLimitExceeded error, got: {:?}", e),
         }
     }
@@ -299,7 +319,7 @@ mod tests {
                 assert_eq!(color, 15);
                 assert_eq!(min, 0);
                 assert_eq!(max, 10);
-            },
+            }
             e => panic!("Expected InvalidMapFlagColor error, got: {:?}", e),
         }
     }
@@ -338,7 +358,7 @@ mod tests {
                 assert_eq!(color, 5);
                 assert_eq!(min, 10);
                 assert_eq!(max, 20);
-            },
+            }
             e => panic!("Expected InvalidMapFlagColor error, got: {:?}", e),
         }
     }

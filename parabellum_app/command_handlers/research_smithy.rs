@@ -58,7 +58,7 @@ mod tests {
 
     use parabellum_core::{GameError, Result};
     use parabellum_game::{
-        models::{buildings::Building, smithy::smithy_upgrade_cost_for_unit, village::Village},
+        models::{buildings::Building, player::Player, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
@@ -66,7 +66,7 @@ mod tests {
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         tribe::Tribe,
     };
 

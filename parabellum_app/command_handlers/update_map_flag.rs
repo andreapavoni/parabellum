@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_game::models::alliance::AlliancePermission;
-use parabellum_game::models::map_flag::MapFlagType;
+use parabellum_game::models::alliance::{AlliancePermission, verify_permission};
+use parabellum_types::map_flag::MapFlagType;
 
 use crate::{
     config::Config,
@@ -56,8 +56,8 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
                 return Err(GameError::NotInAlliance.into());
             }
 
-            // Verify player has MANAGE_MARKS permission
-            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
+            // Verify permissions
+            verify_permission(&player, AlliancePermission::ManageMarks)?;
 
             // Verify alliance ID matches
             if Some(alliance_id) != command.alliance_id {
@@ -71,7 +71,8 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
         }
 
         // Determine flag type
-        let flag_type = MapFlagType::from_i16(flag.flag_type)?;
+        let flag_type = MapFlagType::from_i16(flag.flag_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(flag.flag_type))?;
 
         // Update the flag
         flag.color = command.color;

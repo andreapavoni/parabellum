@@ -3,10 +3,12 @@ use uuid::Uuid;
 
 use parabellum_core::Result;
 use parabellum_types::{
-    common::{Player, User},
+    common::User,
     map::{Position, ValleyTopology},
     tribe::Tribe,
 };
+
+use crate::models::player::Player;
 
 use crate::models::map::{MapField, MapFieldTopology};
 

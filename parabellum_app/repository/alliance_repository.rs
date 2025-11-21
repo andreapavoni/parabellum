@@ -1,6 +1,6 @@
 use parabellum_core::ApplicationError;
 use parabellum_game::models::alliance::{Alliance, AllianceInvite, AllianceLog, AllianceDiplomacy};
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 use uuid::Uuid;
 
 #[async_trait::async_trait]

@@ -1,4 +1,4 @@
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -98,41 +98,5 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         Ok(player.into())
     }
     
-    async fn update_alliance_fields(
-        &self,
-        player_id: Uuid,
-        alliance_id: Option<Uuid>,
-        alliance_role: Option<i32>,
-        alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
-
-        sqlx::query!(
-            r#"
-            UPDATE players
-            SET alliance_id = $1,
-                alliance_role = $2,
-                alliance_join_time = $3,
-                current_alliance_training_contributions = 0,
-                current_alliance_armor_contributions = 0,
-                current_alliance_cp_contributions = 0,
-                current_alliance_trade_contributions = 0,
-                total_alliance_training_contributions = 0,
-                total_alliance_armor_contributions = 0,
-                total_alliance_cp_contributions = 0,
-                total_alliance_trade_contributions = 0
-            WHERE id = $4
-            "#,
-            alliance_id,
-            alliance_role,
-            alliance_join_time,
-            player_id,
-        )
-        .execute(&mut *tx_guard.as_mut())
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(())
-    }
 
 }

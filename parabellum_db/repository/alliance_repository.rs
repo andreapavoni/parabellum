@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use parabellum_core::{ApplicationError, DbError};
 use parabellum_game::models::alliance::{Alliance, AllianceInvite, AllianceLog, AllianceDiplomacy};
 use parabellum_app::repository::{AllianceRepository, AllianceInviteRepository, AllianceLogRepository, AllianceDiplomacyRepository};
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 use sqlx::{Postgres, Transaction, Row};
 use std::sync::Arc;
 use tokio::sync::Mutex;

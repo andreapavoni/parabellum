@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_game::models::alliance::{AllianceInvite, AlliancePermission, AllianceLog, AllianceLogType};
+use parabellum_game::models::alliance::{AllianceInvite, AlliancePermission, AllianceLog, AllianceLogType, verify_permission};
 
 use crate::{
     config::Config,
@@ -34,7 +34,8 @@ impl CommandHandler<InviteToAlliance> for InviteToAllianceCommandHandler {
         let inviter = uow.players().get_by_id(command.player_id).await?;
         let target_player = uow.players().get_by_id(command.target_player_id).await?;
 
-        AlliancePermission::verify_permission(&inviter, AlliancePermission::InvitePlayer)?;
+        // Verify permissions
+        verify_permission(&inviter, AlliancePermission::InvitePlayer)?;
 
         // Check if invitation already exists
         let existing_invites = uow
@@ -95,7 +96,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Create inviter player with InvitePlayer permission
         let mut inviter = player_factory(PlayerFactoryOptions {
@@ -163,7 +164,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Create inviter without InvitePlayer permission
         let mut inviter = player_factory(PlayerFactoryOptions {
@@ -208,7 +209,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let mut inviter = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -261,7 +262,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let mut inviter = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
@@ -300,7 +301,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let target_player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Gaul),
@@ -337,7 +338,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Create inviter with all permissions (leader)
         let mut inviter = player_factory(PlayerFactoryOptions {

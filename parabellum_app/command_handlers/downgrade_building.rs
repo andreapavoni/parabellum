@@ -93,7 +93,8 @@ mod tests {
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
-    use parabellum_types::{common::Player, tribe::Tribe};
+    use parabellum_game::models::player::Player;
+    use parabellum_types::tribe::Tribe;
 
     use super::*;
     use crate::{

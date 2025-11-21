@@ -46,6 +46,7 @@ pub mod tests {
         map::Position,
         tribe::Tribe,
     };
+    use sqlx::types::chrono;
     use uuid::Uuid;
 
     #[derive(Clone)]
@@ -276,7 +277,7 @@ pub mod tests {
             "TEST".to_string(),
             60,
             leader_id,
-        );
+        )?;
         alliance.armor_bonus_level = armor_level;
 
         let alliance_repo = uow.alliances();
@@ -297,9 +298,7 @@ pub mod tests {
 
         player.alliance_id = Some(alliance_id);
         // Set join time to 100000 seconds ago to bypass any cooldown checks
-        // Set join time to 100000 seconds ago
-        use chrono::{Utc, Duration};
-        player.alliance_join_time = Some(Utc::now() - Duration::seconds(100000));
+        player.alliance_join_time = Some(chrono::Utc::now() - std::time::Duration::from_secs(100000));
 
         let player_repo = uow.players();
         player_repo.save(&player).await?;
@@ -321,7 +320,7 @@ pub mod tests {
             "TEST".to_string(),
             60,
             leader_id,
-        );
+        )?;
         alliance.training_bonus_level = training_level;
 
         let alliance_repo = uow.alliances();
@@ -344,7 +343,7 @@ pub mod tests {
             "TEST".to_string(),
             60,
             leader_id,
-        );
+        )?;
         alliance.trade_bonus_level = trade_level;
 
         let alliance_repo = uow.alliances();

@@ -21,7 +21,8 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let bonus_type = BonusType::from_i16(command.bonus_type)?;
+        let bonus_type = BonusType::from_i16(command.bonus_type)
+            .ok_or(parabellum_core::GameError::InvalidBonusType(command.bonus_type))?;
 
         let mut player = uow.players().get_by_id(command.player_id).await?;
         let mut village = uow.villages().get_by_id(command.village_id).await?;
@@ -91,14 +92,14 @@ mod tests {
     use uuid::Uuid;
     use parabellum_core::{ApplicationError, Result};
     use parabellum_game::{
-        models::{alliance::Alliance, village::Village},
+        models::{alliance::Alliance, player::Player, village::Village},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
         },
     };
     use parabellum_types::{
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         map::Position,
         tribe::Tribe,
     };
@@ -120,7 +121,7 @@ mod tests {
     )> {
         let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
 
-        let mut alliance = Alliance::new("Test Alliance".to_string(), "TEST".to_string(), 60, Uuid::new_v4());
+        let mut alliance = Alliance::new("Test Alliance".to_string(), "TEST".to_string(), 60, Uuid::new_v4()).unwrap();
         alliance.id = Uuid::new_v4();
 
         let mut player = player_factory(PlayerFactoryOptions {

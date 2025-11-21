@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parabellum_core::Result;
 use parabellum_game::models::village::Village;
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 
 use crate::{
     auth::hash_password,

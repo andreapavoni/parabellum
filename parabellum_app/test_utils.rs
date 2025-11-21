@@ -9,10 +9,11 @@ pub mod tests {
         map::{MapField, MapFieldTopology, MapQuadrant, Valley},
         map_flag::MapFlag,
         marketplace::MarketplaceOffer,
+        player::Player,
         village::Village,
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::User,
         map::{Position, ValleyTopology},
     };
     use std::{
@@ -234,31 +235,6 @@ pub mod tests {
             }
         }
 
-        async fn update_alliance_fields(
-            &self,
-            player_id: Uuid,
-            alliance_id: Option<Uuid>,
-            alliance_role: Option<i32>,
-            alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
-        ) -> Result<(), ApplicationError> {
-            let mut players = self.players.lock().unwrap();
-            if let Some(player) = players.get_mut(&player_id) {
-                player.alliance_id = alliance_id;
-                player.alliance_role = alliance_role;
-                player.alliance_join_time = alliance_join_time;
-                player.current_alliance_training_contributions = 0;
-                player.current_alliance_armor_contributions = 0;
-                player.current_alliance_cp_contributions = 0;
-                player.current_alliance_trade_contributions = 0;
-                player.total_alliance_training_contributions = 0;
-                player.total_alliance_armor_contributions = 0;
-                player.total_alliance_cp_contributions = 0;
-                player.total_alliance_trade_contributions = 0;
-                Ok(())
-            } else {
-                Err(ApplicationError::Db(DbError::PlayerNotFound(player_id)))
-            }
-        }
     }
 
     #[derive(Default, Clone)]

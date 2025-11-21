@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_game::models::alliance::{AllianceLog, AllianceLogType, AlliancePermission};
+use parabellum_game::models::alliance::{
+    AllianceLog, AllianceLogType, AlliancePermission, verify_permission,
+};
 
 use crate::{
     config::Config,
@@ -32,15 +34,15 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
         let kicker = uow.players().get_by_id(command.player_id).await?;
-        let target_player = uow.players().get_by_id(command.target_player_id).await?;
+        let mut target_player = uow.players().get_by_id(command.target_player_id).await?;
 
         // Verify kicker is in the alliance
         if kicker.alliance_id != Some(command.alliance_id) {
             return Err(GameError::PlayerNotInAlliance.into());
         }
 
-        // Verify kicker has permission to kick players
-        AlliancePermission::verify_permission(&kicker, AlliancePermission::KickPlayer)?;
+        // Verify kicker has permission        // Verify permissions
+        verify_permission(&kicker, AlliancePermission::KickPlayer)?;
 
         // Verify target player is in the same alliance
         if target_player.alliance_id != Some(command.alliance_id) {
@@ -54,14 +56,8 @@ impl CommandHandler<KickFromAlliance> for KickFromAllianceCommandHandler {
         }
 
         // Remove player from alliance
-        uow.players()
-            .update_alliance_fields(
-                command.target_player_id,
-                None,
-                None,
-                None,
-            )
-            .await?;
+        target_player.leave_alliance();
+        uow.players().save(&target_player).await?;
 
         // Log kick
         let log = AllianceLog::new(
@@ -111,7 +107,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         // Set leader's alliance fields
         leader.alliance_id = Some(alliance.id);
@@ -207,7 +203,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -268,7 +264,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -327,7 +323,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -388,7 +384,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         // Set leader's alliance fields
         leader.alliance_id = Some(alliance.id);
@@ -442,7 +438,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -489,7 +485,7 @@ mod tests {
             "TEST".to_string(),
             5,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         let target = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Teuton),

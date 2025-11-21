@@ -689,7 +689,8 @@ pub fn calculate_army_losses(army: &Army, percent: f64) -> (TroopSet, TroopSet) 
 
 #[cfg(test)]
 mod tests {
-    use parabellum_types::{common::Player, tribe::Tribe};
+    use crate::models::player::Player;
+    use parabellum_types::tribe::Tribe;
 
     use super::*;
     use crate::test_utils::{

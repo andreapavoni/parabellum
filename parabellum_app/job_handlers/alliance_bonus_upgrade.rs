@@ -35,7 +35,8 @@ impl JobHandler for AllianceBonusUpgradeJobHandler {
         info!("Executing AllianceBonusUpgrade job");
 
         let mut alliance = ctx.uow.alliances().get_by_id(self.payload.alliance_id).await?;
-        let bonus_type = BonusType::from_i16(self.payload.bonus_type)?;
+        let bonus_type = BonusType::from_i16(self.payload.bonus_type)
+            .ok_or(parabellum_core::GameError::InvalidBonusType(self.payload.bonus_type))?;
 
         alliance.upgrade_bonus(bonus_type)?;
 

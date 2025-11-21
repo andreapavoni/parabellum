@@ -2,33 +2,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use parabellum_core::GameError;
-use parabellum_types::common::{Player, ResourceGroup};
+use parabellum_types::common::ResourceGroup;
+pub use parabellum_types::alliance::{AlliancePermission, BonusType};
 
-use crate::models::village::Village;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BonusType {
-    Training = 1,
-    Armor = 2,
-    CombatPoints = 3,
-    Trade = 4,
-}
-
-impl BonusType {
-    pub fn from_i16(value: i16) -> Result<Self, GameError> {
-        match value {
-            1 => Ok(BonusType::Training),
-            2 => Ok(BonusType::Armor),
-            3 => Ok(BonusType::CombatPoints),
-            4 => Ok(BonusType::Trade),
-            _ => Err(GameError::InvalidBonusType(value)),
-        }
-    }
-
-    pub fn as_i16(self) -> i16 {
-        self as i16
-    }
-}
+use crate::models::{player::Player, village::Village};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Alliance {
@@ -64,8 +41,15 @@ pub struct Alliance {
 }
 
 impl Alliance {
-    pub fn new(name: String, tag: String, max_members: i32, leader_id: Uuid) -> Self {
-        Self {
+    pub fn new(name: String, tag: String, max_members: i32, leader_id: Uuid) -> Result<Self, GameError> {
+        if name.len() < 3 || name.len() > 20 {
+            return Err(GameError::InvalidAllianceName("Length must be between 3 and 20 characters".to_string()));
+        }
+        if tag.len() < 3 || tag.len() > 5 {
+            return Err(GameError::InvalidAllianceTag("Length must be between 3 and 5 characters".to_string()));
+        }
+
+        Ok(Self {
             id: Uuid::new_v4(),
             name,
             tag,
@@ -90,11 +74,11 @@ impl Alliance {
             trade_bonus_level: 0,
             trade_bonus_contributions: 0,
             old_pop: 0,
-        }
+        })
     }
 
     /// Creates a new alliance with a founder player. The max_members is determined by the embassy level.
-    pub fn create_with_founder(name: String, tag: String, embassy_level: u8, founder_id: Uuid) -> Self {
+    pub fn create_with_founder(name: String, tag: String, embassy_level: u8, founder_id: Uuid) -> Result<Self, GameError> {
         Self::new(name, tag, embassy_level as i32, founder_id)
     }
 
@@ -244,7 +228,7 @@ impl Alliance {
 
         // Check donation limit based on embassy level
         let donation_limit = Self::get_donation_limit(embassy_level, speed);
-        let current_contributions = Self::get_player_current_contributions(player, bonus_type);
+        let current_contributions = player.get_alliance_contribution(bonus_type);
 
         if current_contributions + contribution_points > donation_limit {
             return Err(GameError::AllianceDonationLimitExceeded);
@@ -267,7 +251,7 @@ impl Alliance {
         village.deduct_resources(resources)?;
 
         // Update player stats for the specific bonus type
-        Self::update_player_contributions(player, bonus_type, contribution_points);
+        player.add_alliance_contribution(bonus_type, contribution_points);
 
         // Update alliance bonus contributions
         match bonus_type {
@@ -284,38 +268,6 @@ impl Alliance {
             contribution_points,
             upgrade_triggered,
         })
-    }
-
-    /// Helper to get player's current contributions for a specific bonus type
-    fn get_player_current_contributions(player: &Player, bonus_type: BonusType) -> i64 {
-        match bonus_type {
-            BonusType::Training => player.current_alliance_training_contributions,
-            BonusType::Armor => player.current_alliance_armor_contributions,
-            BonusType::CombatPoints => player.current_alliance_cp_contributions,
-            BonusType::Trade => player.current_alliance_trade_contributions,
-        }
-    }
-
-    /// Helper to update player's contributions for a specific bonus type
-    fn update_player_contributions(player: &mut Player, bonus_type: BonusType, points: i64) {
-        match bonus_type {
-            BonusType::Training => {
-                player.current_alliance_training_contributions += points;
-                player.total_alliance_training_contributions += points;
-            }
-            BonusType::Armor => {
-                player.current_alliance_armor_contributions += points;
-                player.total_alliance_armor_contributions += points;
-            }
-            BonusType::CombatPoints => {
-                player.current_alliance_cp_contributions += points;
-                player.total_alliance_cp_contributions += points;
-            }
-            BonusType::Trade => {
-                player.current_alliance_trade_contributions += points;
-                player.total_alliance_trade_contributions += points;
-            }
-        }
     }
 
     /// Upgrades the bonus level for a given bonus type.
@@ -461,47 +413,20 @@ pub struct AllianceDiplomacy {
     pub accepted: i16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AlliancePermission {
-    AssignToPosition = 1,
-    KickPlayer = 2,
-    ChangeAllianceDesc = 4,
-    AllianceDiplomacy = 8,
-    IgmMessage = 16,
-    InvitePlayer = 32,
-    ManageForum = 64,
-    ManageMarks = 128,
+/// Verifies that a player has the specified permission.
+pub fn verify_permission(player: &Player, permission: AlliancePermission) -> Result<(), GameError> {
+    if !AlliancePermission::has_permission(player.alliance_role.unwrap_or(0), permission) {
+        return Err(match permission {
+            AlliancePermission::InvitePlayer => GameError::NoInvitePermission,
+            AlliancePermission::KickPlayer => GameError::NoKickPermission,
+            AlliancePermission::ManageMarks => GameError::NoManageMarksPermission,
+            _ => GameError::NoInvitePermission, // Generic fallback
+        });
+    }
+    Ok(())
 }
 
-impl AlliancePermission {
-    pub fn has_permission(role_bitfield: i32, permission: AlliancePermission) -> bool {
-        (role_bitfield & (permission as i32)) != 0
-    }
 
-    /// Returns bitfield with all permissions enabled (255)
-    pub fn all_permissions() -> i32 {
-        255
-    }
-
-    /// Returns bitfield with standard officer permissions (invite, manage marks, send messages)
-    /// Typically given to demoted leaders or trusted officers
-    pub fn officer_permissions() -> i32 {
-        (Self::InvitePlayer as i32) | (Self::ManageMarks as i32) | (Self::IgmMessage as i32)
-    }
-
-    /// Verifies that a player has the specified permission.
-    pub fn verify_permission(player: &Player, permission: AlliancePermission) -> Result<(), GameError> {
-        if !Self::has_permission(player.alliance_role.unwrap_or(0), permission) {
-            return Err(match permission {
-                AlliancePermission::InvitePlayer => GameError::NoInvitePermission,
-                AlliancePermission::KickPlayer => GameError::NoKickPermission,
-                AlliancePermission::ManageMarks => GameError::NoManageMarksPermission,
-                _ => GameError::NoInvitePermission, // Generic fallback
-            });
-        }
-        Ok(())
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -514,7 +439,7 @@ mod tests {
             "TEST".to_string(),
             60,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Test level 0
         alliance.armor_bonus_level = 0;
@@ -540,7 +465,7 @@ mod tests {
             "TEST".to_string(),
             60,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Test level 0
         alliance.training_bonus_level = 0;
@@ -566,7 +491,7 @@ mod tests {
             "TEST".to_string(),
             60,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Test level 0
         alliance.cp_bonus_level = 0;
@@ -588,7 +513,7 @@ mod tests {
             "TEST".to_string(),
             60,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Test level 0
         alliance.trade_bonus_level = 0;
@@ -614,7 +539,7 @@ mod tests {
             "TEST".to_string(),
             60,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         // Set all bonuses to different levels
         alliance.armor_bonus_level = 3;

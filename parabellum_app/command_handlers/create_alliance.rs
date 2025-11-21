@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use chrono::Utc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{
-    Alliance, AllianceLog, AllianceLogType, AlliancePermission,
+    Alliance, AllianceLog, AllianceLogType,
 };
+use parabellum_types::alliance::AlliancePermission;
 
 use crate::{
     config::Config,
@@ -34,7 +34,7 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let player = uow.players().get_by_id(command.player_id).await?;
+        let mut player = uow.players().get_by_id(command.player_id).await?;
 
         // Verify player is not already in an alliance
         if player.alliance_id.is_some() {
@@ -60,19 +60,15 @@ impl CommandHandler<CreateAlliance> for CreateAllianceCommandHandler {
             command.tag.clone(),
             embassy_level,
             command.player_id,
-        );
+        )?;
 
         uow.alliances().save(&alliance).await?;
 
         // Set player as alliance leader
-        uow.players()
-            .update_alliance_fields(
-                command.player_id,
-                Some(alliance.id),
-                Some(AlliancePermission::all_permissions()),
-                Some(Utc::now()),
-            )
-            .await?;
+        player.join_alliance(alliance.id, AlliancePermission::all_permissions())
+            .map_err(|_| GameError::PlayerAlreadyInAlliance)?; // Should not happen due to check above
+        
+        uow.players().save(&player).await?;
 
         // Log alliance creation
         let log = AllianceLog::new(
@@ -335,7 +331,7 @@ mod tests {
             "TEST".to_string(),
             3,
             Uuid::new_v4(),
-        );
+        ).unwrap();
         mock_uow.alliances().save(&existing_alliance).await.unwrap();
 
         mock_uow.players().save(&player).await.unwrap();
@@ -392,7 +388,7 @@ mod tests {
             "OLD".to_string(),
             3,
             Uuid::new_v4(),
-        );
+        ).unwrap();
         mock_uow.alliances().save(&existing_alliance).await.unwrap();
 
         mock_uow.players().save(&player).await.unwrap();

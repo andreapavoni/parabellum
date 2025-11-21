@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use parabellum_core::{ApplicationError, GameError, Result};
-use parabellum_game::models::alliance::AlliancePermission;
-use parabellum_game::models::map_flag::{MapFlag, MapFlagType};
+use parabellum_game::models::alliance::{AlliancePermission, verify_permission};
+use parabellum_game::models::map_flag::MapFlag;
+use parabellum_types::map_flag::MapFlagType;
 
 use crate::{
     config::Config,
@@ -47,12 +48,13 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
                 return Err(GameError::NotInAlliance.into());
             }
 
-            // Verify player has MANAGE_MARKS permission
-            AlliancePermission::verify_permission(&player, AlliancePermission::ManageMarks)?;
+            // Verify permissions
+        verify_permission(&player, AlliancePermission::ManageMarks)?;
         }
 
         // Validate mark type (0 = player mark, 1 = alliance mark)
-        let flag_type = MapFlagType::from_i16(command.mark_type)?;
+        let flag_type = MapFlagType::from_i16(command.mark_type)
+            .ok_or_else(|| GameError::InvalidMapFlagType(command.mark_type))?;
         match flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {},
             _ => return Err(GameError::InvalidMapFlagType(command.mark_type).into()),
@@ -197,7 +199,7 @@ mod tests {
             "ENEMY".to_string(),
             10,
             Uuid::new_v4(),
-        );
+        ).unwrap();
 
         mock_uow.players().save(&player).await.unwrap();
         mock_uow.alliances().save(&target_alliance).await.unwrap();

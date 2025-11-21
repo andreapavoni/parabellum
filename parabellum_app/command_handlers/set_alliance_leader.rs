@@ -31,8 +31,8 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let executor = uow.players().get_by_id(command.player_id).await?;
-        let new_leader = uow.players().get_by_id(command.new_leader_id).await?;
+        let mut executor = uow.players().get_by_id(command.player_id).await?;
+        let mut new_leader = uow.players().get_by_id(command.new_leader_id).await?;
         let mut alliance = uow.alliances().get_by_id(command.alliance_id).await?;
 
         // Verify executor is in the alliance
@@ -50,24 +50,13 @@ impl CommandHandler<SetAllianceLeader> for SetAllianceLeaderCommandHandler {
         uow.alliances().update(&alliance).await?;
 
         // Grant new leader full permissions
-        uow.players()
-            .update_alliance_fields(
-                command.new_leader_id,
-                Some(command.alliance_id),
-                Some(AlliancePermission::all_permissions()),
-                new_leader.alliance_join_time,
-            )
-            .await?;
+        // Grant new leader full permissions
+        new_leader.update_alliance_role(AlliancePermission::all_permissions());
+        uow.players().save(&new_leader).await?;
 
         // Demote old leader to officer role (can still invite, manage marks, send messages)
-        uow.players()
-            .update_alliance_fields(
-                command.player_id,
-                Some(command.alliance_id),
-                Some(AlliancePermission::officer_permissions()),
-                executor.alliance_join_time,
-            )
-            .await?;
+        executor.update_alliance_role(AlliancePermission::officer_permissions());
+        uow.players().save(&executor).await?;
 
         // Log leadership transfer
         let log = AllianceLog::new(
@@ -116,7 +105,7 @@ mod tests {
             "TEST".to_string(),
             5,
             current_leader.id,
-        );
+        ).unwrap();
 
         current_leader.alliance_id = Some(alliance.id);
         current_leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -199,7 +188,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -242,7 +231,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -305,7 +294,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -355,7 +344,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());
@@ -398,7 +387,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
 
@@ -438,7 +427,7 @@ mod tests {
             "TEST".to_string(),
             5,
             leader.id,
-        );
+        ).unwrap();
 
         leader.alliance_id = Some(alliance.id);
         leader.alliance_role = Some(AlliancePermission::all_permissions());

@@ -118,7 +118,7 @@ mod tests {
 
     use parabellum_core::Result;
     use parabellum_game::{
-        models::{buildings::Building, village::Village},
+        models::{buildings::Building, player::Player, village::Village},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
@@ -126,7 +126,7 @@ mod tests {
     };
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         map::Position,
         tribe::Tribe,
     };

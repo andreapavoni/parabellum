@@ -63,9 +63,10 @@ mod tests {
         models::{buildings::Building, village::Village},
         test_utils::setup_player_party,
     };
+    use parabellum_game::models::player::Player;
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::{ResourceGroup},
         tribe::Tribe,
     };
 

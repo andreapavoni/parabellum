@@ -132,6 +132,12 @@ pub enum GameError {
     #[error("Alliance name already exists")]
     AllianceNameAlreadyExists,
 
+    #[error("Invalid alliance name: {0}")]
+    InvalidAllianceName(String),
+
+    #[error("Invalid alliance tag: {0}")]
+    InvalidAllianceTag(String),
+
     #[error("Player does not have permission to invite")]
     NoInvitePermission,
 

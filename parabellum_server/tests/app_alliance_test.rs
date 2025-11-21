@@ -391,7 +391,7 @@ pub mod tests {
         };
 
         // Setup and invite 3 additional players
-        for i in 0..3 {
+        for _ in 0..3 {
             let (player, mut village, _, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
@@ -483,7 +483,7 @@ pub mod tests {
         };
 
         // Fill alliance to capacity (2 more members = 3 total)
-        for i in 0..2 {
+        for _ in 0..2 {
             let (player, mut village, _, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
@@ -1096,12 +1096,9 @@ pub mod tests {
             let uow_setup = uow_provider.begin().await?;
             let player_repo = uow_setup.players();
 
-            player_repo.update_alliance_fields(
-                member.id,
-                Some(alliance_id),
-                Some(2), // KickPlayer permission = 2
-                None,
-            ).await?;
+            let mut member_player = player_repo.get_by_id(member.id).await?;
+            member_player.update_alliance_role(2); // KickPlayer permission = 2
+            player_repo.save(&member_player).await?;
 
             uow_setup.commit().await?;
         }
@@ -1353,7 +1350,9 @@ pub mod tests {
             let alliance_repo = uow_setup.alliances();
 
             // Remove leader from alliance
-            player_repo.update_alliance_fields(leader.id, None, None, None).await?;
+            let mut leader_player = player_repo.get_by_id(leader.id).await?;
+            leader_player.leave_alliance();
+            player_repo.save(&leader_player).await?;
 
             // Update alliance to have member as leader
             let mut alliance = alliance_repo.get_by_id(alliance_id).await?;
