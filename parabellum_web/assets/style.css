@@ -478,3 +478,109 @@
    background-color: rgba(200, 200, 200, 0.4);
    transform: translate(-50%, -50%) rotate(60deg);
  }
+
+ /* login */
+
+ .login-box {
+   width: 100%;
+   max-width: 400px;
+   background: white;
+   border: 1px solid #ccc;
+   border-radius: 6px;
+   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+   padding: 2rem;
+ }
+
+ /*.input-field {
+   width: 100%;
+   padding: 10px;
+   border: 1px solid #ccc;
+   border-radius: 4px;
+   margin-bottom: 15px;
+   font-size: 14px;
+ }
+
+ .input-field:focus {
+   border-color: #8ebf42;
+   outline: none;
+   box-shadow: 0 0 0 2px rgba(142, 191, 66, 0.2);
+ }
+
+ .btn-green {
+   width: 100%;
+   background-color: #8ebf42;
+   border: 1px solid #7da83a;
+   color: white;
+   font-weight: bold;
+   padding: 10px;
+   border-radius: 4px;
+   cursor: pointer;
+   transition: background-color 0.2s;
+ }*/
+
+ /*.btn-green:hover {
+   background-color: #9acd56;
+ }*/
+
+ /* register */
+ .register-box {
+   width: 100%;
+   max-width: 500px;
+   background: white;
+   border: 1px solid #ccc;
+   border-radius: 6px;
+   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+   padding: 2rem;
+ }
+
+ .input-field,
+ .select-field {
+   width: 100%;
+   padding: 10px;
+   border: 1px solid #ccc;
+   border-radius: 4px;
+   margin-bottom: 15px;
+   font-size: 14px;
+   background-color: #fff;
+ }
+
+ .input-field:focus,
+ .select-field:focus {
+   border-color: #8ebf42;
+   outline: none;
+   box-shadow: 0 0 0 2px rgba(142, 191, 66, 0.2);
+ }
+
+ .btn-green {
+   width: 100%;
+   background-color: #8ebf42;
+   border: 1px solid #7da83a;
+   color: white;
+   font-weight: bold;
+   padding: 12px;
+   border-radius: 4px;
+   cursor: pointer;
+   transition: background-color 0.2s;
+   font-size: 16px;
+ }
+
+ .btn-green:hover {
+   background-color: #9acd56;
+ }
+
+ .tribe-info {
+   font-size: 11px;
+   color: #666;
+   margin-top: -10px;
+   margin-bottom: 15px;
+   padding-left: 2px;
+   font-style: italic;
+ }
+
+ /* landing */
+ .content-box {
+   background: white;
+   border: 1px solid #ccc;
+   border-radius: 4px;
+   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+ }

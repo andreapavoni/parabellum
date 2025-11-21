@@ -1,9 +1,7 @@
 /target
-Cargo.lock
 tmp/
 logs/
 _*.md
 .sqlx/
 tarpaulin-report.html
-.env
 parabellum_web/assets/*.html

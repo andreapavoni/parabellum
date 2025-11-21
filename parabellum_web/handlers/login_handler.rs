@@ -19,9 +19,8 @@ pub struct LoginForm {
 
 /// GET /login – Show the login form.
 pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    // If already logged in (cookie present), redirect to home instead of showing form
     if let Some(_cookie) = jar.get("user_email") {
-        return Redirect::to("/").into_response();
+        return Redirect::to("/village").into_response();
     }
     render_template(LoginTemplate::default(), None).into_response()
 }
@@ -32,6 +31,10 @@ pub async fn login(
     jar: SignedCookieJar,
     Form(form): Form<LoginForm>,
 ) -> impl IntoResponse {
+    if let Some(_cookie) = jar.get("user_email") {
+        return Redirect::to("/village").into_response();
+    }
+
     let query = AuthenticateUser {
         email: form.email.clone(),
         password: form.password.clone(),
@@ -45,7 +48,7 @@ pub async fn login(
         Ok(user) => {
             let cookie = Cookie::new("user_email", user.email.clone());
             let jar = jar.add(cookie);
-            return (jar, Redirect::to("/")).into_response();
+            return (jar, Redirect::to("/village")).into_response();
         }
 
         Err(ApplicationError::App(AppError::WrongAuthCredentials)) => (

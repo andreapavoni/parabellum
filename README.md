@@ -60,8 +60,9 @@ Want to get the server running locally? Here’s how.
 
 5.  **(optional) Run tests:**
     ```sh
-    cargo test
+    cargo test --release -- --test-threads=1
     ```
+    _Note: use 1 thread only, to avoid issues in tests setup that weren't solved yet._
 
 6.  **Run the server:**
     ```sh

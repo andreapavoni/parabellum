@@ -28,13 +28,11 @@ pub async fn register_page(
     State(_state): State<AppState>,
     jar: SignedCookieJar,
 ) -> impl IntoResponse {
-    // If already logged in, redirect home (no need to register a new account)
     if let Some(_) = jar.get("user_email") {
         return Redirect::to("/").into_response();
     }
     let template = RegisterTemplate {
         current_user: false,
-        current_user_email: None,
         username_value: "".to_string(),
         email_value: "".to_string(),
         selected_tribe: "Roman".to_string(), // default selection
@@ -83,13 +81,12 @@ pub async fn register(
         Ok(()) => {
             let cookie = Cookie::new("user_email", form.email.clone());
             let updated_jar = jar.add(cookie);
-            return (updated_jar, Redirect::to("/")).into_response();
+            return (updated_jar, Redirect::to("/village")).into_response();
         }
         Err(ApplicationError::App(AppError::PasswordError)) => {
             // Password hashing error or invalid password (unlikely scenario)
             let template = RegisterTemplate {
                 current_user: false,
-                current_user_email: None,
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),
                 selected_tribe: form.tribe.clone(),
@@ -114,7 +111,6 @@ pub async fn register(
             tracing::error!("Registration DB error: {}", db_err);
             let template = RegisterTemplate {
                 current_user: false,
-                current_user_email: None,
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),
                 selected_tribe: form.tribe.clone(),
