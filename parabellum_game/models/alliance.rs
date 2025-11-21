@@ -23,9 +23,12 @@ pub struct Alliance {
     // Battle Statistics
     pub total_attack_points: i64,
     pub total_defense_points: i64,
+    pub total_roober_points: i64,
+    pub total_climber_points: i64,
     pub current_attack_points: i64,
     pub current_defense_points: i64,
     pub current_robber_points: i64,
+    pub current_climber_points: i64,
 
     // Alliance Bonuses
     pub training_bonus_level: i32,
@@ -36,8 +39,6 @@ pub struct Alliance {
     pub cp_bonus_contributions: i64,
     pub trade_bonus_level: i32,
     pub trade_bonus_contributions: i64,
-
-    pub old_pop: i32,
 }
 
 impl Alliance {
@@ -62,9 +63,12 @@ impl Alliance {
             leader_id: Some(leader_id),
             total_attack_points: 0,
             total_defense_points: 0,
+            total_roober_points: 0,
+            total_climber_points: 0,
             current_attack_points: 0,
             current_defense_points: 0,
             current_robber_points: 0,
+            current_climber_points: 0,
             training_bonus_level: 0,
             training_bonus_contributions: 0,
             armor_bonus_level: 0,
@@ -73,7 +77,6 @@ impl Alliance {
             cp_bonus_contributions: 0,
             trade_bonus_level: 0,
             trade_bonus_contributions: 0,
-            old_pop: 0,
         })
     }
 

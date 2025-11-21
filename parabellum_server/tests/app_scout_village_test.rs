@@ -23,11 +23,11 @@ pub mod tests {
     async fn test_scout_village() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0]; // 10 Equites Legati (index 3)
-        let (scout_player, scout_village, scout_army, _) = {
+        let (scout_player, scout_village, scout_army, _, _) = {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
         };
         let original_home_army_id = scout_army.id;
-        let (_target_player, target_village, _target_army, _) = {
+        let (_target_player, target_village, _target_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -188,13 +188,13 @@ pub mod tests {
 
         // Setup scout with 10 scouts (Roman Equites Legati at index 3)
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0];
-        let (scout_player, scout_village, scout_army, _) = {
+        let (scout_player, scout_village, scout_army, _, _) = {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
         };
 
         // Setup target with defending units and alliance bonus
         let defender_units = [0, 20, 0, 0, 0, 0, 0, 0, 0, 0]; // 20 Praetorians
-        let (target_player, target_village, _target_army, _) = {
+        let (target_player, target_village, _target_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -294,13 +294,13 @@ pub mod tests {
 
         // Setup scout with 10 scouts (same as bonus test)
         let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0];
-        let (scout_player, scout_village, scout_army, _) = {
+        let (scout_player, scout_village, scout_army, _, _) = {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
         };
 
         // Setup target with defending units but NO alliance
         let defender_units = [0, 20, 0, 0, 0, 0, 0, 0, 0, 0]; // 20 Praetorians (same as bonus test)
-        let (_target_player, target_village, _target_army, _) = {
+        let (_target_player, target_village, _target_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

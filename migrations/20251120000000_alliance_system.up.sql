@@ -47,7 +47,7 @@ CREATE TABLE alliance (
     cp_bonus_level INTEGER DEFAULT 0,
     cp_bonus_contributions BIGINT DEFAULT 0,
     trade_bonus_level INTEGER DEFAULT 0,
-    trade_bonus_contributions BIGINT DEFAULT 0,
+    trade_bonus_contributions BIGINT DEFAULT 0
 );
 
 -- Alliance invitations
@@ -145,10 +145,8 @@ CREATE TRIGGER update_map_flag_updated_at
 
 -- Add alliance fields to players table
 ALTER TABLE players ADD COLUMN alliance_id UUID REFERENCES alliance(id) ON DELETE SET NULL;
-ALTER TABLE players ADD COLUMN alliance_role_name VARCHAR(255);
 ALTER TABLE players ADD COLUMN alliance_role INTEGER;
 ALTER TABLE players ADD COLUMN alliance_join_time TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE players ADD COLUMN alliance_contributions BIGINT DEFAULT 0;
 
 -- Current Week Contributions
 ALTER TABLE players ADD COLUMN current_alliance_training_contributions BIGINT DEFAULT 0;
@@ -161,10 +159,6 @@ ALTER TABLE players ADD COLUMN total_alliance_training_contributions BIGINT DEFA
 ALTER TABLE players ADD COLUMN total_alliance_armor_contributions BIGINT DEFAULT 0;
 ALTER TABLE players ADD COLUMN total_alliance_cp_contributions BIGINT DEFAULT 0;
 ALTER TABLE players ADD COLUMN total_alliance_trade_contributions BIGINT DEFAULT 0;
-
--- Alliance Preferences
-ALTER TABLE players ADD COLUMN alliance_notification_enabled BOOLEAN DEFAULT TRUE;
-ALTER TABLE players ADD COLUMN alliance_settings TEXT;
 
 -- Add created_at timestamp to players table
 ALTER TABLE players ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();

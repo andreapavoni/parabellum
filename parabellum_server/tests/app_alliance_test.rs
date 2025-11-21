@@ -15,7 +15,7 @@ pub mod tests {
     async fn test_create_alliance_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, mut village, _army, _hero) =
+        let (player, mut village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Set village as capital and add Embassy level 3
@@ -83,7 +83,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup first player
-        let (player1, mut village1, _army1, _hero1) =
+        let (player1, mut village1, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -100,7 +100,7 @@ pub mod tests {
         }
 
         // Setup second player
-        let (player2, mut village2, _army2, _hero2) =
+        let (player2, mut village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -175,7 +175,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup first player
-        let (player1, mut village1, _army1, _hero1) =
+        let (player1, mut village1, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -192,7 +192,7 @@ pub mod tests {
         }
 
         // Setup second player
-        let (player2, mut village2, _army2, _hero2) =
+        let (player2, mut village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -247,7 +247,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -264,7 +264,7 @@ pub mod tests {
         }
 
         // Setup invitee player
-        let (invitee, mut invitee_village, _army2, _hero2) =
+        let (invitee, mut invitee_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -352,7 +352,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -392,7 +392,7 @@ pub mod tests {
 
         // Setup and invite 3 additional players
         for _ in 0..3 {
-            let (player, mut village, _, _) =
+            let (player, mut village, _, _, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
             {
@@ -444,7 +444,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -484,7 +484,7 @@ pub mod tests {
 
         // Fill alliance to capacity (2 more members = 3 total)
         for _ in 0..2 {
-            let (player, mut village, _, _) =
+            let (player, mut village, _, _, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
             {
@@ -517,7 +517,7 @@ pub mod tests {
         }
 
         // Setup one more player to try joining full alliance
-        let (overflow_player, mut overflow_village, _, _) =
+        let (overflow_player, mut overflow_village, _, _, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
@@ -560,7 +560,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -577,7 +577,7 @@ pub mod tests {
         }
 
         // Setup target player
-        let (target, _village2, _army2, _hero2) =
+        let (target, _village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         // Create alliance as leader
@@ -641,7 +641,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -658,7 +658,7 @@ pub mod tests {
         }
 
         // Setup member player (will be added to alliance without invite permission)
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -675,7 +675,7 @@ pub mod tests {
         }
 
         // Setup target player
-        let (target, _village3, _army3, _hero3) =
+        let (target, _village3, _army3, _hero3, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         // Create alliance as leader
@@ -735,7 +735,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -752,7 +752,7 @@ pub mod tests {
         }
 
         // Setup target player
-        let (target, _village2, _army2, _hero2) =
+        let (target, _village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         // Create alliance
@@ -804,7 +804,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -821,7 +821,7 @@ pub mod tests {
         }
 
         // Setup member player
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -914,7 +914,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -931,7 +931,7 @@ pub mod tests {
         }
 
         // Setup two members
-        let (member1, mut member1_village, _army2, _hero2) =
+        let (member1, mut member1_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -947,7 +947,7 @@ pub mod tests {
             uow_setup.commit().await?;
         }
 
-        let (member2, mut member2_village, _army3, _hero3) =
+        let (member2, mut member2_village, _army3, _hero3, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
@@ -1021,7 +1021,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1038,7 +1038,7 @@ pub mod tests {
         }
 
         // Setup member with kick permission (for testing - normally leader would grant this)
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -1122,7 +1122,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1139,7 +1139,7 @@ pub mod tests {
         }
 
         // Setup member player
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -1231,7 +1231,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1273,7 +1273,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup two players
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1289,7 +1289,7 @@ pub mod tests {
             uow_setup.commit().await?;
         }
 
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -1380,7 +1380,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1397,7 +1397,7 @@ pub mod tests {
         }
 
         // Setup member player (will become new leader)
-        let (member, mut member_village, _army2, _hero2) =
+        let (member, mut member_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -1471,9 +1471,9 @@ pub mod tests {
             let updated_member = uow_check.players().get_by_id(member.id).await?;
             assert_eq!(updated_member.alliance_role, Some(255)); // all_permissions()
 
-            // Verify old leader has no permissions
+            // Verify old leader has officer permissions (demoted from leader)
             let updated_leader = uow_check.players().get_by_id(leader.id).await?;
-            assert_eq!(updated_leader.alliance_role, Some(0));
+            assert_eq!(updated_leader.alliance_role, Some(176)); // officer_permissions()
 
             // Verify alliance log was created
             let logs = uow_check
@@ -1494,7 +1494,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
@@ -1511,7 +1511,7 @@ pub mod tests {
         }
 
         // Setup two members
-        let (member1, mut member1_village, _army2, _hero2) =
+        let (member1, mut member1_village, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -1527,7 +1527,7 @@ pub mod tests {
             uow_setup.commit().await?;
         }
 
-        let (member2, mut member2_village, _army3, _hero3) =
+        let (member2, mut member2_village, _army3, _hero3, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
@@ -1601,7 +1601,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup leader player
-        let (leader, mut leader_village, _army1, _hero1) =
+        let (leader, mut leader_village, _army1, _hero1, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {

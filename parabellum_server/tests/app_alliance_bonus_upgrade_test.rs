@@ -20,7 +20,7 @@ pub mod tests {
         let (app, worker, uow_provider, _config) = setup_app(false).await?;
 
         // Setup attacker
-        let (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -32,7 +32,7 @@ pub mod tests {
         };
 
         // Setup defender
-        let (defender_player, defender_village, _defender_army, _) = {
+        let (defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

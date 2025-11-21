@@ -34,10 +34,8 @@ pub struct Player {
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub alliance_id: Option<Uuid>,
-    pub alliance_role_name: Option<String>,
     pub alliance_role: Option<i32>,
     pub alliance_join_time: Option<DateTime<Utc>>,
-    pub alliance_contributions: Option<i64>,
     pub current_alliance_training_contributions: Option<i64>,
     pub current_alliance_armor_contributions: Option<i64>,
     pub current_alliance_cp_contributions: Option<i64>,
@@ -46,8 +44,6 @@ pub struct Player {
     pub total_alliance_armor_contributions: Option<i64>,
     pub total_alliance_cp_contributions: Option<i64>,
     pub total_alliance_trade_contributions: Option<i64>,
-    pub alliance_notification_enabled: Option<bool>,
-    pub alliance_settings: Option<String>,
 }
 
 #[derive(Debug, FromRow, Clone)]

@@ -15,14 +15,14 @@ pub mod tests {
         },
     };
     use parabellum_core::Result;
-    use parabellum_game::models::{buildings::Building, map_flag::MapFlagType};
-    use parabellum_types::{buildings::BuildingName, tribe::Tribe};
+    use parabellum_game::models::buildings::Building;
+    use parabellum_types::{buildings::BuildingName, map_flag::MapFlagType, tribe::Tribe};
 
     #[tokio::test]
     async fn test_create_player_custom_flag_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Create a custom flag
@@ -63,10 +63,10 @@ pub mod tests {
     async fn test_create_player_mark_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
-        let (target_player, _village2, _army2, _hero2) =
+        let (target_player, _village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         // Create a player mark
@@ -101,7 +101,7 @@ pub mod tests {
     async fn test_update_map_flag_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Create a custom flag
@@ -154,7 +154,7 @@ pub mod tests {
     async fn test_delete_map_flag_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Create a custom flag
@@ -205,7 +205,7 @@ pub mod tests {
     async fn test_alliance_custom_flag_with_permissions_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, mut village, _army, _hero) =
+        let (player, mut village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Set up alliance
@@ -244,8 +244,8 @@ pub mod tests {
         let flag_cmd = CreateCustomFlag {
             player_id: player.id,
             alliance_id: Some(alliance_id),
-            x: 200,
-            y: -100,
+            x: 50,
+            y: -50,
             color: 15,
             text: "Alliance Flag".to_string(),
         };
@@ -274,7 +274,7 @@ pub mod tests {
     async fn test_alliance_mark_full_flow() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, mut village, _army, _hero) =
+        let (player, mut village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Set up alliance
@@ -310,7 +310,7 @@ pub mod tests {
         };
 
         // Create another alliance to mark
-        let (player2, mut village2, _army2, _hero2) =
+        let (player2, mut village2, _army2, _hero2, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
@@ -374,7 +374,7 @@ pub mod tests {
     async fn test_custom_flag_limit_enforcement() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Create 5 custom flags (the limit)
@@ -420,12 +420,12 @@ pub mod tests {
     async fn test_multi_mark_limit_enforcement() -> Result<()> {
         let (app, _worker, uow_provider, _config) = setup_app(false).await?;
 
-        let (player, _village, _army, _hero) =
+        let (player, _village, _army, _hero, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         // Create 10 player marks (the limit)
         for _ in 0..10 {
-            let (target_player, _v, _a, _h) =
+            let (target_player, _v, _a, _h, _) =
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
             let cmd = CreateMultiMark {
@@ -440,7 +440,7 @@ pub mod tests {
         }
 
         // Try to create an 11th mark (should fail)
-        let (target_player, _v, _a, _h) =
+        let (target_player, _v, _a, _h, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         let cmd = CreateMultiMark {

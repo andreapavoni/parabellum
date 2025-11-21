@@ -23,7 +23,7 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
         let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        let (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -35,7 +35,7 @@ pub mod tests {
         };
 
         let original_home_army_id = attacker_army.id;
-        let (_defender_player, defender_village, _defender_army, _) = {
+        let (_defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -209,7 +209,7 @@ pub mod tests {
     async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -220,7 +220,7 @@ pub mod tests {
             .await?
         };
 
-        let (_, mut defender_village, _, _) = {
+        let (_, mut defender_village, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -333,7 +333,7 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
 
         // Setup attacker with 50 Equites Imperatoris (cavalry)
-        let (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -345,7 +345,7 @@ pub mod tests {
         };
 
         // Setup defender with 80 legionnaires (infantry)
-        let (defender_player, defender_village, _defender_army, _) = {
+        let (defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -452,7 +452,7 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
 
         // Setup attacker with 50 Equites Imperatoris (cavalry) - same as bonus test
-        let (attacker_player, attacker_village, attacker_army, _) = {
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -464,7 +464,7 @@ pub mod tests {
         };
 
         // Setup defender with 80 legionnaires (infantry) - same as bonus test, but NO alliance
-        let (_defender_player, defender_village, _defender_army, _) = {
+        let (_defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

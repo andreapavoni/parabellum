@@ -22,7 +22,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup player with barracks
-        let (player, village, _army, _) = {
+        let (player, village, _army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -116,7 +116,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup player WITHOUT alliance
-        let (player, village, _army, _) = {
+        let (player, village, _army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,

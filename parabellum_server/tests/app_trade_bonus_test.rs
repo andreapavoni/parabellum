@@ -21,7 +21,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup sender with marketplace
-        let (sender_player, sender_village, _army, _) = {
+        let (sender_player, sender_village, _army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -33,7 +33,7 @@ pub mod tests {
         };
 
         // Setup receiver
-        let (_, receiver_village, _, _) = {
+        let (_, receiver_village, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -137,7 +137,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup TWO sender players - one with alliance, one without
-        let (player_with_bonus, village_with_bonus, _, _) = {
+        let (player_with_bonus, village_with_bonus, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -148,7 +148,7 @@ pub mod tests {
             .await?
         };
 
-        let (player_no_bonus, village_no_bonus, _, _) = {
+        let (player_no_bonus, village_no_bonus, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -160,7 +160,7 @@ pub mod tests {
         };
 
         // Setup receiver
-        let (_, receiver_village, _, _) = {
+        let (_, receiver_village, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -275,7 +275,7 @@ pub mod tests {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
 
         // Setup sender WITHOUT alliance
-        let (sender_player, sender_village, _army, _) = {
+        let (sender_player, sender_village, _army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -287,7 +287,7 @@ pub mod tests {
         };
 
         // Setup receiver
-        let (_, receiver_village, _, _) = {
+        let (_, receiver_village, _, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
