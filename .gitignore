@@ -9,3 +9,4 @@ logs/
 _*.md
 .sqlx/
 tarpaulin-report.html
+parabellum_web/assets/*.html

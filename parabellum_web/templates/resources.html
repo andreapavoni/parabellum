@@ -1,0 +1,93 @@
+{% extends "layouts/base.html" %}
+{% block title %}Village Center – PARABELLUM{% endblock %}
+{% block body %}
+<div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
+
+    <div class="flex flex-col items-center w-full md:w-auto">
+        <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left">Pavonz's Village</h1>
+
+        <div class="map-container-responsive">
+            <div class="hex wood" style="top: 0px; left: 60px;"><span class="level">1</span></div>
+            <div class="hex crop" style="top: 0px; left: 120px;"><span class="level">1</span></div>
+            <div class="hex iron" style="top: 0px; left: 180px;"><span class="level">1</span></div>
+
+
+            <div class="hex crop" style="top: 52px; left: 30px;"><span class="level">1</span></div>
+            <div class="hex wood" style="top: 52px; left: 90px;"><span class="level">1</span></div>
+            <div class="hex iron" style="top: 52px; left: 150px;"><span class="level">1</span></div>
+            <div class="hex crop" style="top: 52px; left: 210px;"><span class="level">2</span></div>
+
+
+            <div class="hex wood" style="top: 104px; left: 0px;"><span class="level">1</span></div>
+            <div class="hex clay" style="top: 104px; left: 60px;"><span class="level">1</span></div>
+
+
+            <div class="village">
+                <!--<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/it.svg" style="opacity:0; width:100%; height:100%; background: url('https://thumbs.dreamstime.com/b/cartoon-medieval-village-top-view-houses-fountain-vector-illustration-216652605.jpg') center/cover no-repeat;" alt="Village">-->
+            </div>
+
+            <div class="hex wood" style="top: 104px; left: 180px;"><span class="level">1</span></div>
+            <div class="hex crop" style="top: 104px; left: 240px;"><span class="level">2</span></div>
+
+            <div class="hex clay" style="top: 156px; left: 30px;"><span class="level">1</span></div>
+            <div class="hex clay" style="top: 156px; left: 90px;"><span class="level">1</span></div>
+            <div class="hex crop" style="top: 156px; left: 150px;"><span class="level">1</span></div>
+            <div class="hex iron" style="top: 156px; left: 210px;"><span class="level">2</span></div>
+
+            <div class="hex clay" style="top: 208px; left: 60px;"><span class="level">1</span></div>
+            <div class="hex iron" style="top: 208px; left: 120px;"><span class="level">1</span></div>
+            <div class="hex crop" style="top: 208px; left: 180px;"><span class="level">2</span></div>
+
+        </div>
+
+
+        <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
+            <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Costruzioni in corso:</div>
+            <div class="flex justify-between w-full">
+                <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Warehouse (Lv 15)</span>
+                <span>0:45:12</span>
+            </div>
+            <div class="flex justify-between w-full">
+                <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Granaio (Lv 12)</span>
+                <span>1:20:05</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
+        <div class="flex flex-row md:flex-col justify-between md:justify-start gap-8 md:gap-0">
+
+            <div class="flex-1">
+                <h3 class="font-bold mb-3 text-sm">Production:</h3>
+                <div class="text-xs space-y-2">
+                    <div class="flex justify-between border-b border-gray-100 pb-1">
+                        <span>🌲 Legno:</span>
+                        <span class="font-bold">20</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-100 pb-1">
+                        <span>🧱 Argilla:</span>
+                        <span class="font-bold">24</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-100 pb-1">
+                        <span>⛏️ Ferro:</span>
+                        <span class="font-bold">20</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-100 pb-1">
+                        <span>🌾 Grano:</span>
+                        <span class="font-bold">2</span>
+                    </div>
+                </div>
+                <div class="mt-2 text-[12px] font-bold text-gray-400 text-right">/hour</div>
+            </div>
+
+            <div class="flex-1 md:mt-8">
+                <h3 class="font-bold mb-2 text-sm md:mt-6">Troops:</h3>
+                <div class="text-xs text-gray-500 italic">
+                  No units in the village
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

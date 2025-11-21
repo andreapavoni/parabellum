@@ -1,0 +1,56 @@
+{% extends "layouts/base.html" %}
+{% block title %}Home – PARABELLUM{% endblock %}
+{% block body %}
+<div class="grid md:grid-cols-2 gap-8 items-start">
+  <div class="space-y-6">
+    <div class="content-box p-6 bg-white">
+      <h1 class="text-2xl font-bold text-gray-700 mb-4">Welcome to Parabellum</h1>
+      <p class="text-sm leading-relaxed text-gray-600 mb-4">
+        Develop your village, train your powerful army end fight together with your alliance to rule the server.
+        Choose between Romans, Gauls or Teutons and write your history in this ancient world.
+      </p>
+      <div class="mt-6 text-center">
+        <a href="travian_register.html" class="btn-green px-8 py-3 rounded text-lg inline-block shadow-md transform hover:-translate-y-1 transition">
+          PLAY FOR FREE!
+        </a>
+        <p class="text-xs text-gray-400 mt-2">No downloads.</p>
+      </div>
+    </div>
+    <div class="content-box p-4">
+      <h3 class="font-bold text-sm text-gray-500 border-b border-gray-200 pb-2 mb-3">Latest News</h3>
+      <div class="space-y-3 text-xs">
+        <div class="flex justify-between">
+          <span class="font-bold text-green-700">New Speed Server 3x</span>
+          <span class="text-gray-400">Today</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hidden md:block relative h-80 rounded-lg overflow-hidden border border-gray-300 shadow-md group">
+    <div class="absolute inset-0 bg-cover bg-center transition duration-1000 group-hover:scale-105"
+          style="background-image: url('https://wallpaperaccess.com/full/1736218.jpg');">
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
+      <div class="text-white">
+        <h3 class="font-bold text-xl text-shadow">A living world.</h3>
+        <p class="text-sm text-gray-200">Thousands of real players..</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-8 grid grid-cols-3 gap-4 text-center text-sm text-gray-600">
+  <div class="content-box p-3">
+    <div class="font-bold text-lg text-green-600">12,405</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">Players</div>
+  </div>
+  <div class="content-box p-3">
+    <div class="font-bold text-lg text-orange-600">4,200</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">Active Today</div>
+  </div>
+  <div class="content-box p-3">
+    <div class="font-bold text-lg text-blue-600">Dec 25th</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">Server starting</div>
+  </div>
+</div>
+{% endblock %}

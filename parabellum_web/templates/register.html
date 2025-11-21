@@ -1,45 +1,80 @@
-{% extends "layout.html" %}
-{% block title %}Sign Up – Parabellum{% endblock %}
+{% extends "layouts/base.html" %}
+{% block title %}Register – PARABELLUM{% endblock %}
 {% block body %}
-<h1>Create an Account</h1>
-{% if error.is_some() %}
-  <p class="error" style="color:red;">{{ error.as_deref().unwrap() }}</p>
-{% endif %}
-<form action="/register" method="post">
-  <p>
-    <label>Username:<br>
-      <input type="text" name="username" value="{{ username_value }}" required>
-    </label>
-  </p>
-  <p>
-    <label>Email:<br>
-      <input type="email" name="email" value="{{ email_value }}" required>
-    </label>
-  </p>
-  <p>
-    <label>Password:<br>
-      <input type="password" name="password" required>
-    </label>
-  </p>
-  <p>
-    <label>Tribe:<br>
-      <select name="tribe">
-        <option value="Roman" {% if selected_tribe == "Roman" %}selected{% endif %}>Roman</option>
-        <option value="Gaul" {% if selected_tribe == "Gaul" %}selected{% endif %}>Gaul</option>
-        <option value="Teuton" {% if selected_tribe == "Teuton" %}selected{% endif %}>Teuton</option>
-      </select>
-    </label>
-  </p>
-  <p>
-    <label>Quadrant:<br>
-      <select name="quadrant">
-        <option value="NorthEast" {% if selected_quadrant == "NorthEast" %}selected{% endif %}>NorthEast</option>
-        <option value="NorthWest" {% if selected_quadrant == "NorthWest" %}selected{% endif %}>NorthWest</option>
-        <option value="SouthEast" {% if selected_quadrant == "SouthEast" %}selected{% endif %}>SouthEast</option>
-        <option value="SouthWest" {% if selected_quadrant == "SouthWest" %}selected{% endif %}>SouthWest</option>
-      </select>
-    </label>
-  </p>
-  <button type="submit">Sign Up</button>
-</form>
+
+<div class="flex flex-col items-center w-full px-4">
+    <div class="register-box">
+        <h2 class="text-xl font-bold text-gray-700 mb-6 text-center">Build Your Empire</h2>
+        {% if error.is_some() %}
+          <p class="mb-3 text-center text-red-600 error">{{ error.as_deref().unwrap() }}</p>
+        {% endif %}
+
+        <form action="/register" method="post">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Username</label>
+                    <input type="text" name="username" class="input-field" value="{{ username_value }}" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Email</label>
+                    <input type="email" class="input-field" name="email" value="{{ email_value }}" required>
+                </div>
+            </div>
+
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Password</label>
+            <input type="password" name="password" class="input-field" placeholder="Set a secure password..." required>
+
+            <hr class="my-4 border-gray-200">
+
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Scegli la tua Tribù</label>
+            <select id="tribe-select" name="tribe" class="select-field" onchange="updateTribeInfo()">
+                <option value="Roman" {% if selected_tribe == "Roman" %}selected{% endif %}>Romans (For newcomers)</option>
+                <option value="Gaul" {% if selected_tribe == "Gaul" %}selected{% endif %}>Gauls (Fast and defensive)</option>
+                <option value="Teuton" {% if selected_tribe == "Teuton" %}selected{% endif %}>Teutons (Aggressive raiders)</option>
+            </select>
+            <div id="tribe-desc" class="tribe-info">
+                Balanced, excellent builders. Expensive military units, but very powerful.
+            </div>
+
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Starting position</label>
+            <select class="select-field" name="quadrant">
+              <option value="NorthEast" {% if selected_quadrant == "NorthEast" %}selected{% endif %}>North-East (+/+)</option>
+              <option value="NorthWest" {% if selected_quadrant == "NorthWest" %}selected{% endif %}>North-West (-/+)</option>
+              <option value="SouthEast" {% if selected_quadrant == "SouthEast" %}selected{% endif %}>South-East (+/-)</option>
+              <option value="SouthWest" {% if selected_quadrant == "SouthWest" %}selected{% endif %}>South-West (-/-)</option>
+            </select>
+
+            <div class="flex items-start mb-6">
+                <input type="checkbox" class="mt-1 mr-2 accent-green-600" required>
+                <span class="text-xs text-gray-600">
+                    I accept <a href="#" class="text-green-600 hover:underline">Terms Of Service</a> and <a href="#" class="text-green-600 hover:underline">Privacy Policy</a>.
+                </span>
+            </div>
+
+            <button type="submit" class="btn-green">REGISTER</button>
+        </form>
+
+        <div class="mt-6 text-center border-t border-gray-100 pt-4">
+            <p class="text-sm text-gray-600">Already owning a village?</p>
+            <a href="/login" class="text-green-700 font-bold hover:underline text-sm">Access here</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Semplice script per cambiare la descrizione della tribù
+    function updateTribeInfo() {
+        const select = document.getElementById('tribe-select');
+        const desc = document.getElementById('tribe-desc');
+        const val = select.value;
+
+        if (val === 'Roman') {
+            desc.innerText = "Balanced, excellent builders. Expensive military units, but very powerful.";
+        } else if (val === 'Gaul') {
+            desc.innerText = "Excellent defense. Fast traders and unique traps.";
+        } else if (val === 'Teuton') {
+            desc.innerText = "The most offensive tribe. Cheap units but slow and weak in defense.";
+        }
+    }
+</script>
 {% endblock %}

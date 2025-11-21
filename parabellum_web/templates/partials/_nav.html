@@ -1,10 +1,41 @@
-<nav>
-  <a href="/">Parabellum</a>
-  {% if current_user %}
-    <span>Hi, {{ current_user_email.as_deref().unwrap_or("Anonymous") }}</span>
-    <a href="/logout">Logout</a>
-  {% else %}
-    <a href="/login">Login</a>
-    <a href="/register">Register</a>
-  {% endif %}
-</nav>
+<header class="bg-white border-b border-gray-300 shadow-sm">
+{% if current_user %}
+
+<div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
+  <div class="font-serif font-bold text-lg text-gray-700 tracking-wide"><a class="cursor-pointer" href="/">PARABELLUM</a></div>
+
+  <div class="flex items-center gap-3 text-gray-600">
+    <span class="font-bold text-gray-800">Username</span>
+    <span class="cursor-pointer font-bold hover:text-green-600 text-green-700 hover:underline"><a href="/logout">Logout</a></span>
+    <span class="sm:inline text-[12px] text-gray-600">09:34:20</span>
+  </div>
+</div>
+<div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
+  <div class="nav-icon" title="Fields"><a href="/resources">🌾</a></div>
+  <div class="nav-icon nav-active" title="Village Center"><a href="/village">🏠</a></div>
+  <div class="nav-icon" title="Map"><a href="/map">🗺️</a></div>
+  <div class="nav-icon" title="Stats">📊</div>
+  <div class="nav-icon" title="Reports">📜</div>
+  <div class="nav-icon" title="Messages">✉️</div>
+</div>
+<div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
+  <div class="res-item"><div class="res-icon bg-green-700"></div> 108/1200</div>
+  <div class="res-item"><div class="res-icon bg-orange-700"></div> 81/1200</div>
+  <div class="res-item"><div class="res-icon bg-gray-600"></div> 45/1200</div>
+  <div class="res-item"><div class="res-icon bg-yellow-500"></div> 20/800</div>
+  <div class="res-item"><div class="res-icon bg-red-800"></div> 32/34</div>
+</div>
+
+{% else %}
+
+  <div class="container mx-auto flex justify-between items-center">
+    <div class="font-serif font-bold text-2xl text-gray-700 tracking-wide">
+      <a href="/">PARABELLUM</a>
+    </div>
+    <div class="space-x-4 text-sm font-bold text-gray-600">
+      <a href="/login" class="hover:text-green-600 transition">Login</a>
+      <a href="/register" class="text-green-700 hover:underline">Register</a>
+    </div>
+  </div>
+{% endif %}
+</header>

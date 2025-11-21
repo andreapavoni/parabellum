@@ -6,7 +6,9 @@ use tower_http::{services::ServeDir, trace::TraceLayer};
 use parabellum_app::{app::AppBus, config::Config};
 use parabellum_core::{ApplicationError, Result};
 
-use crate::handlers::{home_handler, login, login_page, logout, register, register_page};
+use crate::handlers::{
+    home, login, login_page, logout, register, register_page, resources, village,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -37,10 +39,12 @@ impl WebRouter {
     pub async fn serve(state: AppState, port: u16) -> Result<(), ApplicationError> {
         let router = Router::new()
             .nest_service("/assets", ServeDir::new("parabellum_web/assets"))
-            .route("/", get(home_handler))
+            .route("/", get(home))
             .route("/login", get(login_page).post(login))
             .route("/register", get(register_page).post(register))
             .route("/logout", get(logout))
+            .route("/village", get(village))
+            .route("/resources", get(resources))
             .with_state(state)
             .layer(TraceLayer::new_for_http());
 

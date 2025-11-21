@@ -1,19 +1,18 @@
-use axum::{extract::State, response::IntoResponse};
+use axum::{
+    extract::State,
+    response::{IntoResponse, Redirect},
+};
 use axum_extra::extract::SignedCookieJar;
 
-use crate::{handlers::render_template, http::AppState, templates::HelloTemplate};
+use crate::{handlers::render_template, http::AppState, templates::HomeTemplate};
 
-pub async fn home_handler(
-    State(_state): State<AppState>,
-    jar: SignedCookieJar,
-) -> impl IntoResponse {
-    let (is_logged_in, user_email) = match jar.get("user_email") {
-        Some(cookie) => (true, Some(cookie.value().to_string())),
-        None => (false, None),
-    };
-    let template = HelloTemplate {
-        current_user: is_logged_in,
-        current_user_email: user_email,
+pub async fn home(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
+    if let Some(_cookie) = jar.get("user_email") {
+        return Redirect::to("/village").into_response();
+    }
+
+    let template = HomeTemplate {
+        current_user: false,
     };
     return render_template(template, None).into_response();
 }
