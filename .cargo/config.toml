@@ -4,7 +4,7 @@ t = "test"
 tt = "test -q -- --test-threads=1"
 
 # coverage tests
-tc = "cargo tarpaulin -p parabellum_server  -- --test-threads=1"
+tc = "tarpaulin -p parabellum_server --release -- --test-threads=1"
 
 # show output
-# t1nocap = "test -- --test-threads=1 --nocapture"
+tnc = "test -- --test-threads=1 --nocapture"

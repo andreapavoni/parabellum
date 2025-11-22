@@ -12,7 +12,7 @@ services:
     volumes:
       - parabellum_data:/var/lib/postgresql/data
 
-  parabellum:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
@@ -23,9 +23,11 @@ services:
     environment:
       DATABASE_URL: postgres://parabellum:password@db:5432/parabellum_dev
       TEST_DATABASE_URL: postgres://parabellum:password@db:5432/parabellum_test
-      RUST_LOG: info
+      RUST_LOG: info,parabellum=debug,tower_http=debug,sqlx=info
     ports:
       - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
 
 volumes:
   parabellum_data:

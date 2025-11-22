@@ -1,8 +1,8 @@
 /target
 Cargo.lock
 tmp/
-logs/
+logs/*.log.*
 _*.md
 .sqlx/
 tarpaulin-report.html
-parabellum_web/assets/*.html
+frontend/*.html

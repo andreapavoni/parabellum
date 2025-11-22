@@ -28,6 +28,11 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), Appli
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
 
+    sqlx::migrate!("../migrations")
+        .run(&db_pool)
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
     setup_world_map(&db_pool, &config).await?;
 
     let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
