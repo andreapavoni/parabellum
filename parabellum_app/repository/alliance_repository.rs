@@ -34,6 +34,9 @@ pub trait AllianceLogRepository: Send + Sync {
 #[async_trait::async_trait]
 pub trait AllianceDiplomacyRepository: Send + Sync {
     async fn save(&self, diplomacy: &AllianceDiplomacy) -> Result<(), ApplicationError>;
+    async fn get_by_id(&self, id: Uuid) -> Result<Option<AllianceDiplomacy>, ApplicationError>;
     async fn get_by_alliance_id(&self, alliance_id: Uuid) -> Result<Vec<AllianceDiplomacy>, ApplicationError>;
+    async fn get_between_alliances(&self, alliance1_id: Uuid, alliance2_id: Uuid) -> Result<Option<AllianceDiplomacy>, ApplicationError>;
+    async fn update(&self, diplomacy: &AllianceDiplomacy) -> Result<(), ApplicationError>;
     async fn delete(&self, id: Uuid) -> Result<(), ApplicationError>;
 }

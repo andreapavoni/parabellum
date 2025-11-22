@@ -12,7 +12,7 @@ pub struct Player {
     pub tribe: Tribe,
     pub user_id: Uuid,
     pub alliance_id: Option<Uuid>,
-    pub alliance_role: Option<i32>,
+    pub alliance_role: Option<i16>,
     pub alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
     pub current_alliance_recruitment_contributions: i64,
     pub current_alliance_metallurgy_contributions: i64,
@@ -25,7 +25,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn join_alliance(&mut self, alliance_id: Uuid, role: i32) -> Result<(), GameError> {
+    pub fn join_alliance(&mut self, alliance_id: Uuid, role: i16) -> Result<(), GameError> {
         if self.alliance_id.is_some() {
             return Err(GameError::PlayerAlreadyInAlliance);
         }
@@ -51,7 +51,7 @@ impl Player {
         self.total_alliance_commerce_contributions = 0;
     }
 
-    pub fn update_alliance_role(&mut self, role: i32) {
+    pub fn update_alliance_role(&mut self, role: i16) {
         self.alliance_role = Some(role);
     }
 

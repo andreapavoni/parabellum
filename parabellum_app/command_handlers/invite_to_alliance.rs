@@ -104,7 +104,7 @@ mod tests {
             ..Default::default()
         });
         inviter.alliance_id = Some(alliance.id);
-        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i32);
+        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i16);
 
         // Create target player
         let target_player = player_factory(PlayerFactoryOptions {
@@ -216,7 +216,7 @@ mod tests {
             ..Default::default()
         });
         inviter.alliance_id = Some(alliance.id);
-        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i32);
+        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i16);
 
         let target_player = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Gaul),
@@ -269,7 +269,7 @@ mod tests {
             ..Default::default()
         });
         inviter.alliance_id = Some(alliance.id);
-        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i32);
+        inviter.alliance_role = Some(AlliancePermission::InvitePlayer as i16);
 
         mock_uow.alliances().save(&alliance).await.unwrap();
         mock_uow.players().save(&inviter).await.unwrap();

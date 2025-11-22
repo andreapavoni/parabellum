@@ -144,6 +144,21 @@ pub enum GameError {
     #[error("Player does not have permission to kick")]
     NoKickPermission,
 
+    #[error("Player does not have permission to manage diplomacy")]
+    NoDiplomacyPermission,
+
+    #[error("Diplomacy relationship already exists between these alliances")]
+    DiplomacyAlreadyExists,
+
+    #[error("Alliance not found")]
+    AllianceNotFound,
+
+    #[error("Diplomacy not found")]
+    DiplomacyNotFound,
+
+    #[error("Diplomacy has already been processed")]
+    DiplomacyAlreadyProcessed,
+
     #[error("Cannot kick the alliance leader")]
     CannotKickLeader,
 

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use parabellum_core::GameError;
 use parabellum_types::common::ResourceGroup;
-pub use parabellum_types::alliance::{AlliancePermission, AllianceBonusType};
+pub use parabellum_types::alliance::{AlliancePermission, AllianceBonusType, DiplomacyType, DiplomacyStatus};
 
 use crate::models::{player::Player, village::Village};
 
@@ -17,7 +17,7 @@ pub struct Alliance {
     pub info1: Option<String>,
     pub info2: Option<String>,
     pub forum_link: Option<String>,
-    pub max_members: i32,
+    pub max_members: i16,
     pub leader_id: Option<Uuid>,
 
     // Battle Statistics
@@ -31,18 +31,18 @@ pub struct Alliance {
     pub current_climber_points: i64,
 
     // Alliance Bonuses
-    pub recruitment_bonus_level: i32,
+    pub recruitment_bonus_level: i16,
     pub recruitment_bonus_contributions: i64,
-    pub metallurgy_bonus_level: i32,
+    pub metallurgy_bonus_level: i16,
     pub metallurgy_bonus_contributions: i64,
-    pub philosophy_bonus_level: i32,
+    pub philosophy_bonus_level: i16,
     pub philosophy_bonus_contributions: i64,
-    pub commerce_bonus_level: i32,
+    pub commerce_bonus_level: i16,
     pub commerce_bonus_contributions: i64,
 }
 
 impl Alliance {
-    pub fn new(name: String, tag: String, max_members: i32, leader_id: Uuid) -> Result<Self, GameError> {
+    pub fn new(name: String, tag: String, max_members: i16, leader_id: Uuid) -> Result<Self, GameError> {
         if name.len() < 3 || name.len() > 20 {
             return Err(GameError::InvalidAllianceName("Length must be between 3 and 20 characters".to_string()));
         }
@@ -82,12 +82,12 @@ impl Alliance {
 
     /// Creates a new alliance with a founder player. The max_members is determined by the embassy level.
     pub fn create_with_founder(name: String, tag: String, embassy_level: u8, founder_id: Uuid) -> Result<Self, GameError> {
-        Self::new(name, tag, embassy_level as i32, founder_id)
+        Self::new(name, tag, embassy_level as i16, founder_id)
     }
 
     /// Returns the contributions needed to reach a specific level (cumulative).
     /// Based on original game formula with speed multiplier.
-    pub fn get_bonus_contributions_needed(level: i32, speed: i32) -> i64 {
+    pub fn get_bonus_contributions_needed(level: i16, speed: i32) -> i64 {
         let base_requirements = [
             0_i64,        // Level 0: 0
             2_400_000,    // Level 1: 2.4M
@@ -103,7 +103,7 @@ impl Alliance {
             1
         };
 
-        if level < 0 || level >= base_requirements.len() as i32 {
+        if level < 0 || level >= base_requirements.len() as i16 {
             return 0;
         }
 
@@ -116,7 +116,7 @@ impl Alliance {
     }
 
     /// Calculates the current bonus level based on contributions.
-    pub fn calculate_bonus_level(contributions: i64, speed: i32) -> i32 {
+    pub fn calculate_bonus_level(contributions: i64, speed: i32) -> i16 {
         let mut level = 0;
         for i in 1..=5 {
             if contributions >= Self::get_bonus_contributions_needed(i, speed) {
@@ -143,27 +143,27 @@ impl Alliance {
 
     /// Returns the cooldown in seconds for new players joining an alliance with a given bonus level.
     /// Players joining an alliance with bonus level 3+ have a cooldown before they can benefit or contribute.
-    pub fn get_new_player_cooldown(bonus_level: i32, speed: i32) -> i64 {
+    pub fn get_new_player_cooldown(bonus_level: i16, speed: i32) -> i64 {
         if bonus_level <= 2 {
             return 0;
         }
         let days = bonus_level - 2;
-        ((days * 86400) as f64 / speed as f64).ceil() as i64
+        ((days as i32 * 86400) as f64 / speed as f64).ceil() as i64
     }
 
     /// Returns the upgrade duration in seconds for upgrading to the next level.
-    pub fn get_bonus_upgrade_duration(current_level: i32, speed: i32) -> i64 {
+    pub fn get_bonus_upgrade_duration(current_level: i16, speed: i32) -> i64 {
         let target_level = current_level + 1;
-        ((target_level * 86400) as f64 / speed as f64).round() as i64
+        ((target_level as i32 * 86400) as f64 / speed as f64).round() as i64
     }
 
-    pub fn get_bonus_upgrade_cost(&self, level: i32) -> i64 {
+    pub fn get_bonus_upgrade_cost(&self, level: i16) -> i64 {
         // Use the realistic contribution requirements
         Self::get_bonus_contributions_needed(level, 1) // Default speed of 1 for cost calculation
     }
 
     /// Returns the current level for a given bonus type.
-    pub fn get_bonus_level(&self, bonus_type: AllianceBonusType) -> i32 {
+    pub fn get_bonus_level(&self, bonus_type: AllianceBonusType) -> i16 {
         match bonus_type {
             AllianceBonusType::Recruitment => self.recruitment_bonus_level,
             AllianceBonusType::Metallurgy => self.metallurgy_bonus_level,
@@ -365,6 +365,9 @@ pub enum AllianceLogType {
     PlayerLeft = 3,
     PlayerKicked = 4,
     RoleChanged = 5,
+    DiplomacyProposed = 6,
+    DiplomacyAccepted = 7,
+    DiplomacyDeclined = 8,
 }
 
 impl AllianceLogType {
@@ -416,6 +419,54 @@ pub struct AllianceDiplomacy {
     pub accepted: i16,
 }
 
+impl AllianceDiplomacy {
+    /// Creates a new alliance diplomacy proposal
+    pub fn new(alliance1_id: Uuid, alliance2_id: Uuid, diplomacy_type: DiplomacyType) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            alliance1_id,
+            alliance2_id,
+            type_: diplomacy_type as i16,
+            accepted: DiplomacyStatus::Pending as i16,
+        }
+    }
+
+    /// Accepts the diplomacy proposal
+    pub fn accept(&mut self) {
+        self.accepted = DiplomacyStatus::Accepted as i16;
+    }
+
+    /// Declines the diplomacy proposal
+    pub fn decline(&mut self) {
+        self.accepted = DiplomacyStatus::Declined as i16;
+    }
+
+    /// Checks if the diplomacy is pending
+    pub fn is_pending(&self) -> bool {
+        self.accepted == DiplomacyStatus::Pending as i16
+    }
+
+    /// Checks if the diplomacy is accepted
+    pub fn is_accepted(&self) -> bool {
+        self.accepted == DiplomacyStatus::Accepted as i16
+    }
+
+    /// Checks if the diplomacy is declined
+    pub fn is_declined(&self) -> bool {
+        self.accepted == DiplomacyStatus::Declined as i16
+    }
+
+    /// Gets the diplomacy type
+    pub fn get_type(&self) -> Option<DiplomacyType> {
+        match self.type_ {
+            1 => Some(DiplomacyType::War),
+            2 => Some(DiplomacyType::NAP),
+            3 => Some(DiplomacyType::Alliance),
+            _ => None,
+        }
+    }
+}
+
 /// Verifies that a player has the specified permission.
 pub fn verify_permission(player: &Player, permission: AlliancePermission) -> Result<(), GameError> {
     if !AlliancePermission::has_permission(player.alliance_role.unwrap_or(0), permission) {
@@ -423,6 +474,7 @@ pub fn verify_permission(player: &Player, permission: AlliancePermission) -> Res
             AlliancePermission::InvitePlayer => GameError::NoInvitePermission,
             AlliancePermission::KickPlayer => GameError::NoKickPermission,
             AlliancePermission::ManageMarks => GameError::NoManageMarksPermission,
+            AlliancePermission::AllianceDiplomacy => GameError::NoDiplomacyPermission,
             _ => GameError::NoInvitePermission, // Generic fallback
         });
     }
@@ -555,6 +607,157 @@ mod tests {
         assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.02);
         assert_eq!(alliance.get_philosophy_bonus_multiplier(), 0.01);
         assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.04);
+    }
+
+    // ========== AllianceDiplomacy Domain Tests ==========
+
+    #[test]
+    fn test_alliance_diplomacy_new_creates_pending_status() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+
+        assert_eq!(diplomacy.alliance1_id, alliance1_id);
+        assert_eq!(diplomacy.alliance2_id, alliance2_id);
+        assert_eq!(diplomacy.type_, DiplomacyType::NAP as i16);
+        assert!(diplomacy.is_pending());
+        assert!(!diplomacy.is_accepted());
+        assert!(!diplomacy.is_declined());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_new_with_different_types() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        // Test NAP
+        let nap = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+        assert_eq!(nap.get_type(), Some(DiplomacyType::NAP));
+
+        // Test Alliance
+        let alliance = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::Alliance);
+        assert_eq!(alliance.get_type(), Some(DiplomacyType::Alliance));
+
+        // Test War
+        let war = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::War);
+        assert_eq!(war.get_type(), Some(DiplomacyType::War));
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_accept_from_pending() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+        assert!(diplomacy.is_pending());
+
+        diplomacy.accept();
+
+        assert!(diplomacy.is_accepted());
+        assert!(!diplomacy.is_pending());
+        assert!(!diplomacy.is_declined());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_decline_from_pending() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::Alliance);
+        assert!(diplomacy.is_pending());
+
+        diplomacy.decline();
+
+        assert!(diplomacy.is_declined());
+        assert!(!diplomacy.is_pending());
+        assert!(!diplomacy.is_accepted());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_accept_is_idempotent() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+
+        // Accept once
+        diplomacy.accept();
+        assert!(diplomacy.is_accepted());
+
+        // Accept again - should remain accepted
+        diplomacy.accept();
+        assert!(diplomacy.is_accepted());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_decline_is_idempotent() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+
+        // Decline once
+        diplomacy.decline();
+        assert!(diplomacy.is_declined());
+
+        // Decline again - should remain declined
+        diplomacy.decline();
+        assert!(diplomacy.is_declined());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_can_change_from_accepted_to_declined() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::Alliance);
+
+        // Accept first
+        diplomacy.accept();
+        assert!(diplomacy.is_accepted());
+
+        // Then decline (e.g., alliance broke the agreement)
+        diplomacy.decline();
+        assert!(diplomacy.is_declined());
+        assert!(!diplomacy.is_accepted());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_can_change_from_declined_to_accepted() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        let mut diplomacy = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+
+        // Decline first
+        diplomacy.decline();
+        assert!(diplomacy.is_declined());
+
+        // Then accept (e.g., reconsidered the proposal)
+        diplomacy.accept();
+        assert!(diplomacy.is_accepted());
+        assert!(!diplomacy.is_declined());
+    }
+
+    #[test]
+    fn test_alliance_diplomacy_status_checks_are_mutually_exclusive() {
+        let alliance1_id = Uuid::new_v4();
+        let alliance2_id = Uuid::new_v4();
+
+        // Pending state
+        let pending = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+        assert!(pending.is_pending() && !pending.is_accepted() && !pending.is_declined());
+
+        // Accepted state
+        let mut accepted = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+        accepted.accept();
+        assert!(!accepted.is_pending() && accepted.is_accepted() && !accepted.is_declined());
+
+        // Declined state
+        let mut declined = AllianceDiplomacy::new(alliance1_id, alliance2_id, DiplomacyType::NAP);
+        declined.decline();
+        assert!(!declined.is_pending() && !declined.is_accepted() && declined.is_declined());
     }
 }
 

@@ -381,18 +381,16 @@ impl<'a> AllianceInviteRepository for PostgresAllianceInviteRepository<'a> {
     async fn get_by_id(&self, id: Uuid) -> Result<AllianceInvite, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let row = sqlx::query("SELECT * FROM alliance_invite WHERE id = $1")
-            .bind(id)
-            .fetch_one(&mut *tx_guard.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row = sqlx::query_as!(
+            db_models::AllianceInvite,
+            "SELECT id, from_player_id, alliance_id, to_player_id FROM alliance_invite WHERE id = $1",
+            id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(AllianceInvite {
-            id: row.get("id"),
-            from_player_id: row.get("from_player_id"),
-            alliance_id: row.get("alliance_id"),
-            to_player_id: row.get("to_player_id"),
-        })
+        Ok(row.into())
     }
 
     async fn get_by_player_id(
@@ -401,21 +399,16 @@ impl<'a> AllianceInviteRepository for PostgresAllianceInviteRepository<'a> {
     ) -> Result<Vec<AllianceInvite>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let rows = sqlx::query("SELECT * FROM alliance_invite WHERE to_player_id = $1")
-            .bind(player_id)
-            .fetch_all(&mut *tx_guard.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let rows = sqlx::query_as!(
+            db_models::AllianceInvite,
+            "SELECT id, from_player_id, alliance_id, to_player_id FROM alliance_invite WHERE to_player_id = $1",
+            player_id
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(rows
-            .iter()
-            .map(|row| AllianceInvite {
-                id: row.get("id"),
-                from_player_id: row.get("from_player_id"),
-                alliance_id: row.get("alliance_id"),
-                to_player_id: row.get("to_player_id"),
-            })
-            .collect())
+        Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
     async fn get_by_alliance_id(
@@ -424,21 +417,16 @@ impl<'a> AllianceInviteRepository for PostgresAllianceInviteRepository<'a> {
     ) -> Result<Vec<AllianceInvite>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let rows = sqlx::query("SELECT * FROM alliance_invite WHERE alliance_id = $1")
-            .bind(alliance_id)
-            .fetch_all(&mut *tx_guard.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let rows = sqlx::query_as!(
+            db_models::AllianceInvite,
+            "SELECT id, from_player_id, alliance_id, to_player_id FROM alliance_invite WHERE alliance_id = $1",
+            alliance_id
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(rows
-            .iter()
-            .map(|row| AllianceInvite {
-                id: row.get("id"),
-                from_player_id: row.get("from_player_id"),
-                alliance_id: row.get("alliance_id"),
-                to_player_id: row.get("to_player_id"),
-            })
-            .collect())
+        Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), ApplicationError> {
@@ -492,24 +480,18 @@ impl<'a> AllianceLogRepository for PostgresAllianceLogRepository<'a> {
     ) -> Result<Vec<AllianceLog>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let rows = sqlx::query("SELECT * FROM alliance_log WHERE alliance_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
-            .bind(alliance_id)
-            .bind(limit as i64)
-            .bind(offset as i64)
-            .fetch_all(&mut *tx_guard.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let rows = sqlx::query_as!(
+            db_models::AllianceLog,
+            "SELECT id, alliance_id, type AS type_, data, created_at FROM alliance_log WHERE alliance_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            alliance_id,
+            limit as i64,
+            offset as i64
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(rows
-            .iter()
-            .map(|row| AllianceLog {
-                id: row.get("id"),
-                alliance_id: row.get("alliance_id"),
-                type_: row.get("type"),
-                data: row.get("data"),
-                created_at: row.get("created_at"),
-            })
-            .collect())
+        Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 }
 
@@ -544,30 +526,75 @@ impl<'a> AllianceDiplomacyRepository for PostgresAllianceDiplomacyRepository<'a>
         Ok(())
     }
 
+    async fn get_by_id(&self, id: Uuid) -> Result<Option<AllianceDiplomacy>, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        let row = sqlx::query_as!(
+            db_models::AllianceDiplomacy,
+            "SELECT id, alliance1_id, alliance2_id, type AS type_, accepted FROM alliance_diplomacy WHERE id = $1",
+            id
+        )
+        .fetch_optional(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(row.map(|r| r.into()))
+    }
+
     async fn get_by_alliance_id(
         &self,
         alliance_id: Uuid,
     ) -> Result<Vec<AllianceDiplomacy>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
-        let rows = sqlx::query(
-            "SELECT * FROM alliance_diplomacy WHERE alliance1_id = $1 OR alliance2_id = $1",
+        let rows = sqlx::query_as!(
+            db_models::AllianceDiplomacy,
+            "SELECT id, alliance1_id, alliance2_id, type AS type_, accepted FROM alliance_diplomacy WHERE alliance1_id = $1 OR alliance2_id = $1",
+            alliance_id
         )
-        .bind(alliance_id)
         .fetch_all(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(rows
-            .iter()
-            .map(|row| AllianceDiplomacy {
-                id: row.get("id"),
-                alliance1_id: row.get("alliance1_id"),
-                alliance2_id: row.get("alliance2_id"),
-                type_: row.get("type"),
-                accepted: row.get("accepted"),
-            })
-            .collect())
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn get_between_alliances(
+        &self,
+        alliance1_id: Uuid,
+        alliance2_id: Uuid,
+    ) -> Result<Option<AllianceDiplomacy>, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        let row = sqlx::query_as!(
+            db_models::AllianceDiplomacy,
+            "SELECT id, alliance1_id, alliance2_id, type AS type_, accepted FROM alliance_diplomacy WHERE (alliance1_id = $1 AND alliance2_id = $2) OR (alliance1_id = $2 AND alliance2_id = $1)",
+            alliance1_id,
+            alliance2_id
+        )
+        .fetch_optional(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(row.map(|r| r.into()))
+    }
+
+    async fn update(&self, diplomacy: &AllianceDiplomacy) -> Result<(), ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        sqlx::query!(
+            "UPDATE alliance_diplomacy SET alliance1_id = $2, alliance2_id = $3, type = $4, accepted = $5 WHERE id = $1",
+            diplomacy.id,
+            diplomacy.alliance1_id,
+            diplomacy.alliance2_id,
+            diplomacy.type_,
+            diplomacy.accepted,
+        )
+        .execute(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(())
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), ApplicationError> {

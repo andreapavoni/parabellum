@@ -5,7 +5,7 @@ use parabellum_game::{
     models::{army::TroopSet, map::MapQuadrant, player::Player},
 };
 use parabellum_types::{
-    alliance::AllianceBonusType,
+    alliance::{AllianceBonusType, DiplomacyType},
     army::UnitName,
     buildings::BuildingName,
     common::ResourceGroup,
@@ -268,6 +268,31 @@ pub struct ContributeToAllianceBonus {
 }
 
 impl Command for ContributeToAllianceBonus {}
+
+#[derive(Debug, Clone)]
+pub struct CreateAllianceDiplomacy {
+    pub proposer_player_id: Uuid,
+    pub target_alliance_id: Uuid,
+    pub diplomacy_type: DiplomacyType,
+}
+
+impl Command for CreateAllianceDiplomacy {}
+
+#[derive(Debug, Clone)]
+pub struct AcceptAllianceDiplomacy {
+    pub player_id: Uuid,
+    pub diplomacy_id: Uuid,
+}
+
+impl Command for AcceptAllianceDiplomacy {}
+
+#[derive(Debug, Clone)]
+pub struct DeclineAllianceDiplomacy {
+    pub player_id: Uuid,
+    pub diplomacy_id: Uuid,
+}
+
+impl Command for DeclineAllianceDiplomacy {}
 
 // Map Flag Commands
 

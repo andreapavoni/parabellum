@@ -26,7 +26,7 @@ CREATE TABLE alliance (
     info1 TEXT,
     info2 TEXT,
     forum_link VARCHAR(255),
-    max_members INTEGER NOT NULL DEFAULT 3,
+    max_members SMALLINT NOT NULL DEFAULT 3,
     leader_id UUID,
 
     -- Battle Statistics
@@ -40,13 +40,13 @@ CREATE TABLE alliance (
     current_climber_points BIGINT DEFAULT 0,
 
     -- Alliance Bonuses
-    recruitment_bonus_level INTEGER DEFAULT 0,
+    recruitment_bonus_level SMALLINT DEFAULT 0,
     recruitment_bonus_contributions BIGINT DEFAULT 0,
-    metallurgy_bonus_level INTEGER DEFAULT 0,
+    metallurgy_bonus_level SMALLINT DEFAULT 0,
     metallurgy_bonus_contributions BIGINT DEFAULT 0,
-    philosophy_bonus_level INTEGER DEFAULT 0,
+    philosophy_bonus_level SMALLINT DEFAULT 0,
     philosophy_bonus_contributions BIGINT DEFAULT 0,
-    commerce_bonus_level INTEGER DEFAULT 0,
+    commerce_bonus_level SMALLINT DEFAULT 0,
     commerce_bonus_contributions BIGINT DEFAULT 0
 );
 
@@ -77,7 +77,7 @@ CREATE TABLE alliance_diplomacy (
     alliance1_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
     alliance2_id UUID NOT NULL REFERENCES alliance(id) ON DELETE CASCADE,
     type SMALLINT NOT NULL,
-    accepted SMALLINT DEFAULT 0,
+    accepted SMALLINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(alliance1_id, alliance2_id)
@@ -148,7 +148,7 @@ CREATE TRIGGER update_map_flag_updated_at
 
 -- Add alliance fields to players table
 ALTER TABLE players ADD COLUMN alliance_id UUID REFERENCES alliance(id) ON DELETE SET NULL;
-ALTER TABLE players ADD COLUMN alliance_role INTEGER;
+ALTER TABLE players ADD COLUMN alliance_role SMALLINT;
 ALTER TABLE players ADD COLUMN alliance_join_time TIMESTAMPTZ DEFAULT NOW();
 
 -- Current Week Contributions

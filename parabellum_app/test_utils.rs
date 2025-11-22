@@ -615,6 +615,10 @@ pub mod tests {
             Ok(())
         }
 
+        async fn get_by_id(&self, id: Uuid) -> Result<Option<AllianceDiplomacy>, ApplicationError> {
+            Ok(self.diplomacy.lock().unwrap().get(&id).cloned())
+        }
+
         async fn get_by_alliance_id(&self, alliance_id: Uuid) -> Result<Vec<AllianceDiplomacy>, ApplicationError> {
             let result = self.diplomacy
                 .lock()
@@ -624,6 +628,24 @@ pub mod tests {
                 .cloned()
                 .collect();
             Ok(result)
+        }
+
+        async fn get_between_alliances(&self, alliance1_id: Uuid, alliance2_id: Uuid) -> Result<Option<AllianceDiplomacy>, ApplicationError> {
+            let result = self.diplomacy
+                .lock()
+                .unwrap()
+                .values()
+                .find(|d| {
+                    (d.alliance1_id == alliance1_id && d.alliance2_id == alliance2_id)
+                        || (d.alliance1_id == alliance2_id && d.alliance2_id == alliance1_id)
+                })
+                .cloned();
+            Ok(result)
+        }
+
+        async fn update(&self, diplomacy: &AllianceDiplomacy) -> Result<(), ApplicationError> {
+            self.diplomacy.lock().unwrap().insert(diplomacy.id, diplomacy.clone());
+            Ok(())
         }
 
         async fn delete(&self, id: Uuid) -> Result<(), ApplicationError> {

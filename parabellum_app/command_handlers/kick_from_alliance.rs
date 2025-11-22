@@ -120,7 +120,7 @@ mod tests {
             ..Default::default()
         });
         kicker.alliance_id = Some(alliance.id);
-        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
+        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i16);
         kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         // Create target player
@@ -334,7 +334,7 @@ mod tests {
             ..Default::default()
         });
         kicker.alliance_id = Some(alliance.id);
-        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
+        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i16);
         kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         // Target is not in the alliance
@@ -397,7 +397,7 @@ mod tests {
             ..Default::default()
         });
         kicker.alliance_id = Some(alliance.id);
-        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
+        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i16);
         kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
@@ -449,7 +449,7 @@ mod tests {
             ..Default::default()
         });
         kicker.alliance_id = Some(alliance.id);
-        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i32);
+        kicker.alliance_role = Some(AlliancePermission::KickPlayer as i16);
         kicker.alliance_join_time = Some(Utc::now() - Duration::days(20));
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();

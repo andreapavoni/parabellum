@@ -13,19 +13,19 @@ pub enum AlliancePermission {
 }
 
 impl AlliancePermission {
-    pub fn has_permission(role_bitfield: i32, permission: AlliancePermission) -> bool {
-        (role_bitfield & (permission as i32)) != 0
+    pub fn has_permission(role_bitfield: i16, permission: AlliancePermission) -> bool {
+        (role_bitfield & (permission as i16)) != 0
     }
 
     /// Returns bitfield with all permissions enabled (255)
-    pub fn all_permissions() -> i32 {
+    pub fn all_permissions() -> i16 {
         255
     }
 
     /// Returns bitfield with standard officer permissions (invite, manage marks, send messages)
     /// Typically given to demoted leaders or trusted officers
-    pub fn officer_permissions() -> i32 {
-        (Self::InvitePlayer as i32) | (Self::ManageMarks as i32) | (Self::IgmMessage as i32)
+    pub fn officer_permissions() -> i16 {
+        (Self::InvitePlayer as i16) | (Self::ManageMarks as i16) | (Self::IgmMessage as i16)
     }
 }
 
@@ -35,4 +35,18 @@ pub enum AllianceBonusType {
     Metallurgy = 2,
     Philosophy = 3,
     Commerce = 4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiplomacyType {
+    War = 1,
+    NAP = 2,  // Non-Aggression Pact
+    Alliance = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiplomacyStatus {
+    Declined = -1,
+    Pending = 0,
+    Accepted = 1,
 }

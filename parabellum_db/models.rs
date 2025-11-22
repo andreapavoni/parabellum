@@ -42,7 +42,7 @@ pub struct Player {
     pub user_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub alliance_id: Option<Uuid>,
-    pub alliance_role: Option<i32>,
+    pub alliance_role: Option<i16>,
     pub alliance_join_time: Option<DateTime<Utc>>,
     pub current_alliance_recruitment_contributions: Option<i64>,
     pub current_alliance_metallurgy_contributions: Option<i64>,
@@ -174,4 +174,32 @@ pub struct MapFlag {
     pub created_by: Uuid,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceDiplomacy {
+    pub id: Uuid,
+    pub alliance1_id: Uuid,
+    pub alliance2_id: Uuid,
+    #[sqlx(rename = "type")]
+    pub type_: i16,
+    pub accepted: i16,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceLog {
+    pub id: Uuid,
+    pub alliance_id: Uuid,
+    #[sqlx(rename = "type")]
+    pub type_: i16,
+    pub data: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceInvite {
+    pub id: Uuid,
+    pub from_player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub to_player_id: Uuid,
 }

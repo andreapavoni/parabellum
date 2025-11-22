@@ -290,3 +290,38 @@ impl From<db_models::MapFlag> for game_models::map_flag::MapFlag {
         }
     }
 }
+
+impl From<db_models::AllianceDiplomacy> for game_models::alliance::AllianceDiplomacy {
+    fn from(db_diplomacy: db_models::AllianceDiplomacy) -> Self {
+        Self {
+            id: db_diplomacy.id,
+            alliance1_id: db_diplomacy.alliance1_id,
+            alliance2_id: db_diplomacy.alliance2_id,
+            type_: db_diplomacy.type_,
+            accepted: db_diplomacy.accepted,
+        }
+    }
+}
+
+impl From<db_models::AllianceLog> for game_models::alliance::AllianceLog {
+    fn from(db_log: db_models::AllianceLog) -> Self {
+        Self {
+            id: db_log.id,
+            alliance_id: db_log.alliance_id,
+            type_: db_log.type_,
+            data: db_log.data,
+            created_at: db_log.created_at,
+        }
+    }
+}
+
+impl From<db_models::AllianceInvite> for game_models::alliance::AllianceInvite {
+    fn from(db_invite: db_models::AllianceInvite) -> Self {
+        Self {
+            id: db_invite.id,
+            from_player_id: db_invite.from_player_id,
+            alliance_id: db_invite.alliance_id,
+            to_player_id: db_invite.to_player_id,
+        }
+    }
+}
