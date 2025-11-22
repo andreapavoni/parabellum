@@ -2,6 +2,12 @@
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
+    use uuid::Uuid;
+
     use parabellum_game::models::{
         alliance::{Alliance, AllianceInvite, AllianceLog, AllianceDiplomacy},
         army::Army,
@@ -9,21 +15,14 @@ pub mod tests {
         map::{MapField, MapFieldTopology, MapQuadrant, Valley},
         map_flag::MapFlag,
         marketplace::MarketplaceOffer,
-        player::Player,
         village::Village,
     };
     use parabellum_types::{
-        common::User,
+        common::{Player, User},
+        errors::{ApplicationError, DbError},
         map::{Position, ValleyTopology},
         map_flag::MapFlagType,
     };
-    use std::{
-        collections::HashMap,
-        sync::{Arc, Mutex},
-    };
-    use uuid::Uuid;
-
-    use parabellum_core::{ApplicationError, DbError};
 
     use crate::{
         jobs::Job,
@@ -395,7 +394,9 @@ pub mod tests {
                 return Ok(user.clone());
             }
 
-            Err(ApplicationError::Db(DbError::UserByEmailNotFound(email.clone())))
+            Err(ApplicationError::Db(DbError::UserByEmailNotFound(
+                email.clone(),
+            )))
         }
 
         async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
@@ -877,7 +878,7 @@ pub mod tests {
 
     #[async_trait]
     impl UnitOfWorkProvider for MockUnitOfWorkProvider {
-        async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
             let uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
             Ok(uow)
         }

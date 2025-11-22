@@ -6,7 +6,7 @@ use axum::{
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 
 use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
-use parabellum_core::{AppError, ApplicationError, DbError};
+use parabellum_types::errors::{AppError, ApplicationError, DbError};
 
 use crate::{handlers::render_template, http::AppState, templates::LoginTemplate};
 

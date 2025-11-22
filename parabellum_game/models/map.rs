@@ -3,7 +3,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_core::GameError;
+use parabellum_types::errors::GameError;
 
 use super::village::ProductionBonus;
 use crate::models::army::Army;

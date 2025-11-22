@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::repository::ArmyRepository;
-use parabellum_core::{ApplicationError, DbError, Result};
+use parabellum_types::{errors::{ApplicationError, DbError}, Result};
 use parabellum_game::models::army::Army;
 
 use crate::models::{self as db_models, Tribe};

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde_json::Value;
 
-use parabellum_core::{AppError, ApplicationError};
+use parabellum_types::errors::{AppError, ApplicationError};
 
 use crate::{
     job_handlers::{

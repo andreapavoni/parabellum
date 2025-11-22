@@ -3,7 +3,7 @@ mod test_utils;
 use axum::http::StatusCode;
 use std::collections::HashMap;
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 
 use crate::test_utils::tests::{
@@ -13,7 +13,7 @@ use crate::test_utils::tests::{
 #[tokio::test]
 async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
     let uow_provider = setup_web_app().await?;
-    let uow = uow_provider.begin().await?;
+    let uow = uow_provider.tx().await?;
     let client = setup_http_client(None, None).await;
 
     let email = "inttest@example.com";
@@ -70,7 +70,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
 async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
     let uow_provider = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
-    let uow = uow_provider.begin().await?;
+    let uow = uow_provider.tx().await?;
 
     let email = "inttest@example.com";
     let username = "IntegrationUser";

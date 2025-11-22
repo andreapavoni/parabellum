@@ -47,26 +47,31 @@ Want to get the server running locally? Here’s how.
     ```
     (You shouldn't need to modify this for local dev).
 
-3.  **Start the database:**
+3.  **Start database:**
     ```sh
-    docker-compose up -d
+    docker-compose up -d db
     ```
 
-4.  **Run database migrations:**
+4.  **Create databases:**
     ```sh
     # This sets up the dev AND test databases
     ./setup_db.sh
     ```
 
-5.  **(optional) Run tests:**
+5. **(optional) Run app in docker:**
+   ```sh
+   docker-compose up -d app
+   ```
+
+6.  **(optional) Run tests:**
     ```sh
     cargo test --release -- --test-threads=1
     ```
     _Note: use 1 thread only, to avoid issues in tests setup that weren't solved yet._
 
-6.  **Run the server:**
+7.  **Run the server:**
     ```sh
-    cargo run
+    cargo run --release
     ```
 
   From now, you can go to `http://localhost:8080` and see the progress.

@@ -13,6 +13,7 @@ use crate::{
 pub async fn village(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
     if let Some(_cookie) = jar.get("user_email") {
         // TODO: query logged in user using email from cookie.value().to_string()
+        // state.app_bus.query(query, handler)
         let template = VillageTemplate { current_user: true };
         return render_template(template, None).into_response();
     }

@@ -1,17 +1,18 @@
-use parabellum_types::{
-    army::{Unit, UnitName, UnitRole},
-    tribe::Tribe,
-};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_core::GameError;
+use parabellum_types::{
+    army::{Unit, UnitName, UnitRole},
+    errors::GameError,
+    tribe::Tribe,
+};
 
-use super::smithy::SmithyUpgrades;
 use crate::{
     battle::BattlePartyReport,
     models::{hero::Hero, village::Village},
 };
+
+use super::smithy::SmithyUpgrades;
 
 pub type TroopSet = [u32; 10];
 

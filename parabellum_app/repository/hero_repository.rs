@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
-use parabellum_core::{ApplicationError, Result};
 use parabellum_game::models::hero::Hero;
+use parabellum_types::errors::{ApplicationError, Result};
 
 #[async_trait::async_trait]
 pub trait HeroRepository: Send + Sync {

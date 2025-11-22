@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "parabellum_core",
     "parabellum_game",
     "parabellum_app",
     "parabellum_db",

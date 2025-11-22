@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use parabellum_app::repository::MapRepository;
-use parabellum_core::{
+use parabellum_types::errors::{
     ApplicationError,
     DbError::{self},
 };

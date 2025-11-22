@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::Result;
+use parabellum_types::Result;
 
 use crate::{
     config::Config,
@@ -58,15 +58,14 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::{GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::setup_player_party,
     };
-    use parabellum_game::models::player::Player;
+    use parabellum_types::{Result, errors::GameError};
     use parabellum_types::{
         buildings::BuildingName,
-        common::{ResourceGroup},
+        common::{ResourceGroup, Player},
         tribe::Tribe,
     };
 

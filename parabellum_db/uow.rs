@@ -6,7 +6,7 @@ use parabellum_app::{
     repository::*,
     uow::{UnitOfWork, UnitOfWorkProvider},
 };
-use parabellum_core::{ApplicationError, DbError};
+use parabellum_types::errors::{ApplicationError, DbError};
 
 use crate::repository::*;
 
@@ -23,7 +23,7 @@ impl PostgresUnitOfWorkProvider {
 
 #[async_trait::async_trait]
 impl UnitOfWorkProvider for PostgresUnitOfWorkProvider {
-    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+    async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
         let tx = self
             .pool
             .begin()

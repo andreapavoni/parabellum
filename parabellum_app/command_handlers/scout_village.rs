@@ -2,7 +2,7 @@ use parabellum_types::army::UnitRole;
 use std::sync::Arc;
 use tracing::info;
 
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 
 use crate::{
     command_handlers::helpers::deploy_army_from_village,

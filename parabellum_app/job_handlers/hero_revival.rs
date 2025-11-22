@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use tracing::{info, instrument};
 
-use parabellum_core::{ApplicationError, GameError};
+use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::jobs::{
     Job,
@@ -74,7 +74,7 @@ impl JobHandler for HeroRevivalJobHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::test_utils::setup_player_party;
     use parabellum_types::tribe::Tribe;
     use serde_json::json;

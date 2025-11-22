@@ -8,7 +8,7 @@ pub mod tests {
         cqrs::commands::{ReinforceVillage, ReviveHero},
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
 
     use parabellum_game::models::buildings::Building;
     use parabellum_game::test_utils::{VillageFactoryOptions, village_factory};
@@ -24,7 +24,7 @@ pub mod tests {
         let hero = some_hero.unwrap();
 
         let village2 = {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             let mut village2 = village_factory(VillageFactoryOptions {
@@ -55,7 +55,7 @@ pub mod tests {
 
         // Verify the job is queued correctly
         let (reinforce_job, _deployed_army_id) = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let jobs = uow_check.jobs().list_by_player_id(player.id).await?;
             assert_eq!(jobs.len(), 1, "There should be 1 pending job");
@@ -86,7 +86,7 @@ pub mod tests {
 
         // Verify post-arrival state in the database
         {
-            let uow_final = uow_provider.begin().await?;
+            let uow_final = uow_provider.tx().await?;
             let completed_job = uow_final.jobs().get_by_id(reinforce_job.id).await?;
             assert_eq!(
                 completed_job.status,
@@ -158,7 +158,7 @@ pub mod tests {
 
         // Check the queued job
         let (reinforce_job, deployed_army_id) = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let jobs = uow_check
                 .jobs()
                 .list_by_player_id(reinforcer_player.id)
@@ -188,7 +188,7 @@ pub mod tests {
 
         // Verify post-arrival state
         {
-            let uow_final = uow_provider.begin().await?;
+            let uow_final = uow_provider.tx().await?;
             let completed_job = uow_final.jobs().get_by_id(reinforce_job.id).await?;
             assert_eq!(completed_job.status, JobStatus::Completed);
             // After arrival, the reinforcements should remain as an allied army in the target village
@@ -243,7 +243,7 @@ pub mod tests {
         let mut hero = some_hero.unwrap();
 
         let (player_id, village_id, hero_id) = {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
             let hero_repo = uow.heroes();
 
@@ -270,7 +270,7 @@ pub mod tests {
         };
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
 
             let mut hero = hero_repo.get_by_id(hero_id).await?;
@@ -291,7 +291,7 @@ pub mod tests {
         app.execute(cmd, handler).await?;
 
         let revival_job_id = {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let jobs = uow.jobs().list_by_player_id(player_id).await?;
             assert_eq!(jobs.len(), 1);
             let job = jobs[0].clone();
@@ -306,14 +306,14 @@ pub mod tests {
         };
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let job = uow.jobs().get_by_id(revival_job_id).await?;
             uow.rollback().await?;
             worker.process_jobs(&vec![job.clone()]).await?;
         }
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
             let job_repo = uow.jobs();
 
@@ -341,7 +341,7 @@ pub mod tests {
     async fn test_resurrect_new_hero() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let village_repo = uow.villages();
         let hero_repo = uow.heroes();
 
@@ -384,7 +384,7 @@ pub mod tests {
 
         // ReviveHero(New) → job
         let revival_job_id = {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let jobs = uow.jobs().list_by_player_id(player_id).await?;
             assert_eq!(jobs.len(), 1);
             let job = jobs[0].clone();
@@ -395,14 +395,14 @@ pub mod tests {
         };
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let job = uow.jobs().get_by_id(revival_job_id).await?;
             uow.rollback().await?;
             worker.process_jobs(&vec![job.clone()]).await?;
         }
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
             let job_repo = uow.jobs();
 
@@ -431,7 +431,7 @@ pub mod tests {
     async fn test_hero_xp_levelup_and_revival() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let village_repo = uow.villages();
         let hero_repo = uow.heroes();
 
@@ -462,7 +462,7 @@ pub mod tests {
 
         // 2) Battle with enough XP to level-up hero (T3: threshold lv1 = 100 XP)
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
 
             let mut hero = hero_repo.get_by_id(hero_id).await?;
@@ -484,7 +484,7 @@ pub mod tests {
 
         // 3) Next battle with >= 90% losses → hero dies
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
 
             let mut hero = hero_repo.get_by_id(hero_id).await?;
@@ -509,10 +509,10 @@ pub mod tests {
 
         // 4) Revive hero
         let revival_job_id = {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             uow.commit().await?;
 
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let jobs = uow.jobs().list_by_player_id(player_id).await?;
             assert_eq!(jobs.len(), 1);
             let job = jobs[0].clone();
@@ -528,7 +528,7 @@ pub mod tests {
 
         // 5) Process HeroRevival job
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let job = uow.jobs().get_by_id(revival_job_id).await?;
             uow.rollback().await?;
             worker.process_jobs(&vec![job.clone()]).await?;
@@ -536,7 +536,7 @@ pub mod tests {
 
         // 6) Final state
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let hero_repo = uow.heroes();
             let job_repo = uow.jobs();
 

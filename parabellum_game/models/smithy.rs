@@ -1,4 +1,4 @@
-use parabellum_core::GameError;
+use parabellum_types::errors::GameError;
 use parabellum_types::{
     army::UnitName,
     common::{ResearchCost, ResourceGroup},

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tracing::info;
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 
 use crate::{
     command_handlers::helpers::deploy_army_from_village,
@@ -86,7 +86,7 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::test_utils::setup_player_party;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
 

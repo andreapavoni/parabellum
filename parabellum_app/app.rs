@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, Result};
+use parabellum_types::{errors::{ApplicationError, Result}}
+;
 
 use crate::{
     config::Config,
@@ -40,7 +41,7 @@ impl AppBus {
         C: Command,
         H: CommandHandler<C>,
     {
-        let uow = self.uow_provider.begin().await?;
+        let uow = self.uow_provider.tx().await?;
 
         match handler.handle(cmd, &uow, &self.config).await {
             Ok(_) => {
@@ -63,7 +64,7 @@ impl AppBus {
         Q: Query,
         H: QueryHandler<Q>,
     {
-        let uow = self.uow_provider.begin().await?;
+        let uow = self.uow_provider.tx().await?;
 
         let result = handler.handle(query, &uow, &self.config).await;
 

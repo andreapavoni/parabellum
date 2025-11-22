@@ -1,14 +1,14 @@
-use parabellum_db::bootstrap_world_map;
 use sqlx::PgPool;
 use std::sync::Arc;
 
 use parabellum_app::{
     app::AppBus, config::Config, job_registry::AppJobRegistry, jobs::worker::JobWorker,
 };
-use parabellum_core::{ApplicationError, Result};
-use parabellum_db::{establish_connection_pool, uow::PostgresUnitOfWorkProvider};
-use parabellum_web::AppState;
-use parabellum_web::WebRouter;
+use parabellum_db::{
+    bootstrap_world_map, establish_connection_pool, uow::PostgresUnitOfWorkProvider,
+};
+use parabellum_types::{Result, errors::ApplicationError};
+use parabellum_web::{AppState, WebRouter};
 
 mod logs;
 use logs::setup_logging;
@@ -27,6 +27,11 @@ async fn main() -> Result<(), ApplicationError> {
 async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), ApplicationError> {
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
+
+    sqlx::migrate!("../migrations")
+        .run(&db_pool)
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
 
     setup_world_map(&db_pool, &config).await?;
 

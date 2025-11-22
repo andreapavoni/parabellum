@@ -1,12 +1,14 @@
+use async_trait::async_trait;
+use tracing::{info, instrument};
+
+use parabellum_game::models::village::Village;
+use parabellum_types::errors::ApplicationError;
+
 use crate::jobs::{
     Job, JobPayload,
     handler::{JobHandler, JobHandlerContext},
     tasks::{MerchantGoingTask, MerchantReturnTask},
 };
-use async_trait::async_trait;
-use parabellum_core::ApplicationError;
-use parabellum_game::models::village::Village;
-use tracing::{info, instrument};
 
 pub struct MerchantGoingJobHandler {
     payload: MerchantGoingTask,

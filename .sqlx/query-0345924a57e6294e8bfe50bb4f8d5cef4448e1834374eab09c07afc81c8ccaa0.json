@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n              a.id,\n              a.village_id,\n              a.player_id,\n              a.current_map_field_id,\n              a.tribe as \"tribe: _\",\n              a.units,\n              a.smithy,\n              a.hero_id as \"hero_id?: Uuid\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.level          END as \"hero_level?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.health         END as \"hero_health?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.experience     END as \"hero_experience?: i32\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.resource_focus END as \"hero_resource_focus?: _\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.strength_points       END as \"hero_strength_points?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.resources_points      END as \"hero_resources_points?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.regeneration_points   END as \"hero_regeneration_points?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.off_bonus_points      END as \"hero_off_bonus_points?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.def_bonus_points      END as \"hero_def_bonus_points?: i16\",\n              CASE WHEN h.id IS NULL THEN NULL ELSE h.unassigned_points      END as \"hero_unassigned_points?: i16\"\n            FROM armies a\n            LEFT JOIN heroes h ON a.hero_id = h.id\n            WHERE a.hero_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_map_field_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "units",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "smithy",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "hero_id?: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "hero_level?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 9,
+        "name": "hero_health?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "hero_experience?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "hero_resource_focus?: _",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "hero_strength_points?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "hero_resources_points?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 14,
+        "name": "hero_regeneration_points?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 15,
+        "name": "hero_off_bonus_points?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 16,
+        "name": "hero_def_bonus_points?: i16",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 17,
+        "name": "hero_unassigned_points?: i16",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0345924a57e6294e8bfe50bb4f8d5cef4448e1834374eab09c07afc81c8ccaa0"
+}

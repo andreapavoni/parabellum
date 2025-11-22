@@ -16,7 +16,7 @@ pub mod tests {
         },
         uow::UnitOfWorkProvider,
     };
-    use parabellum_core::{ApplicationError, GameError, Result};
+    use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 
     use parabellum_game::models::{buildings::Building, player::Player, village::Village};
     use parabellum_types::{
@@ -52,7 +52,7 @@ pub mod tests {
         let (_, mut village_b, _, _, _) =
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
 
         let granary =
             Building::new(BuildingName::Granary, config.speed).at_level(10, config.speed)?;
@@ -110,7 +110,7 @@ pub mod tests {
         app.execute(command, handler).await?;
 
         let going_job = {
-            let uow_assert1 = uow_provider.begin().await?;
+            let uow_assert1 = uow_provider.tx().await?;
 
             let sender_village = uow_assert1.villages().get_by_id(village_a.id).await?;
             assert_eq!(
@@ -151,7 +151,7 @@ pub mod tests {
         worker.process_jobs(&vec![going_job.clone()]).await?;
 
         let return_job = {
-            let uow_assert2 = uow_provider.begin().await?;
+            let uow_assert2 = uow_provider.tx().await?;
 
             let target_village = uow_assert2.villages().get_by_id(village_b.id).await?;
             assert_eq!(
@@ -187,7 +187,7 @@ pub mod tests {
 
         worker.process_jobs(&vec![return_job.clone()]).await?;
         {
-            let uow_assert3 = uow_provider.begin().await?;
+            let uow_assert3 = uow_provider.tx().await?;
 
             let original_job = uow_assert3.jobs().get_by_id(return_job.id).await?;
             assert_eq!(original_job.status, JobStatus::Completed);
@@ -217,14 +217,14 @@ pub mod tests {
             setup_test_env().await?;
 
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let mut v = uow.villages().get_by_id(village_a.id).await?;
             v.set_building_level_at_slot(25, 1, config.speed)?;
             uow.villages().save(&v).await?;
             uow.commit().await?;
         }
 
-        let uow_cmd = uow_provider.begin().await?;
+        let uow_cmd = uow_provider.tx().await?;
         let command = SendResources {
             player_id: player_a.id,
             village_id: village_a.id,

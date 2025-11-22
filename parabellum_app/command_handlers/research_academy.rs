@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::Result;
+use parabellum_types::Result;
 
 use crate::{
     config::Config,
@@ -54,7 +54,7 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::{GameError, Result};
+    use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village, player::Player},
         test_utils::{

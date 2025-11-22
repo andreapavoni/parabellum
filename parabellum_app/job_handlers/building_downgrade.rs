@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use parabellum_core::{ApplicationError, GameError};
-use parabellum_types::buildings::BuildingGroup;
 use tracing::{info, instrument};
+
+use parabellum_types::buildings::BuildingGroup;
+use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::jobs::{
     Job,
@@ -73,10 +74,10 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
-    use parabellum_core::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
+    use parabellum_types::Result;
     use parabellum_types::{
         buildings::{BuildingGroup, BuildingName},
         tribe::Tribe,

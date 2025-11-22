@@ -4,8 +4,8 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::repository::MarketplaceRepository;
-use parabellum_core::{ApplicationError, DbError, Result};
 use parabellum_game::models::marketplace::MarketplaceOffer;
+use parabellum_types::{errors::{ApplicationError, DbError}, Result};
 
 use crate::models::{self as db_models};
 

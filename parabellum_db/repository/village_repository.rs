@@ -4,8 +4,8 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::repository::VillageRepository;
-use parabellum_core::{ApplicationError, DbError};
 use parabellum_game::models::village::Village;
+use parabellum_types::errors::{ApplicationError, DbError};
 
 use crate::{mapping::VillageAggregate, models as db_models};
 

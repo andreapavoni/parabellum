@@ -1,4 +1,4 @@
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 
 use crate::{
     config::Config,
@@ -56,7 +56,7 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_core::{GameError, Result};
+    use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, player::Player, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{

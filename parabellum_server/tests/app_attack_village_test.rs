@@ -10,7 +10,7 @@ pub mod tests {
             tasks::{ArmyReturnTask, AttackTask},
         },
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
@@ -59,7 +59,7 @@ pub mod tests {
         app.execute(attack_command, handler).await?;
 
         let (attack_job, deployed_army_id) = {
-            let uow_assert1 = uow_provider.begin().await?;
+            let uow_assert1 = uow_provider.tx().await?;
             let cloned_job;
             let deployed_id;
 
@@ -123,7 +123,7 @@ pub mod tests {
         worker.process_jobs(&vec![attack_job.clone()]).await?;
 
         let return_job = {
-            let uow_assert2 = uow_provider.begin().await?;
+            let uow_assert2 = uow_provider.tx().await?;
             let job_repo = uow_assert2.jobs();
             let final_jobs = job_repo
                 .list_by_player_id(attacker_player.id)
@@ -157,7 +157,7 @@ pub mod tests {
 
         worker.process_jobs(&vec![return_job.clone()]).await?;
         {
-            let uow_assert3 = uow_provider.begin().await?;
+            let uow_assert3 = uow_provider.tx().await?;
             let final_return_job = uow_assert3.jobs().get_by_id(return_job.id).await?;
             assert_eq!(final_return_job.status, JobStatus::Completed);
 
@@ -232,7 +232,7 @@ pub mod tests {
         };
 
         {
-            let uow_update = uow_provider.begin().await?;
+            let uow_update = uow_provider.tx().await?;
             let village_repo = uow_update.villages();
 
             let granary =
@@ -268,7 +268,7 @@ pub mod tests {
         app.execute(attack_command, handler).await?;
 
         let jobs = {
-            let uow_read_jobs = uow_provider.begin().await?;
+            let uow_read_jobs = uow_provider.tx().await?;
             let jobs = uow_read_jobs
                 .jobs()
                 .list_by_player_id(attacker_player.id)
@@ -279,7 +279,7 @@ pub mod tests {
 
         worker.process_jobs(&jobs).await?;
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let village_repo = uow_assert.villages();
             let job_repo = uow_assert.jobs();
 

@@ -1,14 +1,13 @@
 # Build stage
-FROM rust:1.85 as builder
+FROM rust:1.91.1-slim-trixie as builder
 WORKDIR /app
 
-# FIXME: ignore files from .gitignore
 COPY . .
 
-RUN cargo build --release -p parabellum_server
+RUN cargo build --release
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM bitnami/minideb:trixie
 
 RUN apt-get update && \
   apt-get install -y ca-certificates && \
@@ -18,13 +17,10 @@ RUN useradd -m parabellum
 USER parabellum
 
 WORKDIR /app
-COPY --from=builder /app/target/release/parabellum_server /app/parabellum_server
-
-COPY --from=builder /app/migrations ./migrations
-# FIXME: adjust frontend assets paths
-COPY --from=builder /app/parabellum_web ./parabellum_web
+COPY --from=builder /app/target/release/parabellum /app/parabellum
+COPY --from=builder /app/frontend/assets /app/frontend/assets
 
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["./parabellum_server"]
+CMD ["./parabellum"]

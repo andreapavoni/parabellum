@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, player_id, village_id, tribe as \"tribe: _\", level, health, experience, resource_focus,\n                   strength_points, regeneration_points, off_bonus_points, def_bonus_points, resources_points, unassigned_points\n            FROM heroes\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "level",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "health",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "experience",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "resource_focus",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "strength_points",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 9,
+        "name": "regeneration_points",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "off_bonus_points",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 11,
+        "name": "def_bonus_points",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "resources_points",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 13,
+        "name": "unassigned_points",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a4bf672972d7661cca2f16ac51e21499ecffc72aa7ae471c94f23489e61e33e5"
+}

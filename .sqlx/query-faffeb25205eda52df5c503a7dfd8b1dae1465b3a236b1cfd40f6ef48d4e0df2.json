@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM marketplace_offers WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "offer_resources",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "seek_resources",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "merchants_required",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "faffeb25205eda52df5c503a7dfd8b1dae1465b3a236b1cfd40f6ef48d4e0df2"
+}

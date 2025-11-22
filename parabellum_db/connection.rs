@@ -1,7 +1,7 @@
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::env;
 
-use parabellum_core::DbError;
+use parabellum_types::errors::DbError;
 
 pub type DbPool = PgPool;
 

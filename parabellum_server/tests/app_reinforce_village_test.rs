@@ -7,7 +7,7 @@ pub mod tests {
         cqrs::commands::ReinforceVillage,
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
 
     use super::test_utils::tests::setup_player_party;
@@ -54,7 +54,7 @@ pub mod tests {
         app.execute(command, handler).await?;
 
         let (reinforce_job, deployed_army_id) = {
-            let uow_assert1 = uow_provider.begin().await?;
+            let uow_assert1 = uow_provider.tx().await?;
             let jobs = uow_assert1
                 .jobs()
                 .list_by_player_id(reinforcer_player.id)
@@ -109,7 +109,7 @@ pub mod tests {
 
         worker.process_jobs(&vec![reinforce_job.clone()]).await?;
         {
-            let uow_assert2 = uow_provider.begin().await?;
+            let uow_assert2 = uow_provider.tx().await?;
 
             let original_job = uow_assert2.jobs().get_by_id(reinforce_job.id).await?;
             assert_eq!(original_job.status, JobStatus::Completed);

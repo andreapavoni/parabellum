@@ -5,7 +5,10 @@ use crate::{
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
     uow::UnitOfWork,
 };
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, GameError},
+};
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use std::sync::Arc;
 
@@ -116,7 +119,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::{
         models::{buildings::Building, player::Player, village::Village},
         test_utils::{

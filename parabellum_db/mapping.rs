@@ -1,6 +1,6 @@
 use parabellum_app::jobs::{Job, JobStatus};
-use parabellum_core::DbError;
 use parabellum_game::models::{self as game_models};
+use parabellum_types::errors::DbError;
 use parabellum_types::{
     common::User,
     tribe::Tribe,

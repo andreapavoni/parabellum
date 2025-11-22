@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use parabellum_core::GameError;
 use parabellum_types::{
     buildings::{BuildingGroup, BuildingName, BuildingRequirement},
     common::{Cost, ResourceGroup},
+    errors::GameError,
     tribe::Tribe,
 };
 
