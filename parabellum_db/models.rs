@@ -26,6 +26,14 @@ impl From<String> for Tribe {
     }
 }
 
+#[derive(sqlx::Type, Debug, Clone, Copy, Serialize, Deserialize)]
+#[sqlx(type_name = "flag_type_enum", rename_all = "PascalCase")]
+pub enum MapFlagType {
+    PlayerMark,
+    AllianceMark,
+    CustomFlag,
+}
+
 #[derive(Debug, FromRow, Clone)]
 pub struct Player {
     pub id: Uuid,
@@ -160,7 +168,7 @@ pub struct MapFlag {
     pub player_id: Option<Uuid>,
     pub target_id: Option<Uuid>,
     pub position: Option<serde_json::Value>,
-    pub flag_type: i16,
+    pub flag_type: MapFlagType,
     pub color: i16,
     pub text: Option<String>,
     pub created_by: Uuid,

@@ -9,6 +9,7 @@ use parabellum_types::{
     buildings::BuildingName,
     common::ResourceGroup,
     map::Position,
+    map_flag::MapFlagType,
     tribe::Tribe,
 };
 
@@ -286,7 +287,7 @@ pub struct CreateMultiMark {
     pub player_id: Uuid,
     pub alliance_id: Option<Uuid>,  // None for player-owned, Some for alliance-owned
     pub target_id: Uuid,  // Target player or alliance ID
-    pub mark_type: i16,  // 0 = player mark, 1 = alliance mark
+    pub flag_type: MapFlagType,  // PlayerMark or AllianceMark
     pub color: i16,
 }
 

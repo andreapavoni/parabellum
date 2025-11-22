@@ -52,12 +52,10 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
         verify_permission(&player, AlliancePermission::ManageMarks)?;
         }
 
-        // Validate mark type (0 = player mark, 1 = alliance mark)
-        let flag_type = MapFlagType::from_i16(command.mark_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(command.mark_type))?;
-        match flag_type {
+        // Validate mark type (only PlayerMark and AllianceMark allowed)
+        match command.flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {},
-            _ => return Err(GameError::InvalidMapFlagType(command.mark_type).into()),
+            _ => return Err(GameError::InvalidMapFlagType(command.flag_type).into()),
         }
 
         // Check multi-mark limit (10 per owner, combined types 0 and 1)
@@ -74,7 +72,7 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
             .count_by_owner(
                 if is_alliance_owned { None } else { Some(command.player_id) },
                 if is_alliance_owned { command.alliance_id } else { None },
-                Some(MapFlagType::CustomFlag.as_i16()),
+                Some(MapFlagType::CustomFlag),
             )
             .await?;
 
@@ -85,7 +83,7 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
         }
 
         // Verify target exists
-        match flag_type {
+        match command.flag_type {
             MapFlagType::PlayerMark => {
                 // Verify target player exists
                 let _target_player = uow.players().get_by_id(command.target_id).await?;
@@ -101,14 +99,14 @@ impl CommandHandler<CreateMultiMark> for CreateMultiMarkCommandHandler {
         let mut flag = if is_alliance_owned {
             MapFlag::new_alliance_flag(
                 command.alliance_id.unwrap(),
-                flag_type,
+                command.flag_type,
                 command.color,
                 command.player_id,
             )
         } else {
             MapFlag::new_player_flag(
                 command.player_id,
-                flag_type,
+                command.flag_type,
                 command.color,
                 command.player_id,
             )
@@ -162,7 +160,7 @@ mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_player.id,
-            mark_type: 0, // Player mark
+            flag_type: MapFlagType::PlayerMark,
             color: 3,
         };
 
@@ -180,7 +178,7 @@ mod tests {
         assert_eq!(flags[0].alliance_id, None);
         assert_eq!(flags[0].target_id, Some(target_player.id));
         assert_eq!(flags[0].color, 3);
-        assert_eq!(flags[0].flag_type, 0); // PlayerMark
+        assert_eq!(flags[0].flag_type, MapFlagType::PlayerMark);
     }
 
     #[tokio::test]
@@ -208,7 +206,7 @@ mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_alliance.id,
-            mark_type: 1, // Alliance mark
+            flag_type: MapFlagType::AllianceMark,
             color: 5,
         };
 
@@ -223,7 +221,7 @@ mod tests {
         let flags = mock_uow.map_flags().get_by_player_id(player.id).await.unwrap();
         assert_eq!(flags.len(), 1);
         assert_eq!(flags[0].target_id, Some(target_alliance.id));
-        assert_eq!(flags[0].flag_type, 1); // AllianceMark
+        assert_eq!(flags[0].flag_type, MapFlagType::AllianceMark);
     }
 
     #[tokio::test]
@@ -253,7 +251,7 @@ mod tests {
             player_id: player.id,
             alliance_id: Some(alliance_id),
             target_id: target_player.id,
-            mark_type: 0,
+            flag_type: MapFlagType::PlayerMark,
             color: 7,
         };
 
@@ -295,7 +293,7 @@ mod tests {
             player_id: player.id,
             alliance_id: Some(alliance_id),
             target_id: target_player.id,
-            mark_type: 0,
+            flag_type: MapFlagType::PlayerMark,
             color: 3,
         };
 
@@ -344,7 +342,7 @@ mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_player.id,
-            mark_type: 0,
+            flag_type: MapFlagType::PlayerMark,
             color: 5,
         };
 
@@ -377,7 +375,7 @@ mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_player.id,
-            mark_type: 0,
+            flag_type: MapFlagType::PlayerMark,
             color: 15, // Invalid for multi-marks (should be 0-9)
         };
 
@@ -411,7 +409,7 @@ mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: Uuid::new_v4(),
-            mark_type: 2, // Invalid - CustomFlag type not allowed for multi-marks
+            flag_type: MapFlagType::CustomFlag, // Invalid - CustomFlag type not allowed for multi-marks
             color: 5,
         };
 
@@ -419,7 +417,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            ApplicationError::Game(GameError::InvalidMapFlagType(2)) => {},
+            ApplicationError::Game(GameError::InvalidMapFlagType(MapFlagType::CustomFlag)) => {},
             e => panic!("Expected InvalidMapFlagType error, got: {:?}", e),
         }
     }

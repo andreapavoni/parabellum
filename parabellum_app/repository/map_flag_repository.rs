@@ -1,5 +1,6 @@
 use parabellum_core::ApplicationError;
 use parabellum_game::models::map_flag::MapFlag;
+use parabellum_types::map_flag::MapFlagType;
 use uuid::Uuid;
 
 #[async_trait::async_trait]
@@ -29,7 +30,7 @@ pub trait MapFlagRepository: Send + Sync {
         &self,
         player_id: Option<Uuid>,
         alliance_id: Option<Uuid>,
-        flag_type: Option<i16>,
+        flag_type: Option<MapFlagType>,
     ) -> Result<i64, ApplicationError>;
     
     /// Update an existing map flag (color and/or text)

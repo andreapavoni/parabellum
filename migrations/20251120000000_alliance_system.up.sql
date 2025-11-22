@@ -104,17 +104,20 @@ CREATE TABLE alliance_medal (
 CREATE INDEX idx_alliance_medal_alliance_id ON alliance_medal(alliance_id);
 CREATE INDEX idx_alliance_medal_period ON alliance_medal(period_type, period_number);
 
+-- Flag type enum for map flags
+CREATE TYPE flag_type_enum AS ENUM ('PlayerMark', 'AllianceMark', 'CustomFlag');
+
 -- Map flags/marks (unified table for both player and alliance marks)
---   Type 0: Player marks (track specific players)
---   Type 1: Alliance marks (track entire alliances)
---   Type 2: Custom flags (labeled markers on map tiles)
+--   Type 'PlayerMark': Player marks (track specific players)
+--   Type 'AllianceMark': Alliance marks (track entire alliances)
+--   Type 'CustomFlag': Custom flags (labeled markers on map tiles)
 CREATE TABLE map_flag (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     alliance_id UUID REFERENCES alliance(id) ON DELETE CASCADE,
     player_id UUID REFERENCES players(id) ON DELETE CASCADE,
     target_id UUID,
     position JSONB,
-    flag_type SMALLINT NOT NULL,
+    flag_type flag_type_enum NOT NULL,
     color SMALLINT NOT NULL,
     text VARCHAR(50),             
     created_by UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -126,8 +129,8 @@ CREATE TABLE map_flag (
         (alliance_id IS NULL AND player_id IS NOT NULL)
     ),
     CONSTRAINT chk_target_or_position CHECK (
-        (flag_type IN (0, 1) AND target_id IS NOT NULL) OR
-        (flag_type = 2 AND position IS NOT NULL)
+        (flag_type IN ('PlayerMark', 'AllianceMark') AND target_id IS NOT NULL) OR
+        (flag_type = 'CustomFlag' AND position IS NOT NULL)
     )
 );
 

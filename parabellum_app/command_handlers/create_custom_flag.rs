@@ -67,7 +67,7 @@ impl CommandHandler<CreateCustomFlag> for CreateCustomFlagCommandHandler {
                 } else {
                     None
                 },
-                Some(MapFlagType::CustomFlag.as_i16()),
+                Some(MapFlagType::CustomFlag),
             )
             .await?;
 
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(flags[0].position, Some(Position { x: 100, y: 50 }));
         assert_eq!(flags[0].color, 5);
         assert_eq!(flags[0].text, Some("Test flag".to_string()));
-        assert_eq!(flags[0].flag_type, 2); // CustomFlag
+        assert_eq!(flags[0].flag_type, MapFlagType::CustomFlag);
     }
 
     #[tokio::test]

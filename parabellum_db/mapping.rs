@@ -249,6 +249,28 @@ impl From<db_models::Hero> for game_models::hero::Hero {
     }
 }
 
+
+impl From<parabellum_types::map_flag::MapFlagType> for db_models::MapFlagType {
+    fn from(flag_type: parabellum_types::map_flag::MapFlagType) -> Self {
+        match flag_type {
+            parabellum_types::map_flag::MapFlagType::PlayerMark => db_models::MapFlagType::PlayerMark,
+            parabellum_types::map_flag::MapFlagType::AllianceMark => db_models::MapFlagType::AllianceMark,
+            parabellum_types::map_flag::MapFlagType::CustomFlag => db_models::MapFlagType::CustomFlag,
+        }
+    }
+}
+
+impl From<db_models::MapFlagType> for parabellum_types::map_flag::MapFlagType {
+    fn from(flag_type: db_models::MapFlagType) -> Self {
+        match flag_type {
+            db_models::MapFlagType::PlayerMark => parabellum_types::map_flag::MapFlagType::PlayerMark,
+            db_models::MapFlagType::AllianceMark => parabellum_types::map_flag::MapFlagType::AllianceMark,
+            db_models::MapFlagType::CustomFlag => parabellum_types::map_flag::MapFlagType::CustomFlag,
+        }
+    }
+}
+
+
 impl From<db_models::MapFlag> for game_models::map_flag::MapFlag {
     fn from(db_flag: db_models::MapFlag) -> Self {
         let position = db_flag.position.and_then(|v| serde_json::from_value(v).ok());
@@ -259,7 +281,7 @@ impl From<db_models::MapFlag> for game_models::map_flag::MapFlag {
             player_id: db_flag.player_id,
             target_id: db_flag.target_id,
             position,
-            flag_type: db_flag.flag_type,
+            flag_type: db_flag.flag_type.into(),
             color: db_flag.color,
             text: db_flag.text,
             created_by: db_flag.created_by,

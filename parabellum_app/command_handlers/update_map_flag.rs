@@ -70,15 +70,11 @@ impl CommandHandler<UpdateMapFlag> for UpdateMapFlagCommandHandler {
             }
         }
 
-        // Determine flag type
-        let flag_type = MapFlagType::from_i16(flag.flag_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(flag.flag_type))?;
-
         // Update the flag
         flag.color = command.color;
 
         // Update text only for custom flags
-        if flag_type == MapFlagType::CustomFlag && command.text.is_some() {
+        if flag.flag_type == MapFlagType::CustomFlag && command.text.is_some() {
             flag = flag.with_text(command.text.unwrap())?;
         }
 

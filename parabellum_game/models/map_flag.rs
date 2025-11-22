@@ -20,7 +20,7 @@ pub struct MapFlag {
     pub position: Option<Position>,  // For type 2: map position
 
     // Properties
-    pub flag_type: i16,
+    pub flag_type: MapFlagType,
     pub color: i16,
     pub text: Option<String>,
 
@@ -44,7 +44,7 @@ impl MapFlag {
             player_id: Some(player_id),
             target_id: None,
             position: None,
-            flag_type: flag_type.as_i16(),
+            flag_type,
             color,
             text: None,
             created_by,
@@ -66,7 +66,7 @@ impl MapFlag {
             player_id: None,
             target_id: None,
             position: None,
-            flag_type: flag_type.as_i16(),
+            flag_type,
             color,
             text: None,
             created_by,
@@ -101,10 +101,7 @@ impl MapFlag {
     /// Multi-marks (types 0 & 1): 0-9
     /// Custom flags (type 2): 0-10 (player) or 10-20 (alliance)
     pub fn validate_color(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
-        
-        match flag_type {
+        match self.flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {
                 // Multi-marks: colors 0-9
                 if self.color < 0 || self.color > 9 {
@@ -144,10 +141,7 @@ impl MapFlag {
 
     /// Validates that the flag has correct target/coordinates based on type
     pub fn validate_target(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
-        
-        match flag_type {
+        match self.flag_type {
             MapFlagType::PlayerMark | MapFlagType::AllianceMark => {
                 // Multi-marks must have target_id
                 if self.target_id.is_none() {
@@ -198,10 +192,7 @@ impl MapFlag {
 
     /// Validates text requirements for custom flags
     pub fn validate_text(&self) -> Result<(), GameError> {
-        let flag_type = MapFlagType::from_i16(self.flag_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))?;
-
-        if flag_type == MapFlagType::CustomFlag && self.text.is_none() {
+        if self.flag_type == MapFlagType::CustomFlag && self.text.is_none() {
             return Err(GameError::MapFlagMissingText);
         }
 
@@ -245,9 +236,8 @@ impl MapFlag {
     }
 
     /// Gets the flag type as enum
-    pub fn get_flag_type(&self) -> Result<MapFlagType, GameError> {
-        MapFlagType::from_i16(self.flag_type)
-            .ok_or_else(|| GameError::InvalidMapFlagType(self.flag_type))
+    pub fn get_flag_type(&self) -> MapFlagType {
+        self.flag_type
     }
 }
 

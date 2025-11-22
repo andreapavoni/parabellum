@@ -1,7 +1,7 @@
 use thiserror::Error;
 use uuid::Uuid;
 
-use parabellum_types::{army::UnitName, buildings::BuildingName, tribe::Tribe};
+use parabellum_types::{army::UnitName, buildings::BuildingName, map_flag::MapFlagType, tribe::Tribe};
 
 /// Errors for domain logic (game rules).
 #[derive(Debug, Error)]
@@ -169,8 +169,8 @@ pub enum GameError {
     AllianceNewPlayerCooldown,
 
     // Map flag errors
-    #[error("Invalid map flag type: {0}")]
-    InvalidMapFlagType(i16),
+    #[error("Invalid map flag type: {0:?}")]
+    InvalidMapFlagType(MapFlagType),
 
     #[error("Invalid map flag color: {color} (must be between {min} and {max})")]
     InvalidMapFlagColor { color: i16, min: i16, max: i16 },

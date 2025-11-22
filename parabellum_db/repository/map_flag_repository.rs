@@ -24,6 +24,7 @@ impl<'a> PostgresMapFlagRepository<'a> {
 #[async_trait::async_trait]
 impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
     async fn save(&self, flag: &MapFlag) -> Result<(), ApplicationError> {
+        let flag_type: db_models::MapFlagType = flag.flag_type.into();
         let mut tx_guard = self.tx.lock().await;
 
         let position_json = flag.position.as_ref().map(|p| serde_json::to_value(p).expect("Failed to serialize position"));
@@ -45,7 +46,7 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
             flag.player_id,
             flag.target_id,
             position_json,
-            flag.flag_type,
+            flag_type as _,
             flag.color,
             flag.text,
             flag.created_by,
@@ -162,12 +163,13 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
         &self,
         player_id: Option<Uuid>,
         alliance_id: Option<Uuid>,
-        flag_type: Option<i16>,
+        flag_type: Option<parabellum_types::map_flag::MapFlagType>,
     ) -> Result<i64, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
 
         let count: i64 = match (player_id, alliance_id, flag_type) {
             (Some(pid), None, Some(ftype)) => {
+                let ftype: db_models::MapFlagType = ftype.into();
                 sqlx::query_scalar!(
                     r#"
                     SELECT COUNT(*) as "count!"
@@ -175,7 +177,7 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
                     WHERE player_id = $1 AND flag_type = $2
                     "#,
                     pid,
-                    ftype
+                    ftype as _
                 )
                 .fetch_one(&mut *tx_guard.as_mut())
                 .await
@@ -195,6 +197,7 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
                 .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
             }
             (None, Some(aid), Some(ftype)) => {
+                let ftype: db_models::MapFlagType = ftype.into();
                 sqlx::query_scalar!(
                     r#"
                     SELECT COUNT(*) as "count!"
@@ -202,7 +205,7 @@ impl<'a> MapFlagRepository for PostgresMapFlagRepository<'a> {
                     WHERE alliance_id = $1 AND flag_type = $2
                     "#,
                     aid,
-                    ftype
+                    ftype as _
                 )
                 .fetch_one(&mut *tx_guard.as_mut())
                 .await

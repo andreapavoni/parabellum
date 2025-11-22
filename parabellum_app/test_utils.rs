@@ -15,6 +15,7 @@ pub mod tests {
     use parabellum_types::{
         common::User,
         map::{Position, ValleyTopology},
+        map_flag::MapFlagType,
     };
     use std::{
         collections::HashMap,
@@ -708,7 +709,7 @@ pub mod tests {
             &self,
             player_id: Option<Uuid>,
             alliance_id: Option<Uuid>,
-            flag_type: Option<i16>,
+            flag_type: Option<MapFlagType>,
         ) -> Result<i64, ApplicationError> {
             let count = self.flags
                 .lock()

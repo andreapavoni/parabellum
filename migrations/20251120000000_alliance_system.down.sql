@@ -37,3 +37,6 @@ DROP TYPE IF EXISTS medal_category;
 
 -- Drop the medal period type enum
 DROP TYPE IF EXISTS medal_period_type;
+
+-- Drop the flag type enum
+DROP TYPE IF EXISTS flag_type_enum;

@@ -50,7 +50,7 @@ pub mod tests {
             assert_eq!(flags[0].position.as_ref().unwrap().y, 50);
             assert_eq!(flags[0].color, 5);
             assert_eq!(flags[0].text, Some("My Custom Flag".to_string()));
-            assert_eq!(flags[0].flag_type, MapFlagType::CustomFlag.as_i16());
+            assert_eq!(flags[0].flag_type, MapFlagType::CustomFlag);
             assert_eq!(flags[0].created_by, player.id);
 
             uow_check.rollback().await?;
@@ -74,7 +74,7 @@ pub mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_player.id,
-            mark_type: 0, // PlayerMark
+            flag_type: MapFlagType::PlayerMark,
             color: 3,
         };
         let handler = CreateMultiMarkCommandHandler::new();
@@ -89,7 +89,7 @@ pub mod tests {
             assert_eq!(flags[0].player_id, Some(player.id));
             assert_eq!(flags[0].target_id, Some(target_player.id));
             assert_eq!(flags[0].color, 3);
-            assert_eq!(flags[0].flag_type, MapFlagType::PlayerMark.as_i16());
+            assert_eq!(flags[0].flag_type, MapFlagType::PlayerMark);
 
             uow_check.rollback().await?;
         }
@@ -347,7 +347,7 @@ pub mod tests {
             player_id: player.id,
             alliance_id: Some(player_alliance_id),
             target_id: target_alliance_id,
-            mark_type: 1, // AllianceMark
+            flag_type: MapFlagType::AllianceMark,
             color: 7,
         };
         let mark_handler = CreateMultiMarkCommandHandler::new();
@@ -362,7 +362,7 @@ pub mod tests {
             assert_eq!(flags[0].alliance_id, Some(player_alliance_id));
             assert_eq!(flags[0].target_id, Some(target_alliance_id));
             assert_eq!(flags[0].color, 7);
-            assert_eq!(flags[0].flag_type, MapFlagType::AllianceMark.as_i16());
+            assert_eq!(flags[0].flag_type, MapFlagType::AllianceMark);
 
             uow_check.rollback().await?;
         }
@@ -432,7 +432,7 @@ pub mod tests {
                 player_id: player.id,
                 alliance_id: None,
                 target_id: target_player.id,
-                mark_type: 0,
+                flag_type: MapFlagType::PlayerMark,
                 color: 3,
             };
             let handler = CreateMultiMarkCommandHandler::new();
@@ -447,7 +447,7 @@ pub mod tests {
             player_id: player.id,
             alliance_id: None,
             target_id: target_player.id,
-            mark_type: 0,
+            flag_type: MapFlagType::PlayerMark,
             color: 3,
         };
         let handler = CreateMultiMarkCommandHandler::new();
