@@ -5,3 +5,4 @@ logs/*.log.*
 _*.md
 tarpaulin-report.html
 frontend/*.html
+.env
