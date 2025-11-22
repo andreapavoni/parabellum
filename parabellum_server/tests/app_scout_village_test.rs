@@ -10,8 +10,8 @@ pub mod tests {
             tasks::{ArmyReturnTask, ScoutTask},
         },
     };
-    use parabellum_core::Result;
     use parabellum_game::battle::ScoutingTarget;
+    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
 
     use super::test_utils::tests::setup_player_party;

@@ -7,7 +7,7 @@ pub mod tests {
         cqrs::commands::ReinforceVillage,
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
 
     use super::test_utils::tests::setup_player_party;

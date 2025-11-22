@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{error, info, instrument};
 
-use parabellum_core::Result;
+use parabellum_types::Result;
 
 use crate::{
     config::Config,

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::info;
 
-use parabellum_core::{ApplicationError, GameError};
+use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::{
     config::Config,
@@ -100,7 +100,7 @@ impl CommandHandler<ReviveHero> for ReviveHeroCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::{models::buildings::Building, test_utils::setup_player_party};
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 

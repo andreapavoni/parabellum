@@ -5,11 +5,14 @@ use axum::{
 };
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 
-use parabellum_app::command_handlers::RegisterPlayerCommandHandler;
-use parabellum_app::cqrs::commands::RegisterPlayer;
-use parabellum_core::{AppError, ApplicationError};
+use parabellum_app::{
+    command_handlers::RegisterPlayerCommandHandler, cqrs::commands::RegisterPlayer,
+};
 use parabellum_game::models::map::MapQuadrant;
-use parabellum_types::tribe::Tribe;
+use parabellum_types::{
+    errors::{AppError, ApplicationError},
+    tribe::Tribe,
+};
 
 use crate::{handlers::render_template, http::AppState, templates::RegisterTemplate};
 

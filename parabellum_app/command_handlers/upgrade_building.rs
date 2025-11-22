@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, GameError},
+};
 
 use crate::{
     config::Config,
@@ -74,7 +77,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::{
         models::village::Village,
         test_utils::{

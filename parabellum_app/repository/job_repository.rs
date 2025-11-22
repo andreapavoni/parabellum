@@ -1,5 +1,6 @@
-use parabellum_core::ApplicationError;
 use uuid::Uuid;
+
+use parabellum_types::errors::ApplicationError;
 
 use crate::jobs::Job;
 

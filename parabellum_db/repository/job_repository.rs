@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::{jobs::Job, repository::JobRepository};
-use parabellum_core::{ApplicationError, DbError, Result};
+use parabellum_types::{errors::{ApplicationError, DbError}, Result};
 
 use crate::models as db_models;
 

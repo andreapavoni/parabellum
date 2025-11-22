@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_core::{GameError, Result};
+use parabellum_types::errors::{GameError, Result};
 use parabellum_types::{
     army::Unit,
     common::{Cost, ResourceGroup},
@@ -271,7 +271,7 @@ fn unit_strength(unit: &Unit) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
 
     fn setup() -> Result<Hero> {
         let hero = Hero::new(None, 1, Uuid::new_v4(), Tribe::Roman, Some(5));

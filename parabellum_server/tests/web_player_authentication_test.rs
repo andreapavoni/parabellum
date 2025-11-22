@@ -3,7 +3,7 @@ mod test_utils;
 use axum::http::StatusCode;
 use std::collections::HashMap;
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 
 use crate::test_utils::tests::{

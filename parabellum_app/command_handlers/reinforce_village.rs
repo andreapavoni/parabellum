@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tracing::info;
 
-use parabellum_core::{ApplicationError, Result};
+use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::{
     command_handlers::helpers::deploy_army_from_village,

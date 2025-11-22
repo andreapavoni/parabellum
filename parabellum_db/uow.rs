@@ -6,7 +6,7 @@ use parabellum_app::{
     repository::*,
     uow::{UnitOfWork, UnitOfWorkProvider},
 };
-use parabellum_core::{ApplicationError, DbError};
+use parabellum_types::errors::{ApplicationError, DbError};
 
 use crate::repository::*;
 

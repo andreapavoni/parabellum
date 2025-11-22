@@ -1,7 +1,7 @@
 use thiserror::Error;
 use uuid::Uuid;
 
-use parabellum_types::{army::UnitName, buildings::BuildingName, tribe::Tribe};
+use crate::{army::UnitName, buildings::BuildingName, tribe::Tribe};
 
 /// Errors for domain logic (game rules).
 #[derive(Debug, Error)]

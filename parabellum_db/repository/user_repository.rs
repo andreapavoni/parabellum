@@ -4,8 +4,8 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::repository::UserRepository;
-use parabellum_core::{ApplicationError, DbError};
 use parabellum_types::common::User;
+use parabellum_types::errors::{ApplicationError, DbError};
 
 use crate::models as db_models;
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError};
+use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::{
     config::Config,
@@ -76,7 +76,7 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{

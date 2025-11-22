@@ -21,7 +21,7 @@ pub mod tests {
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
-    use parabellum_core::{ApplicationError, Result};
+    use parabellum_types::{Result, errors::ApplicationError};
     use parabellum_db::{
         PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
         PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,

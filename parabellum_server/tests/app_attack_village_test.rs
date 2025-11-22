@@ -10,7 +10,7 @@ pub mod tests {
             tasks::{ArmyReturnTask, AttackTask},
         },
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 

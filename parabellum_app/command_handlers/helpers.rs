@@ -5,7 +5,7 @@ use crate::{
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
 };
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 use parabellum_game::models::{
     army::{Army, TroopSet},
     village::Village,

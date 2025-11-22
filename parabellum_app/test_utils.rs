@@ -2,6 +2,12 @@
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
+    use uuid::Uuid;
+
     use parabellum_game::models::{
         army::Army,
         hero::Hero,
@@ -11,15 +17,9 @@ pub mod tests {
     };
     use parabellum_types::{
         common::{Player, User},
+        errors::{ApplicationError, DbError},
         map::{Position, ValleyTopology},
     };
-    use std::{
-        collections::HashMap,
-        sync::{Arc, Mutex},
-    };
-    use uuid::Uuid;
-
-    use parabellum_core::{ApplicationError, DbError};
 
     use crate::{
         jobs::Job,

@@ -1,4 +1,4 @@
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
 
 #[async_trait::async_trait]

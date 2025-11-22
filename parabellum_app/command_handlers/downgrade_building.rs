@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError, Result};
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, GameError},
+};
 
 use crate::{
     config::Config,
@@ -88,11 +91,11 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_core::Result;
     use parabellum_game::models::village::Village;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
+    use parabellum_types::Result;
     use parabellum_types::{common::Player, tribe::Tribe};
 
     use super::*;

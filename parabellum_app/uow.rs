@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 
 use crate::repository::*;
 

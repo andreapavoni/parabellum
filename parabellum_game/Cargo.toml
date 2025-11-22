@@ -7,7 +7,6 @@ edition = "2024"
 path = "lib.rs"
 
 [dependencies]
-parabellum_core = { path = "../parabellum_core" }
 parabellum_types = { path = "../parabellum_types" }
 
 serde = { workspace = true }

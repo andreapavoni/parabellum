@@ -1,7 +1,7 @@
 use rand::Rng;
 use uuid::Uuid;
 
-use parabellum_core::Result;
+use parabellum_types::errors::Result;
 use parabellum_types::{
     common::{Player, User},
     map::{Position, ValleyTopology},

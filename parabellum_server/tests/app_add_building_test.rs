@@ -5,7 +5,7 @@ use parabellum_app::{
     cqrs::commands::AddBuilding,
     jobs::{JobStatus, tasks::AddBuildingTask},
 };
-use parabellum_core::Result;
+use parabellum_types::Result;
 use parabellum_game::models::buildings::Building;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 

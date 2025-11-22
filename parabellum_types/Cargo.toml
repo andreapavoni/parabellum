@@ -7,5 +7,13 @@ edition = "2024"
 path = "lib.rs"
 
 [dependencies]
-serde = { workspace = true }
+
+# for errors
 uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+argon2 = { workspace = true }
+password-hash = { workspace = true }

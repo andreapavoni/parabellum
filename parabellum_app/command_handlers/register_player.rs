@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::Result;
+use parabellum_types::Result;
 use parabellum_game::models::village::Village;
 use parabellum_types::common::Player;
 
@@ -73,7 +73,7 @@ mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
 
     use super::*;

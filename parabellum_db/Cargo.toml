@@ -9,7 +9,6 @@ path = "lib.rs"
 [dependencies]
 parabellum_app = { path = "../parabellum_app" }
 parabellum_game = { path = "../parabellum_game" }
-parabellum_core = { path = "../parabellum_core" }
 parabellum_types = { path = "../parabellum_types" }
 
 sqlx = { workspace = true }

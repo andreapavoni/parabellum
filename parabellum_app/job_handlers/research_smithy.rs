@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{info, instrument};
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 
 use crate::{
     jobs::{
@@ -55,7 +55,7 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
-    use parabellum_core::Result;
+    use parabellum_types::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };

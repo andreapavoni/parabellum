@@ -1,12 +1,13 @@
+use async_trait::async_trait;
+use tracing::{info, instrument};
+
+use parabellum_types::errors::ApplicationError;
+
 use crate::jobs::{
     Job,
     handler::{JobHandler, JobHandlerContext},
     tasks::ArmyReturnTask,
 };
-
-use async_trait::async_trait;
-use parabellum_core::ApplicationError;
-use tracing::{info, instrument};
 
 pub struct ArmyReturnJobHandler {
     payload: ArmyReturnTask,
@@ -56,11 +57,11 @@ mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    use parabellum_core::Result;
     use parabellum_game::test_utils::{
         ArmyFactoryOptions, PlayerFactoryOptions, VillageFactoryOptions, army_factory,
         player_factory, village_factory,
     };
+    use parabellum_types::Result;
     use parabellum_types::{common::ResourceGroup, tribe::Tribe};
 
     use super::*;

@@ -1,6 +1,7 @@
-use parabellum_core::{ApplicationError, Result};
-use parabellum_game::models::marketplace::MarketplaceOffer;
 use uuid::Uuid;
+
+use parabellum_game::models::marketplace::MarketplaceOffer;
+use parabellum_types::{Result, errors::ApplicationError};
 
 #[async_trait::async_trait]
 pub trait MarketplaceRepository: Send + Sync {

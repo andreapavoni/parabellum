@@ -8,7 +8,7 @@ pub mod tests {
         cqrs::commands::{ReinforceVillage, ReviveHero},
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_core::Result;
+    use parabellum_types::Result;
 
     use parabellum_game::models::buildings::Building;
     use parabellum_game::test_utils::{VillageFactoryOptions, village_factory};

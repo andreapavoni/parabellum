@@ -9,7 +9,6 @@ path = "main.rs"
 
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
-parabellum_core = { path = "../parabellum_core" }
 parabellum_game = { path = "../parabellum_game" }
 parabellum_db = { path = "../parabellum_db" }
 parabellum_app = { path = "../parabellum_app" }

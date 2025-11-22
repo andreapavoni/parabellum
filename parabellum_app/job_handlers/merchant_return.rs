@@ -1,11 +1,13 @@
+use async_trait::async_trait;
+use tracing::{info, instrument};
+
+use parabellum_types::errors::ApplicationError;
+
 use crate::jobs::{
     Job,
     handler::{JobHandler, JobHandlerContext},
     tasks::MerchantReturnTask,
 };
-use async_trait::async_trait;
-use parabellum_core::ApplicationError;
-use tracing::{info, instrument};
 
 pub struct MerchantReturnJobHandler {
     payload: MerchantReturnTask,

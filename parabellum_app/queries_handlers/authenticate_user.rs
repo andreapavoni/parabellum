@@ -1,7 +1,7 @@
+use async_trait::async_trait;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use parabellum_core::{AppError, ApplicationError, DbError};
+use parabellum_types::errors::{AppError, ApplicationError, DbError};
 
 use crate::{
     auth::verify_password,
