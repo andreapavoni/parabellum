@@ -124,14 +124,14 @@ impl From<db_models::Player> for game_models::player::Player {
             alliance_id: player.alliance_id,
             alliance_role: player.alliance_role,
             alliance_join_time: player.alliance_join_time,
-            current_alliance_training_contributions: player.current_alliance_training_contributions.unwrap_or(0),
-            current_alliance_armor_contributions: player.current_alliance_armor_contributions.unwrap_or(0),
-            current_alliance_cp_contributions: player.current_alliance_cp_contributions.unwrap_or(0),
-            current_alliance_trade_contributions: player.current_alliance_trade_contributions.unwrap_or(0),
-            total_alliance_training_contributions: player.total_alliance_training_contributions.unwrap_or(0),
-            total_alliance_armor_contributions: player.total_alliance_armor_contributions.unwrap_or(0),
-            total_alliance_cp_contributions: player.total_alliance_cp_contributions.unwrap_or(0),
-            total_alliance_trade_contributions: player.total_alliance_trade_contributions.unwrap_or(0),
+            current_alliance_recruitment_contributions: player.current_alliance_recruitment_contributions.unwrap_or(0),
+            current_alliance_metallurgy_contributions: player.current_alliance_metallurgy_contributions.unwrap_or(0),
+            current_alliance_philosophy_contributions: player.current_alliance_philosophy_contributions.unwrap_or(0),
+            current_alliance_commerce_contributions: player.current_alliance_commerce_contributions.unwrap_or(0),
+            total_alliance_recruitment_contributions: player.total_alliance_recruitment_contributions.unwrap_or(0),
+            total_alliance_metallurgy_contributions: player.total_alliance_metallurgy_contributions.unwrap_or(0),
+            total_alliance_philosophy_contributions: player.total_alliance_philosophy_contributions.unwrap_or(0),
+            total_alliance_commerce_contributions: player.total_alliance_commerce_contributions.unwrap_or(0),
         }
     }
 }

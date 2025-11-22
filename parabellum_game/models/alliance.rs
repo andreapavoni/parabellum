@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use parabellum_core::GameError;
 use parabellum_types::common::ResourceGroup;
-pub use parabellum_types::alliance::{AlliancePermission, BonusType};
+pub use parabellum_types::alliance::{AlliancePermission, AllianceBonusType};
 
 use crate::models::{player::Player, village::Village};
 
@@ -23,7 +23,7 @@ pub struct Alliance {
     // Battle Statistics
     pub total_attack_points: i64,
     pub total_defense_points: i64,
-    pub total_roober_points: i64,
+    pub total_robber_points: i64,
     pub total_climber_points: i64,
     pub current_attack_points: i64,
     pub current_defense_points: i64,
@@ -31,14 +31,14 @@ pub struct Alliance {
     pub current_climber_points: i64,
 
     // Alliance Bonuses
-    pub training_bonus_level: i32,
-    pub training_bonus_contributions: i64,
-    pub armor_bonus_level: i32,
-    pub armor_bonus_contributions: i64,
-    pub cp_bonus_level: i32,
-    pub cp_bonus_contributions: i64,
-    pub trade_bonus_level: i32,
-    pub trade_bonus_contributions: i64,
+    pub recruitment_bonus_level: i32,
+    pub recruitment_bonus_contributions: i64,
+    pub metallurgy_bonus_level: i32,
+    pub metallurgy_bonus_contributions: i64,
+    pub philosophy_bonus_level: i32,
+    pub philosophy_bonus_contributions: i64,
+    pub commerce_bonus_level: i32,
+    pub commerce_bonus_contributions: i64,
 }
 
 impl Alliance {
@@ -63,20 +63,20 @@ impl Alliance {
             leader_id: Some(leader_id),
             total_attack_points: 0,
             total_defense_points: 0,
-            total_roober_points: 0,
+            total_robber_points: 0,
             total_climber_points: 0,
             current_attack_points: 0,
             current_defense_points: 0,
             current_robber_points: 0,
             current_climber_points: 0,
-            training_bonus_level: 0,
-            training_bonus_contributions: 0,
-            armor_bonus_level: 0,
-            armor_bonus_contributions: 0,
-            cp_bonus_level: 0,
-            cp_bonus_contributions: 0,
-            trade_bonus_level: 0,
-            trade_bonus_contributions: 0,
+            recruitment_bonus_level: 0,
+            recruitment_bonus_contributions: 0,
+            metallurgy_bonus_level: 0,
+            metallurgy_bonus_contributions: 0,
+            philosophy_bonus_level: 0,
+            philosophy_bonus_contributions: 0,
+            commerce_bonus_level: 0,
+            commerce_bonus_contributions: 0,
         })
     }
 
@@ -163,22 +163,22 @@ impl Alliance {
     }
 
     /// Returns the current level for a given bonus type.
-    pub fn get_bonus_level(&self, bonus_type: BonusType) -> i32 {
+    pub fn get_bonus_level(&self, bonus_type: AllianceBonusType) -> i32 {
         match bonus_type {
-            BonusType::Training => self.training_bonus_level,
-            BonusType::Armor => self.armor_bonus_level,
-            BonusType::CombatPoints => self.cp_bonus_level,
-            BonusType::Trade => self.trade_bonus_level,
+            AllianceBonusType::Recruitment => self.recruitment_bonus_level,
+            AllianceBonusType::Metallurgy => self.metallurgy_bonus_level,
+            AllianceBonusType::Philosophy => self.philosophy_bonus_level,
+            AllianceBonusType::Commerce => self.commerce_bonus_level,
         }
     }
 
     /// Returns the current contributions for a given bonus type.
-    pub fn get_bonus_contributions(&self, bonus_type: BonusType) -> i64 {
+    pub fn get_bonus_contributions(&self, bonus_type: AllianceBonusType) -> i64 {
         match bonus_type {
-            BonusType::Training => self.training_bonus_contributions,
-            BonusType::Armor => self.armor_bonus_contributions,
-            BonusType::CombatPoints => self.cp_bonus_contributions,
-            BonusType::Trade => self.trade_bonus_contributions,
+            AllianceBonusType::Recruitment => self.recruitment_bonus_contributions,
+            AllianceBonusType::Metallurgy => self.metallurgy_bonus_contributions,
+            AllianceBonusType::Philosophy => self.philosophy_bonus_contributions,
+            AllianceBonusType::Commerce => self.commerce_bonus_contributions,
         }
     }
 
@@ -188,7 +188,7 @@ impl Alliance {
     }
 
     /// Checks if a bonus can be upgraded based on current contributions.
-    pub fn can_upgrade_bonus(&self, bonus_type: BonusType) -> bool {
+    pub fn can_upgrade_bonus(&self, bonus_type: AllianceBonusType) -> bool {
         let level = self.get_bonus_level(bonus_type);
         let contributions = self.get_bonus_contributions(bonus_type);
         let next_level_cost = self.get_bonus_upgrade_cost(level + 1);
@@ -198,7 +198,7 @@ impl Alliance {
     /// Returns the upgrade duration in seconds for upgrading the current bonus (not adjusted for speed).
     /// This is the base duration before applying game speed multiplier.
     /// Returns None if the level is already at max (5).
-    pub fn get_upgrade_duration_seconds(&self, bonus_type: BonusType) -> Option<i64> {
+    pub fn get_upgrade_duration_seconds(&self, bonus_type: AllianceBonusType) -> Option<i64> {
         let current_level = self.get_bonus_level(bonus_type);
         if current_level >= 5 {
             return None;
@@ -211,7 +211,7 @@ impl Alliance {
     /// Returns the contribution points added and whether an upgrade was triggered.
     pub fn add_contribution(
         &mut self,
-        bonus_type: BonusType,
+        bonus_type: AllianceBonusType,
         resources: &ResourceGroup,
         village: &mut Village,
         player: &mut Player,
@@ -258,10 +258,10 @@ impl Alliance {
 
         // Update alliance bonus contributions
         match bonus_type {
-            BonusType::Training => self.training_bonus_contributions += contribution_points,
-            BonusType::Armor => self.armor_bonus_contributions += contribution_points,
-            BonusType::CombatPoints => self.cp_bonus_contributions += contribution_points,
-            BonusType::Trade => self.trade_bonus_contributions += contribution_points,
+            AllianceBonusType::Recruitment => self.recruitment_bonus_contributions += contribution_points,
+            AllianceBonusType::Metallurgy => self.metallurgy_bonus_contributions += contribution_points,
+            AllianceBonusType::Philosophy => self.philosophy_bonus_contributions += contribution_points,
+            AllianceBonusType::Commerce => self.commerce_bonus_contributions += contribution_points,
         }
 
         // Check if upgrade should be triggered
@@ -274,34 +274,34 @@ impl Alliance {
     }
 
     /// Upgrades the bonus level for a given bonus type.
-    pub fn upgrade_bonus(&mut self, bonus_type: BonusType) -> Result<(), GameError> {
+    pub fn upgrade_bonus(&mut self, bonus_type: AllianceBonusType) -> Result<(), GameError> {
         match bonus_type {
-            BonusType::Training => self.training_bonus_level += 1,
-            BonusType::Armor => self.armor_bonus_level += 1,
-            BonusType::CombatPoints => self.cp_bonus_level += 1,
-            BonusType::Trade => self.trade_bonus_level += 1,
+            AllianceBonusType::Recruitment => self.recruitment_bonus_level += 1,
+            AllianceBonusType::Metallurgy => self.metallurgy_bonus_level += 1,
+            AllianceBonusType::Philosophy => self.philosophy_bonus_level += 1,
+            AllianceBonusType::Commerce => self.commerce_bonus_level += 1,
         }
         Ok(())
     }
 
-    /// Returns the armor bonus as a multiplier (e.g., level 3 = 0.03 or 3%).
-    pub fn get_armor_bonus_multiplier(&self) -> f64 {
-        self.armor_bonus_level as f64 * 0.01
+    /// Returns the metallurgy bonus as a multiplier (e.g., level 3 = 0.03 or 3%).
+    pub fn get_metallurgy_bonus_multiplier(&self) -> f64 {
+        self.metallurgy_bonus_level as f64 * 0.01
     }
 
-    /// Returns the training bonus as a multiplier (e.g., level 2 = 0.02 or 2%).
-    pub fn get_training_bonus_multiplier(&self) -> f64 {
-        self.training_bonus_level as f64 * 0.01
+    /// Returns the recruitment bonus as a multiplier (e.g., level 2 = 0.02 or 2%).
+    pub fn get_recruitment_bonus_multiplier(&self) -> f64 {
+        self.recruitment_bonus_level as f64 * 0.01
     }
 
-    /// Returns the combat points bonus as a multiplier (e.g., level 1 = 0.01 or 1%).
-    pub fn get_cp_bonus_multiplier(&self) -> f64 {
-        self.cp_bonus_level as f64 * 0.01
+    /// Returns the philosophy bonus as a multiplier (e.g., level 1 = 0.01 or 1%).
+    pub fn get_philosophy_bonus_multiplier(&self) -> f64 {
+        self.philosophy_bonus_level as f64 * 0.01
     }
 
-    /// Returns the trade bonus as a multiplier (e.g., level 4 = 0.04 or 4%).
-    pub fn get_trade_bonus_multiplier(&self) -> f64 {
-        self.trade_bonus_level as f64 * 0.01
+    /// Returns the commerce bonus as a multiplier (e.g., level 4 = 0.04 or 4%).
+    pub fn get_commerce_bonus_multiplier(&self) -> f64 {
+        self.commerce_bonus_level as f64 * 0.01
     }
 
     /// Checks if the given player is the alliance leader.
@@ -436,7 +436,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_armor_bonus_multiplier() {
+    fn test_get_metallurgy_bonus_multiplier() {
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -445,24 +445,24 @@ mod tests {
         ).unwrap();
 
         // Test level 0
-        alliance.armor_bonus_level = 0;
-        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.0);
+        alliance.metallurgy_bonus_level = 0;
+        assert_eq!(alliance.get_metallurgy_bonus_multiplier(), 0.0);
 
         // Test level 1 = 1%
-        alliance.armor_bonus_level = 1;
-        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.01);
+        alliance.metallurgy_bonus_level = 1;
+        assert_eq!(alliance.get_metallurgy_bonus_multiplier(), 0.01);
 
         // Test level 3 = 3%
-        alliance.armor_bonus_level = 3;
-        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.03);
+        alliance.metallurgy_bonus_level = 3;
+        assert_eq!(alliance.get_metallurgy_bonus_multiplier(), 0.03);
 
         // Test level 5 = 5%
-        alliance.armor_bonus_level = 5;
-        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.05);
+        alliance.metallurgy_bonus_level = 5;
+        assert_eq!(alliance.get_metallurgy_bonus_multiplier(), 0.05);
     }
 
     #[test]
-    fn test_get_training_bonus_multiplier() {
+    fn test_get_recruitment_bonus_multiplier() {
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -471,24 +471,24 @@ mod tests {
         ).unwrap();
 
         // Test level 0
-        alliance.training_bonus_level = 0;
-        assert_eq!(alliance.get_training_bonus_multiplier(), 0.0);
+        alliance.recruitment_bonus_level = 0;
+        assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.0);
 
         // Test level 2 = 2%
-        alliance.training_bonus_level = 2;
-        assert_eq!(alliance.get_training_bonus_multiplier(), 0.02);
+        alliance.recruitment_bonus_level = 2;
+        assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.02);
 
         // Test level 4 = 4%
-        alliance.training_bonus_level = 4;
-        assert_eq!(alliance.get_training_bonus_multiplier(), 0.04);
+        alliance.recruitment_bonus_level = 4;
+        assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.04);
 
         // Test level 5 = 5%
-        alliance.training_bonus_level = 5;
-        assert_eq!(alliance.get_training_bonus_multiplier(), 0.05);
+        alliance.recruitment_bonus_level = 5;
+        assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.05);
     }
 
     #[test]
-    fn test_get_cp_bonus_multiplier() {
+    fn test_get_philosophy_bonus_multiplier() {
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -497,20 +497,20 @@ mod tests {
         ).unwrap();
 
         // Test level 0
-        alliance.cp_bonus_level = 0;
-        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.0);
+        alliance.philosophy_bonus_level = 0;
+        assert_eq!(alliance.get_philosophy_bonus_multiplier(), 0.0);
 
         // Test level 1 = 1%
-        alliance.cp_bonus_level = 1;
-        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.01);
+        alliance.philosophy_bonus_level = 1;
+        assert_eq!(alliance.get_philosophy_bonus_multiplier(), 0.01);
 
         // Test level 3 = 3%
-        alliance.cp_bonus_level = 3;
-        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.03);
+        alliance.philosophy_bonus_level = 3;
+        assert_eq!(alliance.get_philosophy_bonus_multiplier(), 0.03);
     }
 
     #[test]
-    fn test_get_trade_bonus_multiplier() {
+    fn test_get_commerce_bonus_multiplier() {
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -519,20 +519,20 @@ mod tests {
         ).unwrap();
 
         // Test level 0
-        alliance.trade_bonus_level = 0;
-        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.0);
+        alliance.commerce_bonus_level = 0;
+        assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.0);
 
         // Test level 2 = 2%
-        alliance.trade_bonus_level = 2;
-        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.02);
+        alliance.commerce_bonus_level = 2;
+        assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.02);
 
         // Test level 4 = 4%
-        alliance.trade_bonus_level = 4;
-        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.04);
+        alliance.commerce_bonus_level = 4;
+        assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.04);
 
         // Test level 5 = 5%
-        alliance.trade_bonus_level = 5;
-        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.05);
+        alliance.commerce_bonus_level = 5;
+        assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.05);
     }
 
     #[test]
@@ -545,16 +545,16 @@ mod tests {
         ).unwrap();
 
         // Set all bonuses to different levels
-        alliance.armor_bonus_level = 3;
-        alliance.training_bonus_level = 2;
-        alliance.cp_bonus_level = 1;
-        alliance.trade_bonus_level = 4;
+        alliance.metallurgy_bonus_level = 3;
+        alliance.recruitment_bonus_level = 2;
+        alliance.philosophy_bonus_level = 1;
+        alliance.commerce_bonus_level = 4;
 
         // Verify each returns correct multiplier
-        assert_eq!(alliance.get_armor_bonus_multiplier(), 0.03);
-        assert_eq!(alliance.get_training_bonus_multiplier(), 0.02);
-        assert_eq!(alliance.get_cp_bonus_multiplier(), 0.01);
-        assert_eq!(alliance.get_trade_bonus_multiplier(), 0.04);
+        assert_eq!(alliance.get_metallurgy_bonus_multiplier(), 0.03);
+        assert_eq!(alliance.get_recruitment_bonus_multiplier(), 0.02);
+        assert_eq!(alliance.get_philosophy_bonus_multiplier(), 0.01);
+        assert_eq!(alliance.get_commerce_bonus_multiplier(), 0.04);
     }
 }
 

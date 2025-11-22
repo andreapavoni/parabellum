@@ -5,6 +5,7 @@ use parabellum_game::{
     models::{army::TroopSet, map::MapQuadrant, player::Player},
 };
 use parabellum_types::{
+    alliance::AllianceBonusType,
     army::UnitName,
     buildings::BuildingName,
     common::ResourceGroup,
@@ -262,7 +263,7 @@ pub struct ContributeToAllianceBonus {
     pub player_id: Uuid,
     pub village_id: u32,
     pub alliance_id: Uuid,
-    pub bonus_type: i16,
+    pub bonus_type: AllianceBonusType,
     pub resources: ResourceGroup,
 }
 

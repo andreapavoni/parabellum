@@ -33,10 +33,10 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             r#"
             INSERT INTO alliance (
                 id, name, tag, desc1, desc2, info1, info2, forum_link, max_members, leader_id,
-                total_attack_points, total_defense_points, total_roober_points, total_climber_points,
+                total_attack_points, total_defense_points, total_robber_points, total_climber_points,
                 current_attack_points, current_defense_points, current_robber_points, current_climber_points,
-                training_bonus_level, training_bonus_contributions, armor_bonus_level, armor_bonus_contributions,
-                cp_bonus_level, cp_bonus_contributions, trade_bonus_level, trade_bonus_contributions
+                recruitment_bonus_level, recruitment_bonus_contributions, metallurgy_bonus_level, metallurgy_bonus_contributions,
+                philosophy_bonus_level, philosophy_bonus_contributions, commerce_bonus_level, commerce_bonus_contributions
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
             ON CONFLICT (id) DO UPDATE
@@ -52,20 +52,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
                 leader_id = $10,
                 total_attack_points = $11,
                 total_defense_points = $12,
-                total_roober_points = $13,
+                total_robber_points = $13,
                 total_climber_points = $14,
                 current_attack_points = $15,
                 current_defense_points = $16,
                 current_robber_points = $17,
                 current_climber_points = $18,
-                training_bonus_level = $19,
-                training_bonus_contributions = $20,
-                armor_bonus_level = $21,
-                armor_bonus_contributions = $22,
-                cp_bonus_level = $23,
-                cp_bonus_contributions = $24,
-                trade_bonus_level = $25,
-                trade_bonus_contributions = $26
+                recruitment_bonus_level = $19,
+                recruitment_bonus_contributions = $20,
+                metallurgy_bonus_level = $21,
+                metallurgy_bonus_contributions = $22,
+                philosophy_bonus_level = $23,
+                philosophy_bonus_contributions = $24,
+                commerce_bonus_level = $25,
+                commerce_bonus_contributions = $26
             "#,
             alliance.id,
             &alliance.name,
@@ -79,20 +79,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             alliance.leader_id,
             alliance.total_attack_points,
             alliance.total_defense_points,
-            alliance.total_roober_points,
+            alliance.total_robber_points,
             alliance.total_climber_points,
             alliance.current_attack_points,
             alliance.current_defense_points,
             alliance.current_robber_points,
             alliance.current_climber_points,
-            alliance.training_bonus_level,
-            alliance.training_bonus_contributions,
-            alliance.armor_bonus_level,
-            alliance.armor_bonus_contributions,
-            alliance.cp_bonus_level,
-            alliance.cp_bonus_contributions,
-            alliance.trade_bonus_level,
-            alliance.trade_bonus_contributions,
+            alliance.recruitment_bonus_level,
+            alliance.recruitment_bonus_contributions,
+            alliance.metallurgy_bonus_level,
+            alliance.metallurgy_bonus_contributions,
+            alliance.philosophy_bonus_level,
+            alliance.philosophy_bonus_contributions,
+            alliance.commerce_bonus_level,
+            alliance.commerce_bonus_contributions,
         )
         .execute(&mut *tx_guard.as_mut())
         .await
@@ -123,20 +123,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             leader_id: row.get("leader_id"),
             total_attack_points: row.get("total_attack_points"),
             total_defense_points: row.get("total_defense_points"),
-            total_roober_points: row.get("total_roober_points"),
+            total_robber_points: row.get("total_robber_points"),
             total_climber_points: row.get("total_climber_points"),
             current_attack_points: row.get("current_attack_points"),
             current_defense_points: row.get("current_defense_points"),
             current_robber_points: row.get("current_robber_points"),
             current_climber_points: row.get("current_climber_points"),
-            training_bonus_level: row.get("training_bonus_level"),
-            training_bonus_contributions: row.get("training_bonus_contributions"),
-            armor_bonus_level: row.get("armor_bonus_level"),
-            armor_bonus_contributions: row.get("armor_bonus_contributions"),
-            cp_bonus_level: row.get("cp_bonus_level"),
-            cp_bonus_contributions: row.get("cp_bonus_contributions"),
-            trade_bonus_level: row.get("trade_bonus_level"),
-            trade_bonus_contributions: row.get("trade_bonus_contributions"),
+            recruitment_bonus_level: row.get("recruitment_bonus_level"),
+            recruitment_bonus_contributions: row.get("recruitment_bonus_contributions"),
+            metallurgy_bonus_level: row.get("metallurgy_bonus_level"),
+            metallurgy_bonus_contributions: row.get("metallurgy_bonus_contributions"),
+            philosophy_bonus_level: row.get("philosophy_bonus_level"),
+            philosophy_bonus_contributions: row.get("philosophy_bonus_contributions"),
+            commerce_bonus_level: row.get("commerce_bonus_level"),
+            commerce_bonus_contributions: row.get("commerce_bonus_contributions"),
         })
     }
 
@@ -162,20 +162,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             leader_id: row.get("leader_id"),
             total_attack_points: row.get("total_attack_points"),
             total_defense_points: row.get("total_defense_points"),
-            total_roober_points: row.get("total_roober_points"),
+            total_robber_points: row.get("total_robber_points"),
             total_climber_points: row.get("total_climber_points"),
             current_attack_points: row.get("current_attack_points"),
             current_defense_points: row.get("current_defense_points"),
             current_robber_points: row.get("current_robber_points"),
             current_climber_points: row.get("current_climber_points"),
-            training_bonus_level: row.get("training_bonus_level"),
-            training_bonus_contributions: row.get("training_bonus_contributions"),
-            armor_bonus_level: row.get("armor_bonus_level"),
-            armor_bonus_contributions: row.get("armor_bonus_contributions"),
-            cp_bonus_level: row.get("cp_bonus_level"),
-            cp_bonus_contributions: row.get("cp_bonus_contributions"),
-            trade_bonus_level: row.get("trade_bonus_level"),
-            trade_bonus_contributions: row.get("trade_bonus_contributions"),
+            recruitment_bonus_level: row.get("recruitment_bonus_level"),
+            recruitment_bonus_contributions: row.get("recruitment_bonus_contributions"),
+            metallurgy_bonus_level: row.get("metallurgy_bonus_level"),
+            metallurgy_bonus_contributions: row.get("metallurgy_bonus_contributions"),
+            philosophy_bonus_level: row.get("philosophy_bonus_level"),
+            philosophy_bonus_contributions: row.get("philosophy_bonus_contributions"),
+            commerce_bonus_level: row.get("commerce_bonus_level"),
+            commerce_bonus_contributions: row.get("commerce_bonus_contributions"),
         })
     }
 
@@ -201,20 +201,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             leader_id: row.get("leader_id"),
             total_attack_points: row.get("total_attack_points"),
             total_defense_points: row.get("total_defense_points"),
-            total_roober_points: row.get("total_roober_points"),
+            total_robber_points: row.get("total_robber_points"),
             total_climber_points: row.get("total_climber_points"),
             current_attack_points: row.get("current_attack_points"),
             current_defense_points: row.get("current_defense_points"),
             current_robber_points: row.get("current_robber_points"),
             current_climber_points: row.get("current_climber_points"),
-            training_bonus_level: row.get("training_bonus_level"),
-            training_bonus_contributions: row.get("training_bonus_contributions"),
-            armor_bonus_level: row.get("armor_bonus_level"),
-            armor_bonus_contributions: row.get("armor_bonus_contributions"),
-            cp_bonus_level: row.get("cp_bonus_level"),
-            cp_bonus_contributions: row.get("cp_bonus_contributions"),
-            trade_bonus_level: row.get("trade_bonus_level"),
-            trade_bonus_contributions: row.get("trade_bonus_contributions"),
+            recruitment_bonus_level: row.get("recruitment_bonus_level"),
+            recruitment_bonus_contributions: row.get("recruitment_bonus_contributions"),
+            metallurgy_bonus_level: row.get("metallurgy_bonus_level"),
+            metallurgy_bonus_contributions: row.get("metallurgy_bonus_contributions"),
+            philosophy_bonus_level: row.get("philosophy_bonus_level"),
+            philosophy_bonus_contributions: row.get("philosophy_bonus_contributions"),
+            commerce_bonus_level: row.get("commerce_bonus_level"),
+            commerce_bonus_contributions: row.get("commerce_bonus_contributions"),
         })
     }
 
@@ -236,10 +236,10 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             r#"
             UPDATE alliance SET
                 name = $1, tag = $2, desc1 = $3, desc2 = $4, info1 = $5, info2 = $6, forum_link = $7, max_members = $8, leader_id = $9,
-                total_attack_points = $10, total_defense_points = $11, total_roober_points = $12, total_climber_points = $13,
+                total_attack_points = $10, total_defense_points = $11, total_robber_points = $12, total_climber_points = $13,
                 current_attack_points = $14, current_defense_points = $15, current_robber_points = $16, current_climber_points = $17,
-                training_bonus_level = $18, training_bonus_contributions = $19, armor_bonus_level = $20, armor_bonus_contributions = $21,
-                cp_bonus_level = $22, cp_bonus_contributions = $23, trade_bonus_level = $24, trade_bonus_contributions = $25
+                recruitment_bonus_level = $18, recruitment_bonus_contributions = $19, metallurgy_bonus_level = $20, metallurgy_bonus_contributions = $21,
+                philosophy_bonus_level = $22, philosophy_bonus_contributions = $23, commerce_bonus_level = $24, commerce_bonus_contributions = $25
             WHERE id = $26
             "#,
             &alliance.name,
@@ -253,20 +253,20 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             alliance.leader_id,
             alliance.total_attack_points,
             alliance.total_defense_points,
-            alliance.total_roober_points,
+            alliance.total_robber_points,
             alliance.total_climber_points,
             alliance.current_attack_points,
             alliance.current_defense_points,
             alliance.current_robber_points,
             alliance.current_climber_points,
-            alliance.training_bonus_level,
-            alliance.training_bonus_contributions,
-            alliance.armor_bonus_level,
-            alliance.armor_bonus_contributions,
-            alliance.cp_bonus_level,
-            alliance.cp_bonus_contributions,
-            alliance.trade_bonus_level,
-            alliance.trade_bonus_contributions,
+            alliance.recruitment_bonus_level,
+            alliance.recruitment_bonus_contributions,
+            alliance.metallurgy_bonus_level,
+            alliance.metallurgy_bonus_contributions,
+            alliance.philosophy_bonus_level,
+            alliance.philosophy_bonus_contributions,
+            alliance.commerce_bonus_level,
+            alliance.commerce_bonus_contributions,
             alliance.id,
         )
         .execute(&mut *tx_guard.as_mut())
@@ -290,7 +290,7 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
 
         // Get the leader player
         let db_player = sqlx::query_as::<_, db_models::Player>(
-            r#"SELECT id, username, tribe, user_id, created_at, alliance_id, alliance_role, alliance_join_time, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions FROM players WHERE id = $1"#
+            r#"SELECT id, username, tribe, user_id, created_at, alliance_id, alliance_role, alliance_join_time, current_alliance_recruitment_contributions, current_alliance_metallurgy_contributions, current_alliance_philosophy_contributions, current_alliance_commerce_contributions, total_alliance_recruitment_contributions, total_alliance_metallurgy_contributions, total_alliance_philosophy_contributions, total_alliance_commerce_contributions FROM players WHERE id = $1"#
         )
         .bind(leader_id)
         .fetch_one(&mut *tx_guard.as_mut())
@@ -327,14 +327,14 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
             alliance_id,
             alliance_role,
             alliance_join_time,
-            current_alliance_training_contributions,
-            current_alliance_armor_contributions,
-            current_alliance_cp_contributions,
-            current_alliance_trade_contributions,
-            total_alliance_training_contributions,
-            total_alliance_armor_contributions,
-            total_alliance_cp_contributions,
-            total_alliance_trade_contributions
+            current_alliance_recruitment_contributions,
+            current_alliance_metallurgy_contributions,
+            current_alliance_philosophy_contributions,
+            current_alliance_commerce_contributions,
+            total_alliance_recruitment_contributions,
+            total_alliance_metallurgy_contributions,
+            total_alliance_philosophy_contributions,
+            total_alliance_commerce_contributions
         FROM players
         WHERE alliance_id = $1
         "#,

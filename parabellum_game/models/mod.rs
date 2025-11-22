@@ -8,5 +8,4 @@ pub mod player;
 pub mod smithy;
 pub mod village;
 pub mod alliance;
-pub mod alliance_bonus;
 

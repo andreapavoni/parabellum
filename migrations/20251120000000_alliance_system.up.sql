@@ -32,7 +32,7 @@ CREATE TABLE alliance (
     -- Battle Statistics
     total_attack_points BIGINT DEFAULT 0,
     total_defense_points BIGINT DEFAULT 0,
-    total_roober_points BIGINT DEFAULT 0,
+    total_robber_points BIGINT DEFAULT 0,
     total_climber_points BIGINT DEFAULT 0,
     current_attack_points BIGINT DEFAULT 0,
     current_defense_points BIGINT DEFAULT 0,
@@ -40,14 +40,14 @@ CREATE TABLE alliance (
     current_climber_points BIGINT DEFAULT 0,
 
     -- Alliance Bonuses
-    training_bonus_level INTEGER DEFAULT 0,
-    training_bonus_contributions BIGINT DEFAULT 0,
-    armor_bonus_level INTEGER DEFAULT 0,
-    armor_bonus_contributions BIGINT DEFAULT 0,
-    cp_bonus_level INTEGER DEFAULT 0,
-    cp_bonus_contributions BIGINT DEFAULT 0,
-    trade_bonus_level INTEGER DEFAULT 0,
-    trade_bonus_contributions BIGINT DEFAULT 0
+    recruitment_bonus_level INTEGER DEFAULT 0,
+    recruitment_bonus_contributions BIGINT DEFAULT 0,
+    metallurgy_bonus_level INTEGER DEFAULT 0,
+    metallurgy_bonus_contributions BIGINT DEFAULT 0,
+    philosophy_bonus_level INTEGER DEFAULT 0,
+    philosophy_bonus_contributions BIGINT DEFAULT 0,
+    commerce_bonus_level INTEGER DEFAULT 0,
+    commerce_bonus_contributions BIGINT DEFAULT 0
 );
 
 -- Alliance invitations
@@ -152,16 +152,16 @@ ALTER TABLE players ADD COLUMN alliance_role INTEGER;
 ALTER TABLE players ADD COLUMN alliance_join_time TIMESTAMPTZ DEFAULT NOW();
 
 -- Current Week Contributions
-ALTER TABLE players ADD COLUMN current_alliance_training_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN current_alliance_armor_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN current_alliance_cp_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN current_alliance_trade_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN current_alliance_recruitment_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN current_alliance_metallurgy_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN current_alliance_philosophy_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN current_alliance_commerce_contributions BIGINT DEFAULT 0;
 
 -- Total Contributions
-ALTER TABLE players ADD COLUMN total_alliance_training_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN total_alliance_armor_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN total_alliance_cp_contributions BIGINT DEFAULT 0;
-ALTER TABLE players ADD COLUMN total_alliance_trade_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN total_alliance_recruitment_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN total_alliance_metallurgy_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN total_alliance_philosophy_contributions BIGINT DEFAULT 0;
+ALTER TABLE players ADD COLUMN total_alliance_commerce_contributions BIGINT DEFAULT 0;
 
 -- Add created_at timestamp to players table
 ALTER TABLE players ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();

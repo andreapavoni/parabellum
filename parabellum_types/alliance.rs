@@ -30,25 +30,9 @@ impl AlliancePermission {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BonusType {
-    Training = 1,
-    Armor = 2,
-    CombatPoints = 3,
-    Trade = 4,
-}
-
-impl BonusType {
-    pub fn from_i16(value: i16) -> Option<Self> {
-        match value {
-            1 => Some(BonusType::Training),
-            2 => Some(BonusType::Armor),
-            3 => Some(BonusType::CombatPoints),
-            4 => Some(BonusType::Trade),
-            _ => None,
-        }
-    }
-
-    pub fn as_i16(self) -> i16 {
-        self as i16
-    }
+pub enum AllianceBonusType {
+    Recruitment = 1,
+    Metallurgy = 2,
+    Philosophy = 3,
+    Commerce = 4,
 }

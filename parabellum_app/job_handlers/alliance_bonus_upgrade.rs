@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use tracing::{info, instrument};
 
 use parabellum_core::ApplicationError;
-use parabellum_game::models::alliance::BonusType;
 
 use crate::jobs::{
     Job,
@@ -25,7 +24,7 @@ impl JobHandler for AllianceBonusUpgradeJobHandler {
     #[instrument(skip_all, fields(
         task_type = "AllianceBonusUpgrade",
         alliance_id = %self.payload.alliance_id,
-        bonus_type = self.payload.bonus_type,
+        bonus_type = self.payload.bonus_type as i16,
     ))]
     async fn handle<'ctx, 'a>(
         &'ctx self,
@@ -35,10 +34,8 @@ impl JobHandler for AllianceBonusUpgradeJobHandler {
         info!("Executing AllianceBonusUpgrade job");
 
         let mut alliance = ctx.uow.alliances().get_by_id(self.payload.alliance_id).await?;
-        let bonus_type = BonusType::from_i16(self.payload.bonus_type)
-            .ok_or(parabellum_core::GameError::InvalidBonusType(self.payload.bonus_type))?;
 
-        alliance.upgrade_bonus(bonus_type)?;
+        alliance.upgrade_bonus(self.payload.bonus_type)?;
 
         ctx.uow.alliances().save(&alliance).await?;
 

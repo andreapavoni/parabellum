@@ -16,7 +16,7 @@ pub mod tests {
 
     use super::test_utils::tests::setup_player_party;
     use crate::test_utils::tests::{
-        assign_player_to_alliance, setup_alliance_with_armor_bonus, setup_app,
+        assign_player_to_alliance, setup_alliance_with_metallurgy_bonus, setup_app,
     };
 
     #[tokio::test]
@@ -205,9 +205,9 @@ pub mod tests {
             .await?
         };
 
-        // Create alliance with level 5 armor bonus (5% defense bonus)
+        // Create alliance with level 5 metallurgy bonus (5% defense bonus)
         let alliance =
-            setup_alliance_with_armor_bonus(uow_provider.clone(), target_player.id, 5).await?;
+            setup_alliance_with_metallurgy_bonus(uow_provider.clone(), target_player.id, 5).await?;
 
         // Assign target to alliance
         let _target_player =
@@ -258,11 +258,11 @@ pub mod tests {
             let surviving_scouts = deployed_army.units()[3];
 
             println!(
-                "Scouts surviving (defender has 5% armor bonus): {}",
+                "Scouts surviving (defender has 5% metallurgy bonus): {}",
                 surviving_scouts
             );
 
-            // With 5% armor bonus, defender is stronger, scouts may die
+            // With 5% metallurgy bonus, defender is stronger, scouts may die
             // The exact outcome depends on battle calculation, but we verify it ran
             assert!(
                 surviving_scouts <= 10,
@@ -273,13 +273,13 @@ pub mod tests {
             // Verify alliance bonus exists
             let fetched_alliance = uow_assert.alliances().get_by_id(alliance.id).await?;
             assert_eq!(
-                fetched_alliance.armor_bonus_level, 5,
-                "Alliance should have armor bonus level 5"
+                fetched_alliance.metallurgy_bonus_level, 5,
+                "Alliance should have metallurgy bonus level 5"
             );
 
             println!(
-                "Alliance armor bonus level: {}",
-                fetched_alliance.armor_bonus_level
+                "Alliance metallurgy bonus level: {}",
+                fetched_alliance.metallurgy_bonus_level
             );
 
             uow_assert.rollback().await?;

@@ -50,14 +50,14 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
             alliance_id: None,
             alliance_role: None,
             alliance_join_time: None,
-            current_alliance_training_contributions: 0,
-            current_alliance_armor_contributions: 0,
-            current_alliance_cp_contributions: 0,
-            current_alliance_trade_contributions: 0,
-            total_alliance_training_contributions: 0,
-            total_alliance_armor_contributions: 0,
-            total_alliance_cp_contributions: 0,
-            total_alliance_trade_contributions: 0,
+            current_alliance_recruitment_contributions: 0,
+            current_alliance_metallurgy_contributions: 0,
+            current_alliance_philosophy_contributions: 0,
+            current_alliance_commerce_contributions: 0,
+            total_alliance_recruitment_contributions: 0,
+            total_alliance_metallurgy_contributions: 0,
+            total_alliance_philosophy_contributions: 0,
+            total_alliance_commerce_contributions: 0,
         };
         player_repo.save(&player).await?;
 

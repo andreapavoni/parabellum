@@ -11,11 +11,11 @@ pub mod tests {
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use crate::test_utils::tests::{
-        assign_player_to_alliance, setup_alliance_with_training_bonus, setup_app,
+        assign_player_to_alliance, setup_alliance_with_recruitment_bonus, setup_app,
         setup_player_party,
     };
 
-    /// This test verifies that an alliance with training bonus level 3 (3%) correctly applies
+    /// This test verifies that an alliance with recruitment bonus level 3 (3%) correctly applies
     /// the training time reduction
     #[tokio::test]
     async fn test_alliance_training_bonus_reduces_time() -> Result<()> {
@@ -55,12 +55,12 @@ pub mod tests {
             uow.commit().await?;
         }
 
-        // Create alliance with training bonus level 3 and assign player
+        // Create alliance with recruitment bonus level 3 and assign player
         let alliance =
-            setup_alliance_with_training_bonus(uow_provider.clone(), player.id, 3).await?;
+            setup_alliance_with_recruitment_bonus(uow_provider.clone(), player.id, 3).await?;
         let _player = assign_player_to_alliance(uow_provider.clone(), player.clone(), alliance.id).await?;
 
-        // Train units - the command should apply the training bonus
+        // Train units - the command should apply the recruitment bonus
         let train_command = TrainUnits {
             player_id: player.id,
             village_id: village.id,
@@ -91,18 +91,18 @@ pub mod tests {
             let alliance_repo = uow_read.alliances();
             let final_alliance = alliance_repo.get_by_id(alliance.id).await?;
             assert_eq!(
-                final_alliance.training_bonus_level, 3,
-                "Alliance should have training bonus level 3"
+                final_alliance.recruitment_bonus_level, 3,
+                "Alliance should have recruitment bonus level 3"
             );
             assert_eq!(
-                final_alliance.get_training_bonus_multiplier(), 0.03,
-                "Alliance should return 3% training bonus multiplier"
+                final_alliance.get_recruitment_bonus_multiplier(), 0.03,
+                "Alliance should return 3% recruitment bonus multiplier"
             );
 
             uow_read.rollback().await?;
 
             println!("\n=== ALLIANCE TRAINING BONUS TEST COMPLETE ===");
-            println!("✓ Alliance with training bonus level 3 (3% reduction)");
+            println!("✓ Alliance with recruitment bonus level 3 (3% reduction)");
             println!("✓ Bonus applied to unit training time");
             println!("✓ Training time reduced correctly");
         }
@@ -110,7 +110,7 @@ pub mod tests {
         Ok(())
     }
 
-    /// Test that training bonus is 0 when player has no alliance
+    /// Test that recruitment bonus is 0 when player has no alliance
     #[tokio::test]
     async fn test_no_alliance_no_training_bonus() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;

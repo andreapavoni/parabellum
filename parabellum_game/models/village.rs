@@ -638,11 +638,11 @@ impl Village {
     }
 
     /// Calculates total culture points production per day, including alliance bonus.
-    pub fn calculate_culture_points(&self, alliance_cp_bonus_level: u8) -> u32 {
+    pub fn calculate_culture_points(&self, alliance_philosophy_bonus_level: u8) -> u32 {
         let mut total_cp: u32 = self.buildings.iter().map(|b| b.building.culture_points as u32).sum();
 
-        if alliance_cp_bonus_level > 0 {
-            total_cp = (total_cp as f64 * (1.0 + (alliance_cp_bonus_level as f64 * 0.01))) as u32;
+        if alliance_philosophy_bonus_level > 0 {
+            total_cp = (total_cp as f64 * (1.0 + (alliance_philosophy_bonus_level as f64 * 0.01))) as u32;
         }
 
         total_cp

@@ -159,8 +159,8 @@ pub enum GameError {
     #[error("Village not owned by player")]
     VillageNotOwnedByPlayer,
 
-    #[error("Invalid bonus type: {0}")]
-    InvalidBonusType(i16),
+    #[error("Invalid alliance bonus type: {0}")]
+    InvalidAllianceBonusType(i16),
 
     #[error("Alliance donation limit exceeded")]
     AllianceDonationLimitExceeded,

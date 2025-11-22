@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use parabellum_core::ApplicationError;
-use parabellum_game::models::alliance::BonusType;
 
 use crate::{
     config::Config,
@@ -21,8 +20,7 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
-        let bonus_type = BonusType::from_i16(command.bonus_type)
-            .ok_or(parabellum_core::GameError::InvalidBonusType(command.bonus_type))?;
+        let bonus_type = command.bonus_type;
 
         let mut player = uow.players().get_by_id(command.player_id).await?;
         let mut village = uow.villages().get_by_id(command.village_id).await?;
@@ -67,7 +65,7 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
 
                 let task = AllianceBonusUpgradeTask {
                     alliance_id: alliance.id,
-                    bonus_type: bonus_type.as_i16(),
+                    bonus_type,
                 };
 
                 let job_payload = JobPayload::new("AllianceBonusUpgrade", json!(task));
@@ -99,6 +97,7 @@ mod tests {
         },
     };
     use parabellum_types::{
+        alliance::AllianceBonusType,
         common::ResourceGroup,
         map::Position,
         tribe::Tribe,
@@ -189,7 +188,7 @@ mod tests {
             player_id: player.id,
             village_id: village.id,
             alliance_id: alliance.id,
-            bonus_type: 1, // Training
+            bonus_type: AllianceBonusType::Recruitment,
             resources: ResourceGroup(1000, 1000, 1000, 1000), // 4000 total -> 4 points
         };
 
@@ -201,12 +200,12 @@ mod tests {
 
         // Verify Player contributions updated
         let saved_player = mock_uow.players().get_by_id(player.id).await?;
-        assert_eq!(saved_player.current_alliance_training_contributions, 4);
-        assert_eq!(saved_player.total_alliance_training_contributions, 4);
+        assert_eq!(saved_player.current_alliance_recruitment_contributions, 4);
+        assert_eq!(saved_player.total_alliance_recruitment_contributions, 4);
 
         // Verify Alliance contributions updated
         let saved_alliance = mock_uow.alliances().get_by_id(alliance.id).await?;
-        assert_eq!(saved_alliance.training_bonus_contributions, 4);
+        assert_eq!(saved_alliance.recruitment_bonus_contributions, 4);
 
         Ok(())
     }
@@ -220,7 +219,7 @@ mod tests {
         // Need to reach the threshold exactly, so set to threshold - 5
         use parabellum_game::models::alliance::Alliance;
         let level_1_threshold = Alliance::get_bonus_contributions_needed(1, 1);
-        alliance.training_bonus_contributions = level_1_threshold - 5;
+        alliance.recruitment_bonus_contributions = level_1_threshold - 5;
         mock_uow.alliances().save(&alliance).await?;
 
         // Give village extra resources for the large contribution
@@ -233,7 +232,7 @@ mod tests {
             player_id: player.id,
             alliance_id: alliance.id,
             village_id: village.id,
-            bonus_type: 1,
+            bonus_type: AllianceBonusType::Recruitment,
             resources: ResourceGroup(1_250, 1_250, 1_250, 1_250), // 5k total = 5 points (reaches threshold)
         };
 
@@ -258,7 +257,7 @@ mod tests {
         // Set current contributions to 999,996, try to add 5 (would exceed limit)
         use parabellum_game::models::alliance::Alliance;
         let donation_limit = Alliance::get_donation_limit(20, config.speed as i32);
-        player.current_alliance_training_contributions = donation_limit - 4;
+        player.current_alliance_recruitment_contributions = donation_limit - 4;
         mock_uow.players().save(&player).await?;
 
         let handler = ContributeToAllianceBonusCommandHandler;
@@ -266,7 +265,7 @@ mod tests {
             player_id: player.id,
             village_id: village.id,
             alliance_id: alliance.id,
-            bonus_type: 1, // Training
+            bonus_type: AllianceBonusType::Recruitment,
             resources: ResourceGroup(1_250, 1_250, 1_250, 1_250), // 5k total = 5 points (would exceed limit)
         };
 
@@ -289,7 +288,7 @@ mod tests {
         let (mock_uow, mut player, village, mut alliance) = setup_test_environment(&config).await?;
 
         // Set alliance to level 3 (triggers cooldown for new players)
-        alliance.training_bonus_level = 3;
+        alliance.recruitment_bonus_level = 3;
         mock_uow.alliances().save(&alliance).await?;
 
         // Set player as having just joined (1 second ago)
@@ -303,7 +302,7 @@ mod tests {
             player_id: player.id,
             village_id: village.id,
             alliance_id: alliance.id,
-            bonus_type: 1, // Training
+            bonus_type: AllianceBonusType::Recruitment,
             resources: ResourceGroup(1_000, 1_000, 1_000, 1_000),
         };
 

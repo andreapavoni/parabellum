@@ -1,5 +1,5 @@
 use crate::{
-    command_handlers::helpers::get_player_alliance_trade_bonus,
+    command_handlers::helpers::get_player_alliance_commerce_bonus,
     config::Config,
     cqrs::{CommandHandler, commands::SendResources},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -69,8 +69,8 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         let merchant_stats = sender_village.tribe.merchant_stats();
         let mut merchant_capacity = merchant_stats.capacity;
 
-        // Apply alliance trade bonus
-        let trade_bonus = get_player_alliance_trade_bonus(uow, command.player_id).await?;
+        // Apply alliance commerce bonus
+        let trade_bonus = get_player_alliance_commerce_bonus(uow, command.player_id).await?;
         if trade_bonus > 0.0 {
             merchant_capacity = (merchant_capacity as f64 * (1.0 + trade_bonus)) as u32;
         }

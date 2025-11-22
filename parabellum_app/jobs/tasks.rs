@@ -1,5 +1,5 @@
 use parabellum_game::battle::ScoutingTarget;
-use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{alliance::AllianceBonusType, army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -163,5 +163,5 @@ pub struct CelebrationBreweryTask {}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllianceBonusUpgradeTask {
     pub alliance_id: Uuid,
-    pub bonus_type: i16,
+    pub bonus_type: AllianceBonusType,
 }

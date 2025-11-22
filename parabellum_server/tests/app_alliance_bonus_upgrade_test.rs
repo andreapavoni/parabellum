@@ -10,10 +10,10 @@ pub mod tests {
     use parabellum_types::{buildings::BuildingName, tribe::Tribe};
 
     use crate::test_utils::tests::{
-        assign_player_to_alliance, setup_alliance_with_armor_bonus, setup_app, setup_player_party,
+        assign_player_to_alliance, setup_alliance_with_metallurgy_bonus, setup_app, setup_player_party,
     };
 
-    /// This test verifies that an alliance with armor bonus level 3 (3%) correctly applies
+    /// This test verifies that an alliance with metallurgy bonus level 3 (3%) correctly applies
     /// the defensive bonus in battle
     #[tokio::test]
     async fn test_alliance_bonus_level_applied_in_attack() -> Result<()> {
@@ -43,9 +43,9 @@ pub mod tests {
             .await?
         };
 
-        // Create alliance with armor bonus level 3 and assign defender
+        // Create alliance with metallurgy bonus level 3 and assign defender
         let alliance =
-            setup_alliance_with_armor_bonus(uow_provider.clone(), defender_player.id, 3).await?;
+            setup_alliance_with_metallurgy_bonus(uow_provider.clone(), defender_player.id, 3).await?;
         let _defender_player =
             assign_player_to_alliance(uow_provider.clone(), defender_player, alliance.id).await?;
 
@@ -83,12 +83,12 @@ pub mod tests {
             // Verify alliance still has bonus level 3
             let final_alliance = alliance_repo.get_by_id(alliance.id).await?;
             assert_eq!(
-                final_alliance.armor_bonus_level, 3,
-                "Alliance should still have armor bonus level 3"
+                final_alliance.metallurgy_bonus_level, 3,
+                "Alliance should still have metallurgy bonus level 3"
             );
 
             println!("\n=== ALLIANCE BONUS IN BATTLE TEST COMPLETE ===");
-            println!("✓ Alliance with armor bonus level 3 (3% defense)");
+            println!("✓ Alliance with metallurgy bonus level 3 (3% defense)");
             println!("✓ Bonus applied in attack job execution");
             println!("✓ Battle calculations include alliance defensive bonus");
 

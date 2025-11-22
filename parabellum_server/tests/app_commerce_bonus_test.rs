@@ -11,10 +11,10 @@ pub mod tests {
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use crate::test_utils::tests::{
-        assign_player_to_alliance, setup_alliance_with_trade_bonus, setup_app, setup_player_party,
+        assign_player_to_alliance, setup_alliance_with_commerce_bonus, setup_app, setup_player_party,
     };
 
-    /// This test verifies that an alliance with trade bonus level 4 (4%) correctly applies
+    /// This test verifies that an alliance with commerce bonus level 4 (4%) correctly applies
     /// the merchant capacity increase
     #[tokio::test]
     async fn test_alliance_trade_bonus_increases_capacity() -> Result<()> {
@@ -59,9 +59,9 @@ pub mod tests {
             uow.commit().await?;
         }
 
-        // Create alliance with trade bonus level 4 and assign sender
+        // Create alliance with commerce bonus level 4 and assign sender
         let alliance =
-            setup_alliance_with_trade_bonus(uow_provider.clone(), sender_player.id, 4).await?;
+            setup_alliance_with_commerce_bonus(uow_provider.clone(), sender_player.id, 4).await?;
         let _sender_player =
             assign_player_to_alliance(uow_provider.clone(), sender_player.clone(), alliance.id)
                 .await?;
@@ -101,7 +101,7 @@ pub mod tests {
 
             // With Roman capacity 500 + 4% = 520
             // Sending 1000 resources should need ceil(1000/520) = 2 merchants
-            println!("Merchants used with 4% trade bonus: {}", merchants_used);
+            println!("Merchants used with 4% commerce bonus: {}", merchants_used);
             assert_eq!(
                 merchants_used, 2,
                 "Should use 2 merchants with bonus (capacity 520)"
@@ -111,19 +111,19 @@ pub mod tests {
             let alliance_repo = uow_read.alliances();
             let final_alliance = alliance_repo.get_by_id(alliance.id).await?;
             assert_eq!(
-                final_alliance.trade_bonus_level, 4,
-                "Alliance should have trade bonus level 4"
+                final_alliance.commerce_bonus_level, 4,
+                "Alliance should have commerce bonus level 4"
             );
             assert_eq!(
-                final_alliance.get_trade_bonus_multiplier(),
+                final_alliance.get_commerce_bonus_multiplier(),
                 0.04,
-                "Alliance should return 4% trade bonus multiplier"
+                "Alliance should return 4% commerce bonus multiplier"
             );
 
             uow_read.rollback().await?;
 
             println!("\n=== ALLIANCE TRADE BONUS TEST COMPLETE ===");
-            println!("✓ Alliance with trade bonus level 4 (4% capacity increase)");
+            println!("✓ Alliance with commerce bonus level 4 (4% capacity increase)");
             println!("✓ Bonus applied to merchant capacity");
             println!("✓ Merchant count calculated with bonus");
         }
@@ -131,7 +131,7 @@ pub mod tests {
         Ok(())
     }
 
-    /// Test that trade bonus actually reduces merchant count for larger shipments
+    /// Test that commerce bonus actually reduces merchant count for larger shipments
     #[tokio::test]
     async fn test_trade_bonus_saves_merchants() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;
@@ -193,8 +193,8 @@ pub mod tests {
             uow.commit().await?;
         }
 
-        // Create alliance with trade bonus level 5 (5%) for first player
-        let alliance = setup_alliance_with_trade_bonus(
+        // Create alliance with commerce bonus level 5 (5%) for first player
+        let alliance = setup_alliance_with_commerce_bonus(
             uow_provider.clone(),
             player_with_bonus.id,
             5,
@@ -269,7 +269,7 @@ pub mod tests {
         Ok(())
     }
 
-    /// Test that trade bonus is 0 when player has no alliance
+    /// Test that commerce bonus is 0 when player has no alliance
     #[tokio::test]
     async fn test_no_alliance_no_trade_bonus() -> Result<()> {
         let (app, _worker, uow_provider, config) = setup_app(false).await?;

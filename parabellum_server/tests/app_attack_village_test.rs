@@ -15,7 +15,7 @@ pub mod tests {
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use crate::test_utils::tests::{
-        assign_player_to_alliance, setup_alliance_with_armor_bonus, setup_app, setup_player_party,
+        assign_player_to_alliance, setup_alliance_with_metallurgy_bonus, setup_app, setup_player_party,
     };
 
     #[tokio::test]
@@ -356,9 +356,9 @@ pub mod tests {
             .await?
         };
 
-        // Create alliance with level 5 armor bonus (5% defense bonus)
+        // Create alliance with level 5 metallurgy bonus (5% defense bonus)
         let alliance =
-            setup_alliance_with_armor_bonus(uow_provider.clone(), defender_player.id, 5).await?;
+            setup_alliance_with_metallurgy_bonus(uow_provider.clone(), defender_player.id, 5).await?;
 
         // Assign defender to alliance
         let _defender_player =
@@ -399,7 +399,7 @@ pub mod tests {
             // Check defender village
             let updated_defender_village = village_repo.get_by_id(defender_village.id).await?;
 
-            // With 5% armor bonus, defender should survive better
+            // With 5% metallurgy bonus, defender should survive better
             if let Some(defender_army) = updated_defender_village.army() {
                 let surviving_legionnaires = defender_army.units()[0];
                 println!(
@@ -437,8 +437,8 @@ pub mod tests {
             // but we can verify the battle completed and alliance exists)
             let fetched_alliance = uow_assert.alliances().get_by_id(alliance.id).await?;
             assert_eq!(
-                fetched_alliance.armor_bonus_level, 5,
-                "Alliance should have armor bonus level 5"
+                fetched_alliance.metallurgy_bonus_level, 5,
+                "Alliance should have metallurgy bonus level 5"
             );
 
             uow_assert.rollback().await?;

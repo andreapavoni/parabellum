@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parabellum_core::{ApplicationError, GameError};
 
 use crate::{
-    command_handlers::helpers::get_player_alliance_training_bonus,
+    command_handlers::helpers::get_player_alliance_recruitment_bonus,
     config::Config,
     cqrs::{CommandHandler, commands::TrainUnits},
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
@@ -52,8 +52,8 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         )?;
         village_repo.save(&village).await?;
 
-        // Apply alliance training bonus
-        let training_bonus = get_player_alliance_training_bonus(uow, command.player_id).await?;
+        // Apply alliance recruitment bonus
+        let training_bonus = get_player_alliance_recruitment_bonus(uow, command.player_id).await?;
         if training_bonus > 0.0 {
             let new_time = (time_per_unit as f64 * (1.0 - training_bonus)).floor().max(1.0);
             time_per_unit = new_time as u32;

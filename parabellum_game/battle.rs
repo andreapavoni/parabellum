@@ -162,7 +162,7 @@ impl Battle {
             (total_defender_infantry_points as f64 * wall_bonus) as u32;
         total_defender_cavalry_points = (total_defender_cavalry_points as f64 * wall_bonus) as u32;
 
-        // Alliance Armor Bonus
+        // Alliance Metallurgy Bonus
         if self.defender_alliance_bonus > 0.0 {
             total_defender_infantry_points =
                 (total_defender_infantry_points as f64 * (1.0 + self.defender_alliance_bonus)) as u32;

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use parabellum_core::GameError;
 use parabellum_types::tribe::Tribe;
-pub use parabellum_types::alliance::BonusType;
+pub use parabellum_types::alliance::AllianceBonusType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
@@ -14,14 +14,14 @@ pub struct Player {
     pub alliance_id: Option<Uuid>,
     pub alliance_role: Option<i32>,
     pub alliance_join_time: Option<chrono::DateTime<chrono::Utc>>,
-    pub current_alliance_training_contributions: i64,
-    pub current_alliance_armor_contributions: i64,
-    pub current_alliance_cp_contributions: i64,
-    pub current_alliance_trade_contributions: i64,
-    pub total_alliance_training_contributions: i64,
-    pub total_alliance_armor_contributions: i64,
-    pub total_alliance_cp_contributions: i64,
-    pub total_alliance_trade_contributions: i64,
+    pub current_alliance_recruitment_contributions: i64,
+    pub current_alliance_metallurgy_contributions: i64,
+    pub current_alliance_philosophy_contributions: i64,
+    pub current_alliance_commerce_contributions: i64,
+    pub total_alliance_recruitment_contributions: i64,
+    pub total_alliance_metallurgy_contributions: i64,
+    pub total_alliance_philosophy_contributions: i64,
+    pub total_alliance_commerce_contributions: i64,
 }
 
 impl Player {
@@ -41,47 +41,47 @@ impl Player {
         self.alliance_join_time = None;
 
         // Reset contributions
-        self.current_alliance_training_contributions = 0;
-        self.current_alliance_armor_contributions = 0;
-        self.current_alliance_cp_contributions = 0;
-        self.current_alliance_trade_contributions = 0;
-        self.total_alliance_training_contributions = 0;
-        self.total_alliance_armor_contributions = 0;
-        self.total_alliance_cp_contributions = 0;
-        self.total_alliance_trade_contributions = 0;
+        self.current_alliance_recruitment_contributions = 0;
+        self.current_alliance_metallurgy_contributions = 0;
+        self.current_alliance_philosophy_contributions = 0;
+        self.current_alliance_commerce_contributions = 0;
+        self.total_alliance_recruitment_contributions = 0;
+        self.total_alliance_metallurgy_contributions = 0;
+        self.total_alliance_philosophy_contributions = 0;
+        self.total_alliance_commerce_contributions = 0;
     }
 
     pub fn update_alliance_role(&mut self, role: i32) {
         self.alliance_role = Some(role);
     }
 
-    pub fn add_alliance_contribution(&mut self, bonus_type: BonusType, points: i64) {
+    pub fn add_alliance_contribution(&mut self, bonus_type: AllianceBonusType, points: i64) {
         match bonus_type {
-            BonusType::Training => {
-                self.current_alliance_training_contributions += points;
-                self.total_alliance_training_contributions += points;
+            AllianceBonusType::Recruitment => {
+                self.current_alliance_recruitment_contributions += points;
+                self.total_alliance_recruitment_contributions += points;
             }
-            BonusType::Armor => {
-                self.current_alliance_armor_contributions += points;
-                self.total_alliance_armor_contributions += points;
+            AllianceBonusType::Metallurgy => {
+                self.current_alliance_metallurgy_contributions += points;
+                self.total_alliance_metallurgy_contributions += points;
             }
-            BonusType::CombatPoints => {
-                self.current_alliance_cp_contributions += points;
-                self.total_alliance_cp_contributions += points;
+            AllianceBonusType::Philosophy => {
+                self.current_alliance_philosophy_contributions += points;
+                self.total_alliance_philosophy_contributions += points;
             }
-            BonusType::Trade => {
-                self.current_alliance_trade_contributions += points;
-                self.total_alliance_trade_contributions += points;
+            AllianceBonusType::Commerce => {
+                self.current_alliance_commerce_contributions += points;
+                self.total_alliance_commerce_contributions += points;
             }
         }
     }
 
-    pub fn get_alliance_contribution(&self, bonus_type: BonusType) -> i64 {
+    pub fn get_alliance_contribution(&self, bonus_type: AllianceBonusType) -> i64 {
         match bonus_type {
-            BonusType::Training => self.current_alliance_training_contributions,
-            BonusType::Armor => self.current_alliance_armor_contributions,
-            BonusType::CombatPoints => self.current_alliance_cp_contributions,
-            BonusType::Trade => self.current_alliance_trade_contributions,
+            AllianceBonusType::Recruitment => self.current_alliance_recruitment_contributions,
+            AllianceBonusType::Metallurgy => self.current_alliance_metallurgy_contributions,
+            AllianceBonusType::Philosophy => self.current_alliance_philosophy_contributions,
+            AllianceBonusType::Commerce => self.current_alliance_commerce_contributions,
         }
     }
 }

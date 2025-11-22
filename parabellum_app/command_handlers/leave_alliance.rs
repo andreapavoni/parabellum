@@ -113,10 +113,10 @@ mod tests {
         member.alliance_id = Some(alliance.id);
         member.alliance_role = Some(0);
         member.alliance_join_time = Some(Utc::now() - Duration::days(20));
-        member.current_alliance_training_contributions = 50000;
-        member.current_alliance_armor_contributions = 30000;
-        member.total_alliance_training_contributions = 100000;
-        member.total_alliance_armor_contributions = 75000;
+        member.current_alliance_recruitment_contributions = 50000;
+        member.current_alliance_metallurgy_contributions = 30000;
+        member.total_alliance_recruitment_contributions = 100000;
+        member.total_alliance_metallurgy_contributions = 75000;
 
         mock_uow_impl.alliances().save(&alliance).await.unwrap();
         mock_uow_impl.players().save(&leader).await.unwrap();
@@ -143,14 +143,14 @@ mod tests {
         assert_eq!(updated_member.alliance_join_time, None);
 
         // Verify all contribution fields are reset to 0
-        assert_eq!(updated_member.current_alliance_training_contributions, 0);
-        assert_eq!(updated_member.current_alliance_armor_contributions, 0);
-        assert_eq!(updated_member.current_alliance_cp_contributions, 0);
-        assert_eq!(updated_member.current_alliance_trade_contributions, 0);
-        assert_eq!(updated_member.total_alliance_training_contributions, 0);
-        assert_eq!(updated_member.total_alliance_armor_contributions, 0);
-        assert_eq!(updated_member.total_alliance_cp_contributions, 0);
-        assert_eq!(updated_member.total_alliance_trade_contributions, 0);
+        assert_eq!(updated_member.current_alliance_recruitment_contributions, 0);
+        assert_eq!(updated_member.current_alliance_metallurgy_contributions, 0);
+        assert_eq!(updated_member.current_alliance_philosophy_contributions, 0);
+        assert_eq!(updated_member.current_alliance_commerce_contributions, 0);
+        assert_eq!(updated_member.total_alliance_recruitment_contributions, 0);
+        assert_eq!(updated_member.total_alliance_metallurgy_contributions, 0);
+        assert_eq!(updated_member.total_alliance_philosophy_contributions, 0);
+        assert_eq!(updated_member.total_alliance_commerce_contributions, 0);
 
         // Verify alliance log was created
         let logs = mock_uow_impl

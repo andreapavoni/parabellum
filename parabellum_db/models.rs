@@ -44,14 +44,14 @@ pub struct Player {
     pub alliance_id: Option<Uuid>,
     pub alliance_role: Option<i32>,
     pub alliance_join_time: Option<DateTime<Utc>>,
-    pub current_alliance_training_contributions: Option<i64>,
-    pub current_alliance_armor_contributions: Option<i64>,
-    pub current_alliance_cp_contributions: Option<i64>,
-    pub current_alliance_trade_contributions: Option<i64>,
-    pub total_alliance_training_contributions: Option<i64>,
-    pub total_alliance_armor_contributions: Option<i64>,
-    pub total_alliance_cp_contributions: Option<i64>,
-    pub total_alliance_trade_contributions: Option<i64>,
+    pub current_alliance_recruitment_contributions: Option<i64>,
+    pub current_alliance_metallurgy_contributions: Option<i64>,
+    pub current_alliance_philosophy_contributions: Option<i64>,
+    pub current_alliance_commerce_contributions: Option<i64>,
+    pub total_alliance_recruitment_contributions: Option<i64>,
+    pub total_alliance_metallurgy_contributions: Option<i64>,
+    pub total_alliance_philosophy_contributions: Option<i64>,
+    pub total_alliance_commerce_contributions: Option<i64>,
 }
 
 #[derive(Debug, FromRow, Clone)]
