@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO armies (id, village_id, current_map_field_id, hero_id, units, smithy, tribe, player_id)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n                ON CONFLICT (id) DO UPDATE\n                SET\n                    units = $5,\n                    hero_id = $4,\n                    current_map_field_id = $3,\n                    village_id = $2,\n                    player_id = $8,\n                    tribe = $7,\n                    smithy = $6\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Jsonb",
+        "Jsonb",
+        {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9d5b87a770c8c6b0bcbbfcc3fbd4c17e747ab7625fa29660b005f69c33e4d82"
+}

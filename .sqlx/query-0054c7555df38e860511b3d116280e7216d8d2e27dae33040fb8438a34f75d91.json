@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO heroes (id, village_id, player_id, tribe, level, health, experience,\n                                 strength_points, regeneration_points, off_bonus_points, def_bonus_points, resources_points, unassigned_points, resource_focus)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)\n            ON CONFLICT (id) DO UPDATE\n            SET\n              village_id = $2,\n              level = $5,\n              health = $6,\n              experience = $7,\n              strength_points = $8,\n              regeneration_points = $9,\n              off_bonus_points = $10,\n              def_bonus_points = $11,\n              resources_points = $12,\n              unassigned_points = $13,\n              resource_focus = $14\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        },
+        "Int2",
+        "Int2",
+        "Int4",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0054c7555df38e860511b3d116280e7216d8d2e27dae33040fb8438a34f75d91"
+}

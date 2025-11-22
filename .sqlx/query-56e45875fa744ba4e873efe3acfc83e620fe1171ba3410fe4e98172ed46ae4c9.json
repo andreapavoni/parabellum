@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO villages (\n                    id, player_id, name, position, buildings, production,\n                    stocks, smithy_upgrades, academy_research, population,\n                    loyalty, is_capital\n                )\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n                ON CONFLICT (id) DO UPDATE\n                SET\n                    name = $3,\n                    buildings = $5,\n                    production = $6,\n                    stocks = $7,\n                    smithy_upgrades = $8,\n                    academy_research = $9,\n                    population = $10,\n                    loyalty = $11,\n                    updated_at = NOW()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        "Varchar",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Int4",
+        "Int2",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56e45875fa744ba4e873efe3acfc83e620fe1171ba3410fe4e98172ed46ae4c9"
+}

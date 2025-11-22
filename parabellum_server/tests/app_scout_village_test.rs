@@ -49,7 +49,7 @@ pub mod tests {
         app.execute(command, handler).await?;
 
         let (scout_job, deployed_army_id) = {
-            let uow_assert1 = uow_provider.begin().await?;
+            let uow_assert1 = uow_provider.tx().await?;
             let jobs = uow_assert1
                 .jobs()
                 .list_by_player_id(scout_player.id)
@@ -100,7 +100,7 @@ pub mod tests {
         worker.process_jobs(&vec![scout_job.clone()]).await?;
 
         let return_job = {
-            let uow_assert2 = uow_provider.begin().await?;
+            let uow_assert2 = uow_provider.tx().await?;
 
             let original_job = uow_assert2.jobs().get_by_id(scout_job.id).await?;
             assert_eq!(original_job.status, JobStatus::Completed);
@@ -134,7 +134,7 @@ pub mod tests {
 
         worker.process_jobs(&vec![return_job.clone()]).await?;
         {
-            let uow_assert3 = uow_provider.begin().await?;
+            let uow_assert3 = uow_provider.tx().await?;
             let original_job = uow_assert3.jobs().get_by_id(return_job.id).await?;
             assert_eq!(
                 original_job.status,

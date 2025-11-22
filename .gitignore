@@ -3,6 +3,5 @@ Cargo.lock
 tmp/
 logs/*.log.*
 _*.md
-.sqlx/
 tarpaulin-report.html
 frontend/*.html

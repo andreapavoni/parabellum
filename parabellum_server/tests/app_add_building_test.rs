@@ -18,7 +18,7 @@ async fn test_build() -> Result<()> {
         setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
     {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
 
         village.set_building_level_at_slot(19, 3, config.speed)?;
         let rally_point =
@@ -45,7 +45,7 @@ async fn test_build() -> Result<()> {
     app.execute(command, handler).await?;
 
     let (job_to_run, village_id) = {
-        let uow_assert1 = uow_provider.begin().await?;
+        let uow_assert1 = uow_provider.tx().await?;
         let updated_village = uow_assert1.villages().get_by_id(village.id).await?;
         assert_eq!(
             updated_village.stored_resources().lumber(),
@@ -75,7 +75,7 @@ async fn test_build() -> Result<()> {
 
     worker.process_jobs(&vec![job_to_run.clone()]).await?;
     {
-        let uow_assert2 = uow_provider.begin().await?;
+        let uow_assert2 = uow_provider.tx().await?;
         let final_village = uow_assert2.villages().get_by_id(village_id).await?;
         let new_building = final_village.get_building_by_slot_id(slot_to_build);
         assert!(new_building.is_some(), "Building should now exist");

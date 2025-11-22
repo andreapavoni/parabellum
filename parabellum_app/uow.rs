@@ -28,7 +28,7 @@ pub trait UnitOfWork<'a>: Send + Sync {
 #[async_trait::async_trait]
 pub trait UnitOfWorkProvider: Send + Sync {
     /// Begin a new Unit of Work (transaction).
-    async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>;
+    async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>;
     // You might also want to provide a way to get a repository pool
     // for non-transactional operations like read-only operations,
     // async fn pool(&self) -> Arc<dyn SomeRepoPool>;

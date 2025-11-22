@@ -109,7 +109,7 @@ pub mod tests {
 
     #[async_trait]
     impl<'a> UnitOfWorkProvider for TestUnitOfWorkProvider<'a> {
-        async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>
+        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>
         where
             'a: 'p,
         {
@@ -221,7 +221,7 @@ pub mod tests {
         units: TroopSet,
         with_hero: bool,
     ) -> Result<(Player, Village, Army, Option<Hero>, User)> {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let player: Player;
         let village: Village;
         let army: Army;

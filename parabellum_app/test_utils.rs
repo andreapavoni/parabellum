@@ -379,7 +379,9 @@ pub mod tests {
                 return Ok(user.clone());
             }
 
-            Err(ApplicationError::Db(DbError::UserByEmailNotFound(email.clone())))
+            Err(ApplicationError::Db(DbError::UserByEmailNotFound(
+                email.clone(),
+            )))
         }
 
         async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
@@ -463,7 +465,7 @@ pub mod tests {
 
     #[async_trait]
     impl UnitOfWorkProvider for MockUnitOfWorkProvider {
-        async fn begin<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
             let uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
             Ok(uow)
         }

@@ -52,7 +52,7 @@ impl JobWorker {
     #[instrument(skip_all)]
     /// Process due jobs.
     pub async fn process_due_jobs(&self) -> Result<()> {
-        let uow = self.uow_provider.begin().await?;
+        let uow = self.uow_provider.tx().await?;
         let due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
         if !due_jobs.is_empty() {
             info!(count = due_jobs.len(), "Processing due jobs");
@@ -64,7 +64,7 @@ impl JobWorker {
     /// Process given jobs.
     pub async fn process_jobs(&self, jobs: &Vec<Job>) -> Result<()> {
         for job in jobs {
-            let uow = self.uow_provider.begin().await?;
+            let uow = self.uow_provider.tx().await?;
             let context = JobHandlerContext {
                 uow,
                 config: self.config.clone(),
@@ -91,7 +91,7 @@ impl JobWorker {
                         // or an unregistered task_type.
                         // Mark the job as failed and continue.
                         context.uow.rollback().await?;
-                        let uow_fail = self.uow_provider.begin().await?;
+                        let uow_fail = self.uow_provider.tx().await?;
                         uow_fail
                             .jobs()
                             .mark_as_failed(job_id, &e.to_string())
@@ -112,7 +112,7 @@ impl JobWorker {
                     error!(job_id = %job.id, error = ?e, "Job failed");
                     context.uow.rollback().await?;
 
-                    let uow_fail = self.uow_provider.begin().await?;
+                    let uow_fail = self.uow_provider.tx().await?;
                     uow_fail
                         .jobs()
                         .mark_as_failed(job_id, &e.to_string())
