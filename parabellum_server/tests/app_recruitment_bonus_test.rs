@@ -6,7 +6,7 @@ pub mod tests {
         command_handlers::TrainUnitsCommandHandler,
         cqrs::commands::TrainUnits,
     };
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
     use parabellum_game::models::buildings::Building;
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
@@ -35,7 +35,7 @@ pub mod tests {
 
         // Give player resources and build barracks
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
             let mut village = village_repo.get_by_id(village.id).await?;
 
@@ -73,7 +73,7 @@ pub mod tests {
 
         // Get the training job and verify the time_per_unit has the bonus applied
         {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(player.id).await?;
 
             assert_eq!(jobs.len(), 1, "Should have 1 training job");
@@ -129,7 +129,7 @@ pub mod tests {
 
         // Give player resources and build barracks
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
             let mut village = village_repo.get_by_id(village.id).await?;
 
@@ -162,7 +162,7 @@ pub mod tests {
 
         // Verify job was created (no bonus applied)
         {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(player.id).await?;
             uow_read.rollback().await?;
 

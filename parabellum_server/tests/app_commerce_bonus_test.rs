@@ -6,7 +6,7 @@ pub mod tests {
         command_handlers::SendResourcesCommandHandler,
         cqrs::commands::SendResources,
     };
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
     use parabellum_game::models::buildings::Building;
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
@@ -46,7 +46,7 @@ pub mod tests {
 
         // Set up villages with marketplace and resources
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
 
             let mut sender_village = village_repo.get_by_id(sender_village.id).await?;
@@ -90,7 +90,7 @@ pub mod tests {
 
         // Get the merchant job and verify
         {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(sender_player.id).await?;
 
             assert_eq!(jobs.len(), 1, "Should have 1 merchant job");
@@ -173,7 +173,7 @@ pub mod tests {
 
         // Set up villages with marketplace and resources
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
 
             let mut village1 = village_repo.get_by_id(village_with_bonus.id).await?;
@@ -236,7 +236,7 @@ pub mod tests {
 
         // Compare merchant usage
         {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
 
             let jobs_with_bonus = uow_read
                 .jobs()
@@ -300,7 +300,7 @@ pub mod tests {
 
         // Set up villages
         {
-            let uow = uow_provider.begin().await?;
+            let uow = uow_provider.tx().await?;
             let village_repo = uow.villages();
 
             let mut sender_village = village_repo.get_by_id(sender_village.id).await?;
@@ -325,7 +325,7 @@ pub mod tests {
 
         // Verify job was created (no bonus applied)
         {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(sender_player.id).await?;
             uow_read.rollback().await?;
 

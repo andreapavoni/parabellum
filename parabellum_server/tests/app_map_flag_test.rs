@@ -14,7 +14,7 @@ pub mod tests {
             CreateAlliance,
         },
     };
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
     use parabellum_game::models::buildings::Building;
     use parabellum_types::{buildings::BuildingName, map_flag::MapFlagType, tribe::Tribe};
 
@@ -39,7 +39,7 @@ pub mod tests {
 
         // Verify flag was created in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 1);
@@ -82,7 +82,7 @@ pub mod tests {
 
         // Verify mark was created in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 1);
@@ -118,7 +118,7 @@ pub mod tests {
 
         // Get the flag ID
         let flag_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             let id = flags[0].id;
             uow_check.rollback().await?;
@@ -138,7 +138,7 @@ pub mod tests {
 
         // Verify flag was updated in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let updated_flag = uow_check.map_flags().get_by_id(flag_id).await?;
             assert_eq!(updated_flag.color, 8);
@@ -171,7 +171,7 @@ pub mod tests {
 
         // Get the flag ID
         let flag_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 1);
             let id = flags[0].id;
@@ -190,7 +190,7 @@ pub mod tests {
 
         // Verify flag was deleted from database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 0);
@@ -210,7 +210,7 @@ pub mod tests {
 
         // Set up alliance
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village.is_capital = true;
@@ -233,7 +233,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let updated_player = uow_check.players().get_by_id(player.id).await?;
             let id = updated_player.alliance_id.unwrap();
             uow_check.rollback().await?;
@@ -254,7 +254,7 @@ pub mod tests {
 
         // Verify alliance flag was created in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let flags = uow_check.map_flags().get_by_alliance_id(alliance_id).await?;
             assert_eq!(flags.len(), 1);
@@ -279,7 +279,7 @@ pub mod tests {
 
         // Set up alliance
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village.is_capital = true;
@@ -302,7 +302,7 @@ pub mod tests {
 
         // Get alliance ID
         let player_alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let updated_player = uow_check.players().get_by_id(player.id).await?;
             let id = updated_player.alliance_id.unwrap();
             uow_check.rollback().await?;
@@ -314,7 +314,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village2.is_capital = true;
@@ -335,7 +335,7 @@ pub mod tests {
         app.execute(target_alliance_cmd, target_alliance_handler).await?;
 
         let target_alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let updated_player = uow_check.players().get_by_id(player2.id).await?;
             let id = updated_player.alliance_id.unwrap();
             uow_check.rollback().await?;
@@ -355,7 +355,7 @@ pub mod tests {
 
         // Verify alliance mark was created in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let flags = uow_check.map_flags().get_by_alliance_id(player_alliance_id).await?;
             assert_eq!(flags.len(), 1);
@@ -407,7 +407,7 @@ pub mod tests {
 
         // Verify only 5 flags exist in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 5);
             uow_check.rollback().await?;
@@ -457,7 +457,7 @@ pub mod tests {
 
         // Verify only 10 marks exist in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let flags = uow_check.map_flags().get_by_player_id(player.id).await?;
             assert_eq!(flags.len(), 10);
             uow_check.rollback().await?;

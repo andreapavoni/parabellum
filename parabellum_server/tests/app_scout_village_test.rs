@@ -228,7 +228,7 @@ pub mod tests {
 
         // Get and process scout job
         let scout_job = {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(scout_player.id).await?;
             uow_read.rollback().await?;
             jobs[0].clone()
@@ -238,7 +238,7 @@ pub mod tests {
 
         // Verify scout results with alliance bonus applied
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let job_repo = uow_assert.jobs();
 
             // Check scout job completed
@@ -328,7 +328,7 @@ pub mod tests {
 
         // Get and process scout job
         let scout_job = {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read.jobs().list_by_player_id(scout_player.id).await?;
             uow_read.rollback().await?;
             jobs[0].clone()
@@ -338,7 +338,7 @@ pub mod tests {
 
         // Verify scout results WITHOUT alliance bonus
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let job_repo = uow_assert.jobs();
 
             // Check scout job completed

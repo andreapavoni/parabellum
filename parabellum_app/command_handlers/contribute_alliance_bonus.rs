@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::{
     config::Config,
@@ -28,7 +28,7 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
 
         // Verify player is in the alliance and owns the village
         if player.alliance_id != Some(command.alliance_id) {
-            return Err(ApplicationError::Game(parabellum_core::GameError::NotInAlliance));
+            return Err(ApplicationError::Game(GameError::NotInAlliance));
         }
         village.verify_ownership(command.player_id)?;
 
@@ -88,7 +88,7 @@ impl CommandHandler<ContributeToAllianceBonus> for ContributeToAllianceBonusComm
 mod tests {
     use std::sync::Arc;
     use uuid::Uuid;
-    use parabellum_core::{ApplicationError, Result};
+    use parabellum_types::errors::{ApplicationError, GameError, Result};
     use parabellum_game::{
         models::{alliance::Alliance, player::Player, village::Village},
         test_utils::{
@@ -273,7 +273,7 @@ mod tests {
         let result = handler.handle(command, &mock_uow, &config).await;
         assert!(result.is_err());
         match result {
-            Err(ApplicationError::Game(parabellum_core::GameError::AllianceDonationLimitExceeded)) => {
+            Err(ApplicationError::Game(GameError::AllianceDonationLimitExceeded)) => {
                 // Expected error
             }
             _ => panic!("Expected AllianceDonationLimitExceeded error"),
@@ -310,7 +310,7 @@ mod tests {
         let result = handler.handle(command, &mock_uow, &config).await;
         assert!(result.is_err());
         match result {
-            Err(ApplicationError::Game(parabellum_core::GameError::AllianceNewPlayerCooldown)) => {
+            Err(ApplicationError::Game(GameError::AllianceNewPlayerCooldown)) => {
                 // Expected error
             }
             _ => panic!("Expected AllianceNewPlayerCooldown error"),

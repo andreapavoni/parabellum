@@ -2,7 +2,7 @@ use parabellum_types::map::Position;
 use parabellum_types::map_flag::MapFlagType;
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::errors::{ApplicationError, GameError, Result};
 use parabellum_game::models::alliance::{AlliancePermission, verify_permission};
 use parabellum_game::models::map_flag::MapFlag;
 

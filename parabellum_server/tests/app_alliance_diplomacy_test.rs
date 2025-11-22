@@ -14,7 +14,7 @@ use parabellum_app::{
     },
     uow::UnitOfWorkProvider,
 };
-use parabellum_core::{ApplicationError, GameError};
+use parabellum_types::errors::{ApplicationError, GameError};
 use parabellum_game::models::{
     alliance::{Alliance, AllianceDiplomacy, AlliancePermission},
     player::Player,
@@ -63,7 +63,7 @@ async fn setup_diplomacy_context(
 
     // Set diplomacy permissions if needed
     if player1_has_perm || player2_has_perm {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
 
         if player1_has_perm {
             let mut p1 = uow.players().get_by_id(player1.id).await?;
@@ -99,14 +99,14 @@ async fn test_create_alliance_diplomacy_success() -> Result<(), ApplicationError
         diplomacy_type: DiplomacyType::NAP,
     };
 
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let handler = CreateAllianceDiplomacyCommandHandler::new();
     let config = Arc::new(Config::from_env());
     handler.handle(command, &uow, &config).await?;
     uow.commit().await?;
 
     // Verify diplomacy was created
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let diplomacy = uow
         .alliance_diplomacy()
         .get_between_alliances(ctx.alliance1.id, ctx.alliance2.id)
@@ -132,7 +132,7 @@ async fn test_create_alliance_diplomacy_no_permission() -> Result<(), Applicatio
         diplomacy_type: DiplomacyType::NAP,
     };
 
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let handler = CreateAllianceDiplomacyCommandHandler::new();
     let config = Arc::new(Config::from_env());
     let result = handler.handle(command, &uow, &config).await;
@@ -152,7 +152,7 @@ async fn test_accept_alliance_diplomacy_success() -> Result<(), ApplicationError
 
     // Create diplomacy proposal
     let diplomacy = AllianceDiplomacy::new(ctx.alliance1.id, ctx.alliance2.id, DiplomacyType::NAP);
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     uow.alliance_diplomacy().save(&diplomacy).await?;
     uow.commit().await?;
 
@@ -162,14 +162,14 @@ async fn test_accept_alliance_diplomacy_success() -> Result<(), ApplicationError
         diplomacy_id: diplomacy.id,
     };
 
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let handler = AcceptAllianceDiplomacyCommandHandler::new();
     let config = Arc::new(Config::from_env());
     handler.handle(command, &uow, &config).await?;
     uow.commit().await?;
 
     // Verify diplomacy was accepted
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let updated_diplomacy = uow
         .alliance_diplomacy()
         .get_by_id(diplomacy.id)
@@ -188,7 +188,7 @@ async fn test_decline_alliance_diplomacy_success() -> Result<(), ApplicationErro
 
     // Create diplomacy proposal
     let diplomacy = AllianceDiplomacy::new(ctx.alliance1.id, ctx.alliance2.id, DiplomacyType::Alliance);
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     uow.alliance_diplomacy().save(&diplomacy).await?;
     uow.commit().await?;
 
@@ -198,14 +198,14 @@ async fn test_decline_alliance_diplomacy_success() -> Result<(), ApplicationErro
         diplomacy_id: diplomacy.id,
     };
 
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let handler = DeclineAllianceDiplomacyCommandHandler::new();
     let config = Arc::new(Config::from_env());
     handler.handle(command, &uow, &config).await?;
     uow.commit().await?;
 
     // Verify diplomacy was declined
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let updated_diplomacy = uow
         .alliance_diplomacy()
         .get_by_id(diplomacy.id)
@@ -225,7 +225,7 @@ async fn test_accept_diplomacy_already_processed() -> Result<(), ApplicationErro
     // Create and immediately accept diplomacy
     let mut diplomacy = AllianceDiplomacy::new(ctx.alliance1.id, ctx.alliance2.id, DiplomacyType::NAP);
     diplomacy.accept();
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     uow.alliance_diplomacy().save(&diplomacy).await?;
     uow.commit().await?;
 
@@ -235,7 +235,7 @@ async fn test_accept_diplomacy_already_processed() -> Result<(), ApplicationErro
         diplomacy_id: diplomacy.id,
     };
 
-    let uow = ctx.uow_provider.begin().await?;
+    let uow = ctx.uow_provider.tx().await?;
     let handler = AcceptAllianceDiplomacyCommandHandler::new();
     let config = Arc::new(Config::from_env());
     let result = handler.handle(command, &uow, &config).await;

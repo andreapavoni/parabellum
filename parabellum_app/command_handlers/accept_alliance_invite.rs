@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_core::{ApplicationError, GameError, Result};
+use parabellum_types::errors::{ApplicationError, GameError, Result};
 
 use crate::{
     config::Config,

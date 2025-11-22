@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_core::GameError;
+use parabellum_types::errors::GameError;
 use parabellum_types::map::Position;
 use parabellum_types::map_flag::MapFlagType;
 

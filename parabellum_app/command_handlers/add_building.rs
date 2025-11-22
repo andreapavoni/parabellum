@@ -65,9 +65,10 @@ mod tests {
     use parabellum_types::{Result, errors::GameError};
     use parabellum_types::{
         buildings::BuildingName,
-        common::{ResourceGroup, Player},
+        common::ResourceGroup,
         tribe::Tribe,
     };
+    use parabellum_game::models::player::Player;
 
     use super::*;
     use crate::{jobs::tasks::AddBuildingTask, test_utils::tests::MockUnitOfWork};

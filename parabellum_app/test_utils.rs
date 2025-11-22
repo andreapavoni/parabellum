@@ -18,11 +18,12 @@ pub mod tests {
         village::Village,
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::User,
         errors::{ApplicationError, DbError},
         map::{Position, ValleyTopology},
         map_flag::MapFlagType,
     };
+    use parabellum_game::models::player::Player;
 
     use crate::{
         jobs::Job,

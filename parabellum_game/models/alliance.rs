@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_core::GameError;
+use parabellum_types::errors::GameError;
 use parabellum_types::common::ResourceGroup;
 pub use parabellum_types::alliance::{AlliancePermission, AllianceBonusType, DiplomacyType, DiplomacyStatus};
 

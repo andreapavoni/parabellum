@@ -7,7 +7,7 @@ pub mod tests {
         command_handlers::{CreateAllianceCommandHandler, AcceptAllianceInviteCommandHandler, InviteToAllianceCommandHandler, KickFromAllianceCommandHandler, LeaveAllianceCommandHandler, SetAllianceLeaderCommandHandler},
         cqrs::commands::{CreateAlliance, AcceptAllianceInvite, InviteToAlliance, KickFromAlliance, LeaveAlliance, SetAllianceLeader},
     };
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
     use parabellum_game::models::buildings::Building;
     use parabellum_types::{buildings::BuildingName, tribe::Tribe};
 
@@ -20,7 +20,7 @@ pub mod tests {
 
         // Set village as capital and add Embassy level 3
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village.is_capital = true;
@@ -45,7 +45,7 @@ pub mod tests {
 
         // Verify alliance was created in database
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             // Verify alliance exists
             let alliance = uow_check
@@ -87,7 +87,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village1.is_capital = true;
@@ -104,7 +104,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village2.is_capital = true;
@@ -136,7 +136,7 @@ pub mod tests {
 
         // Verify both alliances exist and are distinct
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let alliance1 = uow_check
                 .alliances()
@@ -179,7 +179,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village1.is_capital = true;
@@ -196,7 +196,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             village2.is_capital = true;
@@ -251,7 +251,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -268,7 +268,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             invitee_village.is_capital = true;
@@ -291,7 +291,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -320,7 +320,7 @@ pub mod tests {
 
         // Verify player joined alliance
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let updated_invitee = uow_check.players().get_by_id(invitee.id).await?;
             assert_eq!(updated_invitee.alliance_id, Some(alliance_id));
@@ -356,7 +356,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -380,7 +380,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("BIG".to_string())
@@ -396,7 +396,7 @@ pub mod tests {
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
             {
-                let uow_setup = uow_provider.begin().await?;
+                let uow_setup = uow_provider.tx().await?;
                 let village_repo = uow_setup.villages();
 
                 village.is_capital = true;
@@ -428,7 +428,7 @@ pub mod tests {
 
         // Verify member count
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let member_count = uow_check.alliances().count_members(alliance_id).await?;
             assert_eq!(member_count, 4); // Leader + 3 members
@@ -448,7 +448,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -472,7 +472,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("SMALL".to_string())
@@ -488,7 +488,7 @@ pub mod tests {
                 setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
             {
-                let uow_setup = uow_provider.begin().await?;
+                let uow_setup = uow_provider.tx().await?;
                 let village_repo = uow_setup.villages();
 
                 village.is_capital = true;
@@ -521,7 +521,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             overflow_village.is_capital = true;
@@ -564,7 +564,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -591,7 +591,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -612,7 +612,7 @@ pub mod tests {
 
         // Verify invitation was created
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let invites = uow_check.alliance_invites().get_by_player_id(target.id).await?;
             assert_eq!(invites.len(), 1);
@@ -645,7 +645,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -662,7 +662,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -689,7 +689,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -739,7 +739,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -766,7 +766,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -808,7 +808,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -825,7 +825,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -848,7 +848,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -886,7 +886,7 @@ pub mod tests {
 
         // Verify member was kicked
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let updated_member = uow_check.players().get_by_id(member.id).await?;
             assert_eq!(updated_member.alliance_id, None);
@@ -918,7 +918,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -935,7 +935,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member1_village.is_capital = true;
@@ -951,7 +951,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member2_village.is_capital = true;
@@ -974,7 +974,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1025,7 +1025,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1042,7 +1042,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -1065,7 +1065,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1093,7 +1093,7 @@ pub mod tests {
 
         // Grant kick permission to member (manually update database for test)
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let player_repo = uow_setup.players();
 
             let mut member_player = player_repo.get_by_id(member.id).await?;
@@ -1126,7 +1126,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1143,7 +1143,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -1166,7 +1166,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1201,7 +1201,7 @@ pub mod tests {
 
         // Verify member left
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             let updated_member = uow_check.players().get_by_id(member.id).await?;
             assert_eq!(updated_member.alliance_id, None);
@@ -1235,7 +1235,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1277,7 +1277,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1293,7 +1293,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -1316,7 +1316,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1345,7 +1345,7 @@ pub mod tests {
         // Transfer leadership manually by kicking leader and updating member to be leader
         // First kick the leader (this is a test setup workaround)
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let player_repo = uow_setup.players();
             let alliance_repo = uow_setup.alliances();
 
@@ -1384,7 +1384,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1401,7 +1401,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member_village.is_capital = true;
@@ -1424,7 +1424,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1461,7 +1461,7 @@ pub mod tests {
 
         // Verify leadership transfer
         {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
 
             // Verify alliance leader was updated
             let alliance = uow_check.alliances().get_by_id(alliance_id).await?;
@@ -1498,7 +1498,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1515,7 +1515,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member1_village.is_capital = true;
@@ -1531,7 +1531,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Teuton, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             member2_village.is_capital = true;
@@ -1554,7 +1554,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())
@@ -1605,7 +1605,7 @@ pub mod tests {
             setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
 
         {
-            let uow_setup = uow_provider.begin().await?;
+            let uow_setup = uow_provider.tx().await?;
             let village_repo = uow_setup.villages();
 
             leader_village.is_capital = true;
@@ -1628,7 +1628,7 @@ pub mod tests {
 
         // Get alliance ID
         let alliance_id = {
-            let uow_check = uow_provider.begin().await?;
+            let uow_check = uow_provider.tx().await?;
             let alliance = uow_check
                 .alliances()
                 .get_by_tag("TEST".to_string())

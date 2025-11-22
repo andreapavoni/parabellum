@@ -6,7 +6,7 @@ pub mod tests {
         command_handlers::AttackVillageCommandHandler,
         cqrs::commands::AttackVillage,
     };
-    use parabellum_core::Result;
+    use parabellum_types::errors::Result;
     use parabellum_types::{buildings::BuildingName, tribe::Tribe};
 
     use crate::test_utils::tests::{
@@ -64,7 +64,7 @@ pub mod tests {
 
         // Get and process attack job
         let attack_job = {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read
                 .jobs()
                 .list_by_player_id(attacker_player.id)
@@ -77,7 +77,7 @@ pub mod tests {
 
         // Verify the alliance bonus (level 3 = 3%) was applied
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let alliance_repo = uow_assert.alliances();
 
             // Verify alliance still has bonus level 3

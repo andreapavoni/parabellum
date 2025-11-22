@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::repository::MapFlagRepository;
-use parabellum_core::{ApplicationError, DbError, GameError, Result};
+use parabellum_types::errors::{ApplicationError, DbError, GameError, Result};
 
 use crate::models::{self as db_models};
 

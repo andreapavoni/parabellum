@@ -157,7 +157,7 @@ pub mod tests {
     )> {
         let config = Arc::new(Config::from_env());
         let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
+        let master_tx = pool.tx().await.unwrap();
         let master_tx_arc = Arc::new(Mutex::new(master_tx));
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
             Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
@@ -272,7 +272,7 @@ pub mod tests {
         leader_id: Uuid,
         armor_level: i32,
     ) -> Result<Alliance> {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -295,7 +295,7 @@ pub mod tests {
         mut player: Player,
         alliance_id: Uuid,
     ) -> Result<Player> {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
 
         player.alliance_id = Some(alliance_id);
         // Set join time to 100000 seconds ago to bypass any cooldown checks
@@ -315,7 +315,7 @@ pub mod tests {
         leader_id: Uuid,
         training_level: i32,
     ) -> Result<Alliance> {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),
@@ -338,7 +338,7 @@ pub mod tests {
         leader_id: Uuid,
         trade_level: i32,
     ) -> Result<Alliance> {
-        let uow = uow_provider.begin().await?;
+        let uow = uow_provider.tx().await?;
         let mut alliance = Alliance::new(
             "Test Alliance".to_string(),
             "TEST".to_string(),

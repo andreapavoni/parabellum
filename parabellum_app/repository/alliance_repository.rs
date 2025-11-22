@@ -1,4 +1,4 @@
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::alliance::{Alliance, AllianceInvite, AllianceLog, AllianceDiplomacy};
 use parabellum_game::models::player::Player;
 use uuid::Uuid;

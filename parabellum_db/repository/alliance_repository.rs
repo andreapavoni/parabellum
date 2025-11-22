@@ -3,7 +3,7 @@ use parabellum_app::repository::{
     AllianceDiplomacyRepository, AllianceInviteRepository, AllianceLogRepository,
     AllianceRepository,
 };
-use parabellum_core::{ApplicationError, DbError};
+use parabellum_types::errors::{ApplicationError, DbError};
 use parabellum_game::models::alliance::{Alliance, AllianceDiplomacy, AllianceInvite, AllianceLog};
 use parabellum_game::models::player::Player;
 use sqlx::{Postgres, Row, Transaction};

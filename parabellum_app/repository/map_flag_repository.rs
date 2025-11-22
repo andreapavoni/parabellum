@@ -1,4 +1,4 @@
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::map_flag::MapFlag;
 use parabellum_types::map_flag::MapFlagType;
 use uuid::Uuid;

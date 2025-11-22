@@ -379,7 +379,7 @@ pub mod tests {
 
         // Get and process attack job
         let attack_job = {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read
                 .jobs()
                 .list_by_player_id(attacker_player.id)
@@ -392,7 +392,7 @@ pub mod tests {
 
         // Verify battle results with alliance bonus applied
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let village_repo = uow_assert.villages();
             let army_repo = uow_assert.armies();
 
@@ -492,7 +492,7 @@ pub mod tests {
 
         // Get and process attack job
         let attack_job = {
-            let uow_read = uow_provider.begin().await?;
+            let uow_read = uow_provider.tx().await?;
             let jobs = uow_read
                 .jobs()
                 .list_by_player_id(attacker_player.id)
@@ -505,7 +505,7 @@ pub mod tests {
 
         // Verify battle results WITHOUT alliance bonus
         {
-            let uow_assert = uow_provider.begin().await?;
+            let uow_assert = uow_provider.tx().await?;
             let village_repo = uow_assert.villages();
             let army_repo = uow_assert.armies();
 

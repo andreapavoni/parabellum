@@ -1,4 +1,4 @@
-use parabellum_core::ApplicationError;
+use parabellum_types::errors::ApplicationError;
 use crate::uow::UnitOfWork;
 use parabellum_game::models::village::Village;
 
