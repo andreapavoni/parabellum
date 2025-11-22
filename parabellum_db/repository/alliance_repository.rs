@@ -290,7 +290,7 @@ impl<'a> AllianceRepository for PostgresAllianceRepository<'a> {
 
         // Get the leader player
         let db_player = sqlx::query_as::<_, db_models::Player>(
-            r#"SELECT id, username, tribe, user_id, created_at, alliance_id, alliance_role_name, alliance_role, alliance_join_time, alliance_contributions, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions, alliance_notification_enabled, alliance_settings FROM players WHERE id = $1"#
+            r#"SELECT id, username, tribe, user_id, created_at, alliance_id, alliance_role, alliance_join_time, current_alliance_training_contributions, current_alliance_armor_contributions, current_alliance_cp_contributions, current_alliance_trade_contributions, total_alliance_training_contributions, total_alliance_armor_contributions, total_alliance_cp_contributions, total_alliance_trade_contributions FROM players WHERE id = $1"#
         )
         .bind(leader_id)
         .fetch_one(&mut *tx_guard.as_mut())
