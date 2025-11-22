@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parabellum_types::Result;
 use parabellum_game::models::village::Village;
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 
 use crate::{
     auth::hash_password,
@@ -47,6 +47,17 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
             username: command.username,
             tribe: command.tribe,
             user_id: user.id,
+            alliance_id: None,
+            alliance_role: None,
+            alliance_join_time: None,
+            current_alliance_recruitment_contributions: 0,
+            current_alliance_metallurgy_contributions: 0,
+            current_alliance_philosophy_contributions: 0,
+            current_alliance_commerce_contributions: 0,
+            total_alliance_recruitment_contributions: 0,
+            total_alliance_metallurgy_contributions: 0,
+            total_alliance_philosophy_contributions: 0,
+            total_alliance_commerce_contributions: 0,
         };
         player_repo.save(&player).await?;
 

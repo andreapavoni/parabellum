@@ -18,10 +18,10 @@ pub mod tests {
     };
     use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 
-    use parabellum_game::models::{buildings::Building, village::Village};
+    use parabellum_game::models::{buildings::Building, player::Player, village::Village};
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         tribe::Tribe,
     };
 

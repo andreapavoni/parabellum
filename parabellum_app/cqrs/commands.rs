@@ -2,13 +2,15 @@ use uuid::Uuid;
 
 use parabellum_game::{
     battle::ScoutingTarget,
-    models::{army::TroopSet, map::MapQuadrant},
+    models::{army::TroopSet, map::MapQuadrant, player::Player},
 };
 use parabellum_types::{
+    alliance::{AllianceBonusType, DiplomacyType},
     army::UnitName,
     buildings::BuildingName,
-    common::{Player, ResourceGroup},
+    common::ResourceGroup,
     map::Position,
+    map_flag::MapFlagType,
     tribe::Tribe,
 };
 
@@ -202,3 +204,138 @@ pub struct ReviveHero {
 }
 
 impl Command for ReviveHero {}
+
+// Alliance Commands
+
+#[derive(Debug, Clone)]
+pub struct CreateAlliance {
+    pub player_id: Uuid,
+    pub name: String,
+    pub tag: String,
+}
+
+impl Command for CreateAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct InviteToAlliance {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub target_player_id: Uuid,
+}
+
+impl Command for InviteToAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct AcceptAllianceInvite {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+}
+
+impl Command for AcceptAllianceInvite {}
+
+#[derive(Debug, Clone)]
+pub struct LeaveAlliance {
+    pub player_id: Uuid,
+}
+
+impl Command for LeaveAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct KickFromAlliance {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub target_player_id: Uuid,
+}
+
+impl Command for KickFromAlliance {}
+
+#[derive(Debug, Clone)]
+pub struct SetAllianceLeader {
+    pub player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub new_leader_id: Uuid,
+}
+
+impl Command for SetAllianceLeader {}
+
+#[derive(Debug, Clone)]
+pub struct ContributeToAllianceBonus {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub alliance_id: Uuid,
+    pub bonus_type: AllianceBonusType,
+    pub resources: ResourceGroup,
+}
+
+impl Command for ContributeToAllianceBonus {}
+
+#[derive(Debug, Clone)]
+pub struct CreateAllianceDiplomacy {
+    pub proposer_player_id: Uuid,
+    pub target_alliance_id: Uuid,
+    pub diplomacy_type: DiplomacyType,
+}
+
+impl Command for CreateAllianceDiplomacy {}
+
+#[derive(Debug, Clone)]
+pub struct AcceptAllianceDiplomacy {
+    pub player_id: Uuid,
+    pub diplomacy_id: Uuid,
+}
+
+impl Command for AcceptAllianceDiplomacy {}
+
+#[derive(Debug, Clone)]
+pub struct DeclineAllianceDiplomacy {
+    pub player_id: Uuid,
+    pub diplomacy_id: Uuid,
+}
+
+impl Command for DeclineAllianceDiplomacy {}
+
+// Map Flag Commands
+
+#[derive(Debug, Clone)]
+pub struct CreateCustomFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,  // None for player-owned, Some for alliance-owned
+    pub x: i32,
+    pub y: i32,
+    pub color: i16,
+    pub text: String,
+}
+
+impl Command for CreateCustomFlag {}
+
+#[derive(Debug, Clone)]
+pub struct CreateMultiMark {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,  // None for player-owned, Some for alliance-owned
+    pub target_id: Uuid,  // Target player or alliance ID
+    pub flag_type: MapFlagType,  // PlayerMark or AllianceMark
+    pub color: i16,
+}
+
+impl Command for CreateMultiMark {}
+
+#[derive(Debug, Clone)]
+pub struct UpdateMapFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub flag_id: Uuid,
+    pub color: i16,
+    pub text: Option<String>,
+}
+
+impl Command for UpdateMapFlag {}
+
+#[derive(Debug, Clone)]
+pub struct DeleteMapFlag {
+    pub player_id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub flag_id: Uuid,
+}
+
+impl Command for DeleteMapFlag {}
+

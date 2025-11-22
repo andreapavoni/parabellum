@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(sqlx::Type, Debug, Clone, Copy, Serialize, Deserialize)]
 #[sqlx(type_name = "tribe", rename_all = "PascalCase")]
 pub enum Tribe {
     Roman,
@@ -13,12 +13,45 @@ pub enum Tribe {
     Nature,
 }
 
+impl From<String> for Tribe {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Roman" => Tribe::Roman,
+            "Gaul" => Tribe::Gaul,
+            "Teuton" => Tribe::Teuton,
+            "Natar" => Tribe::Natar,
+            "Nature" => Tribe::Nature,
+            _ => Tribe::Roman, // Default fallback
+        }
+    }
+}
+
+#[derive(sqlx::Type, Debug, Clone, Copy, Serialize, Deserialize)]
+#[sqlx(type_name = "flag_type_enum", rename_all = "PascalCase")]
+pub enum MapFlagType {
+    PlayerMark,
+    AllianceMark,
+    CustomFlag,
+}
+
 #[derive(Debug, FromRow, Clone)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,
     pub tribe: Tribe,
     pub user_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub alliance_id: Option<Uuid>,
+    pub alliance_role: Option<i16>,
+    pub alliance_join_time: Option<DateTime<Utc>>,
+    pub current_alliance_recruitment_contributions: Option<i64>,
+    pub current_alliance_metallurgy_contributions: Option<i64>,
+    pub current_alliance_philosophy_contributions: Option<i64>,
+    pub current_alliance_commerce_contributions: Option<i64>,
+    pub total_alliance_recruitment_contributions: Option<i64>,
+    pub total_alliance_metallurgy_contributions: Option<i64>,
+    pub total_alliance_philosophy_contributions: Option<i64>,
+    pub total_alliance_commerce_contributions: Option<i64>,
 }
 
 #[derive(Debug, FromRow, Clone)]
@@ -26,6 +59,7 @@ pub struct User {
     pub id: Uuid,
     pub email: String,
     pub password_hash: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -125,4 +159,47 @@ pub struct MarketplaceOffer {
     pub seek_resources: serde_json::Value,
     pub merchants_required: i16,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MapFlag {
+    pub id: Uuid,
+    pub alliance_id: Option<Uuid>,
+    pub player_id: Option<Uuid>,
+    pub target_id: Option<Uuid>,
+    pub position: Option<serde_json::Value>,
+    pub flag_type: MapFlagType,
+    pub color: i16,
+    pub text: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceDiplomacy {
+    pub id: Uuid,
+    pub alliance1_id: Uuid,
+    pub alliance2_id: Uuid,
+    #[sqlx(rename = "type")]
+    pub type_: i16,
+    pub accepted: i16,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceLog {
+    pub id: Uuid,
+    pub alliance_id: Uuid,
+    #[sqlx(rename = "type")]
+    pub type_: i16,
+    pub data: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AllianceInvite {
+    pub id: Uuid,
+    pub from_player_id: Uuid,
+    pub alliance_id: Uuid,
+    pub to_player_id: Uuid,
 }

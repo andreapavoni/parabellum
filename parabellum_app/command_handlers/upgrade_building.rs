@@ -79,14 +79,14 @@ mod tests {
 
     use parabellum_types::Result;
     use parabellum_game::{
-        models::village::Village,
+        models::{player::Player, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         tribe::Tribe,
     };
 

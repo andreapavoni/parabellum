@@ -1,4 +1,5 @@
 use crate::{
+    command_handlers::helpers::get_player_alliance_commerce_bonus,
     config::Config,
     cqrs::{CommandHandler, commands::SendResources},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -69,8 +70,16 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         sender_village.deduct_resources(&resources_to_send)?;
 
         let merchant_stats = sender_village.tribe.merchant_stats();
+        let mut merchant_capacity = merchant_stats.capacity;
+
+        // Apply alliance commerce bonus
+        let trade_bonus = get_player_alliance_commerce_bonus(uow, command.player_id).await?;
+        if trade_bonus > 0.0 {
+            merchant_capacity = (merchant_capacity as f64 * (1.0 + trade_bonus)) as u32;
+        }
+
         let merchants_needed =
-            Self::calculate_merchants_needed(merchant_stats.capacity, resources_to_send.total())?;
+            Self::calculate_merchants_needed(merchant_capacity, resources_to_send.total())?;
 
         if sender_village.get_available_merchants() < merchants_needed {
             return Err(ApplicationError::Game(GameError::NotEnoughMerchants));
@@ -112,7 +121,7 @@ mod tests {
 
     use parabellum_types::Result;
     use parabellum_game::{
-        models::{buildings::Building, village::Village},
+        models::{buildings::Building, player::Player, village::Village},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
@@ -120,7 +129,7 @@ mod tests {
     };
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         map::Position,
         tribe::Tribe,
     };

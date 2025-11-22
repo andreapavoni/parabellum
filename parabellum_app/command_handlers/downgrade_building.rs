@@ -96,7 +96,8 @@ mod tests {
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
     use parabellum_types::Result;
-    use parabellum_types::{common::Player, tribe::Tribe};
+    use parabellum_types::tribe::Tribe;
+    use parabellum_game::models::player::Player;
 
     use super::*;
     use crate::{

@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use parabellum_types::common::Player;
+use parabellum_game::models::player::Player;
 use parabellum_types::errors::ApplicationError;
 
 #[async_trait::async_trait]

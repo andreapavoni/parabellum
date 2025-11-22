@@ -17,3 +17,4 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 argon2 = { workspace = true }
 password-hash = { workspace = true }
+chrono = { workspace = true }

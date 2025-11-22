@@ -1,12 +1,11 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
-    use axum::http::HeaderValue;
     use parabellum_web::{AppState, WebRouter};
     use rand::Rng;
-    use reqwest::{Client, header, redirect::Policy};
+    use reqwest::Client;
     use sqlx::{Postgres, Transaction};
-    use std::{collections::HashMap, sync::Arc};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
 
     use parabellum_app::{
@@ -16,22 +15,26 @@ pub mod tests {
         job_registry::AppJobRegistry,
         jobs::worker::JobWorker,
         repository::{
+            AllianceRepository, AllianceInviteRepository, AllianceLogRepository, AllianceDiplomacyRepository,
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, UserRepository, VillageRepository,
+            PlayerRepository, UserRepository, VillageRepository, MapFlagRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
     use parabellum_types::{Result, errors::ApplicationError};
     use parabellum_db::{
-        PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
-        PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresUserRepository, PostgresVillageRepository, bootstrap_world_map,
-        establish_test_connection_pool,
+        PostgresAllianceRepository, PostgresAllianceInviteRepository, PostgresAllianceLogRepository,
+        PostgresAllianceDiplomacyRepository, PostgresArmyRepository, PostgresHeroRepository,
+        PostgresJobRepository, PostgresMapRepository, PostgresMarketplaceRepository,
+        PostgresPlayerRepository, PostgresUserRepository, PostgresVillageRepository,
+        PostgresMapFlagRepository, bootstrap_world_map, establish_test_connection_pool,
     };
     use parabellum_game::{
         models::{
+            alliance::Alliance,
             army::{Army, TroopSet},
             hero::Hero,
+            player::Player,
             village::Village,
         },
         test_utils::{
@@ -40,10 +43,12 @@ pub mod tests {
         },
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::User,
         map::Position,
         tribe::Tribe,
     };
+    use sqlx::types::chrono;
+    use uuid::Uuid;
 
     #[derive(Clone)]
     pub struct TestUnitOfWork<'a> {
@@ -85,6 +90,26 @@ pub mod tests {
 
         fn users(&self) -> Arc<dyn UserRepository + 'p> {
             Arc::new(PostgresUserRepository::new(self.tx.clone()))
+        }
+
+        fn alliances(&self) -> Arc<dyn AllianceRepository + 'p> {
+            Arc::new(PostgresAllianceRepository::new(self.tx.clone()))
+        }
+
+        fn alliance_invites(&self) -> Arc<dyn AllianceInviteRepository + 'p> {
+            Arc::new(PostgresAllianceInviteRepository::new(self.tx.clone()))
+        }
+
+        fn alliance_logs(&self) -> Arc<dyn AllianceLogRepository + 'p> {
+            Arc::new(PostgresAllianceLogRepository::new(self.tx.clone()))
+        }
+
+        fn alliance_diplomacy(&self) -> Arc<dyn AllianceDiplomacyRepository + 'p> {
+            Arc::new(PostgresAllianceDiplomacyRepository::new(self.tx.clone()))
+        }
+
+        fn map_flags(&self) -> Arc<dyn MapFlagRepository + 'p> {
+            Arc::new(PostgresMapFlagRepository::new(self.tx.clone()))
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
@@ -132,7 +157,7 @@ pub mod tests {
     )> {
         let config = Arc::new(Config::from_env());
         let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
+        let master_tx = pool.tx().await.unwrap();
         let master_tx_arc = Arc::new(Mutex::new(master_tx));
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
             Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
@@ -153,64 +178,15 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<Arc<dyn UnitOfWorkProvider>> {
+    pub async fn setup_web_app() -> Result<(Client, Arc<dyn UnitOfWorkProvider>)> {
         let (app_bus, _, uow_provider, config) = setup_app(true).await?;
         let app = Arc::new(app_bus);
         let state = AppState::new(app, &config);
         tokio::spawn(WebRouter::serve(state.clone(), 8088));
 
-        Ok(uow_provider)
-    }
+        let client = Client::new();
 
-    #[allow(dead_code)]
-    pub async fn setup_user_cookie(user: User) -> HeaderValue {
-        let client = setup_http_client(None, None).await;
-        let mut form = HashMap::new();
-        form.insert("email", user.email.as_str());
-        form.insert("password", "parabellum!");
-        let res = client
-            .post("http://localhost:8088/login")
-            .form(&form)
-            .send()
-            .await
-            .unwrap();
-
-        if let Some(cookie) = res.headers().get("set-cookie") {
-            return cookie.clone();
-        } else {
-            println!(
-                "======== setup cookie {:#?} ====",
-                res.text().await.unwrap().to_string()
-            );
-            HeaderValue::from_str("ok=ok").unwrap()
-        }
-
-        //let cookie = res.headers().get("set-cookie");
-        // println!(
-        //     "======== setup client {:#?} ====",
-        //     res.text().await.unwrap().to_string()
-        // );
-
-        // res.headers().get("set-cookie").unwrap().clone()
-        // cookie.map(|c| c.clone()).unwrap();
-        // HeaderValue::from_str("ok=ok").unwrap()
-    }
-
-    #[allow(dead_code)]
-    pub async fn setup_http_client(cookie: Option<HeaderValue>, redirects: Option<u8>) -> Client {
-        let redirect_policy = redirects.map_or(Policy::none(), |n| Policy::limited(n as usize));
-        let client = Client::builder()
-            .redirect(redirect_policy)
-            .cookie_store(true);
-
-        if cookie.is_none() {
-            return client.build().unwrap();
-        }
-
-        let cookie = cookie.unwrap();
-        let mut request_headers = header::HeaderMap::new();
-        request_headers.insert(header::COOKIE, cookie);
-        client.default_headers(request_headers).build().unwrap()
+        Ok((client, uow_provider))
     }
 
     #[allow(dead_code)]
@@ -241,7 +217,7 @@ pub mod tests {
                 Position { x, y }
             });
 
-            let email = format!("parabellum-{}@example.com", rng.gen_range(1..99999));
+            let email = format!("travian-{}@example.com", rng.gen_range(1..99999));
             user_repo
                 .save(email.clone(), hash_password("parabellum!")?)
                 .await?;
@@ -286,6 +262,95 @@ pub mod tests {
 
         uow.commit().await?;
 
-        Ok((player, village, army, hero, user))
+        Ok((player, village, army, hero))
+    }
+
+    /// Sets up an alliance with a specific armor bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_armor_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        armor_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.tx().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        )?;
+        alliance.armor_bonus_level = armor_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
+    }
+
+    /// Assigns a player to an alliance with an old join time to bypass cooldowns
+    #[allow(dead_code)]
+    pub async fn assign_player_to_alliance(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        mut player: Player,
+        alliance_id: Uuid,
+    ) -> Result<Player> {
+        let uow = uow_provider.tx().await?;
+
+        player.alliance_id = Some(alliance_id);
+        // Set join time to 100000 seconds ago to bypass any cooldown checks
+        player.alliance_join_time = Some(chrono::Utc::now() - std::time::Duration::from_secs(100000));
+
+        let player_repo = uow.players();
+        player_repo.save(&player).await?;
+        uow.commit().await?;
+
+        Ok(player)
+    }
+
+    /// Sets up an alliance with a specific training bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_training_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        training_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.tx().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        )?;
+        alliance.training_bonus_level = training_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
+    }
+
+    /// Sets up an alliance with a specific trade bonus level
+    #[allow(dead_code)]
+    pub async fn setup_alliance_with_trade_bonus(
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        leader_id: Uuid,
+        trade_level: i32,
+    ) -> Result<Alliance> {
+        let uow = uow_provider.tx().await?;
+        let mut alliance = Alliance::new(
+            "Test Alliance".to_string(),
+            "TEST".to_string(),
+            60,
+            leader_id,
+        )?;
+        alliance.trade_bonus_level = trade_level;
+
+        let alliance_repo = uow.alliances();
+        alliance_repo.save(&alliance).await?;
+        uow.commit().await?;
+
+        Ok(alliance)
     }
 }

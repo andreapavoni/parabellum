@@ -17,6 +17,11 @@ pub trait UnitOfWork<'a>: Send + Sync {
     fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a>;
     fn heroes(&self) -> Arc<dyn HeroRepository + 'a>;
     fn users(&self) -> Arc<dyn UserRepository + 'a>;
+    fn alliances(&self) -> Arc<dyn AllianceRepository + 'a>;
+    fn alliance_invites(&self) -> Arc<dyn AllianceInviteRepository + 'a>;
+    fn alliance_logs(&self) -> Arc<dyn AllianceLogRepository + 'a>;
+    fn alliance_diplomacy(&self) -> Arc<dyn AllianceDiplomacyRepository + 'a>;
+    fn map_flags(&self) -> Arc<dyn MapFlagRepository + 'a>;
 
     // Transaction control methods
     // Consume self to ensure the UoW is not used after commit/rollback

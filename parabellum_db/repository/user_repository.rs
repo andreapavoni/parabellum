@@ -46,15 +46,10 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
 
     async fn get_by_email(&self, email: &String) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let rec = sqlx::query_as!(
-            db_models::User,
-            r#"
-            SELECT id, email, password_hash
-            FROM users
-            WHERE email = $1
-            "#,
-            email,
+        let rec = sqlx::query_as::<_, db_models::User>(
+            r#"SELECT * FROM users WHERE email = $1"#
         )
+        .bind(email)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.clone())))?;
@@ -64,15 +59,10 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
 
     async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let rec = sqlx::query_as!(
-            db_models::User,
-            r#"
-            SELECT id, email, password_hash
-            FROM users
-            WHERE id = $1
-            "#,
-            id,
+        let rec = sqlx::query_as::<_, db_models::User>(
+            r#"SELECT * FROM users WHERE id = $1"#
         )
+        .bind(id)
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::UserByIdNotFound(id)))?;

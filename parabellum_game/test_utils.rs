@@ -3,10 +3,12 @@ use uuid::Uuid;
 
 use parabellum_types::errors::Result;
 use parabellum_types::{
-    common::{Player, User},
+    common::User,
     map::{Position, ValleyTopology},
     tribe::Tribe,
 };
+
+use crate::models::player::Player;
 
 use crate::models::map::{MapField, MapFieldTopology};
 
@@ -114,6 +116,17 @@ pub fn player_factory(options: PlayerFactoryOptions) -> Player {
         username: options.username.map_or(default_username, |s| s.to_string()),
         tribe: options.tribe.unwrap_or(Tribe::Roman),
         user_id: options.user_id.unwrap_or_else(Uuid::new_v4),
+        alliance_id: None,
+        alliance_role: None,
+        alliance_join_time: None,
+        current_alliance_recruitment_contributions: 0,
+        current_alliance_metallurgy_contributions: 0,
+        current_alliance_philosophy_contributions: 0,
+        current_alliance_commerce_contributions: 0,
+        total_alliance_recruitment_contributions: 0,
+        total_alliance_metallurgy_contributions: 0,
+        total_alliance_philosophy_contributions: 0,
+        total_alliance_commerce_contributions: 0,
     }
 }
 

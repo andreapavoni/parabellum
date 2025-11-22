@@ -4,4 +4,7 @@ tmp/
 logs/*.log.*
 _*.md
 tarpaulin-report.html
+.env
+parabellum_web/assets/*.html
 frontend/*.html
+guides/*.md

@@ -56,7 +56,7 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 mod tests {
     use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
-        models::{buildings::Building, village::Village},
+        models::{buildings::Building, village::Village, player::Player},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
@@ -64,7 +64,7 @@ mod tests {
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::ResourceGroup,
         tribe::Tribe,
     };
 

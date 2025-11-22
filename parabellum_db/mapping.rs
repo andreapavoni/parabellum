@@ -2,7 +2,7 @@ use parabellum_app::jobs::{Job, JobStatus};
 use parabellum_game::models::{self as game_models};
 use parabellum_types::errors::DbError;
 use parabellum_types::{
-    common::{Player, User},
+    common::User,
     tribe::Tribe,
 };
 
@@ -114,13 +114,24 @@ impl From<Tribe> for db_models::Tribe {
     }
 }
 
-impl From<db_models::Player> for Player {
+impl From<db_models::Player> for game_models::player::Player {
     fn from(player: db_models::Player) -> Self {
-        Player {
+        Self {
             id: player.id,
             username: player.username,
             tribe: player.tribe.into(),
             user_id: player.user_id,
+            alliance_id: player.alliance_id,
+            alliance_role: player.alliance_role,
+            alliance_join_time: player.alliance_join_time,
+            current_alliance_recruitment_contributions: player.current_alliance_recruitment_contributions.unwrap_or(0),
+            current_alliance_metallurgy_contributions: player.current_alliance_metallurgy_contributions.unwrap_or(0),
+            current_alliance_philosophy_contributions: player.current_alliance_philosophy_contributions.unwrap_or(0),
+            current_alliance_commerce_contributions: player.current_alliance_commerce_contributions.unwrap_or(0),
+            total_alliance_recruitment_contributions: player.total_alliance_recruitment_contributions.unwrap_or(0),
+            total_alliance_metallurgy_contributions: player.total_alliance_metallurgy_contributions.unwrap_or(0),
+            total_alliance_philosophy_contributions: player.total_alliance_philosophy_contributions.unwrap_or(0),
+            total_alliance_commerce_contributions: player.total_alliance_commerce_contributions.unwrap_or(0),
         }
     }
 }
@@ -234,6 +245,83 @@ impl From<db_models::Hero> for game_models::hero::Hero {
             resources_points: db_hero.resources_points as u16,
             resource_focus: serde_json::from_value(db_hero.resource_focus).unwrap(),
             unassigned_points: db_hero.unassigned_points as u16,
+        }
+    }
+}
+
+
+impl From<parabellum_types::map_flag::MapFlagType> for db_models::MapFlagType {
+    fn from(flag_type: parabellum_types::map_flag::MapFlagType) -> Self {
+        match flag_type {
+            parabellum_types::map_flag::MapFlagType::PlayerMark => db_models::MapFlagType::PlayerMark,
+            parabellum_types::map_flag::MapFlagType::AllianceMark => db_models::MapFlagType::AllianceMark,
+            parabellum_types::map_flag::MapFlagType::CustomFlag => db_models::MapFlagType::CustomFlag,
+        }
+    }
+}
+
+impl From<db_models::MapFlagType> for parabellum_types::map_flag::MapFlagType {
+    fn from(flag_type: db_models::MapFlagType) -> Self {
+        match flag_type {
+            db_models::MapFlagType::PlayerMark => parabellum_types::map_flag::MapFlagType::PlayerMark,
+            db_models::MapFlagType::AllianceMark => parabellum_types::map_flag::MapFlagType::AllianceMark,
+            db_models::MapFlagType::CustomFlag => parabellum_types::map_flag::MapFlagType::CustomFlag,
+        }
+    }
+}
+
+
+impl From<db_models::MapFlag> for game_models::map_flag::MapFlag {
+    fn from(db_flag: db_models::MapFlag) -> Self {
+        let position = db_flag.position.and_then(|v| serde_json::from_value(v).ok());
+
+        Self {
+            id: db_flag.id,
+            alliance_id: db_flag.alliance_id,
+            player_id: db_flag.player_id,
+            target_id: db_flag.target_id,
+            position,
+            flag_type: db_flag.flag_type.into(),
+            color: db_flag.color,
+            text: db_flag.text,
+            created_by: db_flag.created_by,
+            created_at: db_flag.created_at,
+            updated_at: db_flag.updated_at,
+        }
+    }
+}
+
+impl From<db_models::AllianceDiplomacy> for game_models::alliance::AllianceDiplomacy {
+    fn from(db_diplomacy: db_models::AllianceDiplomacy) -> Self {
+        Self {
+            id: db_diplomacy.id,
+            alliance1_id: db_diplomacy.alliance1_id,
+            alliance2_id: db_diplomacy.alliance2_id,
+            type_: db_diplomacy.type_,
+            accepted: db_diplomacy.accepted,
+        }
+    }
+}
+
+impl From<db_models::AllianceLog> for game_models::alliance::AllianceLog {
+    fn from(db_log: db_models::AllianceLog) -> Self {
+        Self {
+            id: db_log.id,
+            alliance_id: db_log.alliance_id,
+            type_: db_log.type_,
+            data: db_log.data,
+            created_at: db_log.created_at,
+        }
+    }
+}
+
+impl From<db_models::AllianceInvite> for game_models::alliance::AllianceInvite {
+    fn from(db_invite: db_models::AllianceInvite) -> Self {
+        Self {
+            id: db_invite.id,
+            from_player_id: db_invite.from_player_id,
+            alliance_id: db_invite.alliance_id,
+            to_player_id: db_invite.to_player_id,
         }
     }
 }

@@ -1,7 +1,7 @@
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{army::UnitName, buildings::BuildingName, tribe::Tribe};
+use crate::{army::UnitName, buildings::BuildingName, map_flag::MapFlagType, tribe::Tribe};
 
 /// Errors for domain logic (game rules).
 #[derive(Debug, Error)]
@@ -109,4 +109,120 @@ pub enum GameError {
 
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),
+
+    // Alliance errors
+    #[error("Player is already in an alliance")]
+    PlayerAlreadyInAlliance,
+
+    #[error("Player is not in an alliance")]
+    PlayerNotInAlliance,
+
+    #[error("No invitation found for this player and alliance")]
+    InvitationNotFound,
+
+    #[error("Player already has a pending invitation from this alliance")]
+    InvitationAlreadyExists,
+
+    #[error("Alliance is full")]
+    AllianceFull,
+
+    #[error("Alliance tag already exists")]
+    AllianceTagAlreadyExists,
+
+    #[error("Alliance name already exists")]
+    AllianceNameAlreadyExists,
+
+    #[error("Invalid alliance name: {0}")]
+    InvalidAllianceName(String),
+
+    #[error("Invalid alliance tag: {0}")]
+    InvalidAllianceTag(String),
+
+    #[error("Player does not have permission to invite")]
+    NoInvitePermission,
+
+    #[error("Player does not have permission to kick")]
+    NoKickPermission,
+
+    #[error("Player does not have permission to manage diplomacy")]
+    NoDiplomacyPermission,
+
+    #[error("Diplomacy relationship already exists between these alliances")]
+    DiplomacyAlreadyExists,
+
+    #[error("Alliance not found")]
+    AllianceNotFound,
+
+    #[error("Diplomacy not found")]
+    DiplomacyNotFound,
+
+    #[error("Diplomacy has already been processed")]
+    DiplomacyAlreadyProcessed,
+
+    #[error("Cannot kick the alliance leader")]
+    CannotKickLeader,
+
+    #[error("Player is not the alliance leader")]
+    NotAllianceLeader,
+
+    #[error("Player is already the alliance leader")]
+    PlayerAlreadyLeader,
+
+    #[error("Player is not in an alliance")]
+    NotInAlliance,
+
+    #[error("Village not owned by player")]
+    VillageNotOwnedByPlayer,
+
+    #[error("Invalid alliance bonus type: {0}")]
+    InvalidAllianceBonusType(i16),
+
+    #[error("Alliance donation limit exceeded")]
+    AllianceDonationLimitExceeded,
+
+    #[error("New player cooldown active - cannot contribute yet")]
+    AllianceNewPlayerCooldown,
+
+    // Map flag errors
+    #[error("Invalid map flag type: {0:?}")]
+    InvalidMapFlagType(MapFlagType),
+
+    #[error("Invalid map flag color: {color} (must be between {min} and {max})")]
+    InvalidMapFlagColor { color: i16, min: i16, max: i16 },
+
+    #[error("Map flag missing target ID for multi-mark")]
+    MapFlagMissingTarget,
+
+    #[error("Map flag has invalid coordinates for multi-mark")]
+    MapFlagInvalidCoordinates,
+
+    #[error("Map flag missing coordinates for custom flag")]
+    MapFlagMissingCoordinates,
+
+    #[error("Map flag has invalid target ID for custom flag")]
+    MapFlagInvalidTarget,
+
+    #[error("Map flag ownership invalid - must have either alliance_id or player_id")]
+    MapFlagInvalidOwnership,
+
+    #[error("Map flag limit exceeded")]
+    MapFlagLimitExceeded,
+
+    #[error("No permission to manage alliance map flags")]
+    NoManageMarksPermission,
+
+    #[error("Map flag position ({x}, {y}) is out of world bounds (±{world_size})")]
+    MapFlagPositionOutOfBounds { x: i32, y: i32, world_size: i16 },
+
+    #[error("Map flag missing required text for custom flag")]
+    MapFlagMissingText,
+
+    #[error("Map flag text too long (max 50 characters, got {length})")]
+    MapFlagTextTooLong { length: usize },
+
+    #[error("Map flag is not owned by player")]
+    MapFlagNotOwnedByPlayer,
+
+    #[error("Map flag is not owned by alliance")]
+    MapFlagNotOwnedByAlliance,
 }
