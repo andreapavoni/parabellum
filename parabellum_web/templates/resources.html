@@ -39,19 +39,7 @@
             <div class="hex crop" style="top: 208px; left: 180px;"><span class="level">2</span></div>
 
         </div>
-
-
-        <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
-            <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Costruzioni in corso:</div>
-            <div class="flex justify-between w-full">
-                <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Warehouse (Lv 15)</span>
-                <span>0:45:12</span>
-            </div>
-            <div class="flex justify-between w-full">
-                <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Granaio (Lv 12)</span>
-                <span>1:20:05</span>
-            </div>
-        </div>
+        {% include "partials/_building_queue.html" %}
     </div>
 
     <div class="w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
@@ -61,19 +49,19 @@
                 <h3 class="font-bold mb-3 text-sm">Production:</h3>
                 <div class="text-xs space-y-2">
                     <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🌲 Legno:</span>
+                        <span>🌲 Lumber:</span>
                         <span class="font-bold">20</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🧱 Argilla:</span>
+                        <span>🧱 Clay:</span>
                         <span class="font-bold">24</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>⛏️ Ferro:</span>
+                        <span>⛏️ Iron:</span>
                         <span class="font-bold">20</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🌾 Grano:</span>
+                        <span>🌾 Crop:</span>
                         <span class="font-bold">2</span>
                     </div>
                 </div>

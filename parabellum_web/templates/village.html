@@ -57,23 +57,13 @@
 
           </div>
 
-          <!-- Coda Costruzione -->
-          <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
-              <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Costruzioni in corso:</div>
-              <div class="flex justify-between w-full">
-                  <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Warehouse (Lv 15)</span>
-                  <span>0:45:12</span>
-              </div>
-              <div class="flex justify-between w-full">
-                  <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> Granaio (Lv 12)</span>
-                  <span>1:20:05</span>
-              </div>
-          </div>
+
+          {% include "partials/_building_queue.html" %}
       </div>
 
       <!-- SIDEBAR LISTA VILLAGGI -->
       <div class="w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
-          <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Villaggi:</h3>
+          <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Villages:</h3>
           <ul class="text-xs space-y-2 list-none pl-0">
               <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Cannae</span>
@@ -97,11 +87,11 @@
               </li>
           </ul>
 
-          <div class="mt-8 text-xs space-y-2 text-gray-600">
+          <!--<div class="mt-8 text-xs space-y-2 text-gray-600">
               <div class="hover:underline cursor-pointer text-blue-600">Mappa</div>
               <div class="hover:underline cursor-pointer text-blue-600">Statistiche</div>
               <div class="hover:underline cursor-pointer text-blue-600">Report</div>
-          </div>
+          </div>-->
       </div>
 
   </div>
