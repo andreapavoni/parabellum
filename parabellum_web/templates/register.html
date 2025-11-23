@@ -90,16 +90,11 @@
     // Semplice script per cambiare la descrizione della tribù
     function updateTribeInfo() {
         const select = document.getElementById('tribe-select');
+        const option = select.options[select.selectedIndex];
         const desc = document.getElementById('tribe-desc');
-        const val = select.value;
 
-        if (val === 'Roman') {
-            desc.innerText = "Balanced, excellent builders. Expensive military units, but very powerful.";
-        } else if (val === 'Gaul') {
-            desc.innerText = "Excellent defense. Fast traders and unique traps.";
-        } else if (val === 'Teuton') {
-            desc.innerText = "The most offensive tribe. Cheap units but slow and weak in defense.";
-        }
+        desc.innerText = option.getAttribute("data-description");
+
     }
 </script>
 {% endblock %}
