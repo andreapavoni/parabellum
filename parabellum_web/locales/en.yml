@@ -9,6 +9,12 @@ game:
   hour: Hour
   village:
     title: Village Center
+    capital: "%{name} (Capital)"
+    villages: Villages
+    map: Map
+    stats: Statistics
+    report: Report
+    main_building: Main
     whoami: "%{name}'s Village"
     building_queue: Building queue
     buildings:
