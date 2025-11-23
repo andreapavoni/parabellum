@@ -1,13 +1,12 @@
 {% extends "layouts/base.html" %}
-{% block title %}Home – PARABELLUM{% endblock %}
+{% block title %}{{t!("home.title")}} – PARABELLUM{% endblock %}
 {% block body %}
 <div class="grid md:grid-cols-2 gap-8 items-start">
   <div class="space-y-6">
     <div class="content-box p-6 bg-white">
-      <h1 class="text-2xl font-bold text-gray-700 mb-4">Welcome to Parabellum</h1>
+      <h1 class="text-2xl font-bold text-gray-700 mb-4">{{t!("home.welcome")}}</h1>
       <p class="text-sm leading-relaxed text-gray-600 mb-4">
-        Develop your village, train your powerful army end fight together with your alliance to rule the server.
-        Choose between Romans, Gauls or Teutons and write your history in this ancient world.
+        {{t!("home.description")}}
       </p>
       <div class="mt-6 text-center">
         <a href="travian_register.html" class="btn-green px-8 py-3 rounded text-lg inline-block shadow-md transform hover:-translate-y-1 transition">

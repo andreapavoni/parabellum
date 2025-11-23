@@ -1,0 +1,5 @@
+_version: 1
+
+# Just to check changing user locale realtime
+home:
+  welcome: Willkommen bei Parabellum
