@@ -1,5 +1,89 @@
 _version: 1
 
-register:
+# TODO: Traslated with ChatGPT (requires human verification)
+user:
+  username: Nome utente
+  email: Email
+  password: Password
+  confirm_password: Conferma password
+game:
+  hour: Ora
+  village:
+    title: Centro del Villaggio
+    capital: "%{name} (Capitale)"
+    villages: Villaggi
+    map: Mappa
+    stats: Statistiche
+    report: Rapporto
+    main_building: Edificio Principale
+    whoami: "Villaggio di %{name}"
+    construction_in_progress: Costruzione in corso
+    buildings:
+      warehouse: Magazzino
+      granary: Granaio
+    resources:
+      title: Produzione
+      lumber: Legname
+      clay: Argilla
+      iron: Ferro
+      grain: Raccolto
+    troops:
+      title: Truppe
+      no_units: Nessuna unità nel villaggio
+  starting_position:
+    title: Posizione iniziale
+    north_east: Nord-Est %{key}
+    north_west: Nord-Ovest %{key}
+    south_east: Sud-Est %{key}
+    south_west: Sud-Ovest %{key}
+  tribes:
+    roman:
+      title: Romani (Per principianti)
+      description: >
+        Bilanciati, eccellenti costruttori. Unità militari costose ma molto potenti.
+    gaul:
+      title: Galli (Veloci e difensivi)
+      description: >
+        Eccellente difesa. Mercanti veloci e trappole uniche.
+    teuton:
+      title: Teutoni (Incursori aggressivi)
+      description: >
+        La tribù più offensiva. Unità economiche ma lente e deboli in difesa.
+home:
+  title: Home
+  welcome: Benvenuto su Parabellum
+  description: >
+    Sviluppa il tuo villaggio, addestra il tuo potente esercito e combatti insieme alla tua alleanza per dominare il server. Scegli tra Romani, Galli o Teutoni e scrivi la tua storia in questo mondo antico.
+  play_for_free: GIOCA GRATIS!
+  no_downloads: Nessun download.
+  latest_news: Ultime Notizie
+  new_speed_server3x: Nuovo Server Veloce 3x
+  today: Oggi
+  living_world: Un mondo vivo.
+  many_players: Migliaia di giocatori reali.
+  players: Giocatori
+  active_today: Attivi Oggi
+  server_starting: Server in partenza
+nav:
+  logout: Logout
+  login: Login
+  register: Registrati
+footer:
+  not_affiliated: Non affiliato a %{name}
+login:
+  title: Login
+  register_question: Hai bisogno di un account?
+  register_button: Registrati ora
   form:
-    choose_tribe: Scegli la tua Tribù
+    title: Accedi al tuo Villaggio
+    submit: ENTRA
+register:
+  title: Registrazione
+  login_question: Hai già un villaggio?
+  login_button: Accedi qui
+  form:
+    title: Costruisci il tuo Impero
+    password_placeholder: Imposta una password sicura...
+    choose_tribe: Scegli una Tribù
+    accept_terms: Accetto %{item1} e %{item2}
+    submit: REGISTRATI
