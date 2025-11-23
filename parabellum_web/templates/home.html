@@ -10,17 +10,17 @@
       </p>
       <div class="mt-6 text-center">
         <a href="travian_register.html" class="btn-green px-8 py-3 rounded text-lg inline-block shadow-md transform hover:-translate-y-1 transition">
-          PLAY FOR FREE!
+          {{t!("home.play_for_free")}}
         </a>
-        <p class="text-xs text-gray-400 mt-2">No downloads.</p>
+        <p class="text-xs text-gray-400 mt-2">{{t!("home.no_downloads")}}</p>
       </div>
     </div>
     <div class="content-box p-4">
-      <h3 class="font-bold text-sm text-gray-500 border-b border-gray-200 pb-2 mb-3">Latest News</h3>
+      <h3 class="font-bold text-sm text-gray-500 border-b border-gray-200 pb-2 mb-3">{{t!("home.latest_news")}}</h3>
       <div class="space-y-3 text-xs">
         <div class="flex justify-between">
-          <span class="font-bold text-green-700">New Speed Server 3x</span>
-          <span class="text-gray-400">Today</span>
+          <span class="font-bold text-green-700">{{t!("home.new_speed_server3x")}}</span>
+          <span class="text-gray-400">{{t!("home.today")}}</span>
         </div>
       </div>
     </div>
@@ -32,8 +32,8 @@
     </div>
     <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6">
       <div class="text-white">
-        <h3 class="font-bold text-xl text-shadow">A living world.</h3>
-        <p class="text-sm text-gray-200">Thousands of real players..</p>
+        <h3 class="font-bold text-xl text-shadow">{{t!("home.living_world")}}</h3>
+        <p class="text-sm text-gray-200">{{t!("home.many_players")}}</p>
       </div>
     </div>
   </div>
@@ -41,15 +41,15 @@
 <div class="mt-8 grid grid-cols-3 gap-4 text-center text-sm text-gray-600">
   <div class="content-box p-3">
     <div class="font-bold text-lg text-green-600">12,405</div>
-    <div class="text-xs uppercase tracking-wide text-gray-400">Players</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">{{t!("home.players")}}</div>
   </div>
   <div class="content-box p-3">
     <div class="font-bold text-lg text-orange-600">4,200</div>
-    <div class="text-xs uppercase tracking-wide text-gray-400">Active Today</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">{{t!("home.active_today")}}</div>
   </div>
   <div class="content-box p-3">
     <div class="font-bold text-lg text-blue-600">Dec 25th</div>
-    <div class="text-xs uppercase tracking-wide text-gray-400">Server starting</div>
+    <div class="text-xs uppercase tracking-wide text-gray-400">{{t!("home.server_starting")}}</div>
   </div>
 </div>
 {% endblock %}

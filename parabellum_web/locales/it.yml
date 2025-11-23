@@ -1,0 +1,5 @@
+_version: 1
+
+register:
+  form:
+    choose_tribe: Scegli la tua Tribù
