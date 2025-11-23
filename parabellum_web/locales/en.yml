@@ -6,6 +6,23 @@ user:
   password: Password
   confirm_password: Confirm Password
 game:
+  hour: Hour
+  village:
+    title: Village Center
+    whoami: "%{name}'s Village"
+    building_queue: Building queue
+    buildings:
+      warehouse: Warehouse
+      granary: Granary
+    resources:
+      title: Production
+      lumber: Lumber
+      clay: Clay
+      iron: Iron
+      crop: Crop
+    troops:
+      title: Troops
+      no_units: No units in the village
   starting_position:
     title: Starting position
     north_east: North-East %{key}
