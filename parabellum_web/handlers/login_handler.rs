@@ -8,13 +8,14 @@ use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
 use parabellum_types::errors::{AppError, ApplicationError, DbError};
 
-use crate::{handlers::render_template, http::AppState, templates::LoginTemplate};
+use crate::{handlers::{render_template, generate_csrf_token, validate_csrf_token}, http::AppState, templates::LoginTemplate};
 
 /// Form for login.
 #[derive(serde::Deserialize)]
 pub struct LoginForm {
     pub email: String,
     pub password: String,
+    pub csrf_token: String,
 }
 
 /// GET /login – Show the login form.
@@ -22,7 +23,12 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/village").into_response();
     }
-    render_template(LoginTemplate::default(), None).into_response()
+    let (updated_jar, csrf_token) = generate_csrf_token(jar);
+    let template = LoginTemplate {
+        csrf_token,
+        ..Default::default()
+    };
+    (updated_jar, render_template(template, None)).into_response()
 }
 
 /// POST /login – Handle login form submission.
@@ -33,6 +39,18 @@ pub async fn login(
 ) -> impl IntoResponse {
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/village").into_response();
+    }
+
+    // Valida CSRF token
+    if !validate_csrf_token(jar.clone(), &form.csrf_token) {
+        let (updated_jar, csrf_token) = generate_csrf_token(jar);
+        let template = LoginTemplate {
+            email_value: form.email.clone(),
+            error: Some("Invalid CSRF token. Please try again.".to_string()),
+            csrf_token,
+            ..Default::default()
+        };
+        return (updated_jar, render_template(template, Some(StatusCode::FORBIDDEN))).into_response();
     }
 
     let query = AuthenticateUser {
@@ -69,10 +87,12 @@ pub async fn login(
         }
     };
 
+    let (updated_jar, csrf_token) = generate_csrf_token(jar);
     let template = LoginTemplate {
         email_value: form.email.clone(),
         error: err_msg,
+        csrf_token,
         ..Default::default()
     };
-    render_template(template, status).into_response()
+    (updated_jar, render_template(template, status)).into_response()
 }

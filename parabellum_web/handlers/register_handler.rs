@@ -14,7 +14,7 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::{handlers::render_template, http::AppState, templates::RegisterTemplate};
+use crate::{handlers::{render_template, generate_csrf_token, validate_csrf_token}, http::AppState, templates::RegisterTemplate};
 
 // Form for registration.
 #[derive(Clone, serde::Deserialize)]
@@ -24,6 +24,7 @@ pub struct RegisterForm {
     pub password: String,
     pub tribe: String,
     pub quadrant: String,
+    pub csrf_token: String,
 }
 
 /// GET /register – Show the signup form.
@@ -34,6 +35,7 @@ pub async fn register_page(
     if let Some(_) = jar.get("user_email") {
         return Redirect::to("/").into_response();
     }
+    let (updated_jar, csrf_token) = generate_csrf_token(jar);
     let template = RegisterTemplate {
         current_user: false,
         username_value: "".to_string(),
@@ -41,8 +43,9 @@ pub async fn register_page(
         selected_tribe: "Roman".to_string(), // default selection
         selected_quadrant: "NorthEast".to_string(),
         error: None,
+        csrf_token,
     };
-    render_template(template, None).into_response()
+    (updated_jar, render_template(template, None)).into_response()
 }
 
 /// POST /register – Handle signup form submission.
@@ -54,6 +57,22 @@ pub async fn register(
     if let Some(_) = jar.get("user_email") {
         return Redirect::to("/").into_response();
     }
+
+    // Valida CSRF token
+    if !validate_csrf_token(jar.clone(), &form.csrf_token) {
+        let (updated_jar, csrf_token) = generate_csrf_token(jar);
+        let template = RegisterTemplate {
+            current_user: false,
+            username_value: form.username.clone(),
+            email_value: form.email.clone(),
+            selected_tribe: form.tribe.clone(),
+            selected_quadrant: form.quadrant.clone(),
+            error: Some("Invalid CSRF token. Please try again.".to_string()),
+            csrf_token,
+        };
+        return (updated_jar, render_template(template, Some(StatusCode::FORBIDDEN))).into_response();
+    }
+
     let tribe_enum = match form.tribe.as_str() {
         "Roman" => Tribe::Roman,
         "Gaul" => Tribe::Gaul,
@@ -88,6 +107,7 @@ pub async fn register(
         }
         Err(ApplicationError::App(AppError::PasswordError)) => {
             // Password hashing error or invalid password (unlikely scenario)
+            let (updated_jar, csrf_token) = generate_csrf_token(jar);
             let template = RegisterTemplate {
                 current_user: false,
                 username_value: form.username.clone(),
@@ -95,8 +115,9 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some("Invalid password or internal error.".to_string()),
+                csrf_token,
             };
-            return render_template(template, Some(StatusCode::INTERNAL_SERVER_ERROR))
+            return (updated_jar, render_template(template, Some(StatusCode::INTERNAL_SERVER_ERROR)))
                 .into_response();
         }
         Err(ApplicationError::Db(db_err)) => {
@@ -112,6 +133,7 @@ pub async fn register(
                 "Registration failed due to an internal error."
             };
             tracing::error!("Registration DB error: {}", db_err);
+            let (updated_jar, csrf_token) = generate_csrf_token(jar);
             let template = RegisterTemplate {
                 current_user: false,
                 username_value: form.username.clone(),
@@ -119,8 +141,9 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some(user_message.to_string()),
+                csrf_token,
             };
-            return render_template(template, Some(StatusCode::UNPROCESSABLE_ENTITY))
+            return (updated_jar, render_template(template, Some(StatusCode::UNPROCESSABLE_ENTITY)))
                 .into_response();
         }
         Err(e) => {

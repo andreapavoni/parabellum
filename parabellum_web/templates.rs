@@ -14,6 +14,7 @@ pub struct LoginTemplate {
     pub current_user: bool,
     pub email_value: String,   // to pre-fill email input
     pub error: Option<String>, // login error message, if any
+    pub csrf_token: String,    // CSRF token for form protection
 }
 
 /// Template for the registration page
@@ -26,6 +27,7 @@ pub struct RegisterTemplate {
     pub selected_tribe: String,    // to retain selected tribe option
     pub selected_quadrant: String, // to retain selected quadrant option
     pub error: Option<String>,     // signup error message, if any
+    pub csrf_token: String,        // CSRF token for form protection
 }
 
 /// Template for the village center page

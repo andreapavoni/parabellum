@@ -8,6 +8,7 @@
           <p class="mb-3 text-center text-red-600 error">{{ error.as_deref().unwrap() }}</p>
         {% endif %}
         <form action="/login" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("user.email")}}</label>
             <input type="email" class="input-field" name="email" value="{{ email_value }}" required>
 
