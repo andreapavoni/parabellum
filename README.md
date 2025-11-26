@@ -1,6 +1,6 @@
 # Parabellum
 
-![Rust](https://img.shields.io/badge/made%20with-Rust-eb4524.svg)
+![Rust](https://img.shields.io/badge/min%20rust-1.85-green.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 Parabellum is an attempt to build a (yet another!) modern, fast, and open-source MMORPG inspired by the classic game Travian 3.x.
