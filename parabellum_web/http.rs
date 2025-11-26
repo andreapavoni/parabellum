@@ -37,6 +37,10 @@ pub struct WebRouter {}
 
 impl WebRouter {
     pub async fn serve(state: AppState, port: u16) -> Result<(), ApplicationError> {
+        // Set default locale. We initialize with user locale later
+        rust_i18n::set_locale("en-EN");
+        // rust_i18n::set_locale("it-IT");
+
         let router = Router::new()
             .nest_service("/assets", ServeDir::new("frontend/assets"))
             .route("/", get(home))

@@ -1,10 +1,10 @@
 {% extends "layouts/base.html" %}
-{% block title %}Register – PARABELLUM{% endblock %}
+{% block title %}{{t!("register.title")}} – PARABELLUM{% endblock %}
 {% block body %}
 
 <div class="flex flex-col items-center w-full px-4">
     <div class="register-box">
-        <h2 class="text-xl font-bold text-gray-700 mb-6 text-center">Build Your Empire</h2>
+        <h2 class="text-xl font-bold text-gray-700 mb-6 text-center">{{t!("register.form.title")}}</h2>
         {% if error.is_some() %}
           <p class="mb-3 text-center text-red-600 error">{{ error.as_deref().unwrap() }}</p>
         {% endif %}
@@ -12,51 +12,76 @@
         <form action="/register" method="post">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Username</label>
+                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("user.username")}}</label>
                     <input type="text" name="username" class="input-field" value="{{ username_value }}" required>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Email</label>
+                    <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("user.email")}}</label>
                     <input type="email" class="input-field" name="email" value="{{ email_value }}" required>
                 </div>
             </div>
 
-            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Password</label>
-            <input type="password" name="password" class="input-field" placeholder="Set a secure password..." required>
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("user.password")}}</label>
+            <input type="password" name="password" class="input-field" placeholder="{{t!("register.form.password_placeholder")}}" required>
 
             <hr class="my-4 border-gray-200">
 
-            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Scegli la tua Tribù</label>
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("register.form.choose_tribe")}}</label>
             <select id="tribe-select" name="tribe" class="select-field" onchange="updateTribeInfo()">
-                <option value="Roman" {% if selected_tribe == "Roman" %}selected{% endif %}>Romans (For newcomers)</option>
-                <option value="Gaul" {% if selected_tribe == "Gaul" %}selected{% endif %}>Gauls (Fast and defensive)</option>
-                <option value="Teuton" {% if selected_tribe == "Teuton" %}selected{% endif %}>Teutons (Aggressive raiders)</option>
+                <option value="Roman"
+                    data-description="{{t!("game.tribes.roman.description")}}"
+                    {% if selected_tribe == "Roman" %}selected{% endif %}>
+                        {{t!("game.tribes.roman.title")}}
+                </option>
+                <option value="Gaul"
+                    data-description="{{t!("game.tribes.gaul.description")}}"
+                    {% if selected_tribe == "Gaul" %}selected{% endif %}>
+                        {{t!("game.tribes.gaul.title")}}
+                </option>
+                <option value="Teuton"
+                    data-description="{{t!("game.tribes.teuton.description")}}"
+                    {% if selected_tribe == "Teuton" %}selected{% endif %}>
+                        {{t!("game.tribes.teuton.title")}}
+                </option>
             </select>
             <div id="tribe-desc" class="tribe-info">
-                Balanced, excellent builders. Expensive military units, but very powerful.
+                {{t!("game.tribes.roman.description")}}
             </div>
 
-            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">Starting position</label>
+            <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("game.starting_position.title")}}</label>
             <select class="select-field" name="quadrant">
-              <option value="NorthEast" {% if selected_quadrant == "NorthEast" %}selected{% endif %}>North-East (+/+)</option>
-              <option value="NorthWest" {% if selected_quadrant == "NorthWest" %}selected{% endif %}>North-West (-/+)</option>
-              <option value="SouthEast" {% if selected_quadrant == "SouthEast" %}selected{% endif %}>South-East (+/-)</option>
-              <option value="SouthWest" {% if selected_quadrant == "SouthWest" %}selected{% endif %}>South-West (-/-)</option>
+              <option value="NorthEast"
+                  {% if selected_quadrant == "NorthEast" %}selected{% endif %}>
+                      {{t!("game.starting_position.north_east", key="(+/+)")}}
+              </option>
+              <option value="NorthWest"
+                  {% if selected_quadrant == "NorthWest" %}selected{% endif %}>
+                      {{t!("game.starting_position.north_west", key="(-/+)")}}
+              </option>
+              <option value="SouthEast"
+                  {% if selected_quadrant == "SouthEast" %}selected{% endif %}>
+                      {{t!("game.starting_position.south_east", key="(+/-)")}}
+              </option>
+              <option value="SouthWest"
+                  {% if selected_quadrant == "SouthWest" %}selected{% endif %}>
+                      {{t!("game.starting_position.south_west", key="(-/-)")}}
+              </option>
             </select>
 
             <div class="flex items-start mb-6">
                 <input type="checkbox" class="mt-1 mr-2 accent-green-600" required>
                 <span class="text-xs text-gray-600">
+                    <!-- TODO: Create helper function to generate such complex text-->
                     I accept <a href="#" class="text-green-600 hover:underline">Terms Of Service</a> and <a href="#" class="text-green-600 hover:underline">Privacy Policy</a>.
                 </span>
             </div>
 
-            <button type="submit" class="btn-green">REGISTER</button>
+            <button type="submit" class="btn-green">{{t!("register.form.submit")}}</button>
         </form>
 
         <div class="mt-6 text-center border-t border-gray-100 pt-4">
-            <p class="text-sm text-gray-600">Already owning a village?</p>
-            <a href="/login" class="text-green-700 font-bold hover:underline text-sm">Access here</a>
+            <p class="text-sm text-gray-600">{{t!("register.login_question")}}</p>
+            <a href="/login" class="text-green-700 font-bold hover:underline text-sm">{{t!("register.login_button")}}</a>
         </div>
     </div>
 </div>
@@ -65,16 +90,11 @@
     // Semplice script per cambiare la descrizione della tribù
     function updateTribeInfo() {
         const select = document.getElementById('tribe-select');
+        const option = select.options[select.selectedIndex];
         const desc = document.getElementById('tribe-desc');
-        const val = select.value;
 
-        if (val === 'Roman') {
-            desc.innerText = "Balanced, excellent builders. Expensive military units, but very powerful.";
-        } else if (val === 'Gaul') {
-            desc.innerText = "Excellent defense. Fast traders and unique traps.";
-        } else if (val === 'Teuton') {
-            desc.innerText = "The most offensive tribe. Cheap units but slow and weak in defense.";
-        }
+        desc.innerText = option.getAttribute("data-description");
+
     }
 </script>
 {% endblock %}

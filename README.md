@@ -108,6 +108,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 
 ### In Progress
+- [ ] **i18n**: add translations in several languages.
 - [ ] **API / UI**: Getting the minimal viable views to navigate the game
   - [x] Layout, basic navbar
   - [x] Login, Register
@@ -131,7 +132,6 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
-- [ ] **i18n**: add translations in several languages.
 
 ---
 

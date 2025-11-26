@@ -4,6 +4,9 @@ default: run
 run:
     cargo run --release
 
+debug:
+    cargo run
+
 # db
 # app
 start target:

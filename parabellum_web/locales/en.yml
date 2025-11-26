@@ -1,0 +1,88 @@
+_version: 1
+
+user:
+  username: Username
+  email: Email
+  password: Password
+  confirm_password: Confirm Password
+game:
+  hour: Hour
+  village:
+    title: Village Center
+    capital: "%{name} (Capital)"
+    villages: Villages
+    map: Map
+    stats: Statistics
+    report: Report
+    main_building: Main
+    whoami: "%{name}'s Village"
+    building_queue: Building queue
+    buildings:
+      warehouse: Warehouse
+      granary: Granary
+    resources:
+      title: Production
+      lumber: Lumber
+      clay: Clay
+      iron: Iron
+      crop: Crop
+    troops:
+      title: Troops
+      no_units: No units in the village
+  starting_position:
+    title: Starting position
+    north_east: North-East %{key}
+    north_west: North-West %{key}
+    south_east: South-East %{key}
+    south_west: South-West %{key}
+  tribes:
+    roman:
+      title: Romans (For newcomers)
+      description: >
+        Balanced, excellent builders. Expensive military units, but very powerful.
+    gaul:
+      title: Gauls (Fast and defensive)
+      description: >
+        Excellent defense. Fast traders and unique traps.
+    teuton:
+      title: Teutons (Aggressive raiders)
+      description: >
+        The most offensive tribe. Cheap units but slow and weak in defense.
+home:
+  title: Home
+  welcome: Welcome to Parabellum
+  description: >
+    Develop your village, train your powerful army end fight together with your alliance to rule the server. Choose between Romans, Gauls or Teutons and write your history in this ancient world.
+  play_for_free: PLAY FOR FREE!
+  no_downloads: No downloads.
+  latest_news: Latest News
+  new_speed_server3x: New Speed Server 3x
+  today: Today
+  living_world: A living world.
+  many_players: Thousands of real players..
+  players: Players
+  active_today: Active Today
+  server_starting: Server starting
+nav:
+  logout: Logout
+  login: Login
+  register: Register
+footer:
+  not_affiliated: Not affiliated to %{name}
+login:
+  title: Login
+  register_question: Need an account?
+  register_button: Register now
+  form:
+    title: Access Your Village
+    submit: ENTER
+register:
+  title: Register
+  login_question: Already owning a village?
+  login_button: Access here
+  form:
+    title: Build Your Empire
+    password_placeholder: Set a secure password...
+    choose_tribe: Choose Tribe
+    accept_terms: I accept %{item1} and %{item2}
+    submit: REGISTER

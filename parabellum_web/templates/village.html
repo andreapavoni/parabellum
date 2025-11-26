@@ -1,18 +1,18 @@
 {% extends "layouts/base.html" %}
-{% block title %}Village Center – PARABELLUM{% endblock %}
+{% block title %}{{t!("game.village.title")}} – PARABELLUM{% endblock %}
 {% block body %}
   <!-- CORPO PRINCIPALE -->
   <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
 
       <!-- SEZIONE CENTRO VILLAGGIO -->
       <div class="flex flex-col items-center w-full md:w-auto">
-          <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">Karthago (Capital)</h1>
+          <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">{{t!("game.village.capital", name = "Karthago")}}</h1>
 
           <div class="village-container-responsive relative">
               <div class="wall-ring" title="Mura cittadine"></div>
 
               <!-- CENTRO -->
-              <div class="building-slot main-building" style="top: 50%; left: 50%;" title="Main Building">Main</div>
+              <div class="building-slot main-building" style="top: 50%; left: 50%;" title="Main Building">{{t!("game.village.main_building")}}</div>
 
               <!-- PUNTO DI RADUNO -->
               <div class="building-slot rally-point" style="top: 55%; left: 67%;" title="Rally Point"></div>
@@ -63,7 +63,7 @@
 
       <!-- SIDEBAR LISTA VILLAGGI -->
       <div class="w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
-          <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Villages:</h3>
+          <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">{{t!("game.village.villages")}}:</h3>
           <ul class="text-xs space-y-2 list-none pl-0">
               <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
                   <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Cannae</span>
@@ -88,9 +88,9 @@
           </ul>
 
           <!--<div class="mt-8 text-xs space-y-2 text-gray-600">
-              <div class="hover:underline cursor-pointer text-blue-600">Mappa</div>
-              <div class="hover:underline cursor-pointer text-blue-600">Statistiche</div>
-              <div class="hover:underline cursor-pointer text-blue-600">Report</div>
+              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.map")}}</div>
+              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.stats")}}</div>
+              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.report")}}</div>
           </div>-->
       </div>
 
