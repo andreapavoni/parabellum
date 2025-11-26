@@ -10,6 +10,7 @@
         {% endif %}
 
         <form action="/register" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1 uppercase">{{t!("user.username")}}</label>

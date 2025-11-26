@@ -5,16 +5,20 @@ use axum::{
 };
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 
+use crate::{
+    handlers::{generate_csrf, render_template, validate_csrf},
+    http::AppState,
+    templates::LoginTemplate,
+};
 use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
 use parabellum_types::errors::{AppError, ApplicationError, DbError};
-
-use crate::{handlers::render_template, http::AppState, templates::LoginTemplate};
 
 /// Form for login.
 #[derive(serde::Deserialize)]
 pub struct LoginForm {
     pub email: String,
     pub password: String,
+    pub csrf_token: String,
 }
 
 /// GET /login – Show the login form.
@@ -22,7 +26,13 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/village").into_response();
     }
-    render_template(LoginTemplate::default(), None).into_response()
+    let (jar, csrf_token) = generate_csrf(jar);
+
+    let template = LoginTemplate {
+        csrf_token,
+        ..Default::default()
+    };
+    (jar, render_template(template, None)).into_response()
 }
 
 /// POST /login – Handle login form submission.
@@ -33,6 +43,23 @@ pub async fn login(
 ) -> impl IntoResponse {
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/village").into_response();
+    }
+
+    if !validate_csrf(&jar, &form.csrf_token) {
+        let (jar, new_csrf_token) = generate_csrf(jar);
+
+        let template = LoginTemplate {
+            csrf_token: new_csrf_token,
+            email_value: form.email.clone(),
+            error: Some("Invalid form token. Please try again.".to_string()),
+            ..Default::default()
+        };
+
+        return (
+            jar,
+            render_template(template, Some(StatusCode::BAD_REQUEST)),
+        )
+            .into_response();
     }
 
     let query = AuthenticateUser {
@@ -69,10 +96,16 @@ pub async fn login(
         }
     };
 
+    // Login fallito per credenziali / errori applicativi:
+    // genera un nuovo CSRF token e ripresenta la form.
+    let (jar, new_csrf_token) = generate_csrf(jar);
+
     let template = LoginTemplate {
+        csrf_token: new_csrf_token,
         email_value: form.email.clone(),
         error: err_msg,
         ..Default::default()
     };
-    render_template(template, status).into_response()
+
+    (jar, render_template(template, status)).into_response()
 }

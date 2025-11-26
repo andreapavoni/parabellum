@@ -11,6 +11,7 @@ pub struct HomeTemplate {
 #[derive(Debug, Default, Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
+    pub csrf_token: String,
     pub current_user: bool,
     pub email_value: String,   // to pre-fill email input
     pub error: Option<String>, // login error message, if any
@@ -20,6 +21,7 @@ pub struct LoginTemplate {
 #[derive(Debug, Default, Template)]
 #[template(path = "register.html")]
 pub struct RegisterTemplate {
+    pub csrf_token: String,
     pub current_user: bool,
     pub username_value: String,    // to pre-fill username on error
     pub email_value: String,       // to pre-fill email on error

@@ -1,4 +1,6 @@
 [alias]
+c = "check"
+
 t = "test"
 
 tt = "test -q -- --test-threads=1"
