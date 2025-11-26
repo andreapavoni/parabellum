@@ -35,6 +35,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 # Now we can copy everything
 COPY . .
 
+ENV SQLX_OFFLINE=true
+
 # Build with cached deps
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
@@ -49,6 +51,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m parabellum
+RUN mkdir -p /app/logs && chown -R parabellum:parabellum /app
 USER parabellum
 
 WORKDIR /app

@@ -26,6 +26,7 @@ services:
       RUST_LOG: info,parabellum=debug,tower_http=debug,sqlx=info
     ports:
       - "8080:8080"
+    user: "${UID}:${GID}"
     volumes:
       - ./logs:/app/logs
 
