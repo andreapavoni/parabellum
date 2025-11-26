@@ -1,30 +1,28 @@
-use axum::{
-    extract::State,
-    response::{IntoResponse, Redirect},
-};
+use axum::{extract::State, response::IntoResponse};
 use axum_extra::extract::SignedCookieJar;
 
 use crate::{
-    handlers::render_template,
+    handlers::{current_user, render_template},
     http::AppState,
     templates::{ResourcesTemplate, VillageTemplate},
 };
 
-pub async fn village(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    if let Some(_cookie) = jar.get("user_email") {
-        // TODO: query logged in user using email from cookie.value().to_string()
-        // state.app_bus.query(query, handler)
-        let template = VillageTemplate { current_user: true };
-        return render_template(template, None).into_response();
+pub async fn village(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
+    match current_user(&state, &jar).await {
+        Ok(_user) => {
+            let template = VillageTemplate { current_user: true };
+            render_template(template, None).into_response()
+        }
+        Err(redirect) => redirect.into_response(),
     }
-    return Redirect::to("/login").into_response();
 }
 
-pub async fn resources(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    if let Some(_cookie) = jar.get("user_email") {
-        // TODO: query logged in user using email from cookie.value().to_string()
-        let template = ResourcesTemplate { current_user: true };
-        return render_template(template, None).into_response();
+pub async fn resources(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
+    match current_user(&state, &jar).await {
+        Ok(_user) => {
+            let template = ResourcesTemplate { current_user: true };
+            render_template(template, None).into_response()
+        }
+        Err(redirect) => redirect.into_response(),
     }
-    return Redirect::to("/login").into_response();
 }

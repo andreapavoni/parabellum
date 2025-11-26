@@ -1,17 +1,9 @@
 use axum::{
-    extract::{Form, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
-
-use crate::{
-    handlers::{generate_csrf, render_template, validate_csrf},
-    http::AppState,
-    templates::LoginTemplate,
-};
-use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
-use parabellum_types::errors::{AppError, ApplicationError, DbError};
 
 /// Form for login.
 #[derive(serde::Deserialize)]
@@ -19,6 +11,20 @@ pub struct LoginForm {
     pub email: String,
     pub password: String,
     pub csrf_token: String,
+}
+
+use crate::{
+    handlers::{CsrfForm, HasCsrfToken, generate_csrf, render_template},
+    http::AppState,
+    templates::LoginTemplate,
+};
+use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
+use parabellum_types::errors::{AppError, ApplicationError, DbError};
+
+impl HasCsrfToken for LoginForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
 }
 
 /// GET /login – Show the login form.
@@ -38,28 +44,10 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
 /// POST /login – Handle login form submission.
 pub async fn login(
     State(state): State<AppState>,
-    jar: SignedCookieJar,
-    Form(form): Form<LoginForm>,
+    CsrfForm { jar, inner: form }: CsrfForm<LoginForm>,
 ) -> impl IntoResponse {
     if let Some(_cookie) = jar.get("user_email") {
         return Redirect::to("/village").into_response();
-    }
-
-    if !validate_csrf(&jar, &form.csrf_token) {
-        let (jar, new_csrf_token) = generate_csrf(jar);
-
-        let template = LoginTemplate {
-            csrf_token: new_csrf_token,
-            email_value: form.email.clone(),
-            error: Some("Invalid form token. Please try again.".to_string()),
-            ..Default::default()
-        };
-
-        return (
-            jar,
-            render_template(template, Some(StatusCode::BAD_REQUEST)),
-        )
-            .into_response();
     }
 
     let query = AuthenticateUser {

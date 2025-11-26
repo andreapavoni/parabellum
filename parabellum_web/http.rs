@@ -41,14 +41,22 @@ impl WebRouter {
         rust_i18n::set_locale("en-EN");
         // rust_i18n::set_locale("it-IT");
 
-        let router = Router::new()
-            .nest_service("/assets", ServeDir::new("frontend/assets"))
+        // Public routes (no authentication required)
+        let public_routes = Router::new()
             .route("/", get(home))
             .route("/login", get(login_page).post(login))
             .route("/register", get(register_page).post(register))
-            .route("/logout", get(logout))
+            .route("/logout", get(logout));
+
+        // Protected routes (require authenticated user)
+        let protected_routes = Router::new()
             .route("/village", get(village))
-            .route("/resources", get(resources))
+            .route("/resources", get(resources));
+
+        let router = Router::new()
+            .nest_service("/assets", ServeDir::new("frontend/assets"))
+            .merge(public_routes)
+            .merge(protected_routes)
             .with_state(state)
             .layer(TraceLayer::new_for_http());
 
