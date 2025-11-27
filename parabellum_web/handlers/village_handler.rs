@@ -1,28 +1,16 @@
-use axum::{extract::State, response::IntoResponse};
-use axum_extra::extract::SignedCookieJar;
+use axum::response::IntoResponse;
 
 use crate::{
-    handlers::{current_user, render_template},
-    http::AppState,
+    handlers::{User, render_template},
     templates::{ResourcesTemplate, VillageTemplate},
 };
 
-pub async fn village(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    match current_user(&state, &jar).await {
-        Ok(_user) => {
-            let template = VillageTemplate { current_user: true };
-            render_template(template, None).into_response()
-        }
-        Err(redirect) => redirect.into_response(),
-    }
+pub async fn village(_user: User) -> impl IntoResponse {
+    let template = VillageTemplate { current_user: true };
+    render_template(template, None).into_response()
 }
 
-pub async fn resources(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    match current_user(&state, &jar).await {
-        Ok(_user) => {
-            let template = ResourcesTemplate { current_user: true };
-            render_template(template, None).into_response()
-        }
-        Err(redirect) => redirect.into_response(),
-    }
+pub async fn resources(_user: User) -> impl IntoResponse {
+    let template = ResourcesTemplate { current_user: true };
+    render_template(template, None).into_response()
 }

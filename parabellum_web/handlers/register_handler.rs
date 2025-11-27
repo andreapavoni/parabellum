@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Form, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
@@ -15,7 +15,7 @@ use parabellum_types::{
 };
 
 use crate::{
-    handlers::{generate_csrf, render_template, validate_csrf},
+    handlers::{CsrfForm, HasCsrfToken, generate_csrf, render_template},
     http::AppState,
     templates::RegisterTemplate,
 };
@@ -29,6 +29,12 @@ pub struct RegisterForm {
     pub tribe: String,
     pub quadrant: String,
     pub csrf_token: String,
+}
+
+impl HasCsrfToken for RegisterForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
 }
 
 /// GET /register – Show the signup form.
@@ -56,31 +62,10 @@ pub async fn register_page(
 /// POST /register – Handle signup form submission.
 pub async fn register(
     State(state): State<AppState>,
-    jar: SignedCookieJar,
-    Form(form): Form<RegisterForm>,
+    CsrfForm { jar, inner: form }: CsrfForm<RegisterForm>,
 ) -> impl IntoResponse {
     if let Some(_) = jar.get("user_email") {
         return Redirect::to("/").into_response();
-    }
-
-    if !validate_csrf(&jar, &form.csrf_token) {
-        let (jar, new_csrf_token) = generate_csrf(jar);
-
-        let template = RegisterTemplate {
-            csrf_token: new_csrf_token,
-            current_user: false,
-            username_value: form.username.clone(),
-            email_value: form.email.clone(),
-            selected_tribe: form.tribe.clone(),
-            selected_quadrant: form.quadrant.clone(),
-            error: Some("Invalid form token. Please try again.".to_string()),
-        };
-
-        return (
-            jar,
-            render_template(template, Some(StatusCode::BAD_REQUEST)),
-        )
-            .into_response();
     }
 
     let tribe_enum = match form.tribe.as_str() {

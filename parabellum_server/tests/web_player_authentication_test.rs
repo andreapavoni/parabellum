@@ -7,7 +7,7 @@ use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 
 use crate::test_utils::tests::{
-    setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
+    fetch_csrf_token, setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
 };
 
 #[tokio::test]
@@ -24,10 +24,12 @@ async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
 
     let (_player, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, [0; 10], false).await?;
+    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login").await?;
 
     let mut form = HashMap::new();
     form.insert("email", user.email.as_str());
     form.insert("password", "parabellum!");
+    form.insert("csrf_token", csrf_token.as_str());
 
     let res = client
         .post("http://localhost:8088/login")
@@ -53,9 +55,12 @@ async fn test_login_player_wrong_password() -> Result<(), ApplicationError> {
     let (_, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, [0; 10], false).await?;
 
+    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login").await?;
+
     let mut form = HashMap::new();
     form.insert("email", user.email.as_str());
     form.insert("password", "wrong");
+    form.insert("csrf_token", csrf_token.as_str());
 
     let res = client
         .post("http://localhost:8088/login")

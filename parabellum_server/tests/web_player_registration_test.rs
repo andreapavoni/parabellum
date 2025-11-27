@@ -7,7 +7,7 @@ use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 
 use crate::test_utils::tests::{
-    setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
+    fetch_csrf_token, setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
 };
 
 #[tokio::test]
@@ -18,6 +18,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
 
     let email = "inttest@example.com";
     let username = "IntegrationUser";
+    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/register").await?;
 
     let mut form = HashMap::new();
     form.insert("username", username);
@@ -25,6 +26,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
     form.insert("password", "Secure123!");
     form.insert("tribe", "Teuton");
     form.insert("quadrant", "SouthWest");
+    form.insert("csrf_token", csrf_token.as_str());
 
     assert!(uow.users().get_by_email(&email.to_string()).await.is_err());
 
@@ -74,11 +76,13 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
 
     let email = "inttest@example.com";
     let username = "IntegrationUser";
+    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/register").await?;
 
     let mut form = HashMap::new();
     form.insert("username", username);
     form.insert("tribe", "Teuton");
     form.insert("quadrant", "SouthWest");
+    form.insert("csrf_token", csrf_token.as_str());
 
     assert!(uow.users().get_by_email(&email.to_string()).await.is_err());
 

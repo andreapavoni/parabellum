@@ -45,13 +45,13 @@ impl WebRouter {
         let public_routes = Router::new()
             .route("/", get(home))
             .route("/login", get(login_page).post(login))
-            .route("/register", get(register_page).post(register))
-            .route("/logout", get(logout));
+            .route("/register", get(register_page).post(register));
 
         // Protected routes (require authenticated user)
         let protected_routes = Router::new()
             .route("/village", get(village))
-            .route("/resources", get(resources));
+            .route("/resources", get(resources))
+            .route("/logout", get(logout));
 
         let router = Router::new()
             .nest_service("/assets", ServeDir::new("frontend/assets"))

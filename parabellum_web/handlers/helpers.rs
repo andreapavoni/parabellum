@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{
-    extract::{Form, FromRef, FromRequest, Request},
-    http::StatusCode,
+    extract::{Form, FromRef, FromRequest, FromRequestParts, Request, State},
+    http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::{
@@ -12,7 +12,7 @@ use std::future::Future;
 use uuid::Uuid;
 
 use parabellum_app::{cqrs::queries::GetUserByEmail, queries_handlers::GetUserByEmailHandler};
-use parabellum_types::common::User;
+use parabellum_types::common::User as UserType;
 
 use crate::http::AppState;
 
@@ -99,9 +99,9 @@ where
     }
 }
 
-/// Helper: load the currently authenticated user from the `user_email` cookie.
+/// Loads the currently authenticated user from the cookie.
 /// Returns `Ok(User)` if found, or `Err(Redirect)` to redirect to /login.
-pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<User, Redirect> {
+pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<UserType, Redirect> {
     if let Some(cookie) = jar.get("user_email") {
         let email = cookie.value().to_string();
         let query = GetUserByEmail {
@@ -118,5 +118,36 @@ pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<Use
         }
     } else {
         Err(Redirect::to("/login"))
+    }
+}
+
+/// Extractor for authenticated users.
+/// Automatically loads the user from the cookie.
+/// If no user is found or the user doesn't exist, returns a redirect to `/login`.
+#[derive(Clone)]
+pub struct User(pub UserType);
+
+impl<S> FromRequestParts<S> for User
+where
+    S: Send + Sync,
+    Key: FromRef<S>,
+    AppState: FromRef<S>,
+{
+    type Rejection = Redirect;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move {
+            let jar = SignedCookieJar::from_request_parts(parts, state)
+                .await
+                .map_err(|_| Redirect::to("/login"))?;
+            let app_state = State::<AppState>::from_request_parts(parts, state)
+                .await
+                .map_err(|_| Redirect::to("/login"))?;
+
+            current_user(&app_state, &jar).await.map(User)
+        }
     }
 }

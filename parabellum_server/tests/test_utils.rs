@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub mod tests {
     use async_trait::async_trait;
-    use axum::http::HeaderValue;
+    use axum::http::{HeaderValue, StatusCode};
     use parabellum_web::{AppState, WebRouter};
     use rand::Rng;
     use reqwest::{Client, header, redirect::Policy};
@@ -21,7 +21,6 @@ pub mod tests {
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
-    use parabellum_types::{Result, errors::ApplicationError};
     use parabellum_db::{
         PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
         PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
@@ -39,6 +38,7 @@ pub mod tests {
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
+    use parabellum_types::{Result, errors::ApplicationError};
     use parabellum_types::{
         common::{Player, User},
         map::Position,
@@ -165,9 +165,13 @@ pub mod tests {
     #[allow(dead_code)]
     pub async fn setup_user_cookie(user: User) -> HeaderValue {
         let client = setup_http_client(None, None).await;
+        let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login")
+            .await
+            .expect("Failed to fetch CSRF token");
         let mut form = HashMap::new();
         form.insert("email", user.email.as_str());
         form.insert("password", "parabellum!");
+        form.insert("csrf_token", csrf_token.as_str());
         let res = client
             .post("http://localhost:8088/login")
             .form(&form)
@@ -178,22 +182,11 @@ pub mod tests {
         if let Some(cookie) = res.headers().get("set-cookie") {
             return cookie.clone();
         } else {
-            println!(
-                "======== setup cookie {:#?} ====",
+            panic!(
+                "setup cookie failed: {:#?}",
                 res.text().await.unwrap().to_string()
             );
-            HeaderValue::from_str("ok=ok").unwrap()
         }
-
-        //let cookie = res.headers().get("set-cookie");
-        // println!(
-        //     "======== setup client {:#?} ====",
-        //     res.text().await.unwrap().to_string()
-        // );
-
-        // res.headers().get("set-cookie").unwrap().clone()
-        // cookie.map(|c| c.clone()).unwrap();
-        // HeaderValue::from_str("ok=ok").unwrap()
     }
 
     #[allow(dead_code)]
@@ -211,6 +204,33 @@ pub mod tests {
         let mut request_headers = header::HeaderMap::new();
         request_headers.insert(header::COOKIE, cookie);
         client.default_headers(request_headers).build().unwrap()
+    }
+
+    /// Fetches a CSRF token from a form page (login or register).
+    /// Makes a GET request to the page, parses the HTML to extract the CSRF token
+    /// from the hidden input field, and returns it along with the client (which has
+    /// the CSRF cookie stored).
+    #[allow(dead_code)]
+    pub async fn fetch_csrf_token(
+        client: &Client,
+        page_url: &str,
+    ) -> Result<String, ApplicationError> {
+        let res = client.get(page_url).send().await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = res.text().await.unwrap();
+        // Parse HTML to find: <input type="hidden" name="csrf_token" value="...">
+        if let Some(start) = body.find(r#"name="csrf_token" value=""#) {
+            let value_start = start + r#"name="csrf_token" value=""#.len();
+            if let Some(end) = body[value_start..].find('"') {
+                let token = body[value_start..value_start + end].to_string();
+                return Ok(token);
+            }
+        }
+
+        Err(ApplicationError::Infrastructure(
+            "Failed to extract CSRF token from form page".to_string(),
+        ))
     }
 
     #[allow(dead_code)]

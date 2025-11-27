@@ -84,10 +84,7 @@ pub async fn login(
         }
     };
 
-    // Login fallito per credenziali / errori applicativi:
-    // genera un nuovo CSRF token e ripresenta la form.
     let (jar, new_csrf_token) = generate_csrf(jar);
-
     let template = LoginTemplate {
         csrf_token: new_csrf_token,
         email_value: form.email.clone(),
