@@ -6,7 +6,9 @@ use axum::{
 use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 
 use parabellum_app::{
-    command_handlers::RegisterPlayerCommandHandler, cqrs::commands::RegisterPlayer,
+    command_handlers::RegisterPlayerCommandHandler,
+    cqrs::{commands::RegisterPlayer, queries::GetUserByEmail},
+    queries_handlers::GetUserByEmailHandler,
 };
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
@@ -96,9 +98,25 @@ pub async fn register(
         .await
     {
         Ok(()) => {
-            let cookie = Cookie::new("user_email", form.email.clone());
-            let updated_jar = jar.add(cookie);
-            return (updated_jar, Redirect::to("/village")).into_response();
+            let query = GetUserByEmail {
+                email: form.email.clone(),
+            };
+            match state
+                .app_bus
+                .query(query, GetUserByEmailHandler::new())
+                .await
+            {
+                Ok(user) => {
+                    let cookie = Cookie::new("user_id", user.id.to_string());
+                    let updated_jar = jar.add(cookie);
+                    return (updated_jar, Redirect::to("/village")).into_response();
+                }
+                Err(e) => {
+                    tracing::error!("Registration follow-up error: {}", e);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.")
+                        .into_response();
+                }
+            }
         }
         Err(ApplicationError::App(AppError::PasswordError)) => {
             // Password hashing error or invalid password (unlikely scenario)

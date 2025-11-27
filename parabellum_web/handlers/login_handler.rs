@@ -61,7 +61,7 @@ pub async fn login(
         .await
     {
         Ok(user) => {
-            let cookie = Cookie::new("user_email", user.email.clone());
+            let cookie = Cookie::new("user_id", user.id.to_string());
             let jar = jar.add(cookie);
             return (jar, Redirect::to("/village")).into_response();
         }

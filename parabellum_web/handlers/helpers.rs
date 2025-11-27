@@ -11,7 +11,7 @@ use axum_extra::extract::{
 use std::future::Future;
 use uuid::Uuid;
 
-use parabellum_app::{cqrs::queries::GetUserByEmail, queries_handlers::GetUserByEmailHandler};
+use parabellum_app::{cqrs::queries::GetUserById, queries_handlers::GetUserByIdHandler};
 use parabellum_types::common::User as UserType;
 
 use crate::http::AppState;
@@ -102,17 +102,14 @@ where
 /// Loads the currently authenticated user from the cookie.
 /// Returns `Ok(User)` if found, or `Err(Redirect)` to redirect to /login.
 pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<UserType, Redirect> {
-    if let Some(cookie) = jar.get("user_email") {
-        let email = cookie.value().to_string();
-        let query = GetUserByEmail {
-            email: email.clone(),
+    if let Some(cookie) = jar.get("user_id") {
+        let user_id = match Uuid::parse_str(cookie.value()) {
+            Ok(id) => id,
+            Err(_) => return Err(Redirect::to("/login")),
         };
+        let query = GetUserById { id: user_id };
 
-        match state
-            .app_bus
-            .query(query, GetUserByEmailHandler::new())
-            .await
-        {
+        match state.app_bus.query(query, GetUserByIdHandler::new()).await {
             Ok(user) => Ok(user),
             Err(_) => Err(Redirect::to("/login")),
         }
@@ -122,9 +119,9 @@ pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<Use
 }
 
 /// Ensures that the requester is not already authenticated.
-/// If a `user_email` cookie is found, returns a redirect to `/village`.
+/// If a `user_id` cookie is found, returns a redirect to `/village`.
 pub fn ensure_not_authenticated(jar: &SignedCookieJar) -> Result<(), Redirect> {
-    if jar.get("user_email").is_some() {
+    if jar.get("user_id").is_some() {
         Err(Redirect::to("/village"))
     } else {
         Ok(())

@@ -1,4 +1,5 @@
 use parabellum_types::common::User;
+use uuid::Uuid;
 
 use crate::cqrs::Query;
 
@@ -18,5 +19,14 @@ pub struct GetUserByEmail {
 }
 
 impl Query for GetUserByEmail {
+    type Output = User;
+}
+
+/// Fetch a user by id (for authenticated sessions).
+pub struct GetUserById {
+    pub id: Uuid,
+}
+
+impl Query for GetUserById {
     type Output = User;
 }
