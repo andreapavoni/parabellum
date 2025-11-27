@@ -15,7 +15,7 @@ use parabellum_types::{
 };
 
 use crate::{
-    handlers::{CsrfForm, HasCsrfToken, generate_csrf, render_template},
+    handlers::{CsrfForm, HasCsrfToken, ensure_not_authenticated, generate_csrf, render_template},
     http::AppState,
     templates::RegisterTemplate,
 };
@@ -42,8 +42,8 @@ pub async fn register_page(
     State(_state): State<AppState>,
     jar: SignedCookieJar,
 ) -> impl IntoResponse {
-    if let Some(_) = jar.get("user_email") {
-        return Redirect::to("/").into_response();
+    if let Err(redirect) = ensure_not_authenticated(&jar) {
+        return redirect.into_response();
     }
 
     let (jar, csrf_token) = generate_csrf(jar);
@@ -64,8 +64,8 @@ pub async fn register(
     State(state): State<AppState>,
     CsrfForm { jar, inner: form }: CsrfForm<RegisterForm>,
 ) -> impl IntoResponse {
-    if let Some(_) = jar.get("user_email") {
-        return Redirect::to("/").into_response();
+    if let Err(redirect) = ensure_not_authenticated(&jar) {
+        return redirect.into_response();
     }
 
     let tribe_enum = match form.tribe.as_str() {

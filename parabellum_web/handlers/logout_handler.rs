@@ -12,5 +12,5 @@ pub async fn logout(State(_state): State<AppState>, jar: SignedCookieJar) -> imp
         return (updated_jar, Redirect::to("/")).into_response();
     }
 
-    return Redirect::to("/").into_response();
+    return Redirect::to("/login").into_response();
 }

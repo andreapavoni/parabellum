@@ -121,6 +121,16 @@ pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<Use
     }
 }
 
+/// Ensures that the requester is not already authenticated.
+/// If a `user_email` cookie is found, returns a redirect to `/village`.
+pub fn ensure_not_authenticated(jar: &SignedCookieJar) -> Result<(), Redirect> {
+    if jar.get("user_email").is_some() {
+        Err(Redirect::to("/village"))
+    } else {
+        Ok(())
+    }
+}
+
 /// Extractor for authenticated users.
 /// Automatically loads the user from the cookie.
 /// If no user is found or the user doesn't exist, returns a redirect to `/login`.
