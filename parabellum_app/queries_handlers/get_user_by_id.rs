@@ -25,7 +25,6 @@ impl QueryHandler<GetUserById> for GetUserByIdHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<<GetUserById as Query>::Output, ApplicationError> {
-        let user_repo = uow.users();
-        user_repo.get_by_id(query.id).await
+        uow.users().get_by_id(query.id).await
     }
 }

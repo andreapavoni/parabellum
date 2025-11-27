@@ -1,13 +1,13 @@
 use askama::Template;
 
-/// Template for the home page
+/// Template for the home page.
 #[derive(Debug, Default, Template)]
 #[template(path = "home.html")]
 pub struct HomeTemplate {
     pub current_user: bool,
 }
 
-/// Template for the login page
+/// Template for the login page.
 #[derive(Debug, Default, Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
@@ -17,7 +17,7 @@ pub struct LoginTemplate {
     pub error: Option<String>, // login error message, if any
 }
 
-/// Template for the registration page
+/// Template for the registration page.
 #[derive(Debug, Default, Template)]
 #[template(path = "register.html")]
 pub struct RegisterTemplate {
@@ -30,16 +30,23 @@ pub struct RegisterTemplate {
     pub error: Option<String>,     // signup error message, if any
 }
 
-/// Template for the village center page
+/// Template for the village center page.
 #[derive(Debug, Default, Template)]
 #[template(path = "village.html")]
 pub struct VillageTemplate {
     pub current_user: bool,
 }
 
-/// Template for the village center page
+/// Template for the village center page.
 #[derive(Debug, Default, Template)]
 #[template(path = "resources.html")]
 pub struct ResourcesTemplate {
+    pub current_user: bool,
+}
+
+/// Template for the map page.
+#[derive(Debug, Default, Template)]
+#[template(path = "map.html")]
+pub struct MapTemplate {
     pub current_user: bool,
 }

@@ -25,7 +25,6 @@ impl QueryHandler<GetUserByEmail> for GetUserByEmailHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         _config: &Arc<Config>,
     ) -> Result<<GetUserByEmail as Query>::Output, ApplicationError> {
-        let user_repo = uow.users();
-        user_repo.get_by_email(&query.email).await
+        uow.users().get_by_email(&query.email).await
     }
 }
