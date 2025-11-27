@@ -55,10 +55,10 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
     };
+    use parabellum_types::Result;
     use parabellum_types::{army::UnitName, tribe::Tribe};
 
     use super::*;

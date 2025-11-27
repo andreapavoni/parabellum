@@ -4,9 +4,12 @@ use crate::{
     cqrs::{CommandHandler, commands::CreateHero},
     uow::UnitOfWork,
 };
-use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 use parabellum_game::models::hero::Hero;
 use parabellum_types::buildings::{BuildingName, BuildingRequirement};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, GameError},
+};
 use std::sync::Arc;
 
 pub struct CreateHeroCommandHandler {}

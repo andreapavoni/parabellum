@@ -16,7 +16,10 @@ pub mod tests {
         },
         uow::UnitOfWorkProvider,
     };
-    use parabellum_types::{errors::{ApplicationError, GameError}, Result};
+    use parabellum_types::{
+        Result,
+        errors::{ApplicationError, GameError},
+    };
 
     use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{

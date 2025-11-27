@@ -86,8 +86,8 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_types::Result;
     use parabellum_game::test_utils::setup_player_party;
+    use parabellum_types::Result;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
 
     use super::*;

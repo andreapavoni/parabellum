@@ -54,13 +54,13 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
+    use parabellum_types::{Result, errors::GameError};
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,

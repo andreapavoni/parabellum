@@ -1,5 +1,5 @@
-use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
+use parabellum_types::errors::ApplicationError;
 
 #[async_trait::async_trait]
 pub trait MapRepository: Send + Sync {

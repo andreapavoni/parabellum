@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use parabellum_types::Result;
 use parabellum_game::models::village::Village;
+use parabellum_types::Result;
 use parabellum_types::common::Player;
 
 use crate::{

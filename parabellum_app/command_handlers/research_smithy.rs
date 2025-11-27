@@ -56,13 +56,13 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
+    use parabellum_types::{Result, errors::GameError};
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,

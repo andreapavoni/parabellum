@@ -100,8 +100,8 @@ impl CommandHandler<ReviveHero> for ReviveHeroCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_types::Result;
     use parabellum_game::{models::buildings::Building, test_utils::setup_player_party};
+    use parabellum_types::Result;
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use super::*;

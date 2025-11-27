@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use parabellum_types::{errors::{ApplicationError, Result}}
-;
+use parabellum_types::errors::{ApplicationError, Result};
 
 use crate::{
     config::Config,

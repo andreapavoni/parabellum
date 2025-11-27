@@ -76,7 +76,6 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -84,6 +83,7 @@ mod tests {
             village_factory,
         },
     };
+    use parabellum_types::Result;
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,

@@ -3,11 +3,11 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use parabellum_app::repository::MapRepository;
+use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
 use parabellum_types::errors::{
     ApplicationError,
     DbError::{self},
 };
-use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
 
 use crate::models as db_models;
 

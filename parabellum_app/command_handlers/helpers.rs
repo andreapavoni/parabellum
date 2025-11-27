@@ -5,10 +5,13 @@ use crate::{
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
 };
-use parabellum_types::{errors::{ApplicationError, GameError}, Result};
 use parabellum_game::models::{
     army::{Army, TroopSet},
     village::Village,
+};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, GameError},
 };
 
 /// Handles the logic of deploying an army from a village.
