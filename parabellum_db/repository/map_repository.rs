@@ -1,6 +1,8 @@
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction, types::Json};
+use serde_json::Value;
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use parabellum_app::repository::MapRepository;
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
@@ -82,26 +84,60 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
         let max_y = center_y + radius;
 
         let mut tx_guard = self.tx.lock().await;
-        let fields = sqlx::query_as!(
-            db_models::MapField,
+        let records = sqlx::query_as::<_, DbMapFieldWithOwner>(
             r#"
-            SELECT *
-            FROM map_fields
-            WHERE (position->>'x')::int BETWEEN $1 AND $2
-              AND (position->>'y')::int BETWEEN $3 AND $4
-            ORDER BY (position->>'y')::int DESC, (position->>'x')::int ASC
+            SELECT
+                mf.id,
+                mf.village_id,
+                mf.player_id,
+                mf.position,
+                mf.topology,
+                v.id AS fallback_village_id,
+                v.player_id AS fallback_player_id
+            FROM map_fields AS mf
+            LEFT JOIN villages AS v
+                ON (mf.position->>'x')::int = (v.position->>'x')::int
+               AND (mf.position->>'y')::int = (v.position->>'y')::int
+            WHERE (mf.position->>'x')::int BETWEEN $1 AND $2
+              AND (mf.position->>'y')::int BETWEEN $3 AND $4
+            ORDER BY (mf.position->>'y')::int DESC, (mf.position->>'x')::int ASC
             "#,
-            min_x,
-            max_x,
-            min_y,
-            max_y
         )
+        .bind(min_x)
+        .bind(max_x)
+        .bind(min_y)
+        .bind(max_y)
         .fetch_all(&mut *tx_guard.as_mut())
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(fields.into_iter().map(MapField::from).collect())
+        let fields = records
+            .into_iter()
+            .map(|record| {
+                let db_field = db_models::MapField {
+                    id: record.id,
+                    village_id: record.village_id.or(record.fallback_village_id),
+                    player_id: record.player_id.or(record.fallback_player_id),
+                    position: record.position,
+                    topology: record.topology,
+                };
+                MapField::from(db_field)
+            })
+            .collect();
+
+        Ok(fields)
     }
+}
+
+#[derive(Debug, FromRow)]
+struct DbMapFieldWithOwner {
+    id: i32,
+    village_id: Option<i32>,
+    player_id: Option<Uuid>,
+    position: Value,
+    topology: Value,
+    fallback_village_id: Option<i32>,
+    fallback_player_id: Option<Uuid>,
 }
 
 /// Populates the World Map.

@@ -289,10 +289,13 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             r#"
             UPDATE map_fields
             SET village_id = $1, player_id = $2
-            WHERE id = $1
+            WHERE (position->>'x')::int = $3
+              AND (position->>'y')::int = $4
             "#,
             village.id as i32,
             village.player_id,
+            village.position.x,
+            village.position.y,
         )
         .execute(&mut *tx_guard.as_mut())
         .await
