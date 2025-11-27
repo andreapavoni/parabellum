@@ -13,7 +13,7 @@
     data-world-size="{{ world_size }}"
 >
 
-     <div class="map-container-main w-full md:w-auto">
+     <div class="map-container-main relative w-full md:w-auto">
 
          <div class="flex flex-col md:flex-row justify-between items-center w-full max-w-[560px] mb-4 px-2 md:pl-4">
              <h1 class="text-xl font-bold text-left w-full md:w-auto">Map <span id="header-coords" class="text-gray-700">({{ user.village.position.x }}|{{ user.village.position.y }})</span></h1>
@@ -49,18 +49,12 @@
              <input type="text" id="input-y" value="{{ user.village.position.y }}" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
              <button onclick="goToCoords()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-1.5 rounded text-xs font-bold text-green-700 ml-3 cursor-pointer shadow-sm transition-colors">OK</button>
          </div>
+         <div
+             id="details-panel-container"
+             class="details-panel hidden"
+         >
 
-     </div>
-
-     <div class="w-full max-w-[560px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
-         <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Details</h3>
-
-         <div id="details-panel">
-             <p class="text-xs text-gray-500 italic mb-4 text-center py-8">Select a field</p>
-         </div>
-
-         <div class="mt-8 border border-gray-300 h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-xs rounded shadow-inner">
-             [Mini Map]
+             <div id="details-panel" class="text-xs text-gray-700"></div>
          </div>
      </div>
 

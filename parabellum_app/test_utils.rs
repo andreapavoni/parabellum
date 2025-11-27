@@ -24,8 +24,8 @@ pub mod tests {
     use crate::{
         jobs::Job,
         repository::{
-            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, UserRepository, VillageRepository,
+            ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
+            MarketplaceRepository, PlayerRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -271,7 +271,7 @@ pub mod tests {
             center_y: i32,
             radius: i32,
             world_size: i32,
-        ) -> Result<Vec<MapField>, ApplicationError> {
+        ) -> Result<Vec<MapRegionTile>, ApplicationError> {
             let fields = self.fields.lock().unwrap();
             let mut region = Vec::new();
 
@@ -285,7 +285,11 @@ pub mod tests {
                     };
                     let id = position.to_id(world_size) as u32;
                     if let Some(field) = fields.get(&id) {
-                        region.push(field.clone());
+                        region.push(MapRegionTile {
+                            field: field.clone(),
+                            village_name: None,
+                            player_name: None,
+                        });
                     }
                 }
             }

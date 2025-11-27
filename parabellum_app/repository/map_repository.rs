@@ -1,6 +1,13 @@
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
 use parabellum_types::errors::ApplicationError;
 
+#[derive(Debug, Clone)]
+pub struct MapRegionTile {
+    pub field: MapField,
+    pub village_name: Option<String>,
+    pub player_name: Option<String>,
+}
+
 #[async_trait::async_trait]
 pub trait MapRepository: Send + Sync {
     async fn find_unoccupied_valley(
@@ -14,5 +21,5 @@ pub trait MapRepository: Send + Sync {
         center_y: i32,
         radius: i32,
         world_size: i32,
-    ) -> Result<Vec<MapField>, ApplicationError>;
+    ) -> Result<Vec<MapRegionTile>, ApplicationError>;
 }

@@ -156,6 +156,7 @@
    width: 100%;
    max-width: 100%;
    overflow: visible;
+   position: relative;
  }
 
  .large-map-wrapper {
@@ -305,6 +306,19 @@
    color: #2e7d32;
    font-size: 12px;
    font-weight: 900;
+ }
+
+ .details-panel {
+   position: absolute;
+   min-width: 200px;
+   max-width: 240px;
+   background: #fff;
+   border: 1px solid #e5e7eb;
+   border-radius: 8px;
+   padding: 12px;
+   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+   z-index: 40;
+   pointer-events: none;
  }
 
  /* FRECCE NAVIGAZIONE */

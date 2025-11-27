@@ -21,8 +21,12 @@
     const headerCoordsEl = document.getElementById('header-coords');
     const inputX = document.getElementById('input-x');
     const inputY = document.getElementById('input-y');
+    const mapContainer = document.querySelector('.map-container-main');
+    const detailsPanelContainer = document.getElementById('details-panel-container');
     const detailsPanel = document.getElementById('details-panel');
     const tooltip = document.getElementById('tile-info');
+    const DETAIL_DELAY_MS = 150;
+    let detailsTimeout = null;
 
     if (
       !gridEl ||
@@ -31,6 +35,8 @@
       !headerCoordsEl ||
       !inputX ||
       !inputY ||
+      !mapContainer ||
+      !detailsPanelContainer ||
       !detailsPanel ||
       !tooltip
     ) {
@@ -47,6 +53,11 @@
       const normalized = ((value + worldSize) % span + span) % span;
       return normalized - worldSize;
     };
+
+    gridEl.addEventListener('mouseleave', () => {
+      hideTooltip();
+      hideDetails();
+    });
 
     async function fetchRegion(params) {
       const search = new URLSearchParams();
@@ -100,6 +111,7 @@
       gridEl.innerHTML = '';
       yAxisEl.innerHTML = '';
       xAxisEl.innerHTML = '';
+      hideDetails();
 
       for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
         const wrappedY = wrapCoordinate(y);
@@ -129,9 +141,15 @@
 
           tile.className = `tile ${visual.typeClass}`;
           tile.innerHTML = `<span class="tile-content">${visual.icon}</span>`;
-          tile.onmouseenter = (event) => showTooltip(event, visual.title);
-          tile.onmouseleave = hideTooltip;
-          tile.onmouseover = () => showDetails(tileData, visual, wrappedX, wrappedY);
+          tile.onmouseenter = (event) => {
+            showTooltip(event, visual.title);
+            scheduleDetails(tileData, visual, wrappedX, wrappedY, tile);
+          };
+          tile.onmouseleave = () => {
+            hideTooltip();
+            cancelDetailsTimeout();
+          };
+          tile.onclick = () => showDetails(tileData, visual, wrappedX, wrappedY, tile);
 
           gridEl.appendChild(tile);
         }
@@ -159,10 +177,12 @@
           tile.village_id === homeVillageId;
         const matchesHomeCoords = x === homeX && y === homeY;
         const isHome = matchesHomeId || matchesHomeCoords;
+        const villageLabel = tile.village_name ?? 'Village';
+        const ownerSuffix = tile.player_name ? ` – ${tile.player_name}` : '';
         return {
           icon: '🏠',
           typeClass: isHome ? 'is-own-village' : 'is-village',
-          title: isHome ? `MyVillage (${x}|${y})` : `Village (${x}|${y})`,
+          title: `${villageLabel}`,
         };
       }
 
@@ -176,10 +196,16 @@
         };
       }
 
+      const valleySummary = tile.valley
+        ? `${tile.valley.lumber}-${tile.valley.clay}-${tile.valley.iron}-${tile.valley.crop}`
+        : '';
+
       return {
         icon: '',
         typeClass: '',
-        title: `Valley (${x}|${y})`,
+        title: valleySummary
+          ? `Valley ${valleySummary}`
+          : `Valley (${x}|${y})`,
       };
     }
 
@@ -196,40 +222,61 @@
       return '🌾';
     }
 
-    function showDetails(tile, visual, x, y) {
+    function scheduleDetails(tile, visual, x, y, tileElement) {
+      cancelDetailsTimeout();
+      detailsTimeout = setTimeout(() => {
+        showDetails(tile, visual, x, y, tileElement);
+      }, DETAIL_DELAY_MS);
+    }
+
+    function cancelDetailsTimeout() {
+      if (detailsTimeout) {
+        clearTimeout(detailsTimeout);
+        detailsTimeout = null;
+      }
+    }
+
+    function showDetails(tile, visual, x, y, tileElement) {
+      const data = tile || {};
       const isVillage =
-        tile && tile.village_id !== undefined && tile.village_id !== null;
+        data.village_id !== undefined && data.village_id !== null;
+      const isOasis = data.tile_type === 'oasis';
+      const valleySummary = data.valley
+        ? `${data.valley.lumber}-${data.valley.clay}-${data.valley.iron}-${data.valley.crop}`
+        : null;
+      const ownerLabel = data.player_name || data.player_id || '-';
+      const oasisLabel = data.oasis || null;
+      const typeLabel = isVillage
+        ? 'Village'
+        : isOasis
+          ? oasisLabel || 'Oasis'
+          : 'Valley';
+      const topologyLabel = isOasis
+        ? oasisLabel || '-'
+        : valleySummary || '-';
+
       const html = `
       <div class="text-center mb-4">
         <div class="text-4xl mb-2">${visual.icon || '🌲'}</div>
         <div class="font-bold text-sm text-gray-800">${visual.title}</div>
         <div class="text-xs text-gray-500 mt-1">
-          Coordinate: <span class="font-mono font-bold text-black">${x}|${y}</span>
+          <span class="font-mono font-bold text-black">${x}|${y}</span>
         </div>
       </div>
       <table class="w-full text-xs">
         <tr class="border-b border-gray-200">
           <td class="py-2 text-gray-600">Giocatore</td>
           <td class="py-2 text-right font-bold text-black">
-            ${isVillage && tile.player_id ? tile.player_id : '-'}
-          </td>
-        </tr>
-        <tr class="border-b border-gray-200">
-          <td class="py-2 text-gray-600">Villaggio</td>
-          <td class="py-2 text-right text-black font-semibold">
-            ${isVillage && tile.village_id ? tile.village_id : '-'}
-          </td>
-        </tr>
-        <tr>
-          <td class="py-2 text-gray-600">Tipo</td>
-          <td class="py-2 text-right">
-            ${tile?.tile_type ?? '-'}
+            ${ownerLabel}
           </td>
         </tr>
       </table>
     `;
 
       detailsPanel.innerHTML = html;
+      detailsPanelContainer.classList.remove('hidden');
+      detailsPanelContainer.style.pointerEvents = 'none';
+      positionDetailsPanel(tileElement);
     }
 
     function showTooltip(event, text) {
@@ -242,6 +289,40 @@
 
     function hideTooltip() {
       tooltip.style.display = 'none';
+    }
+
+    function hideDetails() {
+      cancelDetailsTimeout();
+      if (!detailsPanelContainer.classList.contains('hidden')) {
+        detailsPanelContainer.classList.add('hidden');
+        detailsPanel.innerHTML = '';
+        detailsPanelContainer.style.left = '';
+        detailsPanelContainer.style.top = '';
+      }
+    }
+
+    function positionDetailsPanel(tileElement) {
+      const containerRect = mapContainer.getBoundingClientRect();
+      const panelRect = detailsPanelContainer.getBoundingClientRect();
+      const tileRect = tileElement.getBoundingClientRect();
+
+      const offset = 12;
+      const maxLeft = containerRect.width - panelRect.width - offset;
+      const maxTop = containerRect.height - panelRect.height - offset;
+
+      let left =
+        tileRect.left - containerRect.left + tileRect.width + offset;
+      let top = tileRect.top - containerRect.top;
+
+      if (left > maxLeft) {
+        left = tileRect.left - containerRect.left - panelRect.width - offset;
+      }
+
+      left = Math.max(offset, Math.min(left, maxLeft));
+      top = Math.max(offset, Math.min(top, maxTop));
+
+      detailsPanelContainer.style.left = `${left}px`;
+      detailsPanelContainer.style.top = `${top}px`;
     }
 
     window.moveMap = (dx, dy) => {

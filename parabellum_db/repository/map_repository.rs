@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use parabellum_app::repository::MapRepository;
+use parabellum_app::repository::{MapRegionTile, MapRepository};
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
 use parabellum_types::{
     errors::{
@@ -81,7 +81,7 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
         center_y: i32,
         radius: i32,
         world_size: i32,
-    ) -> Result<Vec<MapField>, ApplicationError> {
+    ) -> Result<Vec<MapRegionTile>, ApplicationError> {
         let tile_ids = build_region_ids(center_x, center_y, radius, world_size);
 
         if tile_ids.is_empty() {
@@ -98,10 +98,14 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                 mf.position,
                 mf.topology,
                 v.id AS fallback_village_id,
-                v.player_id AS fallback_player_id
+                v.player_id AS fallback_player_id,
+                v.name AS village_name,
+                p.username AS player_name
             FROM map_fields AS mf
             LEFT JOIN villages AS v
                 ON v.id = mf.id
+            LEFT JOIN players AS p
+                ON p.id = COALESCE(mf.player_id, v.player_id)
             WHERE mf.id = ANY($1)
             ORDER BY array_position($1, mf.id)
             "#,
@@ -121,7 +125,11 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                     position: record.position,
                     topology: record.topology,
                 };
-                MapField::from(db_field)
+                MapRegionTile {
+                    field: MapField::from(db_field),
+                    village_name: record.village_name,
+                    player_name: record.player_name,
+                }
             })
             .collect();
 
@@ -138,6 +146,8 @@ struct DbMapFieldWithOwner {
     topology: Value,
     fallback_village_id: Option<i32>,
     fallback_player_id: Option<Uuid>,
+    village_name: Option<String>,
+    player_name: Option<String>,
 }
 
 fn build_region_ids(center_x: i32, center_y: i32, radius: i32, world_size: i32) -> Vec<i32> {

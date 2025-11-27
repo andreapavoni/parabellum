@@ -1,4 +1,4 @@
-use parabellum_game::models::{map::MapField, village::Village};
+use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player, User},
     map::Position,
@@ -6,6 +6,7 @@ use parabellum_types::{
 use uuid::Uuid;
 
 use crate::cqrs::Query;
+use crate::repository::MapRegionTile;
 
 /// Checks if a user is authenticates with email and password.
 pub struct AuthenticateUser {
@@ -70,5 +71,5 @@ pub struct GetMapRegion {
 }
 
 impl Query for GetMapRegion {
-    type Output = Vec<MapField>;
+    type Output = Vec<MapRegionTile>;
 }

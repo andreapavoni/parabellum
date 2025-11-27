@@ -10,7 +10,7 @@ mod village_repository;
 pub use army_repository::ArmyRepository;
 pub use hero_repository::HeroRepository;
 pub use job_repository::JobRepository;
-pub use map_repository::MapRepository;
+pub use map_repository::{MapRegionTile, MapRepository};
 pub use marketplace_repository::MarketplaceRepository;
 pub use player_repository::PlayerRepository;
 pub use user_repository::UserRepository;

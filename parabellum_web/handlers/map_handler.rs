@@ -12,8 +12,10 @@ use crate::{
     http::AppState,
     templates::MapTemplate,
 };
-use parabellum_app::{cqrs::queries::GetMapRegion, queries_handlers::GetMapRegionHandler};
-use parabellum_game::models::map::{MapField, MapFieldTopology};
+use parabellum_app::{
+    cqrs::queries::GetMapRegion, queries_handlers::GetMapRegionHandler, repository::MapRegionTile,
+};
+use parabellum_game::models::map::MapFieldTopology;
 use parabellum_types::map::{Position, ValleyTopology};
 
 const MAP_REGION_RADIUS: i32 = 7;
@@ -56,6 +58,10 @@ pub struct MapTileResponse {
     pub village_id: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub village_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player_name: Option<String>,
     pub tile_type: TileType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub valley: Option<ValleyDistribution>,
@@ -90,8 +96,9 @@ impl From<ValleyTopology> for ValleyDistribution {
     }
 }
 
-impl From<MapField> for MapTileResponse {
-    fn from(field: MapField) -> Self {
+impl From<MapRegionTile> for MapTileResponse {
+    fn from(tile: MapRegionTile) -> Self {
+        let field = tile.field;
         let (tile_type, valley, oasis) = match field.topology {
             MapFieldTopology::Oasis(variant) => {
                 (TileType::Oasis, None, Some(format!("{variant:?}")))
@@ -111,6 +118,8 @@ impl From<MapField> for MapTileResponse {
             field_id: field.id,
             village_id: field.village_id,
             player_id: field.player_id,
+            village_name: tile.village_name,
+            player_name: tile.player_name,
             tile_type,
             valley,
             oasis,
