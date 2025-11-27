@@ -69,6 +69,39 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
 
         Ok(field.into())
     }
+
+    async fn get_region(
+        &self,
+        center_x: i32,
+        center_y: i32,
+        radius: i32,
+    ) -> Result<Vec<MapField>, ApplicationError> {
+        let min_x = center_x - radius;
+        let max_x = center_x + radius;
+        let min_y = center_y - radius;
+        let max_y = center_y + radius;
+
+        let mut tx_guard = self.tx.lock().await;
+        let fields = sqlx::query_as!(
+            db_models::MapField,
+            r#"
+            SELECT *
+            FROM map_fields
+            WHERE (position->>'x')::int BETWEEN $1 AND $2
+              AND (position->>'y')::int BETWEEN $3 AND $4
+            ORDER BY (position->>'y')::int DESC, (position->>'x')::int ASC
+            "#,
+            min_x,
+            max_x,
+            min_y,
+            max_y
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(fields.into_iter().map(MapField::from).collect())
+    }
 }
 
 /// Populates the World Map.

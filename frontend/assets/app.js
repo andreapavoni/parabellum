@@ -1,131 +1,244 @@
-let currentX = 125;
-let currentY = 25;
-const radius = 7;
+(function () {
+  const DEFAULT_RADIUS = 7;
+  const mapRoot = document.getElementById('map-page');
 
-const gridEl = document.getElementById('map-grid');
-const yAxisEl = document.getElementById('y-axis-container');
-const xAxisEl = document.getElementById('x-axis-container');
-const headerCoordsEl = document.getElementById('header-coords');
-const inputX = document.getElementById('input-x');
-const inputY = document.getElementById('input-y');
-const detailsPanel = document.getElementById('details-panel');
-const tooltip = document.getElementById('tile-info');
+  if (mapRoot) {
+    let currentX = parseInt(mapRoot.dataset.centerX ?? '0', 10);
+    let currentY = parseInt(mapRoot.dataset.centerY ?? '0', 10);
+    const homeX = parseInt(mapRoot.dataset.homeX ?? `${currentX}`, 10);
+    const homeY = parseInt(mapRoot.dataset.homeY ?? `${currentY}`, 10);
 
-function renderMap(centerX, centerY) {
-  gridEl.innerHTML = '';
-  yAxisEl.innerHTML = '';
-  xAxisEl.innerHTML = '';
+    const homeVillageId = parseInt(mapRoot.dataset.homeVillageId ?? '0', 10);
+    let currentRadius = DEFAULT_RADIUS;
+    let tileLookup = new Map();
+    let loadingRegion = false;
 
-  headerCoordsEl.innerText = `(${centerX}|${centerY})`;
-  inputX.value = centerX;
-  inputY.value = centerY;
+    const gridEl = document.getElementById('map-grid');
+    const yAxisEl = document.getElementById('y-axis-container');
+    const xAxisEl = document.getElementById('x-axis-container');
+    const headerCoordsEl = document.getElementById('header-coords');
+    const inputX = document.getElementById('input-x');
+    const inputY = document.getElementById('input-y');
+    const detailsPanel = document.getElementById('details-panel');
+    const tooltip = document.getElementById('tile-info');
 
-  for (let y = centerY + radius; y >= centerY - radius; y--) {
-    const div = document.createElement('div');
-    div.className = `y-label ${y === centerY ? 'highlight-axis' : ''}`;
-    div.innerText = y;
-    yAxisEl.appendChild(div);
-  }
+    if (
+      !gridEl ||
+      !yAxisEl ||
+      !xAxisEl ||
+      !headerCoordsEl ||
+      !inputX ||
+      !inputY ||
+      !detailsPanel ||
+      !tooltip
+    ) {
+      return;
+    }
 
-  for (let x = centerX - radius; x <= centerX + radius; x++) {
-    const div = document.createElement('div');
-    div.className = `x-label ${x === centerX ? 'highlight-axis' : ''}`;
-    div.innerText = x;
-    xAxisEl.appendChild(div);
-  }
+    const coordKey = (x, y) => `${x}:${y}`;
 
-  for (let y = centerY + radius; y >= centerY - radius; y--) {
-    for (let x = centerX - radius; x <= centerX + radius; x++) {
-      const tile = document.createElement('div');
-      const isCenter = (x === centerX && y === centerY);
-
-      const seed = Math.abs((x * 123) + (y * 456));
-      let content = '';
-      let typeClass = '';
-      let title = `Abandoned Valley (${x}|${y})`;
-
-      if (isCenter) {
-        typeClass = 'is-own-village';
-        content = '🏠';
-        title = `MyVillage (${x}|${y})`;
-      } else if (seed % 17 === 0) {
-        typeClass = 'is-village';
-        content = '🏠';
-        title = `Village (${x}|${y})`;
-      } else if (seed % 23 === 0) {
-        typeClass = 'oasis-wood';
-        content = '🌲';
-        title = `Lumber Oasis (${x}|${y})`;
-      } else if (seed % 29 === 0) {
-        typeClass = 'oasis-clay';
-        content = '🧱';
-        title = `Clay Oasis (${x}|${y})`;
-      } else if (seed % 31 === 0) {
-        typeClass = 'oasis-iron';
-        content = '⛰️';
-        title = `Iron Oasis (${x}|${y})`;
-      } else if (seed % 37 === 0) {
-        typeClass = 'oasis-crop';
-        content = '🌾';
-        title = `Crop Oasis (${x}|${y})`;
+    async function fetchRegion(params) {
+      const search = new URLSearchParams();
+      if (params.x !== undefined && params.y !== undefined) {
+        search.set('x', params.x.toString());
+        search.set('y', params.y.toString());
+      }
+      if (params.villageId !== undefined) {
+        search.set('village_id', params.villageId.toString());
       }
 
-      tile.className = `tile ${typeClass}`;
-      tile.innerHTML = `<span class="tile-content">${content}</span>`;
+      const response = await fetch(`/map/data?${search.toString()}`, {
+        headers: { Accept: 'application/json' },
+      });
 
-      tile.onmouseenter = (e) => showTooltip(e, title);
-      tile.onmouseleave = () => hideTooltip();
-      tile.onmouseover = () => showDetails(title, x, y, content);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Unable to load map data');
+      }
 
-      gridEl.appendChild(tile);
+      return response.json();
     }
+
+    async function updateRegion(params) {
+      if (loadingRegion) {
+        return;
+      }
+      loadingRegion = true;
+
+      try {
+        const data = await fetchRegion(params);
+        currentX = data.center.x;
+        currentY = data.center.y;
+        currentRadius = data.radius ?? DEFAULT_RADIUS;
+        tileLookup = new Map(
+          data.tiles.map((tile) => [coordKey(tile.x, tile.y), tile]),
+        );
+        renderMap();
+      } catch (error) {
+        console.error('Failed to load map region', error);
+      } finally {
+        loadingRegion = false;
+      }
+    }
+
+    function renderMap() {
+      headerCoordsEl.innerText = `(${currentX}|${currentY})`;
+      inputX.value = currentX;
+      inputY.value = currentY;
+
+      gridEl.innerHTML = '';
+      yAxisEl.innerHTML = '';
+      xAxisEl.innerHTML = '';
+
+      for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
+        const div = document.createElement('div');
+        div.className = `y-label ${y === currentY ? 'highlight-axis' : ''}`;
+        div.innerText = y;
+        yAxisEl.appendChild(div);
+      }
+
+      for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
+        const div = document.createElement('div');
+        div.className = `x-label ${x === currentX ? 'highlight-axis' : ''}`;
+        div.innerText = x;
+        xAxisEl.appendChild(div);
+      }
+
+      for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
+        for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
+          const tile = document.createElement('div');
+          const tileData = tileLookup.get(coordKey(x, y));
+          const visual = describeTile(tileData, x, y);
+
+          tile.className = `tile ${visual.typeClass}`;
+          tile.innerHTML = `<span class="tile-content">${visual.icon}</span>`;
+          tile.onmouseenter = (event) => showTooltip(event, visual.title);
+          tile.onmouseleave = hideTooltip;
+          tile.onmouseover = () => showDetails(tileData, visual, x, y);
+
+          gridEl.appendChild(tile);
+        }
+      }
+    }
+
+    function describeTile(tile, x, y) {
+      if (!tile) {
+        return {
+          icon: '',
+          typeClass: '',
+          title: `Unknown (${x}|${y})`,
+        };
+      }
+
+
+      const isVillageTile =
+        tile.village_id !== undefined && tile.village_id !== null;
+
+      if (isVillageTile) {
+        const matchesHomeId =
+          Number.isFinite(homeVillageId) &&
+          tile.village_id !== undefined &&
+          tile.village_id !== null &&
+          tile.village_id === homeVillageId;
+        const matchesHomeCoords = x === homeX && y === homeY;
+        const isHome = matchesHomeId || matchesHomeCoords;
+        return {
+          icon: '🏠',
+          typeClass: isHome ? 'is-own-village' : 'is-village',
+          title: isHome ? `MyVillage (${x}|${y})` : `Village (${x}|${y})`,
+        };
+      }
+
+
+      if (tile.tile_type === 'oasis') {
+        const variant = (tile.oasis || 'oasis').toLowerCase();
+        return {
+          icon: selectOasisIcon(variant),
+          typeClass: `oasis-${variant.replace(/[^a-z0-9]/g, '-')}`,
+          title: `${tile.oasis ?? 'Oasis'} (${x}|${y})`,
+        };
+      }
+
+      return {
+        icon: '',
+        typeClass: '',
+        title: `Valley (${x}|${y})`,
+      };
+    }
+
+    function selectOasisIcon(variant) {
+      if (variant.includes('lumber')) {
+        return '🌲';
+      }
+      if (variant.includes('clay')) {
+        return '🧱';
+      }
+      if (variant.includes('iron')) {
+        return '⛰️';
+      }
+      return '🌾';
+    }
+
+    function showDetails(tile, visual, x, y) {
+      const isVillage =
+        tile && tile.village_id !== undefined && tile.village_id !== null;
+      const html = `
+      <div class="text-center mb-4">
+        <div class="text-4xl mb-2">${visual.icon || '🌲'}</div>
+        <div class="font-bold text-sm text-gray-800">${visual.title}</div>
+        <div class="text-xs text-gray-500 mt-1">
+          Coordinate: <span class="font-mono font-bold text-black">${x}|${y}</span>
+        </div>
+      </div>
+      <table class="w-full text-xs">
+        <tr class="border-b border-gray-200">
+          <td class="py-2 text-gray-600">Giocatore</td>
+          <td class="py-2 text-right font-bold text-black">
+            ${isVillage && tile.player_id ? tile.player_id : '-'}
+          </td>
+        </tr>
+        <tr class="border-b border-gray-200">
+          <td class="py-2 text-gray-600">Villaggio</td>
+          <td class="py-2 text-right text-black font-semibold">
+            ${isVillage && tile.village_id ? tile.village_id : '-'}
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 text-gray-600">Tipo</td>
+          <td class="py-2 text-right">
+            ${tile?.tile_type ?? '-'}
+          </td>
+        </tr>
+      </table>
+    `;
+
+      detailsPanel.innerHTML = html;
+    }
+
+    function showTooltip(event, text) {
+      tooltip.style.display = 'block';
+      tooltip.innerText = text;
+
+      tooltip.style.left = `${event.pageX + 15}px`;
+      tooltip.style.top = `${event.pageY + 15}px`;
+    }
+
+    function hideTooltip() {
+      tooltip.style.display = 'none';
+    }
+
+    window.moveMap = (dx, dy) => {
+      updateRegion({ x: currentX + dx, y: currentY + dy });
+    };
+
+    window.goToCoords = () => {
+      const parsedX = parseInt(inputX.value, 10);
+      const parsedY = parseInt(inputY.value, 10);
+      if (Number.isFinite(parsedX) && Number.isFinite(parsedY)) {
+        updateRegion({ x: parsedX, y: parsedY });
+      }
+    };
+
+    updateRegion({ x: currentX, y: currentY });
   }
-}
-
-function moveMap(dx, dy) {
-  currentX += dx;
-  currentY += dy;
-  renderMap(currentX, currentY);
-}
-
-function goToCoords() {
-  const x = parseInt(inputX.value) || 0;
-  const y = parseInt(inputY.value) || 0;
-  currentX = x;
-  currentY = y;
-  renderMap(currentX, currentY);
-}
-
-function showDetails(title, x, y, icon) {
-  let html = `
-            <div class="text-center mb-4">
-                <div class="text-4xl mb-2">${icon || '🌲'}</div>
-                <div class="font-bold text-sm text-gray-800">${title}</div>
-                <div class="text-xs text-gray-500 mt-1">Coordinate: <span class="font-mono font-bold text-black">${x}|${y}</span></div>
-            </div>
-            <table class="w-full text-xs">
-                <tr class="border-b border-gray-200"><td class="py-2 text-gray-600">Giocatore</td><td class="py-2 text-right font-bold text-black">${icon === '🏠' ? 'Giocatore_' + Math.abs(x + y) : '-'}</td></tr>
-                <tr class="border-b border-gray-200"><td class="py-2 text-gray-600">Popolazione</td><td class="py-2 text-right text-black font-semibold">${icon === '🏠' ? Math.floor(Math.random() * 500) : '-'}</td></tr>
-                <tr><td class="py-2 text-gray-600">Alleanza</td><td class="py-2 text-right text-blue-600 hover:underline cursor-pointer">${icon === '🏠' ? 'Alleanza_Alpha' : '-'}</td></tr>
-            </table>
-        `;
-  detailsPanel.innerHTML = html;
-}
-
-function showTooltip(e, text) {
-  tooltip.style.display = 'block';
-  tooltip.innerText = text;
-
-  const rect = gridEl.getBoundingClientRect();
-  let left = e.pageX + 15;
-  let top = e.pageY + 15;
-
-  tooltip.style.left = left + 'px';
-  tooltip.style.top = top + 'px';
-}
-
-function hideTooltip() {
-  tooltip.style.display = 'none';
-}
-
-renderMap(currentX, currentY);
+})();

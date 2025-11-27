@@ -264,6 +264,29 @@ pub mod tests {
                 player_id: None,
             })
         }
+
+        async fn get_region(
+            &self,
+            center_x: i32,
+            center_y: i32,
+            radius: i32,
+        ) -> Result<Vec<MapField>, ApplicationError> {
+            let fields = self.fields.lock().unwrap();
+            let min_x = center_x - radius;
+            let max_x = center_x + radius;
+            let min_y = center_y - radius;
+            let max_y = center_y + radius;
+
+            Ok(fields
+                .values()
+                .filter(|field| {
+                    let x = field.position.x;
+                    let y = field.position.y;
+                    x >= min_x && x <= max_x && y >= min_y && y <= max_y
+                })
+                .cloned()
+                .collect())
+        }
     }
 
     #[derive(Default, Clone)]

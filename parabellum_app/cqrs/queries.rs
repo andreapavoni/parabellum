@@ -1,5 +1,8 @@
-use parabellum_game::models::village::Village;
-use parabellum_types::common::{Player, User};
+use parabellum_game::models::{map::MapField, village::Village};
+use parabellum_types::{
+    common::{Player, User},
+    map::Position,
+};
 use uuid::Uuid;
 
 use crate::cqrs::Query;
@@ -57,4 +60,14 @@ pub struct ListVillagesByPlayerId {
 
 impl Query for ListVillagesByPlayerId {
     type Output = Vec<Village>;
+}
+
+/// Fetch a square region of the world map.
+pub struct GetMapRegion {
+    pub center: Position,
+    pub radius: i32,
+}
+
+impl Query for GetMapRegion {
+    type Output = Vec<MapField>;
 }

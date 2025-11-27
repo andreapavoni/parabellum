@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT *\n            FROM map_fields\n            WHERE (position->>'x')::int BETWEEN $1 AND $2\n              AND (position->>'y')::int BETWEEN $3 AND $4\n            ORDER BY (position->>'y')::int DESC, (position->>'x')::int ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "topology",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "65729eeff743c32647b84a8c10c9b8b36ef9948534876cdf853b6173442a5d51"
+}

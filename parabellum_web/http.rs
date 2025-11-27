@@ -7,7 +7,7 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    home, login, login_page, logout, map, register, register_page, resources, village,
+    home, login, login_page, logout, map, map_region, register, register_page, resources, village,
 };
 
 #[derive(Clone)]
@@ -52,6 +52,7 @@ impl WebRouter {
             .route("/village", get(village))
             .route("/resources", get(resources))
             .route("/map", get(map))
+            .route("/map/data", get(map_region))
             .route("/logout", get(logout));
 
         let router = Router::new()

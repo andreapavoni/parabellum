@@ -8,4 +8,10 @@ pub trait MapRepository: Send + Sync {
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError>;
     async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError>;
+    async fn get_region(
+        &self,
+        center_x: i32,
+        center_y: i32,
+        radius: i32,
+    ) -> Result<Vec<MapField>, ApplicationError>;
 }

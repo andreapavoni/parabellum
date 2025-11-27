@@ -124,6 +124,7 @@
 
  .nav-icon:hover {
    transform: translateY(-2px);
+   border-color: #c5e1a5;
  }
 
  .nav-active {
