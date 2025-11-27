@@ -14,6 +14,7 @@ use crate::handlers::{
 pub struct AppState {
     pub app_bus: Arc<AppBus>,
     pub cookie_key: Key,
+    pub world_size: i32,
 }
 
 impl AppState {
@@ -23,6 +24,7 @@ impl AppState {
         AppState {
             app_bus,
             cookie_key,
+            world_size: config.world_size as i32,
         }
     }
 }

@@ -26,7 +26,12 @@ impl QueryHandler<GetMapRegion> for GetMapRegionHandler {
         _config: &Arc<Config>,
     ) -> Result<<GetMapRegion as Query>::Output, ApplicationError> {
         let repo = uow.map();
-        repo.get_region(query.center.x, query.center.y, query.radius)
-            .await
+        repo.get_region(
+            query.center.x,
+            query.center.y,
+            query.radius,
+            query.world_size,
+        )
+        .await
     }
 }

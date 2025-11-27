@@ -13,5 +13,6 @@ pub trait MapRepository: Send + Sync {
         center_x: i32,
         center_y: i32,
         radius: i32,
+        world_size: i32,
     ) -> Result<Vec<MapField>, ApplicationError>;
 }

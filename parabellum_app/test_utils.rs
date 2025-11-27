@@ -270,23 +270,40 @@ pub mod tests {
             center_x: i32,
             center_y: i32,
             radius: i32,
+            world_size: i32,
         ) -> Result<Vec<MapField>, ApplicationError> {
             let fields = self.fields.lock().unwrap();
-            let min_x = center_x - radius;
-            let max_x = center_x + radius;
-            let min_y = center_y - radius;
-            let max_y = center_y + radius;
+            let mut region = Vec::new();
 
-            Ok(fields
-                .values()
-                .filter(|field| {
-                    let x = field.position.x;
-                    let y = field.position.y;
-                    x >= min_x && x <= max_x && y >= min_y && y <= max_y
-                })
-                .cloned()
-                .collect())
+            for y in ((center_y - radius)..=(center_y + radius)).rev() {
+                let wrapped_y = wrap_coordinate(y, world_size);
+                for x in center_x - radius..=center_x + radius {
+                    let wrapped_x = wrap_coordinate(x, world_size);
+                    let position = Position {
+                        x: wrapped_x,
+                        y: wrapped_y,
+                    };
+                    let id = position.to_id(world_size) as u32;
+                    if let Some(field) = fields.get(&id) {
+                        region.push(field.clone());
+                    }
+                }
+            }
+
+            Ok(region)
         }
+    }
+
+    fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
+        if world_size <= 0 {
+            return value;
+        }
+        let span = world_size * 2 + 1;
+        let mut normalized = (value + world_size) % span;
+        if normalized < 0 {
+            normalized += span;
+        }
+        normalized - world_size
     }
 
     #[derive(Default, Clone)]

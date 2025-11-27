@@ -9,6 +9,8 @@
     const homeY = parseInt(mapRoot.dataset.homeY ?? `${currentY}`, 10);
 
     const homeVillageId = parseInt(mapRoot.dataset.homeVillageId ?? '0', 10);
+    const parsedWorldSize = parseInt(mapRoot.dataset.worldSize ?? '100', 10);
+    const worldSize = Number.isFinite(parsedWorldSize) && parsedWorldSize > 0 ? parsedWorldSize : 100;
     let currentRadius = DEFAULT_RADIUS;
     let tileLookup = new Map();
     let loadingRegion = false;
@@ -36,6 +38,15 @@
     }
 
     const coordKey = (x, y) => `${x}:${y}`;
+
+    const wrapCoordinate = (value) => {
+      if (!Number.isFinite(worldSize) || worldSize <= 0) {
+        return value;
+      }
+      const span = worldSize * 2 + 1;
+      const normalized = ((value + worldSize) % span + span) % span;
+      return normalized - worldSize;
+    };
 
     async function fetchRegion(params) {
       const search = new URLSearchParams();
@@ -91,30 +102,36 @@
       xAxisEl.innerHTML = '';
 
       for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
+        const wrappedY = wrapCoordinate(y);
         const div = document.createElement('div');
-        div.className = `y-label ${y === currentY ? 'highlight-axis' : ''}`;
-        div.innerText = y;
+        div.className = `y-label ${wrappedY === currentY ? 'highlight-axis' : ''
+          }`;
+        div.innerText = wrappedY;
         yAxisEl.appendChild(div);
       }
 
       for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
+        const wrappedX = wrapCoordinate(x);
         const div = document.createElement('div');
-        div.className = `x-label ${x === currentX ? 'highlight-axis' : ''}`;
-        div.innerText = x;
+        div.className = `x-label ${wrappedX === currentX ? 'highlight-axis' : ''
+          }`;
+        div.innerText = wrappedX;
         xAxisEl.appendChild(div);
       }
 
       for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
+        const wrappedY = wrapCoordinate(y);
         for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
+          const wrappedX = wrapCoordinate(x);
           const tile = document.createElement('div');
-          const tileData = tileLookup.get(coordKey(x, y));
-          const visual = describeTile(tileData, x, y);
+          const tileData = tileLookup.get(coordKey(wrappedX, wrappedY));
+          const visual = describeTile(tileData, wrappedX, wrappedY);
 
           tile.className = `tile ${visual.typeClass}`;
           tile.innerHTML = `<span class="tile-content">${visual.icon}</span>`;
           tile.onmouseenter = (event) => showTooltip(event, visual.title);
           tile.onmouseleave = hideTooltip;
-          tile.onmouseover = () => showDetails(tileData, visual, x, y);
+          tile.onmouseover = () => showDetails(tileData, visual, wrappedX, wrappedY);
 
           gridEl.appendChild(tile);
         }
@@ -228,14 +245,18 @@
     }
 
     window.moveMap = (dx, dy) => {
-      updateRegion({ x: currentX + dx, y: currentY + dy });
+      const nextX = wrapCoordinate(currentX + dx);
+      const nextY = wrapCoordinate(currentY + dy);
+      updateRegion({ x: nextX, y: nextY });
     };
 
     window.goToCoords = () => {
       const parsedX = parseInt(inputX.value, 10);
       const parsedY = parseInt(inputY.value, 10);
       if (Number.isFinite(parsedX) && Number.isFinite(parsedY)) {
-        updateRegion({ x: parsedX, y: parsedY });
+        const targetX = wrapCoordinate(parsedX);
+        const targetY = wrapCoordinate(parsedY);
+        updateRegion({ x: targetX, y: targetY });
       }
     };
 

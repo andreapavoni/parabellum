@@ -18,10 +18,11 @@ use parabellum_types::map::{Position, ValleyTopology};
 
 const MAP_REGION_RADIUS: i32 = 7;
 
-pub async fn map(user: CurrentUser) -> impl IntoResponse {
+pub async fn map(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let template = MapTemplate {
         current_user: Some(user),
         nav_active: "map",
+        world_size: state.world_size,
     };
     render_template(template, None).into_response()
 }
@@ -126,6 +127,7 @@ pub async fn map_region(
         Ok(center) => center,
         Err(response) => return response,
     };
+    let center = wrap_point(center, state.world_size);
 
     let query = GetMapRegion {
         center: Position {
@@ -133,6 +135,7 @@ pub async fn map_region(
             y: center.y,
         },
         radius: MAP_REGION_RADIUS,
+        world_size: state.world_size,
     };
 
     let fields = match state.app_bus.query(query, GetMapRegionHandler::new()).await {
@@ -181,4 +184,23 @@ fn determine_center(user: &CurrentUser, params: &MapRegionQuery) -> Result<MapPo
         )
             .into_response()),
     }
+}
+
+fn wrap_point(point: MapPoint, world_size: i32) -> MapPoint {
+    MapPoint {
+        x: wrap_coordinate(point.x, world_size),
+        y: wrap_coordinate(point.y, world_size),
+    }
+}
+
+fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
+    if world_size <= 0 {
+        return value;
+    }
+    let span = world_size * 2 + 1;
+    let mut normalized = (value + world_size) % span;
+    if normalized < 0 {
+        normalized += span;
+    }
+    normalized - world_size
 }

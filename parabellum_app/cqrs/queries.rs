@@ -66,6 +66,7 @@ impl Query for ListVillagesByPlayerId {
 pub struct GetMapRegion {
     pub center: Position,
     pub radius: i32,
+    pub world_size: i32,
 }
 
 impl Query for GetMapRegion {

@@ -57,4 +57,5 @@ pub struct ResourcesTemplate {
 pub struct MapTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
+    pub world_size: i32,
 }
