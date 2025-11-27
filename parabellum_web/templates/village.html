@@ -1,24 +1,19 @@
 {% extends "layouts/base.html" %}
 {% block title %}{{t!("game.village.title")}} – PARABELLUM{% endblock %}
 {% block body %}
-  <!-- CORPO PRINCIPALE -->
+{% if let Some(user) = current_user %}
   <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
-
-      <!-- SEZIONE CENTRO VILLAGGIO -->
       <div class="flex flex-col items-center w-full md:w-auto">
-          <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">{{t!("game.village.capital", name = "Karthago")}}</h1>
+          <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">
+            {{ user.village.name }}
+          </h1>
 
           <div class="village-container-responsive relative">
-              <div class="wall-ring" title="Mura cittadine"></div>
+              <div class="wall-ring" title="Wall"></div>
 
-              <!-- CENTRO -->
               <div class="building-slot main-building" style="top: 50%; left: 50%;" title="Main Building">{{t!("game.village.main_building")}}</div>
-
-              <!-- PUNTO DI RADUNO -->
               <div class="building-slot rally-point" style="top: 55%; left: 67%;" title="Rally Point"></div>
 
-
-              <!-- === ANELLO INTERNO (1-6) === -->
               <div class="building-slot" style="top: 28%; left: 47%;">1</div>
               <div class="building-slot" style="top: 35%; left: 63%;">2</div>
               <div class="building-slot" style="top: 37%; left: 32%;">3</div>
@@ -26,73 +21,46 @@
               <div class="building-slot" style="top: 63%; left: 38%;">5</div>
               <div class="building-slot" style="top: 52%; left: 27%;">6</div>
 
-
-              <!-- === ANELLO ESTERNO (7-21) === -->
-
-              <!-- Lato Ovest (Sinistra) -->
               <div class="building-slot" style="top: 22%; left: 24%;">7</div>
               <div class="building-slot" style="top: 36%; left: 15%;">8</div>
-              <div class="building-slot" style="top: 52%; left: 12%;">19</div> <!-- Molto esterno -->
+              <div class="building-slot" style="top: 52%; left: 12%;">19</div>
               <div class="building-slot" style="top: 67%; left: 18%;">9</div>
               <div class="building-slot" style="top: 77%; left: 28%;">10</div>
-              <div class="building-slot" style="top: 13%; left: 40%;">21</div> <!-- Estremo Nord-Ovest -->
+              <div class="building-slot" style="top: 13%; left: 40%;">21</div>
 
-              <!-- Lato Sud (Sotto) -->
               <div class="building-slot" style="top: 86%; left: 43%;">20</div>
               <div class="building-slot" style="top: 85%; left: 60%;">14</div>
 
-              <!-- Lato Est (Destra) -->
               <div class="building-slot" style="top: 76%; left: 75%;">13</div>
               <div class="building-slot" style="top: 63%; left: 85%;">12</div>
-              <div class="building-slot" style="top: 45%; left: 88%;">18</div> <!-- Molto esterno -->
+              <div class="building-slot" style="top: 45%; left: 88%;">18</div>
               <div class="building-slot" style="top: 30%; left: 80%;">11</div>
 
-              <!-- Lato Nord (Sopra) -->
-              <!--<div class="building-slot" style="top: 20%; left: 70%;">16</div>-->
-              <!--<div class="building-slot" style="top: 12%; left: 65%;">17</div>-->
               <div class="building-slot" style="top: 15%; left: 62%;">15</div>
-
-
-              <!-- Mura Label -->
-
           </div>
-
-
           {% include "partials/_building_queue.html" %}
       </div>
 
-      <!-- SIDEBAR LISTA VILLAGGI -->
       <div class="w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
           <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">{{t!("game.village.villages")}}:</h3>
           <ul class="text-xs space-y-2 list-none pl-0">
-              <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
-                  <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Cannae</span>
-                  <span class="text-gray-500">(116|-318)</span>
+              {% for village in user.villages %}
+              <li class="flex justify-between items-center p-1 rounded {% if village.id == user.village.id %}font-bold bg-gray-100 cursor-default{% else %}cursor-pointer hover:bg-gray-100{% endif %}">
+                  <span class="flex items-center">
+                    <span class="w-2 h-2 rounded-full mr-2 {% if village.id == user.village.id %}bg-orange-500{% else %}bg-green-500{% endif %}"></span>
+                    {{ village.name }}
+                  </span>
+                  <span class="{% if village.id == user.village.id %}text-gray-600{% else %}text-gray-500{% endif %}">
+                    ({{ village.position.x }}|{{ village.position.y }})
+                  </span>
               </li>
-              <li class="flex justify-between items-center font-bold bg-gray-100 p-1 rounded cursor-default">
-                  <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-orange-500 mr-2"></span> Karthago</span>
-                  <span class="text-gray-600">(32|-160)</span>
-              </li>
-              <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
-                  <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Mediana</span>
-                  <span class="text-gray-500">(34|-163)</span>
-              </li>
-              <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
-                  <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Sabrata</span>
-                  <span class="text-gray-500">(112|-316)</span>
-              </li>
-              <li class="flex justify-between items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
-                  <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Tharros</span>
-                  <span class="text-gray-500">(112|-218)</span>
-              </li>
+              {% endfor %}
           </ul>
-
-          <!--<div class="mt-8 text-xs space-y-2 text-gray-600">
-              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.map")}}</div>
-              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.stats")}}</div>
-              <div class="hover:underline cursor-pointer text-blue-600">{{t!("game.village.report")}}</div>
-          </div>-->
       </div>
-
   </div>
+{% else %}
+  <div class="container mx-auto px-4 py-12 text-center text-gray-600">
+    {{t!("errors.unauthorized")}}
+  </div>
+{% endif %}
 {% endblock %}

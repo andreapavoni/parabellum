@@ -15,7 +15,6 @@ game:
     stats: Statistics
     report: Report
     main_building: Main
-    whoami: "%{name}'s Village"
     building_queue: Building queue
     buildings:
       warehouse: Warehouse

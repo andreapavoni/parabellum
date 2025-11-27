@@ -11,8 +11,17 @@ use axum_extra::extract::{
 use std::future::Future;
 use uuid::Uuid;
 
-use parabellum_app::{cqrs::queries::GetUserById, queries_handlers::GetUserByIdHandler};
-use parabellum_types::common::User as UserType;
+use parabellum_app::{
+    cqrs::queries::{GetPlayerByUserId, GetUserById, ListVillagesByPlayerId},
+    queries_handlers::{
+        GetPlayerByUserIdHandler, GetUserByIdHandler, ListVillagesByPlayerIdHandler,
+    },
+};
+use parabellum_game::models::village::Village;
+use parabellum_types::{
+    common::{Player as PlayerType, User as UserType},
+    errors::ApplicationError,
+};
 
 use crate::http::AppState;
 
@@ -48,6 +57,40 @@ pub fn validate_csrf(jar: &SignedCookieJar, form_token: &str) -> bool {
     jar.get("csrf_token")
         .map(|cookie| cookie.value() == form_token)
         .unwrap_or(false)
+}
+
+fn pick_active_village<'a>(villages: &'a [Village]) -> Option<&'a Village> {
+    villages
+        .iter()
+        .find(|v| v.is_capital)
+        .or_else(|| villages.first())
+}
+
+/// Initialize session cookies (`user_id` and `current_village_id`) for an authenticated user.
+pub async fn initialize_session(
+    state: &AppState,
+    jar: SignedCookieJar,
+    user_id: Uuid,
+) -> Result<SignedCookieJar, ApplicationError> {
+    let player = state
+        .app_bus
+        .query(
+            GetPlayerByUserId { user_id },
+            GetPlayerByUserIdHandler::new(),
+        )
+        .await?;
+
+    let villages = list_player_villages(state, player.id).await?;
+
+    let village_id = pick_active_village(&villages)
+        .map(|v| v.id)
+        .ok_or_else(|| {
+            ApplicationError::Unknown(format!("Player {} has no villages", player.id))
+        })?;
+
+    let jar = jar.add(Cookie::new("user_id", user_id.to_string()));
+    let jar = jar.add(Cookie::new("current_village_id", village_id.to_string()));
+    Ok(jar)
 }
 
 /// Trait that exposes a CSRF token field on a form type.
@@ -99,23 +142,94 @@ where
     }
 }
 
-/// Loads the currently authenticated user from the cookie.
-/// Returns `Ok(User)` if found, or `Err(Redirect)` to redirect to /login.
-pub async fn current_user(state: &AppState, jar: &SignedCookieJar) -> Result<UserType, Redirect> {
-    if let Some(cookie) = jar.get("user_id") {
-        let user_id = match Uuid::parse_str(cookie.value()) {
-            Ok(id) => id,
-            Err(_) => return Err(Redirect::to("/login")),
-        };
-        let query = GetUserById { id: user_id };
+/// Loads the currently authenticated session (user, player, villages) from the cookies.
+/// Returns `Ok(CurrentUser)` if found, or `Err(Redirect)` to redirect to /login.
+pub async fn current_user(
+    state: &AppState,
+    jar: &SignedCookieJar,
+) -> Result<CurrentUser, Redirect> {
+    let user_cookie = jar.get("user_id").ok_or_else(|| Redirect::to("/login"))?;
+    let user_id = Uuid::parse_str(user_cookie.value()).map_err(|_| Redirect::to("/login"))?;
 
-        match state.app_bus.query(query, GetUserByIdHandler::new()).await {
-            Ok(user) => Ok(user),
-            Err(_) => Err(Redirect::to("/login")),
-        }
-    } else {
-        Err(Redirect::to("/login"))
+    let user = state
+        .app_bus
+        .query(GetUserById { id: user_id }, GetUserByIdHandler::new())
+        .await
+        .map_err(|e| {
+            tracing::error!("Unable to load user {user_id}: {e}");
+            Redirect::to("/login")
+        })?;
+
+    let player = state
+        .app_bus
+        .query(
+            GetPlayerByUserId { user_id },
+            GetPlayerByUserIdHandler::new(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Unable to load player for {user_id}: {e}");
+            Redirect::to("/login")
+        })?;
+
+    let villages = load_villages(state, player.id).await?;
+    let village = select_current_village(jar, &villages, player.id)?;
+
+    Ok(CurrentUser {
+        account: user,
+        player,
+        village,
+        villages,
+    })
+}
+
+fn select_current_village(
+    jar: &SignedCookieJar,
+    villages: &[Village],
+    player_id: Uuid,
+) -> Result<Village, Redirect> {
+    if let Some(selected) = village_from_cookie(jar, villages, player_id) {
+        return Ok(selected.clone());
     }
+
+    pick_active_village(villages).cloned().ok_or_else(|| {
+        tracing::error!("Player {player_id} has no villages configured");
+        Redirect::to("/login")
+    })
+}
+
+fn village_from_cookie<'a>(
+    jar: &SignedCookieJar,
+    villages: &'a [Village],
+    player_id: Uuid,
+) -> Option<&'a Village> {
+    let village_id = jar
+        .get("current_village_id")
+        .and_then(|cookie| cookie.value().parse::<u32>().ok())?;
+
+    villages
+        .iter()
+        .find(|v| v.id == village_id && v.player_id == player_id)
+}
+
+async fn load_villages(state: &AppState, player_id: Uuid) -> Result<Vec<Village>, Redirect> {
+    list_player_villages(state, player_id).await.map_err(|e| {
+        tracing::error!("Unable to list villages for player {player_id}: {e}");
+        Redirect::to("/login")
+    })
+}
+
+async fn list_player_villages(
+    state: &AppState,
+    player_id: Uuid,
+) -> Result<Vec<Village>, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            ListVillagesByPlayerId { player_id },
+            ListVillagesByPlayerIdHandler::new(),
+        )
+        .await
 }
 
 /// Ensures that the requester is not already authenticated.
@@ -131,10 +245,15 @@ pub fn ensure_not_authenticated(jar: &SignedCookieJar) -> Result<(), Redirect> {
 /// Extractor for authenticated users.
 /// Automatically loads the user from the cookie.
 /// If no user is found or the user doesn't exist, returns a redirect to `/login`.
-#[derive(Clone)]
-pub struct User(pub UserType);
+#[derive(Clone, Debug)]
+pub struct CurrentUser {
+    pub account: UserType,
+    pub player: PlayerType,
+    pub village: Village,
+    pub villages: Vec<Village>,
+}
 
-impl<S> FromRequestParts<S> for User
+impl<S> FromRequestParts<S> for CurrentUser
 where
     S: Send + Sync,
     Key: FromRef<S>,
@@ -154,7 +273,7 @@ where
                 .await
                 .map_err(|_| Redirect::to("/login"))?;
 
-            current_user(&app_state, &jar).await.map(User)
+            current_user(&app_state, &jar).await
         }
     }
 }

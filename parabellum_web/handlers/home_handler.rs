@@ -13,7 +13,8 @@ pub async fn home(State(_state): State<AppState>, jar: SignedCookieJar) -> impl 
     }
 
     let template = HomeTemplate {
-        current_user: false,
+        current_user: None,
+        nav_active: "home",
     };
     return render_template(template, None).into_response();
 }

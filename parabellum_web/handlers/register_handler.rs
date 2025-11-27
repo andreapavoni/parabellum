@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
+use axum_extra::extract::SignedCookieJar;
 
 use parabellum_app::{
     command_handlers::RegisterPlayerCommandHandler,
@@ -17,7 +17,10 @@ use parabellum_types::{
 };
 
 use crate::{
-    handlers::{CsrfForm, HasCsrfToken, ensure_not_authenticated, generate_csrf, render_template},
+    handlers::{
+        CsrfForm, HasCsrfToken, ensure_not_authenticated, generate_csrf, initialize_session,
+        render_template,
+    },
     http::AppState,
     templates::RegisterTemplate,
 };
@@ -52,7 +55,8 @@ pub async fn register_page(
 
     let template = RegisterTemplate {
         csrf_token,
-        current_user: false,
+        current_user: None,
+        nav_active: "register",
         selected_tribe: "Roman".to_string(), // default selection
         selected_quadrant: "NorthEast".to_string(),
         ..Default::default()
@@ -106,11 +110,14 @@ pub async fn register(
                 .query(query, GetUserByEmailHandler::new())
                 .await
             {
-                Ok(user) => {
-                    let cookie = Cookie::new("user_id", user.id.to_string());
-                    let updated_jar = jar.add(cookie);
-                    return (updated_jar, Redirect::to("/village")).into_response();
-                }
+                Ok(user) => match initialize_session(&state, jar, user.id).await {
+                    Ok(jar) => return (jar, Redirect::to("/village")).into_response(),
+                    Err(e) => {
+                        tracing::error!("Registration session initialization failed: {}", e);
+                        return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.")
+                            .into_response();
+                    }
+                },
                 Err(e) => {
                     tracing::error!("Registration follow-up error: {}", e);
                     return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.")
@@ -123,7 +130,8 @@ pub async fn register(
             let (jar, new_csrf_token) = generate_csrf(jar);
             let template = RegisterTemplate {
                 csrf_token: new_csrf_token,
-                current_user: false,
+                current_user: None,
+                nav_active: "register",
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),
                 selected_tribe: form.tribe.clone(),
@@ -152,7 +160,8 @@ pub async fn register(
             tracing::error!("Registration DB error: {}", db_err);
             let (jar, new_csrf_token) = generate_csrf(jar);
             let template = RegisterTemplate {
-                current_user: false,
+                current_user: None,
+                nav_active: "register",
                 csrf_token: new_csrf_token,
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),

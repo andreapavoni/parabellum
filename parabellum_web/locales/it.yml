@@ -16,7 +16,6 @@ game:
     stats: Statistiche
     report: Rapporto
     main_building: Edificio Principale
-    whoami: "Villaggio di %{name}"
     construction_in_progress: Costruzione in corso
     buildings:
       warehouse: Magazzino

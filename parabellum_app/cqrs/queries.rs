@@ -1,4 +1,5 @@
-use parabellum_types::common::User;
+use parabellum_game::models::village::Village;
+use parabellum_types::common::{Player, User};
 use uuid::Uuid;
 
 use crate::cqrs::Query;
@@ -29,4 +30,31 @@ pub struct GetUserById {
 
 impl Query for GetUserById {
     type Output = User;
+}
+
+/// Fetch the player entity associated to a user id.
+pub struct GetPlayerByUserId {
+    pub user_id: Uuid,
+}
+
+impl Query for GetPlayerByUserId {
+    type Output = Player;
+}
+
+/// Fetch a village by id.
+pub struct GetVillageById {
+    pub id: u32,
+}
+
+impl Query for GetVillageById {
+    type Output = Village;
+}
+
+/// List all villages for a player.
+pub struct ListVillagesByPlayerId {
+    pub player_id: Uuid,
+}
+
+impl Query for ListVillagesByPlayerId {
+    type Output = Vec<Village>;
 }

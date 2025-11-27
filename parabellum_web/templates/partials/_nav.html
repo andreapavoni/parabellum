@@ -1,19 +1,26 @@
 <header class="bg-white border-b border-gray-300 shadow-sm">
-{% if current_user %}
+{% match current_user %}
+{% when Some(user) %}
 
 <div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
   <div class="font-serif font-bold text-lg text-gray-700 tracking-wide"><a class="cursor-pointer" href="/">PARABELLUM</a></div>
 
   <div class="flex items-center gap-3 text-gray-600">
-    <span class="font-bold text-gray-800">{{t!("user.username")}}</span>
+    <span class="font-bold text-gray-800">{{ user.player.username }}</span>
     <span class="cursor-pointer font-bold hover:text-green-600 text-green-700 hover:underline"><a href="/logout">{{t!("nav.logout")}}</a></span>
     <span class="sm:inline text-[12px] text-gray-600">09:34:20</span>
   </div>
 </div>
-<div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
-  <div class="nav-icon" title="Fields"><a href="/resources">🌾</a></div>
-  <div class="nav-icon nav-active" title="Village Center"><a href="/village">🏠</a></div>
-  <div class="nav-icon" title="Map"><a href="/map">🗺️</a></div>
+<div class='flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide'>
+  <div class='nav-icon {% if nav_active == "resources" %}nav-active{% endif %}' title="Fields">
+    <a href='{% if nav_active == "resources" %}#{% else %}/resources{% endif %}'>🌾</a>
+  </div>
+  <div class='nav-icon {% if nav_active == "village" %}nav-active{% endif %}' title="Village Center">
+    <a href='{% if nav_active == "village" %}#{% else %}/village{% endif %}'>🏠</a>
+  </div>
+  <div class='nav-icon {% if nav_active == "map" %}nav-active{% endif %}' title="Map">
+    <a href='{% if nav_active == "map" %}#{% else %}/map{% endif %}'>🗺️</a>
+  </div>
   <div class="nav-icon" title="Stats">📊</div>
   <div class="nav-icon" title="Reports">📜</div>
   <div class="nav-icon" title="Messages">✉️</div>
@@ -26,7 +33,7 @@
   <div class="res-item">👤 32/34</div>
 </div>
 
-{% else %}
+{% when None %}
 
   <div class="container mx-auto flex justify-between items-center">
     <div class="font-serif font-bold text-2xl text-gray-700 tracking-wide">
@@ -37,5 +44,5 @@
       <a href="/register" class="text-green-700 hover:underline">{{t!("nav.register")}}</a>
     </div>
   </div>
-{% endif %}
+{% endmatch %}
 </header>
