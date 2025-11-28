@@ -1,6 +1,6 @@
 use askama::Template;
 use parabellum_game::models::village::VillageBuilding;
-use parabellum_types::buildings::BuildingName;
+use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 
 use crate::handlers::CurrentUser;
 
@@ -53,6 +53,45 @@ pub struct ResourcesTemplate {
     pub nav_active: &'static str,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResourceCostView {
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+}
+
+impl From<ResourceGroup> for ResourceCostView {
+    fn from(resources: ResourceGroup) -> Self {
+        Self {
+            lumber: resources.lumber(),
+            clay: resources.clay(),
+            iron: resources.iron(),
+            crop: resources.crop(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildingOption {
+    pub name: BuildingName,
+    pub key: String,
+    pub cost: ResourceCostView,
+    pub upkeep: u32,
+    pub time_secs: u32,
+    pub time_formatted: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildingUpgradeInfo {
+    pub next_level: u8,
+    pub cost: ResourceCostView,
+    pub current_upkeep: u32,
+    pub upkeep: u32,
+    pub time_secs: u32,
+    pub time_formatted: String,
+}
+
 /// Template for individual building page.
 #[derive(Debug, Template)]
 #[template(path = "building.html")]
@@ -61,7 +100,9 @@ pub struct BuildingTemplate {
     pub nav_active: &'static str,
     pub slot_id: u8,
     pub slot_building: Option<VillageBuilding>,
-    pub available_buildings: Vec<BuildingName>,
+    pub available_buildings: Vec<BuildingOption>,
+    pub upgrade: Option<BuildingUpgradeInfo>,
+    pub current_upkeep: Option<u32>,
 }
 
 /// Template for the map page.

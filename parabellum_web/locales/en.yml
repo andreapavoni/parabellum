@@ -48,6 +48,12 @@ game:
     level: Level
     population: Population
     value: Output
+    upgrade: Next upgrade
+    cost: Cost
+    time: Build time
+    upkeep: Crop upkeep
+    build_action: Build
+    upgrade_action: "Upgrade to Lv %{level}"
     empty_slot: This slot is empty.
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings

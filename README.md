@@ -132,6 +132,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
+- [ ] **Help/Manual**: to learn.
 
 ---
 

@@ -38,7 +38,7 @@ game:
       lumber: Legname
       clay: Argilla
       iron: Ferro
-      grain: Raccolto
+      crop: Grano
     troops:
       title: Truppe
       no_units: Nessuna unità nel villaggio
@@ -49,6 +49,12 @@ game:
     level: Livello
     population: Popolazione
     value: Valore
+    upgrade: Prossimo upgrade
+    cost: Costo
+    time: Tempo di costruzione
+    upkeep: Consumo di grano
+    build_action: Costruisci
+    upgrade_action: "Migliora al Lv %{level}"
     empty_slot: Questo slot è vuoto.
     empty_slot_hint: Scegli un edificio da costruire qui.
     available: Edifici disponibili

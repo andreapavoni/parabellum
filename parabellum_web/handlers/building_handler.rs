@@ -4,19 +4,14 @@ use axum::{
 };
 use serde::Deserialize;
 
-use parabellum_game::models::{
-    buildings::{self, Building},
-    village::Village,
-};
-use parabellum_types::{
-    buildings::{BuildingGroup, BuildingName},
-    tribe::Tribe,
-};
+use parabellum_game::models::{buildings::Building, village::VillageBuilding};
+use parabellum_types::buildings::BuildingName;
 
 use crate::{
     handlers::{CurrentUser, render_template},
     http::AppState,
-    templates::BuildingTemplate,
+    templates::{BuildingOption, BuildingTemplate, BuildingUpgradeInfo, ResourceCostView},
+    view_helpers::format_duration,
 };
 
 #[derive(Debug, Deserialize)]
@@ -38,11 +33,23 @@ pub async fn building(
     };
 
     let slot_building = user.village.get_building_by_slot_id(slot_id);
-    // TODO:
-    // - check if slot is already occupied or if is reserved (wall, main building, rally point)
-    //  - show information about the building (value, current level, costs/times for upgrade if available)
-    // - if not occupied:
-    //  - show a list of unlocked buildings that can be built in that slot
+    let main_building_level = user.village.main_building_level();
+    let current_upkeep = slot_building
+        .as_ref()
+        .map(|slot| slot.building.cost().upkeep);
+    let upgrade = slot_building
+        .as_ref()
+        .and_then(|slot| building_upgrade_info(slot, state.server_speed, main_building_level));
+
+    let available_buildings = if slot_building.is_none() {
+        user.village
+            .available_buildings_for_slot(slot_id)
+            .into_iter()
+            .filter_map(|name| build_option(name, state.server_speed, main_building_level))
+            .collect::<Vec<BuildingOption>>()
+    } else {
+        vec![]
+    };
 
     let nav_active = if slot_id <= 18 {
         "resources"
@@ -55,8 +62,54 @@ pub async fn building(
         nav_active,
         slot_id,
         slot_building,
-        available_buildings: vec![],
+        available_buildings,
+        upgrade,
+        current_upkeep,
     };
 
     render_template(template, None).into_response()
+}
+
+fn build_option(
+    name: BuildingName,
+    server_speed: i8,
+    main_building_level: u8,
+) -> Option<BuildingOption> {
+    let building = Building::new(name.clone(), server_speed);
+    let cost = building.cost();
+    let time_secs = building.calculate_build_time_secs(&server_speed, &main_building_level);
+
+    Some(BuildingOption {
+        name: name.clone(),
+        key: format!("{:?}", &name),
+        cost: cost.resources.into(),
+        upkeep: cost.upkeep,
+        time_secs,
+        time_formatted: format_duration(time_secs),
+    })
+}
+
+fn building_upgrade_info(
+    slot_building: &VillageBuilding,
+    server_speed: i8,
+    main_building_level: u8,
+) -> Option<BuildingUpgradeInfo> {
+    let current_upkeep = slot_building.building.cost().upkeep;
+    let next_level = slot_building.building.level.saturating_add(1);
+    let upgraded = slot_building
+        .building
+        .clone()
+        .at_level(next_level, server_speed)
+        .ok()?;
+    let cost = upgraded.cost();
+    let time_secs = upgraded.calculate_build_time_secs(&server_speed, &main_building_level);
+
+    Some(BuildingUpgradeInfo {
+        next_level,
+        cost: cost.resources.into(),
+        current_upkeep,
+        upkeep: cost.upkeep,
+        time_secs,
+        time_formatted: format_duration(time_secs),
+    })
 }

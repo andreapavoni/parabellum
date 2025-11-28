@@ -56,7 +56,7 @@ impl WebRouter {
         let protected_routes = Router::new()
             .route("/village", get(village))
             .route("/resources", get(resources))
-            .route("/build", get(building))
+            .route("/build", get(building).post(building))
             .route("/map", get(map))
             .route("/map/data", get(map_region))
             .route("/logout", get(logout));

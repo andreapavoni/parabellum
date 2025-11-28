@@ -12,12 +12,12 @@
             </div>
         </div>-->
         {% if let Some(slot) = slot_building %}
-        <div class="space-y-4">
+        <div class="space-y-6">
             <div>
                 <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
                 <div class="text-2xl font-semibold">{{ slot.building.name }}</div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
                 <div class="p-3 border rounded-md bg-gray-50">
                     <div class="text-gray-500">{{t!("game.building.level")}}</div>
                     <div class="text-lg font-bold">{{ slot.building.level }}</div>
@@ -30,7 +30,63 @@
                     <div class="text-gray-500">{{t!("game.building.value")}}</div>
                     <div class="text-lg font-bold">{{ slot.building.value }}</div>
                 </div>
+                {% if let Some(upkeep) = current_upkeep %}
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
+                    <div class="text-lg font-bold">{{ upkeep }}</div>
+                </div>
+                {% endif %}
             </div>
+            {% if let Some(next) = upgrade %}
+            <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.upgrade")}} – Lv {{ next.next_level }}</div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🌲</span>
+                            <span>{{t!("game.village.resources.lumber")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.lumber }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🧱</span>
+                            <span>{{t!("game.village.resources.clay")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.clay }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>⚒️</span>
+                            <span>{{t!("game.village.resources.iron")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.iron }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🌾</span>
+                            <span>{{t!("game.village.resources.crop")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.crop }}</div>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+                    <div class="text-gray-500 text-sm uppercase">{{t!("game.building.time")}}</div>
+                    <div class="text-xl font-semibold text-gray-800">{{ next.time_formatted }}</div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+                    <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
+                    <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
+                </div>
+                <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
+                    <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                    <input type="hidden" name="action" value="upgrade">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
+                        {{t!("game.building.upgrade_action", level = next.next_level) }}
+                    </button>
+                </form>
+            </div>
+            {% endif %}
         </div>
         {% else %}
         <div class="space-y-6 py-6">
@@ -47,9 +103,46 @@
             <div>
                 <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available")}}</div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                    {% for name in available_buildings %}
-                    <div class="p-3 border rounded-md bg-gray-50 text-left text-sm font-medium text-gray-700">
-                        {{ name }}
+                    {% for option in available_buildings %}
+                    <div class="p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3">
+                        <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
+                        <div>
+                            <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
+                            <div class="grid grid-cols-2 gap-2 mt-1">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.lumber }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.clay }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.iron }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.crop }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.time")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.time_formatted }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.upkeep")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
+                        </div>
+                        <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
+                            <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                            <input type="hidden" name="action" value="build">
+                            <input type="hidden" name="building_name" value="{{ option.key }}">
+                            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded">
+                                {{t!("game.building.build_action")}}
+                            </button>
+                        </form>
                     </div>
                     {% endfor %}
                 </div>
