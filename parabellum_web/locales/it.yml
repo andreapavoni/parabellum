@@ -12,6 +12,7 @@ game:
     title: Centro del Villaggio
     capital: "%{name} (Capitale)"
     villages: Villaggi
+    resources: Risorse
     map: Mappa
     stats: Statistiche
     report: Rapporto

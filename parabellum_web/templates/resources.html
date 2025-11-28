@@ -1,5 +1,6 @@
 {% extends "layouts/base.html" %}
-{% block title %}{{t!("game.village.title")}} – PARABELLUM{% endblock %}
+{% block title %}{{t!("game.village.resources")}} – PARABELLUM{% endblock %}
+
 {% block body %}
 {% if let Some(user) = current_user %}
 <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
@@ -10,37 +11,232 @@
         </h1>
 
         <div class="map-container-responsive">
-            <div class="hex wood" style="top: 0px; left: 60px;"><span class="level">1</span></div>
-            <div class="hex crop" style="top: 0px; left: 120px;"><span class="level">1</span></div>
-            <div class="hex iron" style="top: 0px; left: 180px;"><span class="level">1</span></div>
+            <a class="hex wood {% if let Some(slot) = user.village.get_building_by_slot_id(1) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=1"
+               style="top: 0px; left: 60px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(1) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(1) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(2) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=2"
+               style="top: 0px; left: 120px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(2) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(2) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex iron {% if let Some(slot) = user.village.get_building_by_slot_id(3) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=3"
+               style="top: 0px; left: 180px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(3) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(3) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
 
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(4) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=4"
+               style="top: 52px; left: 30px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(4) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(4) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex wood {% if let Some(slot) = user.village.get_building_by_slot_id(5) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=5"
+               style="top: 52px; left: 90px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(5) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(5) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex iron {% if let Some(slot) = user.village.get_building_by_slot_id(6) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=6"
+               style="top: 52px; left: 150px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(6) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(6) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(7) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=7"
+               style="top: 52px; left: 210px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(7) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(7) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
 
-            <div class="hex crop" style="top: 52px; left: 30px;"><span class="level">1</span></div>
-            <div class="hex wood" style="top: 52px; left: 90px;"><span class="level">1</span></div>
-            <div class="hex iron" style="top: 52px; left: 150px;"><span class="level">1</span></div>
-            <div class="hex crop" style="top: 52px; left: 210px;"><span class="level">2</span></div>
+            <a class="hex wood {% if let Some(slot) = user.village.get_building_by_slot_id(8) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=8"
+               style="top: 104px; left: 0px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(8) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(8) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex clay {% if let Some(slot) = user.village.get_building_by_slot_id(9) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=9"
+               style="top: 104px; left: 60px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(9) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(9) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
 
+            <a class="village"
+               href="/village"
+               title="{{t!("game.village.title")}}">
+            </a>
 
-            <div class="hex wood" style="top: 104px; left: 0px;"><span class="level">1</span></div>
-            <div class="hex clay" style="top: 104px; left: 60px;"><span class="level">1</span></div>
+            <a class="hex wood {% if let Some(slot) = user.village.get_building_by_slot_id(10) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=10"
+               style="top: 104px; left: 180px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(10) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(10) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(11) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=11"
+               style="top: 104px; left: 240px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(11) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(11) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
 
+            <a class="hex clay {% if let Some(slot) = user.village.get_building_by_slot_id(12) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=12"
+               style="top: 156px; left: 30px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(12) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(12) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex clay {% if let Some(slot) = user.village.get_building_by_slot_id(13) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=13"
+               style="top: 156px; left: 90px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(13) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(13) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(14) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=14"
+               style="top: 156px; left: 150px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(14) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(14) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex iron {% if let Some(slot) = user.village.get_building_by_slot_id(15) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=15"
+               style="top: 156px; left: 210px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(15) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(15) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
 
-            <div class="village">
-                <!--<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/it.svg" style="opacity:0; width:100%; height:100%; background: url('https://thumbs.dreamstime.com/b/cartoon-medieval-village-top-view-houses-fountain-vector-illustration-216652605.jpg') center/cover no-repeat;" alt="Village">-->
-            </div>
-
-            <div class="hex wood" style="top: 104px; left: 180px;"><span class="level">1</span></div>
-            <div class="hex crop" style="top: 104px; left: 240px;"><span class="level">2</span></div>
-
-            <div class="hex clay" style="top: 156px; left: 30px;"><span class="level">1</span></div>
-            <div class="hex clay" style="top: 156px; left: 90px;"><span class="level">1</span></div>
-            <div class="hex crop" style="top: 156px; left: 150px;"><span class="level">1</span></div>
-            <div class="hex iron" style="top: 156px; left: 210px;"><span class="level">2</span></div>
-
-            <div class="hex clay" style="top: 208px; left: 60px;"><span class="level">1</span></div>
-            <div class="hex iron" style="top: 208px; left: 120px;"><span class="level">1</span></div>
-            <div class="hex crop" style="top: 208px; left: 180px;"><span class="level">2</span></div>
-
+            <a class="hex clay {% if let Some(slot) = user.village.get_building_by_slot_id(16) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=16"
+               style="top: 208px; left: 60px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(16) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(16) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex iron {% if let Some(slot) = user.village.get_building_by_slot_id(17) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=17"
+               style="top: 208px; left: 120px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(17) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(17) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
+            <a class="hex crop {% if let Some(slot) = user.village.get_building_by_slot_id(18) %}{% if slot.building.level > 0 %}occupied{% endif %}{% endif %}"
+               href="/build?s=18"
+               style="top: 208px; left: 180px;"
+               title="{% if let Some(slot) = user.village.get_building_by_slot_id(18) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                <span class="level">
+                  {% if let Some(slot) = user.village.get_building_by_slot_id(18) %}
+                    {{ slot.building.level }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
+            </a>
         </div>
         {% include "partials/_building_queue.html" %}
     </div>
@@ -50,25 +246,24 @@
 
             <div class="flex-1">
                 <h3 class="font-bold mb-3 text-sm">{{t!("game.village.resources.title")}}:</h3>
-                <div class="text-xs space-y-2">
-                    <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🌲 {{t!("game.village.resources.lumber")}}:</span>
-                        <span class="font-bold">{{ user.village.production.effective.lumber }}</span>
+                <div class="text-xs space-y-3">
+                    <div class="flex justify-between border-b border-gray-100 pb-2">
+                        <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.lumber }}/{{t!("game.hour")}}</span>
                     </div>
-                    <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🧱 {{t!("game.village.resources.clay")}}:</span>
-                        <span class="font-bold">{{ user.village.production.effective.clay }}</span>
+                    <div class="flex justify-between border-b border-gray-100 pb-2">
+                        <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.clay }}/{{t!("game.hour")}}</span>
                     </div>
-                    <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>⛏️ {{t!("game.village.resources.iron")}}:</span>
-                        <span class="font-bold">{{ user.village.production.effective.iron }}</span>
+                    <div class="flex justify-between border-b border-gray-100 pb-2">
+                        <span>⛏️ {{t!("game.village.resources.iron")}}</span>
+                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.iron }}/{{t!("game.hour")}}</span>
                     </div>
-                    <div class="flex justify-between border-b border-gray-100 pb-1">
-                        <span>🌾 {{t!("game.village.resources.crop")}}:</span>
-                        <span class="font-bold">{{ user.village.production.effective.crop }}</span>
+                    <div class="flex justify-between border-b border-gray-100 pb-2">
+                        <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.crop }}/{{t!("game.hour")}}</span>
                     </div>
                 </div>
-                <div class="mt-2 text-[12px] font-bold text-gray-400 text-right">/{{t!("game.hour")}}</div>
             </div>
 
             <div class="flex-1 md:mt-8">

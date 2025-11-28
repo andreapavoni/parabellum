@@ -4,9 +4,9 @@
 {% if let Some(user) = current_user %}
   <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
       <div class="flex flex-col items-center w-full md:w-auto">
-          <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left md:pl-8">
-            {{ user.village.name }}
-          </h1>
+        <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left">
+          {{  user.village.name }} ({{  user.village.position.x }}|{{  user.village.position.y }})
+        </h1>
 
           <div class="village-container-responsive relative">
               <a class="wall-ring-link"

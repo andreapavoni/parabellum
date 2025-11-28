@@ -85,7 +85,7 @@ impl Village {
             tribe: player.tribe.clone(),
             buildings: vec![],
             oases: vec![],
-            population: 2,
+            population: 0,
             army: None,
             reinforcements: vec![],
             deployed_armies: vec![],
@@ -997,10 +997,10 @@ impl Default for VillageStocks {
         Self {
             warehouse_capacity: 800, // Base capacity
             granary_capacity: 800,   // Base capacity
-            lumber: 0,
-            clay: 0,
-            iron: 0,
-            crop: 0,
+            lumber: 800,
+            clay: 800,
+            iron: 800,
+            crop: 800,
         }
     }
 }

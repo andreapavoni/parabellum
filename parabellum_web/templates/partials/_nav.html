@@ -26,11 +26,26 @@
   <div class="nav-icon" title="Messages">✉️</div>
 </div>
 <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
-  <div class="res-item">🌲 108/1200</div>
-  <div class="res-item">🧱 81/1200</div>
-  <div class="res-item">⛏️ 45/1200</div>
-  <div class="res-item">🌾 20/800</div>
-  <div class="res-item">👤 32/34</div>
+  <div class="res-item">
+    <span class="mr-1">🌲</span>
+    <span>{{ user.village.stored_resources().lumber() }}/{{ user.village.warehouse_capacity() }}</span>
+  </div>
+  <div class="res-item">
+    <span class="mr-1">🧱</span>
+    <span>{{ user.village.stored_resources().clay() }}/{{ user.village.warehouse_capacity() }}</span>
+  </div>
+  <div class="res-item">
+    <span class="mr-1">⛏️</span>
+    <span>{{ user.village.stored_resources().iron() }}/{{ user.village.warehouse_capacity() }}</span>
+  </div>
+  <div class="res-item">
+    <span class="mr-1">🌾</span>
+    <span>{{ user.village.stored_resources().crop() }}/{{ user.village.granary_capacity() }}</span>
+  </div>
+  <div class="res-item">
+    <span class="mr-1">👤</span>
+    <span>{{ user.village.population }}</span>
+  </div>
 </div>
 
 {% when None %}
