@@ -16,6 +16,18 @@ game:
     report: Report
     main_building: Main
     building_queue: Building queue
+    slots:
+      empty: "Empty slot"
+      occupied: "%{name} (Lv %{level})"
+    rally_point:
+      empty: "Rally Point - empty"
+      occupied: "Rally Point - Lv %{level}"
+    wall:
+      empty: "Wall - empty"
+      occupied: "Wall - %{name} (Lv %{level})"
+    main_building_slot:
+      empty: "Main Building - empty"
+      occupied: "Main Building - Lv %{level}"
     buildings:
       warehouse: Warehouse
       granary: Granary

@@ -17,6 +17,18 @@ game:
     report: Rapporto
     main_building: Edificio Principale
     construction_in_progress: Costruzione in corso
+    slots:
+      empty: "Slot vuoto"
+      occupied: "%{name} (Lv %{level})"
+    rally_point:
+      empty: "Punto di Raduno - vuoto"
+      occupied: "Punto di Raduno - Lv %{level}"
+    wall:
+      empty: "Mura - vuote"
+      occupied: "Mura - %{name} (Lv %{level})"
+    main_building_slot:
+      empty: "Edificio Principale - vuoto"
+      occupied: "Edificio Principale - Lv %{level}"
     buildings:
       warehouse: Magazzino
       granary: Granaio

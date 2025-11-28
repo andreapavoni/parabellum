@@ -321,7 +321,6 @@
    pointer-events: none;
  }
 
- /* FRECCE NAVIGAZIONE */
  .nav-arrow {
    position: absolute;
    width: 0;
@@ -330,10 +329,6 @@
    cursor: pointer;
    z-index: 5;
  }
-
- /*.nav-arrow:hover {
-   transform: scale(1.1);
- }*/
 
  .arrow-n {
    top: -40px;
@@ -367,7 +362,6 @@
    border-color: transparent transparent transparent #8ebf42;
  }
 
- /* INPUT BOX */
  .coords-input-container {
    background: #fff;
    border: 1px solid #ddd;
@@ -380,26 +374,10 @@
    margin-top: 15px;
  }
 
- /* Tooltip */
- #tile-info {
-   position: absolute;
-   background: rgba(0, 0, 0, 0.9);
-   color: #fff;
-   padding: 6px 10px;
-   border-radius: 4px;
-   font-size: 11px;
-   pointer-events: none;
-   display: none;
-   z-index: 100;
-   white-space: nowrap;
-   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
- }
-
  /* --- VILLAGE MAP WRAPPER --- */
  .village-container-responsive {
    width: 400px;
    height: 350px;
-   margin: 0 auto;
    position: relative;
    background-color: #8ebf42;
    background-image: radial-gradient(circle, #9acd56 10%, #8ebf42 90%);
@@ -418,53 +396,73 @@
    }
  }
 
- /* --- ELEMENTI DECORATIVI --- */
- .wall-ring {
+ .wall-ring-link {
    position: absolute;
    top: 12px;
    left: 12px;
-   right: 12px;
-   bottom: 12px;
-   border: 5px dashed rgba(255, 255, 255, 0.5);
-   border-radius: 50%;
-   pointer-events: none;
-   opacity: 0.8;
+   width: calc(100% - 24px);
+   height: calc(100% - 24px);
+   display: block;
    z-index: 1;
  }
 
- .river {
-   position: absolute;
-   top: -50px;
-   left: 44%;
-   width: 55px;
-   height: 500px;
-   background: #a3d5ff;
-   transform: rotate(12deg);
-   opacity: 0.5;
-   filter: blur(1px);
+ .wall-ring {
+   width: 100%;
+   height: 100%;
    pointer-events: none;
-   z-index: 0;
+   opacity: 0.9;
+ }
+
+ .wall-ring .wall-ring-track {
+   fill: transparent;
+   stroke: rgba(255, 255, 255, 0.5);
+   stroke-width: 1.5%;
+   stroke-dasharray: 10 10;
+   pointer-events: stroke;
+   cursor: pointer;
+   transition: stroke 0.2s ease;
+ }
+
+ .wall-ring .wall-ring-track:hover {
+   stroke: rgba(255, 255, 255, 0.85);
+ }
+
+ .wall-ring.occupied .wall-ring-track {
+   stroke: rgba(249, 115, 22, 0.85);
+   stroke-dasharray: none;
  }
 
  /* --- SLOT EDIFICI --- */
- .building-slot {
-   position: absolute;
-   width: 36px;
-   height: 36px;
-   background-color: rgba(139, 69, 19, 0.15);
-   border: 1px dashed rgba(139, 69, 19, 0.5);
-   border-radius: 50%;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   cursor: pointer;
-   transition: all 0.2s ease;
-   z-index: 10;
-   font-size: 9px;
-   font-weight: bold;
-   color: rgba(0, 0, 0, 0.5);
-   /* Anchor point centrale per precisione */
-   transform: translate(-50%, -50%);
+
+.building-slot {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  background-color: rgba(139, 69, 19, 0.15);
+  border: 1px dashed rgba(139, 69, 19, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+  font-size: 9px;
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.5);
+  text-decoration: none;
+  transform: translate(-50%, -50%);
+}
+
+ .building-slot .slot-label {
+   display: inline-block;
+   font-weight: 700;
+ }
+
+ .building-slot.occupied {
+   background-color: rgba(34, 197, 94, 0.3);
+   border-color: rgba(34, 197, 94, 0.75);
+   color: #14532d;
  }
 
  .building-slot:hover {
@@ -485,7 +483,6 @@
    font-size: 10px;
  }
 
- /* Punto di Raduno: spostato per non collidere con slot 4 e 3 */
  .rally-point {
    width: 70px;
    height: 85px;

@@ -24,7 +24,6 @@
     const mapContainer = document.querySelector('.map-container-main');
     const detailsPanelContainer = document.getElementById('details-panel-container');
     const detailsPanel = document.getElementById('details-panel');
-    const tooltip = document.getElementById('tile-info');
     const DETAIL_DELAY_MS = 150;
     let detailsTimeout = null;
 
@@ -37,8 +36,7 @@
       !inputY ||
       !mapContainer ||
       !detailsPanelContainer ||
-      !detailsPanel ||
-      !tooltip
+      !detailsPanel
     ) {
       return;
     }
@@ -55,7 +53,6 @@
     };
 
     gridEl.addEventListener('mouseleave', () => {
-      hideTooltip();
       hideDetails();
     });
 
@@ -142,11 +139,9 @@
           tile.className = `tile ${visual.typeClass}`;
           tile.innerHTML = `<span class="tile-content">${visual.icon}</span>`;
           tile.onmouseenter = (event) => {
-            showTooltip(event, visual.title);
             scheduleDetails(tileData, visual, wrappedX, wrappedY, tile);
           };
           tile.onmouseleave = () => {
-            hideTooltip();
             cancelDetailsTimeout();
           };
           tile.onclick = () => showDetails(tileData, visual, wrappedX, wrappedY, tile);
@@ -277,18 +272,6 @@
       detailsPanelContainer.classList.remove('hidden');
       detailsPanelContainer.style.pointerEvents = 'none';
       positionDetailsPanel(tileElement);
-    }
-
-    function showTooltip(event, text) {
-      tooltip.style.display = 'block';
-      tooltip.innerText = text;
-
-      tooltip.style.left = `${event.pageX + 15}px`;
-      tooltip.style.top = `${event.pageY + 15}px`;
-    }
-
-    function hideTooltip() {
-      tooltip.style.display = 'none';
     }
 
     function hideDetails() {
