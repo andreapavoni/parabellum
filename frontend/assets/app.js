@@ -233,22 +233,22 @@
 
     function showDetails(tile, visual, x, y, tileElement) {
       const data = tile || {};
-      const isVillage =
-        data.village_id !== undefined && data.village_id !== null;
-      const isOasis = data.tile_type === 'oasis';
-      const valleySummary = data.valley
-        ? `${data.valley.lumber}-${data.valley.clay}-${data.valley.iron}-${data.valley.crop}`
-        : null;
+      // const isVillage =
+      //   data.village_id !== undefined && data.village_id !== null;
+      // const isOasis = data.tile_type === 'oasis';
+      // const valleySummary = data.valley
+      // ? `${data.valley.lumber}-${data.valley.clay}-${data.valley.iron}-${data.valley.crop}`
+      // : null;
       const ownerLabel = data.player_name || data.player_id || '-';
-      const oasisLabel = data.oasis || null;
-      const typeLabel = isVillage
-        ? 'Village'
-        : isOasis
-          ? oasisLabel || 'Oasis'
-          : 'Valley';
-      const topologyLabel = isOasis
-        ? oasisLabel || '-'
-        : valleySummary || '-';
+      // const oasisLabel = data.oasis || null;
+      // const typeLabel = isVillage
+      //   ? 'Village'
+      //   : isOasis
+      //     ? oasisLabel || 'Oasis'
+      //     : 'Valley';
+      // const topologyLabel = isOasis
+      //   ? oasisLabel || '-'
+      //   : valleySummary || '-';
 
       const html = `
       <div class="text-center mb-4">
@@ -260,7 +260,13 @@
       </div>
       <table class="w-full text-xs">
         <tr class="border-b border-gray-200">
-          <td class="py-2 text-gray-600">Giocatore</td>
+          <td class="py-2 text-gray-600">Player</td>
+          <td class="py-2 text-right font-bold text-black">
+            ${ownerLabel}
+          </td>
+        </tr>
+        <tr class="border-b border-gray-200">
+          <td class="py-2 text-gray-600">Population</td>
           <td class="py-2 text-right font-bold text-black">
             ${ownerLabel}
           </td>

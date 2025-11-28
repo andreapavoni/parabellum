@@ -11,7 +11,7 @@ game:
     title: Village Center
     capital: "%{name} (Capital)"
     villages: Villages
-    resources: Resources
+    fields: Resource Fields
     map: Map
     stats: Statistics
     report: Report
@@ -41,6 +41,17 @@ game:
     troops:
       title: Troops
       no_units: No units in the village
+  building:
+    title: Building
+    slot: "Slot %{slot}"
+    existing: Existing building
+    level: Level
+    population: Population
+    value: Output
+    empty_slot: This slot is empty.
+    empty_slot_hint: Choose a building to construct here.
+    available: Available buildings
+    no_available: No buildings unlocked yet.
   starting_position:
     title: Starting position
     north_east: North-East %{key}

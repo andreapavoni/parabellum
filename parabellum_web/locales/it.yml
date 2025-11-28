@@ -12,7 +12,7 @@ game:
     title: Centro del Villaggio
     capital: "%{name} (Capitale)"
     villages: Villaggi
-    resources: Risorse
+    fields: Campi Risorse
     map: Mappa
     stats: Statistiche
     report: Rapporto
@@ -42,6 +42,17 @@ game:
     troops:
       title: Truppe
       no_units: Nessuna unità nel villaggio
+  building:
+    title: Edificio
+    slot: "Slot %{slot}"
+    existing: Edificio presente
+    level: Livello
+    population: Popolazione
+    value: Valore
+    empty_slot: Questo slot è vuoto.
+    empty_slot_hint: Scegli un edificio da costruire qui.
+    available: Edifici disponibili
+    no_available: Nessun edificio disponibile al momento.
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}
