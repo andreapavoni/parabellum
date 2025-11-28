@@ -1,0 +1,67 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{t!("game.building.title")}} – PARABELLUM{% endblock %}
+{% block body %}
+{% if let Some(user) = current_user %}
+<div class="container mx-auto mt-6 px-4 pb-12">
+    <div class="max-w-2xl mx-auto bg-white shadow rounded-lg border border-gray-200 p-6">
+        <!--<div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    {{t!("game.building.slot", slot = self.slot_id) }}
+                </h1>
+            </div>
+        </div>-->
+        {% if let Some(slot) = slot_building %}
+        <div class="space-y-4">
+            <div>
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
+                <div class="text-2xl font-semibold">{{ slot.building.name }}</div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.level")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.level }}</div>
+                </div>
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.population")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.population }}</div>
+                </div>
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.value")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.value }}</div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="space-y-6 py-6">
+            <div class="text-center">
+                <p class="text-lg text-gray-600">{{t!("game.building.empty_slot")}}</p>
+                <p class="text-sm text-gray-500 mt-2">{{t!("game.building.empty_slot_hint")}}</p>
+            </div>
+
+            {% if available_buildings.is_empty() %}
+            <div class="text-center text-sm text-gray-500">
+                {{t!("game.building.no_available")}}
+            </div>
+            {% else %}
+            <div>
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available")}}</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    {% for name in available_buildings %}
+                    <div class="p-3 border rounded-md bg-gray-50 text-left text-sm font-medium text-gray-700">
+                        {{ name }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+  <div class="container mx-auto px-4 py-12 text-center text-gray-600">
+    {{t!("errors.unauthorized")}}
+  </div>
+{% endif %}
+{% endblock %}

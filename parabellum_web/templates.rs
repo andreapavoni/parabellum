@@ -1,9 +1,11 @@
 use askama::Template;
+use parabellum_game::models::village::VillageBuilding;
+use parabellum_types::buildings::BuildingName;
 
 use crate::handlers::CurrentUser;
 
 /// Template for the home page.
-#[derive(Debug, Default, Template)]
+#[derive(Debug, Template)]
 #[template(path = "home.html")]
 pub struct HomeTemplate {
     pub current_user: Option<CurrentUser>,
@@ -49,6 +51,17 @@ pub struct VillageTemplate {
 pub struct ResourcesTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
+}
+
+/// Template for individual building page.
+#[derive(Debug, Template)]
+#[template(path = "building.html")]
+pub struct BuildingTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub slot_id: u8,
+    pub slot_building: Option<VillageBuilding>,
+    pub available_buildings: Vec<BuildingName>,
 }
 
 /// Template for the map page.
