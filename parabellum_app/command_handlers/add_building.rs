@@ -70,7 +70,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::{jobs::tasks::AddBuildingTask, test_utils::tests::MockUnitOfWork};
+    use crate::{
+        jobs::tasks::AddBuildingTask,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
+    };
     use std::sync::Arc;
 
     fn setup_village(config: &Config) -> Result<(Player, Village, Arc<Config>)> {
@@ -96,7 +99,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
+        set_village_resources(&mut village, ResourceGroup(800, 800, 800, 800));
 
         mock_uow.villages().save(&village).await?;
 
@@ -142,7 +145,8 @@ mod tests {
     async fn test_add_building_handler_not_enough_resources() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village(&config)?;
+        let (player, mut village, config) = setup_village(&config)?;
+        set_village_resources(&mut village, ResourceGroup::default());
 
         mock_uow.villages().save(&village).await?;
 

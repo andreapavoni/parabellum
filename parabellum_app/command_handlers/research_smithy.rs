@@ -72,7 +72,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config, jobs::tasks::ResearchSmithyTask, test_utils::tests::MockUnitOfWork,
+        config::Config,
+        jobs::tasks::ResearchSmithyTask,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
         uow::UnitOfWork,
     };
 
@@ -105,7 +107,7 @@ mod tests {
             Building::new(BuildingName::Granary, config.speed).at_level(4, config.speed)?;
         village.add_building_at_slot(granary, 26)?;
         village.research_academy(UnitName::Praetorian)?;
-        village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
+        set_village_resources(&mut village, ResourceGroup(2000, 2000, 2000, 2000));
         Ok((player, village, config))
     }
 

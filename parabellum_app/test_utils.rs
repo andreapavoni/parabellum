@@ -16,7 +16,7 @@ pub mod tests {
         village::Village,
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::{Player, ResourceGroup, User},
         errors::{ApplicationError, DbError},
         map::{Position, ValleyTopology},
     };
@@ -67,6 +67,20 @@ pub mod tests {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
 
+        async fn list_village_building_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
         async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
@@ -77,6 +91,19 @@ pub mod tests {
             _error_message: &str,
         ) -> Result<(), ApplicationError> {
             Ok(())
+        }
+    }
+
+    /// Helper to force a village to have the exact resource amounts requested.
+    pub fn set_village_resources(village: &mut Village, resources: ResourceGroup) {
+        let current = village.stored_resources();
+        if current.total() > 0 {
+            village
+                .deduct_resources(&current)
+                .expect("failed to clear village resources");
+        }
+        if resources.total() > 0 {
+            village.store_resources(&resources);
         }
     }
 

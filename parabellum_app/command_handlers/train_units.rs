@@ -92,7 +92,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::test_utils::tests::MockUnitOfWork;
+    use crate::test_utils::tests::{MockUnitOfWork, set_village_resources};
 
     fn setup_village_with_barracks() -> Result<(Player, Village, Arc<Config>)> {
         let config = Arc::new(Config::from_env());
@@ -112,7 +112,7 @@ mod tests {
         let barracks =
             Building::new(BuildingName::Barracks, config.speed).at_level(10, config.speed)?;
         village.add_building_at_slot(barracks, 20)?;
-        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
+        set_village_resources(&mut village, ResourceGroup(800, 800, 800, 800));
 
         Ok((player, village, config))
     }
@@ -142,7 +142,7 @@ mod tests {
         let stable = Building::new(BuildingName::Stable, config.speed).at_level(1, config.speed)?;
         village.add_building_at_slot(stable, 22)?;
         village.set_academy_research_for_test(&UnitName::Pathfinder, true);
-        village.store_resources(&ResourceGroup(10000, 10000, 10000, 10000));
+        set_village_resources(&mut village, ResourceGroup(10000, 10000, 10000, 10000));
 
         Ok((player, village, config))
     }
@@ -222,7 +222,7 @@ mod tests {
         let village_repo = mock_uow.villages();
 
         let (player, mut village, config) = setup_village_with_barracks()?;
-        village.store_resources(&ResourceGroup(10, 0, 0, 0));
+        set_village_resources(&mut village, ResourceGroup(10, 0, 0, 0));
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
 
