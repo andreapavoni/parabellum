@@ -7,7 +7,16 @@ members = [
     "parabellum_types",
     "parabellum_web"
 ]
-resolver = "2"
+resolver = "3"
+
+[workspace.package]
+description = "A Travian 3.x clone."
+version = "0.2.0"
+authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
+license = "MIT"
+edition = "2024"
+repository = "https://github.com/andreapavoni/parabellum"
+keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game"]
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
