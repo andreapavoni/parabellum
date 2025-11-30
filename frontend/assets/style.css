@@ -463,7 +463,7 @@
 
  .building-slot.occupied {
    background-color: rgba(34, 197, 94, 0.3);
-   border-color: rgba(34, 197, 94, 0.75);
+   border-color: rgb(16, 47, 27, 0.75);
    color: #14532d;
  }
 
