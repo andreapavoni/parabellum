@@ -54,13 +54,13 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 
 #[cfg(test)]
 mod tests {
-    use parabellum_types::{errors::GameError, Result};
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
+    use parabellum_types::{Result, errors::GameError};
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
@@ -70,7 +70,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config, jobs::tasks::ResearchAcademyTask, test_utils::tests::MockUnitOfWork,
+        config::Config,
+        jobs::tasks::ResearchAcademyTask,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
     };
     use std::sync::Arc;
 
@@ -112,7 +114,7 @@ mod tests {
         let (player, mut village, config) = setup_village_for_academy()?;
         let village_id = village.id;
         let player_id = player.id;
-        village.store_resources(&ResourceGroup(2000, 2000, 2000, 2000));
+        set_village_resources(&mut village, ResourceGroup(2000, 2000, 2000, 2000));
 
         mock_uow.villages().save(&village).await?;
 
@@ -143,7 +145,7 @@ mod tests {
         );
         assert_eq!(
             saved_village.stored_resources().crop(),
-            (2000 - 580),
+            2000 - 580,
             "Crop not deducted"
         );
 
@@ -161,7 +163,7 @@ mod tests {
     async fn test_research_academy_handler_not_enough_resources() -> Result<()> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let (player, mut village, config) = setup_village_for_academy()?;
-        village.store_resources(&ResourceGroup::default()); // No resources
+        set_village_resources(&mut village, ResourceGroup::default()); // No resources
         let village_id = village.id;
         let player_id = player.id;
 

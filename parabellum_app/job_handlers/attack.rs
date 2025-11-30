@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use tracing::{info, instrument};
 
-use parabellum_types::errors::ApplicationError;
 use parabellum_game::{
     battle::{AttackType, Battle},
     models::buildings::Building,
 };
 use parabellum_types::common::ResourceGroup;
+use parabellum_types::errors::ApplicationError;
 
 use crate::jobs::{
     Job, JobPayload,

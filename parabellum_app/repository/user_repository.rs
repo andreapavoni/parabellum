@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
-use parabellum_types::errors::ApplicationError;
 use parabellum_types::common::User;
+use parabellum_types::errors::ApplicationError;
 
 #[async_trait::async_trait]
 pub trait UserRepository: Send + Sync {

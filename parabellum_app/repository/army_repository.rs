@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
-use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::army::Army;
+use parabellum_types::errors::ApplicationError;
 
 #[async_trait::async_trait]
 pub trait ArmyRepository: Send + Sync {

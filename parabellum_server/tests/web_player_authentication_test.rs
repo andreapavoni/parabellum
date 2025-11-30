@@ -22,7 +22,7 @@ async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
-    let (_player, _, _, _, user) =
+    let (player, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, [0; 10], false).await?;
     let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login").await?;
 
@@ -41,7 +41,7 @@ async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.text().await.unwrap().to_string();
     // println!("==== body {} =======", body);
-    assert!(body.contains("Username"));
+    assert!(body.contains(&player.username));
     // assert!(body.contains(&format!("{}", player.username)));
 
     Ok(())

@@ -34,6 +34,46 @@ pub struct VillageBuilding {
 
 pub type AcademyResearch = [bool; 10];
 
+const RESOURCE_FIELDS_LAST_SLOT: u8 = 18;
+const MAIN_BUILDING_SLOT_ID: u8 = 19;
+const RALLY_POINT_SLOT_ID: u8 = 39;
+const WALL_SLOT_ID: u8 = 40;
+const MAX_VILLAGE_SLOT_ID: u8 = 40;
+const COMMON_BUILDINGS: [BuildingName; 32] = [
+    BuildingName::Sawmill,
+    BuildingName::Brickyard,
+    BuildingName::IronFoundry,
+    BuildingName::GrainMill,
+    BuildingName::Bakery,
+    BuildingName::Warehouse,
+    BuildingName::Granary,
+    BuildingName::Smithy,
+    BuildingName::TournamentSquare,
+    BuildingName::Marketplace,
+    BuildingName::Embassy,
+    BuildingName::Barracks,
+    BuildingName::Stable,
+    BuildingName::Workshop,
+    BuildingName::Academy,
+    BuildingName::Cranny,
+    BuildingName::TownHall,
+    BuildingName::Residence,
+    BuildingName::Palace,
+    BuildingName::Treasury,
+    BuildingName::TradeOffice,
+    BuildingName::GreatBarracks,
+    BuildingName::GreatStable,
+    BuildingName::StonemansionLodge,
+    BuildingName::Brewery,
+    BuildingName::Trapper,
+    BuildingName::HeroMansion,
+    BuildingName::GreatWarehouse,
+    BuildingName::GreatGranary,
+    BuildingName::WonderOfTheWorld,
+    BuildingName::HorseDrinkingTrough,
+    BuildingName::GreatWorkshop,
+];
+
 // TODO: add standalone rally point? Not yet
 // TODO: add standalone wall? Not yet
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +125,7 @@ impl Village {
             tribe: player.tribe.clone(),
             buildings: vec![],
             oases: vec![],
-            population: 2,
+            population: 0,
             army: None,
             reinforcements: vec![],
             deployed_armies: vec![],
@@ -405,6 +445,18 @@ impl Village {
             .cloned()
     }
 
+    /// Returns all resource field buildings (slots 1-18) sorted by slot id.
+    pub fn resource_fields(&self) -> Vec<VillageBuilding> {
+        let mut fields = self
+            .buildings
+            .iter()
+            .filter(|vb| (1..=RESOURCE_FIELDS_LAST_SLOT).contains(&vb.slot_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        fields.sort_by_key(|vb| vb.slot_id);
+        fields
+    }
+
     /// Returns a building in the village. Returns None if not present.
     /// In case of multiple buildings of same type, it returns the highest level one.
     pub fn get_building_by_name(&self, name: &BuildingName) -> Option<VillageBuilding> {
@@ -418,6 +470,35 @@ impl Village {
             return Some(village_building);
         }
         None
+    }
+
+    /// Returns the list of buildings that can be constructed inside the given slot.
+    /// Resource and reserved slots (main building, rally point, wall) always return empty lists.
+    pub fn available_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
+        if slot_id == 0
+            || slot_id > MAX_VILLAGE_SLOT_ID
+            || slot_id <= RESOURCE_FIELDS_LAST_SLOT
+            || self.get_building_by_slot_id(slot_id).is_some()
+        {
+            return vec![];
+        }
+
+        let candidates = match slot_id {
+            MAIN_BUILDING_SLOT_ID => vec![BuildingName::MainBuilding],
+            RALLY_POINT_SLOT_ID => vec![BuildingName::RallyPoint],
+            WALL_SLOT_ID => self.tribe.wall().into_iter().collect::<Vec<BuildingName>>(),
+            _ => COMMON_BUILDINGS.to_vec(),
+        };
+
+        candidates
+            .into_iter()
+            .filter(|name| self.can_start_building(name))
+            .collect()
+    }
+
+    fn can_start_building(&self, name: &BuildingName) -> bool {
+        let building = Building::new(name.clone(), 1);
+        self.validate_building_construction(&building).is_ok()
     }
 
     pub fn get_random_buildings(&self, count: usize) -> Vec<Building> {
@@ -450,13 +531,10 @@ impl Village {
 
     /// Returns the village wall, if any, according to the actual tribe.
     pub fn wall(&self) -> Option<Building> {
-        match self.tribe {
-            Tribe::Roman => self.get_building_by_name(&BuildingName::CityWall),
-            Tribe::Teuton => self.get_building_by_name(&BuildingName::EarthWall),
-            Tribe::Gaul => self.get_building_by_name(&BuildingName::Palisade),
-            _ => None,
-        }
-        .map(|vb| vb.building)
+        self.tribe
+            .wall()
+            .and_then(|building_name| self.get_building_by_name(&building_name))
+            .map(|vb| vb.building)
     }
 
     /// Get defense bonus from wall, if any.
@@ -997,10 +1075,10 @@ impl Default for VillageStocks {
         Self {
             warehouse_capacity: 800, // Base capacity
             granary_capacity: 800,   // Base capacity
-            lumber: 0,
-            clay: 0,
-            iron: 0,
-            crop: 0,
+            lumber: 800,
+            clay: 800,
+            iron: 800,
+            crop: 800,
         }
     }
 }
@@ -1082,6 +1160,51 @@ mod tests {
         // Effective production
         // 12 crop - 4 upkeep = 8 effective crop
         assert_eq!(v.production.effective.crop, 8, "effective crop production");
+    }
+
+    #[test]
+    fn test_available_buildings_for_common_slot() {
+        let v = village_factory(Default::default());
+        let available = v.available_buildings_for_slot(20);
+
+        assert!(
+            available.contains(&BuildingName::Warehouse),
+            "Warehouse should be available in empty slots"
+        );
+        assert!(
+            available.contains(&BuildingName::Granary),
+            "Granary should be available in empty slots"
+        );
+        assert!(
+            available.contains(&BuildingName::Cranny),
+            "Cranny should be available in empty slots"
+        );
+    }
+
+    #[test]
+    fn test_available_buildings_for_wall_slot_depends_on_tribe() {
+        let roman_village = village_factory(Default::default());
+        let roman_wall = roman_village.available_buildings_for_slot(40);
+        assert_eq!(
+            roman_wall,
+            vec![BuildingName::CityWall],
+            "Romans should only see City Wall in wall slot"
+        );
+
+        let teuton_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Teuton),
+            ..Default::default()
+        });
+        let teuton_village = village_factory(VillageFactoryOptions {
+            player: Some(teuton_player),
+            ..Default::default()
+        });
+        let teuton_wall = teuton_village.available_buildings_for_slot(40);
+        assert_eq!(
+            teuton_wall,
+            vec![BuildingName::EarthWall],
+            "Teutons should only see Earth Wall in wall slot"
+        );
     }
 
     #[test]

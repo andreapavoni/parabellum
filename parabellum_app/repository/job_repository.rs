@@ -15,6 +15,12 @@ pub trait JobRepository: Send + Sync {
     /// Lists jobs created by a player.
     async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError>;
 
+    /// Lists pending/processing building-related jobs for a village.
+    async fn list_village_building_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
     /// Finds and locks atomically overdue jobs, setting the status to "Processing".
     /// This prevents several workers getting the  same job.
     async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>, ApplicationError>;

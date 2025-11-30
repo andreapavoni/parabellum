@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
-use parabellum_types::errors::ApplicationError;
 use parabellum_game::models::village::Village;
+use parabellum_types::errors::ApplicationError;
 
 #[async_trait::async_trait]
 pub trait VillageRepository: Send + Sync {

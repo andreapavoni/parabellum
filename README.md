@@ -112,15 +112,21 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **API / UI**: Getting the minimal viable views to navigate the game
   - [x] Layout, basic navbar
   - [x] Login, Register
-  - [ ] Village Overview (Resources + Buildings)
-  - [ ] Generic building (info + upgrade)
-  - [ ] Special buildings (info + upgrade actions)
-    - [ ] Barracks, Stable, Workshop,
-    - [ ] Rally Point
+  - [x] Village Overview (Resources + Buildings)
+    - [ ] Building queue
+  - [ ] Generic building (info + add/upgrade)
+  - [ ] Special buildings (info + specific actions)
+    - [ ] Barracks, Stable, Workshop, etc...
+    - [ ] Academy (research units)
+    - [ ] Smithy (upgrade units)
+    - [ ] Rally Point:
+      - [ ] send troops
+      - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
+      - [ ] view stationed troops
     - [ ] Merchant, Marketplace
     - [ ] Hero Mansion (hero stuff)
-    - [ ] Castle/Residence
-    - [ ] Town Hall (party)
+    - [ ] Castle/Residence (train settlers, expansion slots, culture points)
+    - [ ] Town Hall (small/big party)
     - [ ] Main Building (downgrades)
   - [ ] Map
 
@@ -132,6 +138,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
+- [ ] **Help/Manual**: to learn.
 
 ---
 

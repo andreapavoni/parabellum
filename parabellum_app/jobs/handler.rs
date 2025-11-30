@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 
-use parabellum_types::{errors::{ApplicationError, Result}}
-;
+use parabellum_types::errors::{ApplicationError, Result};
 
 use crate::{config::Config, jobs::Job, uow::UnitOfWork};
 

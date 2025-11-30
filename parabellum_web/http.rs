@@ -7,13 +7,16 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    home, login, login_page, logout, map, register, register_page, resources, village,
+    build_action, building, home, login, login_page, logout, map, map_region, register,
+    register_page, resources, village,
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub app_bus: Arc<AppBus>,
     pub cookie_key: Key,
+    pub world_size: i32,
+    pub server_speed: i8,
 }
 
 impl AppState {
@@ -23,6 +26,8 @@ impl AppState {
         AppState {
             app_bus,
             cookie_key,
+            world_size: config.world_size as i32,
+            server_speed: config.speed,
         }
     }
 }
@@ -51,7 +56,9 @@ impl WebRouter {
         let protected_routes = Router::new()
             .route("/village", get(village))
             .route("/resources", get(resources))
+            .route("/build", get(building).post(build_action))
             .route("/map", get(map))
+            .route("/map/data", get(map_region))
             .route("/logout", get(logout));
 
         let router = Router::new()

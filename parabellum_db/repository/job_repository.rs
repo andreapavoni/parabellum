@@ -5,7 +5,10 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::{jobs::Job, repository::JobRepository};
-use parabellum_types::{errors::{ApplicationError, DbError}, Result};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, DbError},
+};
 
 use crate::models as db_models;
 
@@ -64,6 +67,30 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
       )
       .fetch_all(&mut *tx_guard.as_mut())
       .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
+    }
+
+    async fn list_village_building_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+        let jobs = sqlx::query_as!(
+            db_models::Job,
+            r#"
+            SELECT id, player_id, village_id, task, status as "status: _", completed_at, created_at, updated_at
+            FROM jobs
+            WHERE village_id = $1
+              AND status IN ('Pending', 'Processing')
+              AND task ->> 'task_type' IN ('AddBuilding', 'BuildingUpgrade')
+            ORDER BY completed_at ASC
+            "#,
+            village_id
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }

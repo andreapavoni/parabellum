@@ -77,13 +77,13 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::{
         models::village::Village,
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
+    use parabellum_types::Result;
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},

@@ -68,7 +68,7 @@ mod tests {
     use crate::{
         config::Config,
         jobs::{Job, JobPayload},
-        test_utils::tests::MockUnitOfWork,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
         uow::UnitOfWork,
     };
 
@@ -94,6 +94,7 @@ mod tests {
             player: Some(player.clone()),
             ..Default::default()
         });
+        set_village_resources(&mut village, ResourceGroup::default());
 
         // Home army has 10 legionnaires
         let home_army = army_factory(ArmyFactoryOptions {

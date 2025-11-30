@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use parabellum_types::Result;
 use parabellum_game::models::{map::Valley, village::Village};
+use parabellum_types::Result;
 
 use crate::{
     config::Config,
@@ -57,8 +57,8 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
+    use parabellum_types::Result;
     use parabellum_types::{map::Position, tribe::Tribe};
 
     use super::*;
