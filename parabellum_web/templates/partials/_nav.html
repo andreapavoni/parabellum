@@ -8,7 +8,11 @@
   <div class="flex items-center gap-3 text-gray-600">
     <span class="font-bold text-gray-800">{{ user.player.username }}</span>
     <span class="cursor-pointer font-bold hover:text-green-600 text-green-700 hover:underline"><a href="/logout">{{t!("nav.logout")}}</a></span>
-    <span class="sm:inline text-[12px] text-gray-600">09:34:20</span>
+    <span id="server-time"
+          class="sm:inline text-[12px] text-gray-600 font-mono"
+          data-timestamp="{{ server_time.timestamp }}">
+      {{ server_time.formatted }}
+    </span>
   </div>
 </div>
 <div class='flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide'>
@@ -28,19 +32,43 @@
 <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
   <div class="res-item">
     <span class="mr-1">🌲</span>
-    <span>{{ user.village.stored_resources().lumber() }}/{{ user.village.warehouse_capacity() }}</span>
+    <span class="res-value"
+          data-resource="lumber"
+          data-amount="{{ user.village.stored_resources().lumber() }}"
+          data-capacity="{{ user.village.warehouse_capacity() }}"
+          data-prod-per-hour="{{ user.village.production.effective.lumber }}">
+      {{ user.village.stored_resources().lumber() }}/{{ user.village.warehouse_capacity() }}
+    </span>
   </div>
   <div class="res-item">
     <span class="mr-1">🧱</span>
-    <span>{{ user.village.stored_resources().clay() }}/{{ user.village.warehouse_capacity() }}</span>
+    <span class="res-value"
+          data-resource="clay"
+          data-amount="{{ user.village.stored_resources().clay() }}"
+          data-capacity="{{ user.village.warehouse_capacity() }}"
+          data-prod-per-hour="{{ user.village.production.effective.clay }}">
+      {{ user.village.stored_resources().clay() }}/{{ user.village.warehouse_capacity() }}
+    </span>
   </div>
   <div class="res-item">
     <span class="mr-1">⛏️</span>
-    <span>{{ user.village.stored_resources().iron() }}/{{ user.village.warehouse_capacity() }}</span>
+    <span class="res-value"
+          data-resource="iron"
+          data-amount="{{ user.village.stored_resources().iron() }}"
+          data-capacity="{{ user.village.warehouse_capacity() }}"
+          data-prod-per-hour="{{ user.village.production.effective.iron }}">
+      {{ user.village.stored_resources().iron() }}/{{ user.village.warehouse_capacity() }}
+    </span>
   </div>
   <div class="res-item">
     <span class="mr-1">🌾</span>
-    <span>{{ user.village.stored_resources().crop() }}/{{ user.village.granary_capacity() }}</span>
+    <span class="res-value"
+          data-resource="crop"
+          data-amount="{{ user.village.stored_resources().crop() }}"
+          data-capacity="{{ user.village.granary_capacity() }}"
+          data-prod-per-hour="{{ user.village.production.effective.crop }}">
+      {{ user.village.stored_resources().crop() }}/{{ user.village.granary_capacity() }}
+    </span>
   </div>
   <div class="res-item">
     <span class="mr-1">👤</span>
@@ -61,3 +89,69 @@
   </div>
 {% endmatch %}
 </header>
+<script>
+  window.__serverClock = window.__serverClock || (function() {
+    const pad = (num) => num.toString().padStart(2, '0');
+    const element = document.getElementById('server-time');
+    if (!element) {
+      return true;
+    }
+    let timestamp = parseInt(element.dataset.timestamp || '0', 10);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return true;
+    }
+    const tick = () => {
+      timestamp += 1;
+      const date = new Date(timestamp * 1000);
+      const hours = pad(date.getUTCHours());
+      const minutes = pad(date.getUTCMinutes());
+      const seconds = pad(date.getUTCSeconds());
+      element.textContent = `${hours}:${minutes}:${seconds}`;
+      element.dataset.timestamp = timestamp;
+    };
+    setInterval(tick, 1000);
+    return true;
+  })();
+  window.__resourceTicker = window.__resourceTicker || (function() {
+    const parseNumber = (value) => {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const resources = Array.from(document.querySelectorAll('.res-value[data-prod-per-hour]')).map((el) => {
+      const amount = parseNumber(el.dataset.amount);
+      const capacity = parseNumber(el.dataset.capacity);
+      const prodPerHour = parseNumber(el.dataset.prodPerHour);
+      return {
+        el,
+        amount,
+        capacity,
+        capacityDisplay: Math.floor(capacity),
+        perSecond: prodPerHour / 3600,
+      };
+    });
+    if (!resources.length) {
+      return true;
+    }
+    const render = (resource) => {
+      const amountInt = Math.max(0, Math.floor(resource.amount));
+      resource.el.textContent = `${amountInt}/${resource.capacityDisplay}`;
+    };
+    let lastTick = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      const deltaSeconds = Math.max(0, (now - lastTick) / 1000);
+      lastTick = now;
+      resources.forEach((resource) => {
+        if (resource.perSecond === 0) {
+          return;
+        }
+        resource.amount += resource.perSecond * deltaSeconds;
+        resource.amount = Math.min(resource.capacity, Math.max(0, resource.amount));
+        render(resource);
+      });
+    };
+    resources.forEach(render);
+    setInterval(tick, 1000);
+    return true;
+  })();
+</script>

@@ -17,6 +17,7 @@ game:
     report: Report
     main_building: Main
     building_queue: Building queue
+    building_queue_empty: No constructions are currently in progress
     slots:
       empty: "Empty slot"
       occupied: "%{name} (Lv %{level})"
@@ -49,11 +50,15 @@ game:
     population: Population
     value: Output
     upgrade: Next upgrade
+    upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"
     cost: Cost
     time: Build time
+    time_remaining: Time remaining
     upkeep: Crop upkeep
     build_action: Build
     upgrade_action: "Upgrade to Lv %{level}"
+    construction_in_progress: "%{name} to level %{level} is currently under construction."
+    queue_locked: Another construction is already queued for this slot.
     empty_slot: This slot is empty.
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings

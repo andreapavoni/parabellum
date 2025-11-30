@@ -1,11 +1,49 @@
 <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
   <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">{{t!("game.village.building_queue")}}:</div>
-  <div class="flex justify-between w-full">
-    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> {{t!("game.village.buildings.warehouse")}} (Lv 15)</span>
-    <span>0:45:12</span>
+  {% if building_queue.is_empty() %}
+  <div class="text-xs text-gray-500">
+    {{t!("game.village.building_queue_empty")}}
   </div>
-  <div class="flex justify-between w-full">
-    <span><span class="text-red-600 cursor-pointer font-bold hover:underline">❌</span> {{t!("game.village.buildings.granary")}} (Lv 12)</span>
-    <span>1:20:05</span>
-  </div>
+  {% else %}
+    {% for item in building_queue %}
+    <div class="flex justify-between w-full items-center">
+      <a class="flex items-center gap-2 text-gray-800 hover:text-gray-900 hover:underline" href="/build?s={{ item.slot_id }}">
+        <span class="{% if item.is_processing %}text-green-600{% else %}text-yellow-600{% endif %}">⏳</span>
+        {{ item.building_name }} (Lv {{ item.target_level }})
+      </a>
+      <span class="font-semibold text-gray-800 queue-timer" data-seconds="{{ item.time_seconds }}">{{ item.time_remaining }}</span>
+    </div>
+    {% endfor %}
+  {% endif %}
 </div>
+<script>
+  window.__buildingQueueTimers = window.__buildingQueueTimers || (function() {
+    const pads = (n) => n.toString().padStart(2, '0');
+    const tick = () => {
+      const timers = document.querySelectorAll('.queue-timer[data-seconds]');
+      if (!timers.length) {
+        return;
+      }
+      let shouldReload = false;
+      timers.forEach((timer) => {
+        let remaining = parseInt(timer.dataset.seconds || '0', 10);
+        if (remaining > 0) {
+          remaining -= 1;
+          timer.dataset.seconds = remaining;
+          const hours = Math.floor(remaining / 3600);
+          const minutes = Math.floor((remaining % 3600) / 60);
+          const seconds = remaining % 60;
+          timer.textContent = `${pads(hours)}:${pads(minutes)}:${pads(seconds)}`;
+          if (remaining === 0) {
+            shouldReload = true;
+          }
+        }
+      });
+      if (shouldReload) {
+        window.location.reload();
+      }
+    };
+    setInterval(tick, 1000);
+    return true;
+  })();
+</script>

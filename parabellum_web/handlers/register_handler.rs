@@ -23,6 +23,7 @@ use crate::{
     },
     http::AppState,
     templates::RegisterTemplate,
+    view_helpers::server_time_context,
 };
 
 // Form for registration.
@@ -57,9 +58,12 @@ pub async fn register_page(
         csrf_token,
         current_user: None,
         nav_active: "register",
+        username_value: String::new(),
+        email_value: String::new(),
         selected_tribe: "Roman".to_string(), // default selection
         selected_quadrant: "NorthEast".to_string(),
-        ..Default::default()
+        error: None,
+        server_time: server_time_context(),
     };
 
     (jar, render_template(template, None)).into_response()
@@ -137,6 +141,7 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some("Invalid password or internal error.".to_string()),
+                server_time: server_time_context(),
             };
 
             return (
@@ -168,6 +173,7 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some(user_message.to_string()),
+                server_time: server_time_context(),
             };
 
             return (

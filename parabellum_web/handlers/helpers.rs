@@ -12,9 +12,13 @@ use std::future::Future;
 use uuid::Uuid;
 
 use parabellum_app::{
-    cqrs::queries::{GetPlayerByUserId, GetUserById, ListVillagesByPlayerId},
+    cqrs::queries::{
+        BuildingQueueItem, GetPlayerByUserId, GetUserById, GetVillageBuildingQueue,
+        ListVillagesByPlayerId,
+    },
     queries_handlers::{
-        GetPlayerByUserIdHandler, GetUserByIdHandler, ListVillagesByPlayerIdHandler,
+        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageBuildingQueueHandler,
+        ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -228,6 +232,19 @@ async fn list_player_villages(
         .query(
             ListVillagesByPlayerId { player_id },
             ListVillagesByPlayerIdHandler::new(),
+        )
+        .await
+}
+
+pub async fn load_building_queue(
+    state: &AppState,
+    village_id: u32,
+) -> Result<Vec<BuildingQueueItem>, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageBuildingQueue { village_id },
+            GetVillageBuildingQueueHandler::new(),
         )
         .await
 }

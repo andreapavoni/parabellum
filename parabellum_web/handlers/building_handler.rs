@@ -5,19 +5,23 @@ use axum::{
 };
 use axum_extra::extract::SignedCookieJar;
 use serde::Deserialize;
+use tracing::error;
 
 use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
     cqrs::commands::{AddBuilding, UpgradeBuilding},
+    cqrs::queries::BuildingQueueItem,
 };
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::buildings::BuildingName;
 
 use crate::{
-    handlers::{CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, render_template},
+    handlers::{
+        CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, load_building_queue, render_template,
+    },
     http::AppState,
     templates::{BuildingOption, BuildingTemplate, BuildingUpgradeInfo},
-    view_helpers::format_duration,
+    view_helpers::{building_queue_to_views, format_duration, server_time_context},
 };
 
 #[derive(Debug, Deserialize)]
@@ -60,8 +64,20 @@ pub async fn building(
         _ => return Redirect::to("/village").into_response(),
     };
 
+    let queue_items = match load_building_queue(&state, user.village.id).await {
+        Ok(items) => items,
+        Err(err) => {
+            error!(
+                error = ?err,
+                village_id = user.village.id,
+                "Unable to load building queue"
+            );
+            Vec::new()
+        }
+    };
+
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(&state, &user, slot_id, csrf_token, None);
+    let template = build_template(&state, &user, slot_id, csrf_token, None, queue_items);
     (jar, render_template(template, None)).into_response()
 }
 
@@ -83,7 +99,8 @@ pub async fn build_action(
             user,
             slot_id,
             "Slot mismatch, please retry.".to_string(),
-        );
+        )
+        .await;
     }
 
     let result = match form.action {
@@ -97,7 +114,8 @@ pub async fn build_action(
                         user,
                         slot_id,
                         "Missing building name.".to_string(),
-                    );
+                    )
+                    .await;
                 }
             };
 
@@ -131,7 +149,7 @@ pub async fn build_action(
 
     match result {
         Ok(()) => Redirect::to(&format!("/build?s={slot_id}")).into_response(),
-        Err(err) => render_with_error(&state, jar, user, slot_id, err.to_string()),
+        Err(err) => render_with_error(&state, jar, user, slot_id, err.to_string()).await,
     }
 }
 
@@ -177,15 +195,26 @@ fn building_upgrade_info(
     })
 }
 
-fn render_with_error(
+async fn render_with_error(
     state: &AppState,
     jar: SignedCookieJar,
     user: CurrentUser,
     slot_id: u8,
     error: String,
 ) -> Response {
+    let queue_items = match load_building_queue(state, user.village.id).await {
+        Ok(items) => items,
+        Err(err) => {
+            error!(
+                error = ?err,
+                village_id = user.village.id,
+                "Unable to load building queue"
+            );
+            Vec::new()
+        }
+    };
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(state, &user, slot_id, csrf_token, Some(error));
+    let template = build_template(state, &user, slot_id, csrf_token, Some(error), queue_items);
     (
         jar,
         render_template(template, Some(StatusCode::BAD_REQUEST)),
@@ -199,17 +228,31 @@ fn build_template(
     slot_id: u8,
     csrf_token: String,
     flash_error: Option<String>,
+    queue_items: Vec<BuildingQueueItem>,
 ) -> BuildingTemplate {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
-    let upgrade = slot_building
+    let queue_view = building_queue_to_views(&queue_items);
+    let current_construction = queue_view
+        .iter()
+        .find(|item| item.slot_id == slot_id)
+        .cloned();
+    let active_job = queue_items.iter().find(|item| item.slot_id == slot_id);
+
+    let effective_building = if let Some(job) = active_job {
+        virtual_building_from_job(job, state.server_speed)
+    } else {
+        slot_building.clone()
+    };
+
+    let upgrade = effective_building
         .as_ref()
         .and_then(|slot| building_upgrade_info(slot, state.server_speed, main_building_level));
-    let current_upkeep = slot_building
+    let current_upkeep = effective_building
         .as_ref()
         .map(|slot| slot.building.cost().upkeep);
 
-    let available_buildings = if slot_building.is_none() {
+    let available_buildings = if slot_building.is_none() && active_job.is_none() {
         user.village
             .available_buildings_for_slot(slot_id)
             .into_iter()
@@ -235,5 +278,17 @@ fn build_template(
         current_upkeep,
         csrf_token,
         flash_error,
+        current_construction,
+        server_time: server_time_context(),
     }
+}
+
+fn virtual_building_from_job(job: &BuildingQueueItem, server_speed: i8) -> Option<VillageBuilding> {
+    let building = Building::new(job.building_name.clone(), server_speed)
+        .at_level(job.target_level, server_speed)
+        .ok()?;
+    Some(VillageBuilding {
+        slot_id: job.slot_id,
+        building,
+    })
 }

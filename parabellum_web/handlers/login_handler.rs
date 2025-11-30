@@ -20,6 +20,7 @@ use crate::{
     },
     http::AppState,
     templates::LoginTemplate,
+    view_helpers::server_time_context,
 };
 use parabellum_app::{cqrs::queries::AuthenticateUser, queries_handlers::AuthenticateUserHandler};
 use parabellum_types::errors::{AppError, ApplicationError, DbError};
@@ -39,8 +40,11 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
 
     let template = LoginTemplate {
         csrf_token,
+        current_user: None,
         nav_active: "login",
-        ..Default::default()
+        email_value: String::new(),
+        error: None,
+        server_time: server_time_context(),
     };
     (jar, render_template(template, None)).into_response()
 }
@@ -96,10 +100,11 @@ pub async fn login(
     let (jar, new_csrf_token) = generate_csrf(jar);
     let template = LoginTemplate {
         csrf_token: new_csrf_token,
+        current_user: None,
         nav_active: "login",
         email_value: form.email.clone(),
         error: err_msg,
-        ..Default::default()
+        server_time: server_time_context(),
     };
 
     (jar, render_template(template, status)).into_response()

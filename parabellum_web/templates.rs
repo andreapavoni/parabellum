@@ -1,6 +1,7 @@
 use askama::Template;
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use uuid::Uuid;
 
 use crate::handlers::CurrentUser;
 
@@ -10,6 +11,7 @@ use crate::handlers::CurrentUser;
 pub struct HomeTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the login page.
@@ -21,6 +23,7 @@ pub struct LoginTemplate {
     pub nav_active: &'static str,
     pub email_value: String,   // to pre-fill email input
     pub error: Option<String>, // login error message, if any
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the registration page.
@@ -35,6 +38,7 @@ pub struct RegisterTemplate {
     pub selected_tribe: String,    // to retain selected tribe option
     pub selected_quadrant: String, // to retain selected quadrant option
     pub error: Option<String>,     // signup error message, if any
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the village center page.
@@ -43,6 +47,8 @@ pub struct RegisterTemplate {
 pub struct VillageTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
+    pub building_queue: Vec<BuildingQueueItemView>,
+    pub server_time: ServerTimeContext,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +58,17 @@ pub struct ResourceField {
     pub level: u8,
 }
 
+#[derive(Debug, Clone)]
+pub struct BuildingQueueItemView {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
+    pub target_level: u8,
+    pub is_processing: bool,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+}
+
 /// Template for the village center page.
 #[derive(Debug, Template)]
 #[template(path = "resources.html")]
@@ -59,6 +76,8 @@ pub struct ResourcesTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
     pub resource_slots: Vec<ResourceField>,
+    pub building_queue: Vec<BuildingQueueItemView>,
+    pub server_time: ServerTimeContext,
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +130,8 @@ pub struct BuildingTemplate {
     pub current_upkeep: Option<u32>,
     pub csrf_token: String,
     pub flash_error: Option<String>,
+    pub current_construction: Option<BuildingQueueItemView>,
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the map page.
@@ -120,4 +141,11 @@ pub struct MapTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
     pub world_size: i32,
+    pub server_time: ServerTimeContext,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ServerTimeContext {
+    pub formatted: String,
+    pub timestamp: i64,
 }

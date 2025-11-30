@@ -1,12 +1,14 @@
+use chrono::{DateTime, Utc};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
+    buildings::BuildingName,
     common::{Player, User},
     map::Position,
 };
 use uuid::Uuid;
 
-use crate::cqrs::Query;
 use crate::repository::MapRegionTile;
+use crate::{cqrs::Query, jobs::JobStatus};
 
 /// Checks if a user is authenticates with email and password.
 pub struct AuthenticateUser {
@@ -61,6 +63,26 @@ pub struct ListVillagesByPlayerId {
 
 impl Query for ListVillagesByPlayerId {
     type Output = Vec<Village>;
+}
+
+/// A queued (or processing) construction for a village.
+#[derive(Debug, Clone)]
+pub struct BuildingQueueItem {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
+    pub target_level: u8,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+/// Fetch the building queue for a village.
+pub struct GetVillageBuildingQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageBuildingQueue {
+    type Output = Vec<BuildingQueueItem>;
 }
 
 /// Fetch a square region of the world map.
