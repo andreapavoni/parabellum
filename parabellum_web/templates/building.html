@@ -4,6 +4,11 @@
 {% if let Some(user) = current_user %}
 <div class="container mx-auto mt-6 px-4 pb-12">
     <div class="max-w-2xl mx-auto bg-white shadow rounded-lg border border-gray-200 p-6">
+        {% if let Some(error) = flash_error %}
+        <div class="mb-4 p-3 border border-red-200 bg-red-50 text-red-700 text-sm rounded">
+            {{ error }}
+        </div>
+        {% endif %}
         <!--<div class="flex items-center justify-between mb-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">
@@ -81,6 +86,7 @@
                 <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                     <input type="hidden" name="slot_id" value="{{ slot_id }}">
                     <input type="hidden" name="action" value="upgrade">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
                         {{t!("game.building.upgrade_action", level = next.next_level) }}
                     </button>
@@ -139,6 +145,7 @@
                             <input type="hidden" name="slot_id" value="{{ slot_id }}">
                             <input type="hidden" name="action" value="build">
                             <input type="hidden" name="building_name" value="{{ option.key }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded">
                                 {{t!("game.building.build_action")}}
                             </button>

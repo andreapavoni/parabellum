@@ -445,6 +445,18 @@ impl Village {
             .cloned()
     }
 
+    /// Returns all resource field buildings (slots 1-18) sorted by slot id.
+    pub fn resource_fields(&self) -> Vec<VillageBuilding> {
+        let mut fields = self
+            .buildings
+            .iter()
+            .filter(|vb| (1..=RESOURCE_FIELDS_LAST_SLOT).contains(&vb.slot_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        fields.sort_by_key(|vb| vb.slot_id);
+        fields
+    }
+
     /// Returns a building in the village. Returns None if not present.
     /// In case of multiple buildings of same type, it returns the highest level one.
     pub fn get_building_by_name(&self, name: &BuildingName) -> Option<VillageBuilding> {

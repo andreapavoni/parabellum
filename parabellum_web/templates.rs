@@ -45,12 +45,20 @@ pub struct VillageTemplate {
     pub nav_active: &'static str,
 }
 
+#[derive(Debug, Clone)]
+pub struct ResourceField {
+    pub class: &'static str,
+    pub name: BuildingName,
+    pub level: u8,
+}
+
 /// Template for the village center page.
-#[derive(Debug, Default, Template)]
+#[derive(Debug, Template)]
 #[template(path = "resources.html")]
 pub struct ResourcesTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
+    pub resource_slots: Vec<ResourceField>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +86,6 @@ pub struct BuildingOption {
     pub key: String,
     pub cost: ResourceCostView,
     pub upkeep: u32,
-    pub time_secs: u32,
     pub time_formatted: String,
 }
 
@@ -88,12 +95,11 @@ pub struct BuildingUpgradeInfo {
     pub cost: ResourceCostView,
     pub current_upkeep: u32,
     pub upkeep: u32,
-    pub time_secs: u32,
     pub time_formatted: String,
 }
 
 /// Template for individual building page.
-#[derive(Debug, Template)]
+#[derive(Debug, Default, Template)]
 #[template(path = "building.html")]
 pub struct BuildingTemplate {
     pub current_user: Option<CurrentUser>,
@@ -103,6 +109,8 @@ pub struct BuildingTemplate {
     pub available_buildings: Vec<BuildingOption>,
     pub upgrade: Option<BuildingUpgradeInfo>,
     pub current_upkeep: Option<u32>,
+    pub csrf_token: String,
+    pub flash_error: Option<String>,
 }
 
 /// Template for the map page.
