@@ -5,15 +5,24 @@ use crate::{
     view_helpers::{building_queue_to_views, resource_css_class, server_time_context},
 };
 use axum::{extract::State, response::IntoResponse};
+use std::collections::HashMap;
 
 pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let building_queue =
         building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
 
+    let slot_buildings = user
+        .village
+        .buildings()
+        .iter()
+        .map(|vb| (vb.slot_id, vb.clone()))
+        .collect::<HashMap<_, _>>();
+
     let template = VillageTemplate {
         current_user: Some(user),
         nav_active: "village",
         building_queue,
+        slot_buildings,
         server_time: server_time_context(),
     };
     render_template(template, None).into_response()

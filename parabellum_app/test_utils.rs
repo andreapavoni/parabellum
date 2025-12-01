@@ -315,6 +315,7 @@ pub mod tests {
                         region.push(MapRegionTile {
                             field: field.clone(),
                             village_name: None,
+                            village_population: None,
                             player_name: None,
                         });
                     }

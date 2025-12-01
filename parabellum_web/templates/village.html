@@ -11,143 +11,143 @@
           <div class="village-container-responsive relative">
               <a class="wall-ring-link{% if let Some(queue_class) = self.queue_state_class(40) %} {{ queue_class }}{% endif %}"
                  href="/build?s=40"
-                 title="{% if let Some(wall) = user.village.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}"
-                 aria-label="{% if let Some(wall) = user.village.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}">
-                  <svg class="wall-ring{% if user.village.wall().is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(40) %} {{ queue_class }}{% endif %}"
+                 title="{% if let Some(wall) = self.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}"
+                 aria-label="{% if let Some(wall) = self.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}">
+                  <svg class="wall-ring{% if self.wall().is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(40) %} {{ queue_class }}{% endif %}"
                        viewBox="0 0 100 100"
                        role="img"
                        aria-hidden="true">
-                      <title>{% if let Some(wall) = user.village.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}</title>
+                      <title>{% if let Some(wall) = self.wall() %}{{t!("game.village.wall.occupied", name = wall.name, level = wall.level)}}{% else %}{{t!("game.village.wall.empty")}}{% endif %}</title>
                       <circle class="wall-ring-track" cx="50" cy="50" r="51"></circle>
                   </svg>
               </a>
 
-              <a class="building-slot main-building{% if user.village.get_building_by_slot_id(19).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(19) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot main-building{% if self.slot_building(19).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(19) %} {{ queue_class }}{% endif %}"
                    href="/build?s=19"
                    style="top: 50%; left: 50%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(19) %}{{t!("game.village.main_building_slot.occupied", level = slot.building.level)}}{% else %}{{t!("game.village.main_building_slot.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(19) %}{{t!("game.village.main_building_slot.occupied", level = slot.building.level)}}{% else %}{{t!("game.village.main_building_slot.empty")}}{% endif %}">
                   <span class="slot-label">{{t!("game.village.main_building")}}</span>
               </a>
-              <a class="building-slot rally-point{% if user.village.get_building_by_slot_id(39).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(39) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot rally-point{% if self.slot_building(39).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(39) %} {{ queue_class }}{% endif %}"
                    href="/build?s=39"
                    style="top: 55%; left: 67%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(39) %}{{t!("game.village.rally_point.occupied", level = slot.building.level)}}{% else %}{{t!("game.village.rally_point.empty")}}{% endif %}"></a>
+                   title="{% if let Some(slot) = self.slot_building(39) %}{{t!("game.village.rally_point.occupied", level = slot.building.level)}}{% else %}{{t!("game.village.rally_point.empty")}}{% endif %}"></a>
 
-              <a class="building-slot{% if user.village.get_building_by_slot_id(20).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(20) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(20).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(20) %} {{ queue_class }}{% endif %}"
                    href="/build?s=20"
                    style="top: 28%; left: 47%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(20) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(20) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">1</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(21).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(21) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(21).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(21) %} {{ queue_class }}{% endif %}"
                    href="/build?s=21"
                    style="top: 35%; left: 63%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(21) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(21) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">2</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(22).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(22) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(22).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(22) %} {{ queue_class }}{% endif %}"
                    href="/build?s=22"
                    style="top: 37%; left: 32%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(22) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(22) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">3</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(23).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(23) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(23).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(23) %} {{ queue_class }}{% endif %}"
                    href="/build?s=23"
                    style="top: 72%; left: 53%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(23) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(23) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">4</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(24).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(24) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(24).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(24) %} {{ queue_class }}{% endif %}"
                    href="/build?s=24"
                    style="top: 63%; left: 38%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(24) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(24) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">5</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(25).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(25) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(25).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(25) %} {{ queue_class }}{% endif %}"
                    href="/build?s=25"
                    style="top: 52%; left: 27%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(25) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(25) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">6</span>
               </a>
 
-              <a class="building-slot{% if user.village.get_building_by_slot_id(26).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(26) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(26).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(26) %} {{ queue_class }}{% endif %}"
                    href="/build?s=26"
                    style="top: 22%; left: 24%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(26) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(26) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">7</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(27).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(27) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(27).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(27) %} {{ queue_class }}{% endif %}"
                    href="/build?s=27"
                    style="top: 36%; left: 15%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(27) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(27) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">8</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(28).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(28) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(28).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(28) %} {{ queue_class }}{% endif %}"
                    href="/build?s=28"
                    style="top: 52%; left: 12%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(28) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(28) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">9</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(29).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(29) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(29).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(29) %} {{ queue_class }}{% endif %}"
                    href="/build?s=29"
                    style="top: 67%; left: 18%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(29) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(29) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">10</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(30).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(30) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(30).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(30) %} {{ queue_class }}{% endif %}"
                    href="/build?s=30"
                    style="top: 77%; left: 28%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(30) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(30) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">11</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(31).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(31) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(31).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(31) %} {{ queue_class }}{% endif %}"
                    href="/build?s=31"
                    style="top: 13%; left: 40%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(31) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(31) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">12</span>
               </a>
 
-              <a class="building-slot{% if user.village.get_building_by_slot_id(32).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(32) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(32).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(32) %} {{ queue_class }}{% endif %}"
                    href="/build?s=32"
                    style="top: 86%; left: 43%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(32) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(32) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">13</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(33).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(33) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(33).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(33) %} {{ queue_class }}{% endif %}"
                    href="/build?s=33"
                    style="top: 85%; left: 60%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(33) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(33) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">14</span>
               </a>
 
-              <a class="building-slot{% if user.village.get_building_by_slot_id(34).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(34) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(34).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(34) %} {{ queue_class }}{% endif %}"
                    href="/build?s=34"
                    style="top: 76%; left: 75%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(34) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(34) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">15</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(35).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(35) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(35).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(35) %} {{ queue_class }}{% endif %}"
                    href="/build?s=35"
                    style="top: 63%; left: 85%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(35) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(35) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">16</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(36).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(36) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(36).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(36) %} {{ queue_class }}{% endif %}"
                    href="/build?s=36"
                    style="top: 45%; left: 88%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(36) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(36) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">17</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(37).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(37) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(37).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(37) %} {{ queue_class }}{% endif %}"
                    href="/build?s=37"
                    style="top: 30%; left: 80%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(37) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(37) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">18</span>
               </a>
-              <a class="building-slot{% if user.village.get_building_by_slot_id(38).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(38) %} {{ queue_class }}{% endif %}"
+              <a class="building-slot{% if self.slot_building(38).is_some() %} occupied{% endif %}{% if let Some(queue_class) = self.queue_state_class(38) %} {{ queue_class }}{% endif %}"
                    href="/build?s=38"
                    style="top: 15%; left: 62%;"
-                   title="{% if let Some(slot) = user.village.get_building_by_slot_id(38) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
+                   title="{% if let Some(slot) = self.slot_building(38) %}{{t!("game.village.slots.occupied", name = slot.building.name, level = slot.building.level)}}{% else %}{{t!("game.village.slots.empty")}}{% endif %}">
                   <span class="slot-label">19</span>
               </a>
           </div>

@@ -1,6 +1,7 @@
 use askama::Template;
-use parabellum_game::models::village::VillageBuilding;
+use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::handlers::CurrentUser;
@@ -48,6 +49,7 @@ pub struct VillageTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
     pub building_queue: Vec<BuildingQueueItemView>,
+    pub slot_buildings: HashMap<u8, VillageBuilding>,
     pub server_time: ServerTimeContext,
 }
 
@@ -63,6 +65,14 @@ impl VillageTemplate {
                     "construction-pending"
                 }
             })
+    }
+
+    pub fn slot_building(&self, slot_id: u8) -> Option<&VillageBuilding> {
+        self.slot_buildings.get(&slot_id)
+    }
+
+    pub fn wall(&self) -> Option<&Building> {
+        self.slot_building(40).map(|vb| &vb.building)
     }
 }
 
