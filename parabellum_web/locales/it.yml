@@ -65,6 +65,7 @@ game:
     empty_slot_hint: Scegli un edificio da costruire qui.
     available: Edifici disponibili
     no_available: Nessun edificio disponibile al momento.
+    not_enough_resources: Risorse insufficienti in magazzino.
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

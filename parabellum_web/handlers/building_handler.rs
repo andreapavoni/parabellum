@@ -249,6 +249,7 @@ fn build_template(
     } else {
         "village"
     };
+    let available_resources = user.village.stored_resources().into();
 
     BuildingTemplate {
         current_user: Some(user.clone()),
@@ -263,6 +264,7 @@ fn build_template(
         building_queue: queue_view,
         current_construction,
         queue_for_slot,
+        available_resources,
         server_time: server_time_context(),
     }
 }

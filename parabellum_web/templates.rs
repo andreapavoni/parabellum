@@ -121,7 +121,7 @@ impl ResourcesTemplate {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ResourceCostView {
     pub lumber: u32,
     pub clay: u32,
@@ -174,6 +174,7 @@ pub struct BuildingTemplate {
     pub building_queue: Vec<BuildingQueueItemView>,
     pub current_construction: Option<BuildingQueueItemView>,
     pub queue_for_slot: Vec<BuildingQueueItemView>,
+    pub available_resources: ResourceCostView,
     pub server_time: ServerTimeContext,
 }
 

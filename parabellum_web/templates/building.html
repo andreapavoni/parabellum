@@ -103,11 +103,17 @@
                     <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
                     <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
                 </div>
+                {% let can_upgrade = self.available_resources.lumber >= next.cost.lumber
+                    && self.available_resources.clay >= next.cost.clay
+                    && self.available_resources.iron >= next.cost.iron
+                    && self.available_resources.crop >= next.cost.crop %}
                 <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                     <input type="hidden" name="slot_id" value="{{ slot_id }}">
                     <input type="hidden" name="action" value="upgrade">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
+                    <button type="submit"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded {% if !can_upgrade %}opacity-60 cursor-not-allowed{% endif %}"
+                            {% if !can_upgrade %}disabled aria-disabled="true"{% endif %}>
                         {% if current_construction.is_some() %}
                             {{t!("game.building.queue_upgrade_action", level = next.next_level) }}
                         {% else %}
@@ -115,6 +121,11 @@
                         {% endif %}
                     </button>
                 </form>
+                {% if !can_upgrade %}
+                <div class="text-xs text-red-600">
+                    {{t!("game.building.not_enough_resources")}}
+                </div>
+                {% endif %}
                 {% if queue_for_slot.len() > 0 %}
                 <div class="mt-4 border rounded-md bg-white p-3 text-xs text-gray-600 space-y-2">
                     <div class="font-semibold text-gray-800 uppercase">{{t!("game.building.slot_queue_title")}}</div>
@@ -190,15 +201,26 @@
                             <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
                         </div>
                         {% if current_construction.is_none() %}
+                        {% let can_build = self.available_resources.lumber >= option.cost.lumber
+                            && self.available_resources.clay >= option.cost.clay
+                            && self.available_resources.iron >= option.cost.iron
+                            && self.available_resources.crop >= option.cost.crop %}
                         <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                             <input type="hidden" name="slot_id" value="{{ slot_id }}">
                             <input type="hidden" name="action" value="build">
                             <input type="hidden" name="building_name" value="{{ option.key }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded">
+                            <button type="submit"
+                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded {% if !can_build %}opacity-60 cursor-not-allowed{% endif %}"
+                                    {% if !can_build %}disabled aria-disabled="true"{% endif %}>
                                 {{t!("game.building.build_action")}}
                             </button>
                         </form>
+                        {% if !can_build %}
+                        <div class="text-xs text-red-600">
+                            {{t!("game.building.not_enough_resources")}}
+                        </div>
+                        {% endif %}
                         {% else %}
                         <div class="text-xs text-gray-500">
                             {{t!("game.building.queue_locked")}}

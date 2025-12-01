@@ -68,6 +68,7 @@ game:
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings
     no_available: No buildings unlocked yet.
+    not_enough_resources: Not enough resources in storage.
   starting_position:
     title: Starting position
     north_east: North-East %{key}
