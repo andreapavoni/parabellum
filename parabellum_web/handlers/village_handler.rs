@@ -1,25 +1,14 @@
-use axum::{extract::State, response::IntoResponse};
-use tracing::error;
-
 use crate::{
-    handlers::{CurrentUser, load_building_queue, render_template},
+    handlers::{CurrentUser, building_queue_or_empty, render_template},
     http::AppState,
     templates::{ResourceField, ResourcesTemplate, VillageTemplate},
     view_helpers::{building_queue_to_views, resource_css_class, server_time_context},
 };
+use axum::{extract::State, response::IntoResponse};
 
 pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
-    let building_queue = match load_building_queue(&state, user.village.id).await {
-        Ok(items) => building_queue_to_views(&items),
-        Err(err) => {
-            error!(
-                error = ?err,
-                village_id = user.village.id,
-                "Unable to load building queue"
-            );
-            Vec::new()
-        }
-    };
+    let building_queue =
+        building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
 
     let template = VillageTemplate {
         current_user: Some(user),
@@ -43,17 +32,8 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         })
         .collect();
 
-    let building_queue = match load_building_queue(&state, user.village.id).await {
-        Ok(items) => building_queue_to_views(&items),
-        Err(err) => {
-            error!(
-                error = ?err,
-                village_id = user.village.id,
-                "Unable to load building queue"
-            );
-            Vec::new()
-        }
-    };
+    let building_queue =
+        building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
 
     let template = ResourcesTemplate {
         current_user: Some(user),

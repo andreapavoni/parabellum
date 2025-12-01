@@ -46,6 +46,11 @@ pub struct MapRegionResponse {
 }
 
 #[derive(Debug, Serialize)]
+struct ErrorResponse {
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct MapPoint {
     pub x: i32,
     pub y: i32,
@@ -156,7 +161,10 @@ pub async fn map_region(
         Ok(fields) => fields,
         Err(e) => {
             tracing::error!("Unable to load map region: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return map_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unable to load map region",
+            );
         }
     };
 
@@ -178,11 +186,10 @@ fn determine_center(user: &CurrentUser, params: &MapRegionQuery) -> Result<MapPo
                 y: village.position.y,
             });
         } else {
-            return Err((
+            return Err(map_error(
                 StatusCode::BAD_REQUEST,
                 "Unknown village id for current player",
-            )
-                .into_response());
+            ));
         }
     }
 
@@ -192,11 +199,10 @@ fn determine_center(user: &CurrentUser, params: &MapRegionQuery) -> Result<MapPo
             x: user.village.position.x,
             y: user.village.position.y,
         }),
-        _ => Err((
+        _ => Err(map_error(
             StatusCode::BAD_REQUEST,
             "Both x and y coordinates are required",
-        )
-            .into_response()),
+        )),
     }
 }
 
@@ -217,4 +223,14 @@ fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
         normalized += span;
     }
     normalized - world_size
+}
+
+fn map_error(status: StatusCode, message: impl Into<String>) -> Response {
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
 }

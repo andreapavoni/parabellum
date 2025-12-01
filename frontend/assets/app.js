@@ -40,8 +40,19 @@ function startCountdownTicker() {
     '.queue-timer[data-seconds]',
     '.countdown-timer[data-seconds]',
   ];
+  let reloadScheduled = false;
+  const scheduleReload = () => {
+    if (reloadScheduled) {
+      return;
+    }
+    reloadScheduled = true;
+    setTimeout(() => window.location.reload(), 1500);
+  };
   const tick = () => {
     if (!window.updateCountdowns || !window.shouldReloadForCountdown) {
+      return;
+    }
+    if (reloadScheduled) {
       return;
     }
     let reload = false;
@@ -52,7 +63,7 @@ function startCountdownTicker() {
       }
     });
     if (reload) {
-      window.location.reload();
+      scheduleReload();
     }
   };
   tick();

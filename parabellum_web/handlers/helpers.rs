@@ -249,6 +249,21 @@ pub async fn load_building_queue(
         .await
 }
 
+/// Loads the building queue but swallows failures and logs them.
+pub async fn building_queue_or_empty(state: &AppState, village_id: u32) -> Vec<BuildingQueueItem> {
+    match load_building_queue(state, village_id).await {
+        Ok(queue) => queue,
+        Err(err) => {
+            tracing::error!(
+                error = ?err,
+                village_id,
+                "Unable to load building queue"
+            );
+            Vec::new()
+        }
+    }
+}
+
 /// Ensures that the requester is not already authenticated.
 /// If a `user_id` cookie is found, returns a redirect to `/village`.
 pub fn ensure_not_authenticated(jar: &SignedCookieJar) -> Result<(), Redirect> {

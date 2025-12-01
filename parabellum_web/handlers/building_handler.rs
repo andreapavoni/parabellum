@@ -5,7 +5,6 @@ use axum::{
 };
 use axum_extra::extract::SignedCookieJar;
 use serde::Deserialize;
-use tracing::error;
 
 use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
@@ -17,7 +16,8 @@ use parabellum_types::buildings::BuildingName;
 
 use crate::{
     handlers::{
-        CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, load_building_queue, render_template,
+        CsrfForm, CurrentUser, HasCsrfToken, building_queue_or_empty, generate_csrf,
+        render_template,
     },
     http::AppState,
     templates::{BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo},
@@ -64,17 +64,7 @@ pub async fn building(
         _ => return Redirect::to("/village").into_response(),
     };
 
-    let queue_items = match load_building_queue(&state, user.village.id).await {
-        Ok(items) => items,
-        Err(err) => {
-            error!(
-                error = ?err,
-                village_id = user.village.id,
-                "Unable to load building queue"
-            );
-            Vec::new()
-        }
-    };
+    let queue_items = building_queue_or_empty(&state, user.village.id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(&state, &user, slot_id, csrf_token, None, queue_items);
@@ -153,22 +143,23 @@ pub async fn build_action(
     }
 }
 
-fn build_option(
-    name: BuildingName,
-    server_speed: i8,
-    main_building_level: u8,
-) -> Option<BuildingOption> {
+fn build_option(name: BuildingName, server_speed: i8, main_building_level: u8) -> BuildingOption {
     let building = Building::new(name.clone(), server_speed);
     let cost = building.cost();
     let time_secs = building.calculate_build_time_secs(&server_speed, &main_building_level);
+    let key = serde_json::to_value(&name)
+        .expect("BuildingName should serialize to a string")
+        .as_str()
+        .expect("BuildingName should serialize to a string")
+        .to_string();
 
-    Some(BuildingOption {
-        name: name.clone(),
-        key: format!("{:?}", &name),
+    BuildingOption {
+        name,
+        key,
         cost: cost.resources.into(),
         upkeep: cost.upkeep,
         time_formatted: format_duration(time_secs),
-    })
+    }
 }
 
 fn building_upgrade_info(
@@ -202,17 +193,7 @@ async fn render_with_error(
     slot_id: u8,
     error: String,
 ) -> Response {
-    let queue_items = match load_building_queue(state, user.village.id).await {
-        Ok(items) => items,
-        Err(err) => {
-            error!(
-                error = ?err,
-                village_id = user.village.id,
-                "Unable to load building queue"
-            );
-            Vec::new()
-        }
-    };
+    let queue_items = building_queue_or_empty(state, user.village.id).await;
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(state, &user, slot_id, csrf_token, Some(error), queue_items);
     (
@@ -257,7 +238,7 @@ fn build_template(
         user.village
             .available_buildings_for_slot(slot_id)
             .into_iter()
-            .filter_map(|name| build_option(name, state.server_speed, main_building_level))
+            .map(|name| build_option(name, state.server_speed, main_building_level))
             .collect::<Vec<BuildingOption>>()
     } else {
         vec![]
