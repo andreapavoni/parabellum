@@ -1,0 +1,243 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{t!("game.building.title")}} – PARABELLUM{% endblock %}
+{% block body %}
+{% if let Some(user) = current_user %}
+<div class="container mx-auto mt-6 px-4 pb-12">
+    <div class="max-w-2xl mx-auto bg-white shadow rounded-lg border border-gray-200 p-6">
+        {% if let Some(error) = flash_error %}
+        <div class="mb-4 p-3 border border-red-200 bg-red-50 text-red-700 text-sm rounded">
+            {{ error }}
+        </div>
+        {% endif %}
+        <!--<div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    {{t!("game.building.slot", slot = self.slot_id) }}
+                </h1>
+            </div>
+        </div>-->
+        {% if let Some(construction) = current_construction %}
+        <div class="mb-4 p-3 border border-amber-200 bg-amber-50 rounded text-sm text-gray-700">
+            <div class="font-semibold text-gray-800">
+                {{t!("game.building.construction_in_progress", name = construction.building_name, level = construction.target_level)}}
+            </div>
+            <div class="mt-1">
+                {{t!("game.building.time_remaining")}}:
+                <span class="font-mono font-semibold text-gray-900 countdown-timer"
+                      data-seconds="{{ construction.time_seconds }}">
+                    {{ construction.time_remaining }}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+        {% if let Some(slot) = slot_building %}
+        <div class="space-y-6">
+            <div>
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
+                <div class="text-2xl font-semibold">{{ slot.building.name }}</div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.level")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.level }}</div>
+                </div>
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.population")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.population }}</div>
+                </div>
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.value")}}</div>
+                    <div class="text-lg font-bold">{{ slot.building.value }}</div>
+                </div>
+                {% if let Some(upkeep) = current_upkeep %}
+                <div class="p-3 border rounded-md bg-gray-50">
+                    <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
+                    <div class="text-lg font-bold">{{ upkeep }}</div>
+                </div>
+                {% endif %}
+            </div>
+            {% if let Some(next) = upgrade %}
+            <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+                <div class="text-sm text-gray-500 uppercase">
+                    {% if current_construction.is_some() %}
+                        {{t!("game.building.upgrade_after_current", level = next.next_level)}}
+                    {% else %}
+                        {{t!("game.building.upgrade")}} – Lv {{ next.next_level }}
+                    {% endif %}
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🌲</span>
+                            <span>{{t!("game.village.resources.lumber")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.lumber }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🧱</span>
+                            <span>{{t!("game.village.resources.clay")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.clay }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>⚒️</span>
+                            <span>{{t!("game.village.resources.iron")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.iron }}</div>
+                    </div>
+                    <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                        <div class="text-gray-500 flex items-center gap-1">
+                            <span>🌾</span>
+                            <span>{{t!("game.village.resources.crop")}}</span>
+                        </div>
+                        <div class="text-lg font-bold text-gray-800">{{ next.cost.crop }}</div>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+                    <div class="text-gray-500 text-sm uppercase">{{t!("game.building.time")}}</div>
+                    <div class="text-xl font-semibold text-gray-800">{{ next.time_formatted }}</div>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+                    <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
+                    <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
+                </div>
+                {% let can_upgrade = self.available_resources.lumber >= next.cost.lumber
+                    && self.available_resources.clay >= next.cost.clay
+                    && self.available_resources.iron >= next.cost.iron
+                    && self.available_resources.crop >= next.cost.crop %}
+                <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
+                    <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                    <input type="hidden" name="action" value="upgrade">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded {% if !can_upgrade %}opacity-60 cursor-not-allowed{% endif %}"
+                            {% if !can_upgrade %}disabled aria-disabled="true"{% endif %}>
+                        {% if current_construction.is_some() %}
+                            {{t!("game.building.queue_upgrade_action", level = next.next_level) }}
+                        {% else %}
+                            {{t!("game.building.upgrade_action", level = next.next_level) }}
+                        {% endif %}
+                    </button>
+                </form>
+                {% if !can_upgrade %}
+                <div class="text-xs text-red-600">
+                    {{t!("game.building.not_enough_resources")}}
+                </div>
+                {% endif %}
+                {% if queue_for_slot.len() > 0 %}
+                <div class="mt-4 border rounded-md bg-white p-3 text-xs text-gray-600 space-y-2">
+                    <div class="font-semibold text-gray-800 uppercase">{{t!("game.building.slot_queue_title")}}</div>
+                    {% for item in queue_for_slot %}
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-100 pb-2 {% if loop.last %}border-0 pb-0{% endif %}">
+                        <div>
+                            {% if loop.first %}
+                                {{t!("game.building.queue_item_current", name = item.building_name, level = item.target_level)}}
+                            {% else %}
+                                {{t!("game.building.queue_item_pending", name = item.building_name, level = item.target_level)}}
+                            {% endif %}
+                        </div>
+                        <div class="font-mono text-gray-800 countdown-timer"
+                             data-seconds="{{ item.time_seconds }}">
+                            {{ item.time_remaining }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="space-y-6 py-6">
+            <div class="text-center">
+                <p class="text-lg text-gray-600">{{t!("game.building.empty_slot")}}</p>
+                <p class="text-sm text-gray-500 mt-2">{{t!("game.building.empty_slot_hint")}}</p>
+            </div>
+
+            {% if available_buildings.is_empty() %}
+            <div class="text-center text-sm text-gray-500">
+                {% if current_construction.is_some() %}
+                    {{t!("game.building.queue_locked")}}
+                {% else %}
+                    {{t!("game.building.no_available")}}
+                {% endif %}
+            </div>
+            {% else %}
+            <div>
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available")}}</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    {% for option in available_buildings %}
+                    <div class="p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3">
+                        <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
+                        <div>
+                            <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
+                            <div class="grid grid-cols-2 gap-2 mt-1">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.lumber }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.clay }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.iron }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.crop }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.time")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.time_formatted }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.upkeep")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
+                        </div>
+                        {% if current_construction.is_none() %}
+                        {% let can_build = self.available_resources.lumber >= option.cost.lumber
+                            && self.available_resources.clay >= option.cost.clay
+                            && self.available_resources.iron >= option.cost.iron
+                            && self.available_resources.crop >= option.cost.crop %}
+                        <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
+                            <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                            <input type="hidden" name="action" value="build">
+                            <input type="hidden" name="building_name" value="{{ option.key }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit"
+                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded {% if !can_build %}opacity-60 cursor-not-allowed{% endif %}"
+                                    {% if !can_build %}disabled aria-disabled="true"{% endif %}>
+                                {{t!("game.building.build_action")}}
+                            </button>
+                        </form>
+                        {% if !can_build %}
+                        <div class="text-xs text-red-600">
+                            {{t!("game.building.not_enough_resources")}}
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="text-xs text-gray-500">
+                            {{t!("game.building.queue_locked")}}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+  <div class="container mx-auto px-4 py-12 text-center text-gray-600">
+    {{t!("errors.unauthorized")}}
+  </div>
+{% endif %}
+{% endblock %}

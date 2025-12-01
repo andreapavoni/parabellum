@@ -1,18 +1,26 @@
 {% extends "layouts/base.html" %}
-{% block title %}{{t!("game.village.title")}} – PARABELLUM{% endblock %}
+{% block title %}{{t!("game.village.map")}} – PARABELLUM{% endblock %}
 {% block body %}
-<div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
+{% let user = current_user.as_ref().expect("current_user should be present for map template") %}
+<div
+    id="map-page"
+    class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12"
+    data-center-x="{{ user.village.position.x }}"
+    data-center-y="{{ user.village.position.y }}"
+    data-home-x="{{ user.village.position.x }}"
+    data-home-y="{{ user.village.position.y }}"
+    data-home-village-id="{{ user.village.id }}"
+    data-world-size="{{ world_size }}"
+>
 
-     <div class="map-container-main w-full md:w-auto">
+     <div class="map-container-main relative w-full md:w-auto">
 
          <div class="flex flex-col md:flex-row justify-between items-center w-full max-w-[560px] mb-4 px-2 md:pl-4">
-             <h1 class="text-xl font-bold text-left w-full md:w-auto">Map <span id="header-coords" class="text-gray-700">(125|25)</span></h1>
+             <h1 class="text-xl font-bold text-left w-full md:w-auto">Map <span id="header-coords" class="text-gray-700">({{ user.village.position.x }}|{{ user.village.position.y }})</span></h1>
          </div>
 
          <div class="large-map-wrapper">
-
              <div class="map-grid-container">
-
                  <div class="nav-arrow arrow-n" onclick="moveMap(0, 1)" title="Nord (Y+)"></div>
                  <div class="nav-arrow arrow-s" onclick="moveMap(0, -1)" title="Sud (Y-)"></div>
                  <div class="nav-arrow arrow-w" onclick="moveMap(-1, 0)" title="Ovest (X-)"></div>
@@ -20,37 +28,26 @@
 
                  <!-- Y Axis -->
                  <div id="y-axis-container" class="y-axis"></div>
-
                  <!-- 15x15 Grid -->
                  <div id="map-grid" class="map-grid"></div>
-
                  <!-- X Axis -->
                  <div id="x-axis-container" class="x-axis"></div>
-
              </div>
-
-             <div id="tile-info"></div>
          </div>
 
          <div class="coords-input-container z-20">
              <span class="font-bold text-sm text-gray-700">x</span>
-             <input type="text" id="input-x" value="125" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
+             <input type="text" id="input-x" value="{{ user.village.position.x }}" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
              <span class="font-bold text-sm text-gray-700">y</span>
-             <input type="text" id="input-y" value="25" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
+             <input type="text" id="input-y" value="{{ user.village.position.y }}" class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold">
              <button onclick="goToCoords()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-1.5 rounded text-xs font-bold text-green-700 ml-3 cursor-pointer shadow-sm transition-colors">OK</button>
          </div>
+         <div
+             id="details-panel-container"
+             class="details-panel hidden"
+         >
 
-     </div>
-
-     <div class="w-full max-w-[560px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
-         <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Details</h3>
-
-         <div id="details-panel">
-             <p class="text-xs text-gray-500 italic mb-4 text-center py-8">Select a field</p>
-         </div>
-
-         <div class="mt-8 border border-gray-300 h-32 bg-gray-100 flex items-center justify-center text-gray-400 text-xs rounded shadow-inner">
-             [Mini Map]
+             <div id="details-panel" class="text-xs text-gray-700"></div>
          </div>
      </div>
 

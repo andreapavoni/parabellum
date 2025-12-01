@@ -49,6 +49,16 @@ impl Tribe {
         }
     }
 
+    /// Returns the wall building associated to the tribe, if any.
+    pub fn wall(&self) -> Option<BuildingName> {
+        match self {
+            Tribe::Roman => Some(BuildingName::CityWall),
+            Tribe::Teuton => Some(BuildingName::EarthWall),
+            Tribe::Gaul => Some(BuildingName::Palisade),
+            _ => None,
+        }
+    }
+
     /// Returns top military unit for actual tribe. Used for hero.
     pub fn get_top_unit(&self) -> Option<&Unit> {
         match self {

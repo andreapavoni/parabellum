@@ -16,7 +16,7 @@ pub mod tests {
         village::Village,
     };
     use parabellum_types::{
-        common::{Player, User},
+        common::{Player, ResourceGroup, User},
         errors::{ApplicationError, DbError},
         map::{Position, ValleyTopology},
     };
@@ -24,8 +24,8 @@ pub mod tests {
     use crate::{
         jobs::Job,
         repository::{
-            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, UserRepository, VillageRepository,
+            ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
+            MarketplaceRepository, PlayerRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -67,6 +67,20 @@ pub mod tests {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
 
+        async fn list_village_building_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
         async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
@@ -77,6 +91,19 @@ pub mod tests {
             _error_message: &str,
         ) -> Result<(), ApplicationError> {
             Ok(())
+        }
+    }
+
+    /// Helper to force a village to have the exact resource amounts requested.
+    pub fn set_village_resources(village: &mut Village, resources: ResourceGroup) {
+        let current = village.stored_resources();
+        if current.total() > 0 {
+            village
+                .deduct_resources(&current)
+                .expect("failed to clear village resources");
+        }
+        if resources.total() > 0 {
+            village.store_resources(&resources);
         }
     }
 
@@ -264,6 +291,51 @@ pub mod tests {
                 player_id: None,
             })
         }
+
+        async fn get_region(
+            &self,
+            center_x: i32,
+            center_y: i32,
+            radius: i32,
+            world_size: i32,
+        ) -> Result<Vec<MapRegionTile>, ApplicationError> {
+            let fields = self.fields.lock().unwrap();
+            let mut region = Vec::new();
+
+            for y in ((center_y - radius)..=(center_y + radius)).rev() {
+                let wrapped_y = wrap_coordinate(y, world_size);
+                for x in center_x - radius..=center_x + radius {
+                    let wrapped_x = wrap_coordinate(x, world_size);
+                    let position = Position {
+                        x: wrapped_x,
+                        y: wrapped_y,
+                    };
+                    let id = position.to_id(world_size) as u32;
+                    if let Some(field) = fields.get(&id) {
+                        region.push(MapRegionTile {
+                            field: field.clone(),
+                            village_name: None,
+                            village_population: None,
+                            player_name: None,
+                        });
+                    }
+                }
+            }
+
+            Ok(region)
+        }
+    }
+
+    fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
+        if world_size <= 0 {
+            return value;
+        }
+        let span = world_size * 2 + 1;
+        let mut normalized = (value + world_size) % span;
+        if normalized < 0 {
+            normalized += span;
+        }
+        normalized - world_size
     }
 
     #[derive(Default, Clone)]

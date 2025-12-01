@@ -14,9 +14,13 @@ pub mod tests {
             tasks::{MerchantGoingTask, MerchantReturnTask},
             worker::JobWorker,
         },
+        test_utils::tests::set_village_resources,
         uow::UnitOfWorkProvider,
     };
-    use parabellum_types::{errors::{ApplicationError, GameError}, Result};
+    use parabellum_types::{
+        Result,
+        errors::{ApplicationError, GameError},
+    };
 
     use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{
@@ -65,7 +69,7 @@ pub mod tests {
         let marketplace =
             Building::new(BuildingName::Marketplace, config.speed).at_level(10, config.speed)?;
         village_a.add_building_at_slot(marketplace, 25)?;
-        village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
+        set_village_resources(&mut village_a, ResourceGroup(5000, 5000, 5000, 5000));
 
         let granary =
             Building::new(BuildingName::Granary, config.speed).at_level(10, config.speed)?;

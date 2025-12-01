@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parabellum_types::Result;
 
 use crate::{
+    command_handlers::helpers::completion_time_for_slot,
     config::Config,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
@@ -32,6 +33,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         config: &Arc<Config>,
     ) -> Result<()> {
         let villages_repo = uow.villages();
+        let job_repo = uow.jobs();
 
         let mut village = villages_repo.get_by_id(cmd.village_id).await?;
         let build_time_secs =
@@ -44,13 +46,18 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             name: cmd.name,
         };
         let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
+        let queue_jobs = job_repo
+            .list_village_building_queue(cmd.village_id as i32)
+            .await?;
+        let completion_time =
+            completion_time_for_slot(&queue_jobs, cmd.slot_id, build_time_secs as i64);
+        let new_job = Job::with_deadline(
             cmd.player_id,
             cmd.village_id as i32,
-            build_time_secs as i64,
             job_payload,
+            completion_time,
         );
-        uow.jobs().add(&new_job).await?;
+        job_repo.add(&new_job).await?;
 
         Ok(())
     }
@@ -70,7 +77,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::{jobs::tasks::AddBuildingTask, test_utils::tests::MockUnitOfWork};
+    use crate::{
+        jobs::tasks::AddBuildingTask,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
+    };
     use std::sync::Arc;
 
     fn setup_village(config: &Config) -> Result<(Player, Village, Arc<Config>)> {
@@ -96,7 +106,7 @@ mod tests {
         let village_id = village.id;
         let player_id = player.id;
 
-        village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
+        set_village_resources(&mut village, ResourceGroup(800, 800, 800, 800));
 
         mock_uow.villages().save(&village).await?;
 
@@ -142,7 +152,8 @@ mod tests {
     async fn test_add_building_handler_not_enough_resources() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
-        let (player, village, config) = setup_village(&config)?;
+        let (player, mut village, config) = setup_village(&config)?;
+        set_village_resources(&mut village, ResourceGroup::default());
 
         mock_uow.villages().save(&village).await?;
 

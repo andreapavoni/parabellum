@@ -1,6 +1,7 @@
 pub mod handlers;
 mod http;
 mod templates;
+pub mod view_helpers;
 
 pub use http::*;
 

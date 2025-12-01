@@ -1,10 +1,18 @@
 use askama::Template;
+use parabellum_game::models::{buildings::Building, village::VillageBuilding};
+use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use std::collections::HashMap;
+use uuid::Uuid;
+
+use crate::handlers::CurrentUser;
 
 /// Template for the home page.
-#[derive(Debug, Default, Template)]
+#[derive(Debug, Template)]
 #[template(path = "home.html")]
 pub struct HomeTemplate {
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the login page.
@@ -12,9 +20,11 @@ pub struct HomeTemplate {
 #[template(path = "login.html")]
 pub struct LoginTemplate {
     pub csrf_token: String,
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
     pub email_value: String,   // to pre-fill email input
     pub error: Option<String>, // login error message, if any
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the registration page.
@@ -22,31 +32,164 @@ pub struct LoginTemplate {
 #[template(path = "register.html")]
 pub struct RegisterTemplate {
     pub csrf_token: String,
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
     pub username_value: String,    // to pre-fill username on error
     pub email_value: String,       // to pre-fill email on error
     pub selected_tribe: String,    // to retain selected tribe option
     pub selected_quadrant: String, // to retain selected quadrant option
     pub error: Option<String>,     // signup error message, if any
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the village center page.
 #[derive(Debug, Default, Template)]
 #[template(path = "village.html")]
 pub struct VillageTemplate {
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub building_queue: Vec<BuildingQueueItemView>,
+    pub slot_buildings: HashMap<u8, VillageBuilding>,
+    pub server_time: ServerTimeContext,
+}
+
+impl VillageTemplate {
+    pub fn queue_state_class(&self, slot_id: u8) -> Option<&'static str> {
+        self.building_queue
+            .iter()
+            .find(|item| item.slot_id == slot_id)
+            .map(|item| {
+                if item.is_processing {
+                    "construction-active"
+                } else {
+                    "construction-pending"
+                }
+            })
+    }
+
+    pub fn slot_building(&self, slot_id: u8) -> Option<&VillageBuilding> {
+        self.slot_buildings.get(&slot_id)
+    }
+
+    pub fn wall(&self) -> Option<&Building> {
+        self.slot_building(40).map(|vb| &vb.building)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ResourceField {
+    pub class: &'static str,
+    pub name: BuildingName,
+    pub level: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildingQueueItemView {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
+    pub target_level: u8,
+    pub is_processing: bool,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+    pub queue_class: Option<String>,
 }
 
 /// Template for the village center page.
-#[derive(Debug, Default, Template)]
+#[derive(Debug, Template)]
 #[template(path = "resources.html")]
 pub struct ResourcesTemplate {
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub resource_slots: Vec<ResourceField>,
+    pub building_queue: Vec<BuildingQueueItemView>,
+    pub server_time: ServerTimeContext,
+}
+
+impl ResourcesTemplate {
+    pub fn queue_state_class(&self, slot_id: u8) -> Option<&'static str> {
+        self.building_queue
+            .iter()
+            .find(|item| item.slot_id == slot_id)
+            .map(|item| {
+                if item.is_processing {
+                    "construction-active"
+                } else {
+                    "construction-pending"
+                }
+            })
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ResourceCostView {
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+}
+
+impl From<ResourceGroup> for ResourceCostView {
+    fn from(resources: ResourceGroup) -> Self {
+        Self {
+            lumber: resources.lumber(),
+            clay: resources.clay(),
+            iron: resources.iron(),
+            crop: resources.crop(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildingOption {
+    pub name: BuildingName,
+    pub key: String,
+    pub cost: ResourceCostView,
+    pub upkeep: u32,
+    pub time_formatted: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildingUpgradeInfo {
+    pub next_level: u8,
+    pub cost: ResourceCostView,
+    pub current_upkeep: u32,
+    pub upkeep: u32,
+    pub time_formatted: String,
+}
+
+/// Template for individual building page.
+#[derive(Debug, Default, Template)]
+#[template(path = "building.html")]
+pub struct BuildingTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub slot_id: u8,
+    pub slot_building: Option<VillageBuilding>,
+    pub available_buildings: Vec<BuildingOption>,
+    pub upgrade: Option<BuildingUpgradeInfo>,
+    pub current_upkeep: Option<u32>,
+    pub csrf_token: String,
+    pub flash_error: Option<String>,
+    pub building_queue: Vec<BuildingQueueItemView>,
+    pub current_construction: Option<BuildingQueueItemView>,
+    pub queue_for_slot: Vec<BuildingQueueItemView>,
+    pub available_resources: ResourceCostView,
+    pub server_time: ServerTimeContext,
 }
 
 /// Template for the map page.
 #[derive(Debug, Default, Template)]
 #[template(path = "map.html")]
 pub struct MapTemplate {
-    pub current_user: bool,
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub world_size: i32,
+    pub server_time: ServerTimeContext,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ServerTimeContext {
+    pub formatted: String,
+    pub timestamp: i64,
 }

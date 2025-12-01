@@ -12,12 +12,24 @@ game:
     title: Centro del Villaggio
     capital: "%{name} (Capitale)"
     villages: Villaggi
+    fields: Campi Risorse
     map: Mappa
     stats: Statistiche
     report: Rapporto
     main_building: Edificio Principale
-    whoami: "Villaggio di %{name}"
     construction_in_progress: Costruzione in corso
+    slots:
+      empty: "Slot vuoto"
+      occupied: "%{name} (Lv %{level})"
+    rally_point:
+      empty: "Punto di Raduno - vuoto"
+      occupied: "Punto di Raduno - Lv %{level}"
+    wall:
+      empty: "Mura - vuote"
+      occupied: "Mura - %{name} (Lv %{level})"
+    main_building_slot:
+      empty: "Edificio Principale - vuoto"
+      occupied: "Edificio Principale - Lv %{level}"
     buildings:
       warehouse: Magazzino
       granary: Granaio
@@ -26,10 +38,34 @@ game:
       lumber: Legname
       clay: Argilla
       iron: Ferro
-      grain: Raccolto
+      crop: Grano
     troops:
       title: Truppe
       no_units: Nessuna unità nel villaggio
+  building:
+    title: Edificio
+    slot: "Slot %{slot}"
+    existing: Edificio presente
+    level: Livello
+    population: Popolazione
+    value: Valore
+    upgrade: Prossimo upgrade
+    cost: Costo
+    time: Tempo di costruzione
+    upkeep: Consumo di grano
+    build_action: Costruisci
+    upgrade_action: "Migliora al Lv %{level}"
+    queue_upgrade_action: "Accoda potenziamento al Lv %{level}"
+    slot_queue_title: Coda dello slot
+    queue_item_current: "%{name} → Lv %{level} (in corso)"
+    queue_item_pending: "In coda: %{name} → Lv %{level}"
+    construction_in_progress: "%{name} verso il livello %{level} è in costruzione."
+    queue_locked: Un'altra costruzione è già in coda per questo slot.
+    empty_slot: Questo slot è vuoto.
+    empty_slot_hint: Scegli un edificio da costruire qui.
+    available: Edifici disponibili
+    no_available: Nessun edificio disponibile al momento.
+    not_enough_resources: Risorse insufficienti in magazzino.
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

@@ -6,6 +6,7 @@ use parabellum_types::{
 };
 
 use crate::{
+    command_handlers::helpers::{completion_time_for_slot, highest_target_level_for_slot},
     config::Config,
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
@@ -45,7 +46,12 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
                 slot_id: command.slot_id,
             })?;
 
-        let next_level = vb.building.level + 1;
+        let queue_jobs = job_repo
+            .list_village_building_queue(command.village_id as i32)
+            .await?;
+        let pending_level = highest_target_level_for_slot(&queue_jobs, command.slot_id)
+            .unwrap_or(vb.building.level);
+        let next_level = pending_level + 1;
         let next_level_building = vb.building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
         let build_time_secs =
@@ -61,11 +67,13 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
 
         let job_payload = JobPayload::new("BuildingUpgrade", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
+        let completion_time =
+            completion_time_for_slot(&queue_jobs, command.slot_id, build_time_secs);
+        let new_job = Job::with_deadline(
             command.player_id,
             command.village_id as i32,
-            build_time_secs,
             job_payload,
+            completion_time,
         );
         job_repo.add(&new_job).await?;
 
@@ -75,15 +83,16 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Duration, Utc};
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::{
         models::village::Village,
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
+    use parabellum_types::Result;
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
@@ -92,8 +101,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config, cqrs::commands::UpgradeBuilding, jobs::tasks::BuildingUpgradeTask,
-        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
+        config::Config,
+        cqrs::commands::UpgradeBuilding,
+        jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
+        test_utils::tests::MockUnitOfWork,
+        uow::UnitOfWork,
     };
 
     fn setup_village_for_upgrade() -> Result<(Player, Village, Arc<Config>, u8)> {
@@ -115,6 +127,65 @@ mod tests {
         village.store_resources(&ResourceGroup(1000, 1000, 1000, 1000));
 
         Ok((player, village, config, main_building_slot))
+    }
+
+    #[tokio::test]
+    async fn test_upgrade_building_handler_stacks_queue_levels() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config, slot_id) = setup_village_for_upgrade()?;
+        let village_id = village.id;
+        let player_id = player.id;
+
+        mock_uow.villages().save(&village).await?;
+
+        let existing_payload = BuildingUpgradeTask {
+            slot_id,
+            building_name: BuildingName::MainBuilding,
+            level: 2,
+        };
+        let existing_job = Job::with_deadline(
+            player_id,
+            village_id as i32,
+            JobPayload::new("BuildingUpgrade", serde_json::to_value(&existing_payload)?),
+            Utc::now() + Duration::seconds(60),
+        );
+        mock_uow.jobs().add(&existing_job).await?;
+
+        let handler = UpgradeBuildingCommandHandler::new();
+        let command = UpgradeBuilding {
+            player_id,
+            village_id,
+            slot_id,
+        };
+
+        handler.handle(command, &mock_uow, &config).await?;
+
+        let jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
+        assert_eq!(jobs.len(), 2, "Should have queued two jobs");
+        let queued_job = jobs
+            .iter()
+            .find(|job| job.id != existing_job.id)
+            .expect("Missing queued job");
+
+        let task: BuildingUpgradeTask =
+            serde_json::from_value(queued_job.task.data.clone()).unwrap();
+        assert_eq!(task.level, 3, "Next queued upgrade should target level 3");
+
+        let mb_level = village.main_building_level();
+        let level3_building = village
+            .get_building_by_slot_id(slot_id)
+            .unwrap()
+            .building
+            .at_level(3, config.speed)
+            .unwrap();
+        let expected_duration =
+            level3_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
+        assert_eq!(
+            queued_job.completed_at,
+            existing_job.completed_at + Duration::seconds(expected_duration),
+            "Queued job should finish after the previous one plus its duration"
+        );
+        Ok(())
     }
 
     #[tokio::test]

@@ -1,13 +1,18 @@
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction, types::Json};
+use serde_json::Value;
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction, types::Json};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
-use parabellum_app::repository::MapRepository;
-use parabellum_types::errors::{
-    ApplicationError,
-    DbError::{self},
-};
+use parabellum_app::repository::{MapRegionTile, MapRepository};
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
+use parabellum_types::{
+    errors::{
+        ApplicationError,
+        DbError::{self},
+    },
+    map::Position,
+};
 
 use crate::models as db_models;
 
@@ -69,6 +74,114 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
 
         Ok(field.into())
     }
+
+    async fn get_region(
+        &self,
+        center_x: i32,
+        center_y: i32,
+        radius: i32,
+        world_size: i32,
+    ) -> Result<Vec<MapRegionTile>, ApplicationError> {
+        let tile_ids = build_region_ids(center_x, center_y, radius, world_size);
+
+        if tile_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tx_guard = self.tx.lock().await;
+        let records = sqlx::query_as::<_, DbMapFieldWithOwner>(
+            r#"
+            SELECT
+                mf.id,
+                mf.village_id,
+                mf.player_id,
+                mf.position,
+                mf.topology,
+                v.id AS fallback_village_id,
+                v.player_id AS fallback_player_id,
+                v.name AS village_name,
+                v.population AS village_population,
+                p.username AS player_name
+            FROM map_fields AS mf
+            LEFT JOIN villages AS v
+                ON v.id = mf.id
+            LEFT JOIN players AS p
+                ON p.id = COALESCE(mf.player_id, v.player_id)
+            WHERE mf.id = ANY($1)
+            ORDER BY array_position($1, mf.id)
+            "#,
+        )
+        .bind(&tile_ids)
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let fields = records
+            .into_iter()
+            .map(|record| {
+                let db_field = db_models::MapField {
+                    id: record.id,
+                    village_id: record.village_id.or(record.fallback_village_id),
+                    player_id: record.player_id.or(record.fallback_player_id),
+                    position: record.position,
+                    topology: record.topology,
+                };
+                MapRegionTile {
+                    field: MapField::from(db_field),
+                    village_name: record.village_name,
+                    village_population: record.village_population,
+                    player_name: record.player_name,
+                }
+            })
+            .collect();
+
+        Ok(fields)
+    }
+}
+
+#[derive(Debug, FromRow)]
+struct DbMapFieldWithOwner {
+    id: i32,
+    village_id: Option<i32>,
+    player_id: Option<Uuid>,
+    position: Value,
+    topology: Value,
+    fallback_village_id: Option<i32>,
+    fallback_player_id: Option<Uuid>,
+    village_name: Option<String>,
+    village_population: Option<i32>,
+    player_name: Option<String>,
+}
+
+fn build_region_ids(center_x: i32, center_y: i32, radius: i32, world_size: i32) -> Vec<i32> {
+    let diameter = (radius * 2 + 1).max(0) as usize;
+    let mut ids = Vec::with_capacity(diameter * diameter);
+
+    for y in ((center_y - radius)..=(center_y + radius)).rev() {
+        let wrapped_y = wrap_coordinate(y, world_size);
+        for x in center_x - radius..=center_x + radius {
+            let wrapped_x = wrap_coordinate(x, world_size);
+            let position = Position {
+                x: wrapped_x,
+                y: wrapped_y,
+            };
+            ids.push(position.to_id(world_size) as i32);
+        }
+    }
+
+    ids
+}
+
+fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
+    if world_size <= 0 {
+        return value;
+    }
+    let span = world_size * 2 + 1;
+    let mut normalized = (value + world_size) % span;
+    if normalized < 0 {
+        normalized += span;
+    }
+    normalized - world_size
 }
 
 /// Populates the World Map.

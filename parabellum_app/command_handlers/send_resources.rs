@@ -110,7 +110,6 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_types::Result;
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::{
@@ -118,6 +117,7 @@ mod tests {
             valley_factory, village_factory,
         },
     };
+    use parabellum_types::Result;
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
@@ -127,8 +127,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config, cqrs::commands::SendResources, jobs::tasks::MerchantGoingTask,
-        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
+        config::Config,
+        cqrs::commands::SendResources,
+        jobs::tasks::MerchantGoingTask,
+        test_utils::tests::{MockUnitOfWork, set_village_resources},
+        uow::UnitOfWork,
     };
 
     async fn setup_test_villages(
@@ -169,17 +172,18 @@ mod tests {
             Building::new(BuildingName::Marketplace, config.speed).at_level(3, config.speed)?;
         village_a.add_building_at_slot(marketplace, 25)?;
 
-        village_a.store_resources(&ResourceGroup(5000, 5000, 5000, 5000));
+        set_village_resources(&mut village_a, ResourceGroup(5000, 5000, 5000, 5000));
         let player_b = player_factory(PlayerFactoryOptions {
             tribe: Some(Tribe::Roman),
             ..Default::default()
         });
         let valley_b = valley_factory(Default::default());
-        let village_b = village_factory(VillageFactoryOptions {
+        let mut village_b = village_factory(VillageFactoryOptions {
             player: Some(player_b.clone()),
             valley: Some(valley_b),
             ..Default::default()
         });
+        set_village_resources(&mut village_b, ResourceGroup::default());
 
         mock_uow.players().save(&player_a).await.unwrap();
         mock_uow.players().save(&player_b).await.unwrap();
