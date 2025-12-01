@@ -125,7 +125,7 @@ mod tests {
             2, building_in_db.building.level
         );
 
-        assert_eq!(initial_population, 4, "Wrong initial village population");
+        assert_eq!(initial_population, 2, "Wrong initial village population");
         assert_eq!(
             saved_village.population,
             initial_population + 1,

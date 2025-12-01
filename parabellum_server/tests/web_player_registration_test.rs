@@ -63,6 +63,10 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
     let y = village.position.y;
 
     assert!(x < 0 && y < 0, "Village should be on the selected quadrant");
+    assert_eq!(
+        village.population, 2,
+        "Freshly created village should start with population 2"
+    );
 
     uow.rollback().await?;
     Ok(())

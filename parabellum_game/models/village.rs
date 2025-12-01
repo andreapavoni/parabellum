@@ -794,7 +794,7 @@ impl Village {
 
     /// Updates the village state (production, upkeep, etc...).
     fn update_state(&mut self) {
-        self.population = 2;
+        self.population = 0;
         self.production = Default::default();
 
         // reset the stocks capacities because we're going to recalculate them
@@ -1150,8 +1150,8 @@ mod tests {
         // Upkeep: 2 (base) + 2 (main building) = 4
         assert_eq!(v.production.upkeep, 4, "upkeep");
 
-        // Population: 2 (base) + 2 (main building) = 4
-        assert_eq!(v.population, 4, "population");
+        // Population: 0 (base) + 2 (main building) = 4
+        assert_eq!(v.population, 2, "population");
 
         // Stocks
         assert_eq!(v.stocks.warehouse_capacity, 800, "stock warehouse");
