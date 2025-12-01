@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}PARABELLUM{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="/assets/tailwind.css">
+    <link rel="stylesheet" href="/assets/index.css">
 </head>
 <body class="flex flex-col min-h-screen">
   {% include "partials/_nav.html" %}
@@ -13,6 +13,6 @@
     {% block body %}{% endblock %}
   </main>
   {% include "partials/_footer.html" %}
-  <script src="/assets/app.js" type="application/javascript"></script>
+  <script src="/assets/index.js" type="application/javascript"></script>
 </body>
 </html>
