@@ -45,6 +45,7 @@ pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueue
                 is_processing: matches!(item.status, JobStatus::Processing),
                 time_remaining: format_duration(remaining),
                 time_seconds: remaining,
+                queue_class: None,
             }
         })
         .collect()

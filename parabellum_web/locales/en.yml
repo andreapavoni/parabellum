@@ -51,14 +51,19 @@ game:
     value: Output
     upgrade: Next upgrade
     upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"
+    queue_upgrade_action: "Queue upgrade to Lv %{level}"
     cost: Cost
     time: Build time
     time_remaining: Time remaining
-    upkeep: Crop upkeep
+    upkeep: Upkeep
     build_action: Build
     upgrade_action: "Upgrade to Lv %{level}"
     construction_in_progress: "%{name} to level %{level} is currently under construction."
     queue_locked: Another construction is already queued for this slot.
+    queue_upgrade_action: "Queue upgrade to Lv %{level}"
+    slot_queue_title: Slot queue
+    queue_item_current: "%{name} → Lv %{level} (in progress)"
+    queue_item_pending: "Queued: %{name} → Lv %{level}"
     empty_slot: This slot is empty.
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings

@@ -55,6 +55,12 @@ game:
     upkeep: Consumo di grano
     build_action: Costruisci
     upgrade_action: "Migliora al Lv %{level}"
+    queue_upgrade_action: "Accoda potenziamento al Lv %{level}"
+    slot_queue_title: Coda dello slot
+    queue_item_current: "%{name} → Lv %{level} (in corso)"
+    queue_item_pending: "In coda: %{name} → Lv %{level}"
+    construction_in_progress: "%{name} verso il livello %{level} è in costruzione."
+    queue_locked: Un'altra costruzione è già in coda per questo slot.
     empty_slot: Questo slot è vuoto.
     empty_slot_hint: Scegli un edificio da costruire qui.
     available: Edifici disponibili

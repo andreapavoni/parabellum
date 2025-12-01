@@ -57,6 +57,36 @@
    filter: brightness(1.1);
  }
 
+ .hex.construction-active {
+   box-shadow: 0 0 12px rgba(249, 115, 22, 0.55);
+   animation: constructionPulse 1.5s ease-in-out infinite;
+ }
+
+ .hex.construction-pending {
+   box-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
+   filter: brightness(1.05);
+ }
+
+ .hex.construction-pending>.level {
+   font-size: 110%;
+ }
+
+ .hex.wood.construction-pending>.level {
+   color: greenyellow;
+ }
+
+ .hex.clay.construction-pending>.level {
+   color: greenyellow;
+ }
+
+ .hex.iron.construction-pending>.level {
+   color: greenyellow;
+ }
+
+ .hex.crop.construction-pending>.level {
+   color: greenyellow;
+ }
+
  /* Testo Livello */
  .level {
    font-weight: bold;
@@ -434,6 +464,31 @@
    stroke-dasharray: none;
  }
 
+ .wall-ring.construction-active .wall-ring-track {
+   stroke: rgba(249, 115, 22, 0.95);
+   stroke-dasharray: none;
+   filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.75));
+ }
+
+ .wall-ring.construction-pending .wall-ring-track {
+   stroke: rgba(251, 191, 36, 0.95);
+   stroke-dasharray: 6 4;
+ }
+
+ @keyframes constructionPulse {
+   0% {
+     box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+   }
+
+   70% {
+     box-shadow: 0 0 8px 6px rgba(249, 115, 22, 0.05);
+   }
+
+   100% {
+     box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+   }
+ }
+
  /* --- SLOT EDIFICI --- */
 
  .building-slot {
@@ -465,6 +520,19 @@
    background-color: rgba(34, 197, 94, 0.3);
    border-color: rgb(16, 47, 27, 0.75);
    color: #14532d;
+ }
+
+ .building-slot.construction-active {
+   background-color: rgba(249, 115, 22, 0.35);
+   border-color: rgba(194, 65, 12, 0.9);
+   color: #7c2d12;
+   animation: constructionPulse 1.6s ease-in-out infinite;
+ }
+
+ .building-slot.construction-pending {
+   background-color: rgba(252, 198, 4, 0.85);
+   border-color: rgba(202, 138, 4, 0.85);
+   color: #92400e;
  }
 
  .building-slot:hover {

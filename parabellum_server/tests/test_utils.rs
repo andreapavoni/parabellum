@@ -179,14 +179,27 @@ pub mod tests {
             .await
             .unwrap();
 
-        if let Some(cookie) = res.headers().get("set-cookie") {
-            return cookie.clone();
-        } else {
+        let cookies = res.headers().get_all("set-cookie");
+        let mut cookie_pairs = Vec::new();
+        for value in cookies.iter() {
+            if let Ok(val_str) = value.to_str() {
+                if let Some((pair, _)) = val_str.split_once(';') {
+                    cookie_pairs.push(pair.to_string());
+                } else {
+                    cookie_pairs.push(val_str.to_string());
+                }
+            }
+        }
+
+        if cookie_pairs.is_empty() {
             panic!(
                 "setup cookie failed: {:#?}",
                 res.text().await.unwrap().to_string()
             );
         }
+
+        let header_value = cookie_pairs.join("; ");
+        return HeaderValue::from_str(&header_value).unwrap();
     }
 
     #[allow(dead_code)]

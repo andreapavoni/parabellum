@@ -22,7 +22,11 @@
                 {{t!("game.building.construction_in_progress", name = construction.building_name, level = construction.target_level)}}
             </div>
             <div class="mt-1">
-                {{t!("game.building.time_remaining")}}: <span class="font-mono font-semibold text-gray-900">{{ construction.time_remaining }}</span>
+                {{t!("game.building.time_remaining")}}:
+                <span class="font-mono font-semibold text-gray-900 countdown-timer"
+                      data-seconds="{{ construction.time_seconds }}">
+                    {{ construction.time_remaining }}
+                </span>
             </div>
         </div>
         {% endif %}
@@ -99,18 +103,36 @@
                     <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
                     <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
                 </div>
-                {% if current_construction.is_none() %}
                 <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                     <input type="hidden" name="slot_id" value="{{ slot_id }}">
                     <input type="hidden" name="action" value="upgrade">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
-                        {{t!("game.building.upgrade_action", level = next.next_level) }}
+                        {% if current_construction.is_some() %}
+                            {{t!("game.building.queue_upgrade_action", level = next.next_level) }}
+                        {% else %}
+                            {{t!("game.building.upgrade_action", level = next.next_level) }}
+                        {% endif %}
                     </button>
                 </form>
-                {% else %}
-                <div class="text-xs text-gray-500">
-                    {{t!("game.building.queue_locked")}}
+                {% if queue_for_slot.len() > 0 %}
+                <div class="mt-4 border rounded-md bg-white p-3 text-xs text-gray-600 space-y-2">
+                    <div class="font-semibold text-gray-800 uppercase">{{t!("game.building.slot_queue_title")}}</div>
+                    {% for item in queue_for_slot %}
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-100 pb-2 {% if loop.last %}border-0 pb-0{% endif %}">
+                        <div>
+                            {% if loop.first %}
+                                {{t!("game.building.queue_item_current", name = item.building_name, level = item.target_level)}}
+                            {% else %}
+                                {{t!("game.building.queue_item_pending", name = item.building_name, level = item.target_level)}}
+                            {% endif %}
+                        </div>
+                        <div class="font-mono text-gray-800 countdown-timer"
+                             data-seconds="{{ item.time_seconds }}">
+                            {{ item.time_remaining }}
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
                 {% endif %}
             </div>

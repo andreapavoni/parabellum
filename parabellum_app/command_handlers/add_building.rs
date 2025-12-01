@@ -3,6 +3,7 @@ use std::sync::Arc;
 use parabellum_types::Result;
 
 use crate::{
+    command_handlers::helpers::completion_time_for_slot,
     config::Config,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
@@ -32,6 +33,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         config: &Arc<Config>,
     ) -> Result<()> {
         let villages_repo = uow.villages();
+        let job_repo = uow.jobs();
 
         let mut village = villages_repo.get_by_id(cmd.village_id).await?;
         let build_time_secs =
@@ -44,13 +46,18 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             name: cmd.name,
         };
         let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
+        let queue_jobs = job_repo
+            .list_village_building_queue(cmd.village_id as i32)
+            .await?;
+        let completion_time =
+            completion_time_for_slot(&queue_jobs, cmd.slot_id, build_time_secs as i64);
+        let new_job = Job::with_deadline(
             cmd.player_id,
             cmd.village_id as i32,
-            build_time_secs as i64,
             job_payload,
+            completion_time,
         );
-        uow.jobs().add(&new_job).await?;
+        job_repo.add(&new_job).await?;
 
         Ok(())
     }

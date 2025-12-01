@@ -16,34 +16,3 @@
     {% endfor %}
   {% endif %}
 </div>
-<script>
-  window.__buildingQueueTimers = window.__buildingQueueTimers || (function() {
-    const pads = (n) => n.toString().padStart(2, '0');
-    const tick = () => {
-      const timers = document.querySelectorAll('.queue-timer[data-seconds]');
-      if (!timers.length) {
-        return;
-      }
-      let shouldReload = false;
-      timers.forEach((timer) => {
-        let remaining = parseInt(timer.dataset.seconds || '0', 10);
-        if (remaining > 0) {
-          remaining -= 1;
-          timer.dataset.seconds = remaining;
-          const hours = Math.floor(remaining / 3600);
-          const minutes = Math.floor((remaining % 3600) / 60);
-          const seconds = remaining % 60;
-          timer.textContent = `${pads(hours)}:${pads(minutes)}:${pads(seconds)}`;
-          if (remaining === 0) {
-            shouldReload = true;
-          }
-        }
-      });
-      if (shouldReload) {
-        window.location.reload();
-      }
-    };
-    setInterval(tick, 1000);
-    return true;
-  })();
-</script>

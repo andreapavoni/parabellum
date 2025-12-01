@@ -20,7 +20,7 @@ use crate::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, load_building_queue, render_template,
     },
     http::AppState,
-    templates::{BuildingOption, BuildingTemplate, BuildingUpgradeInfo},
+    templates::{BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo},
     view_helpers::{building_queue_to_views, format_duration, server_time_context},
 };
 
@@ -233,17 +233,18 @@ fn build_template(
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
     let queue_view = building_queue_to_views(&queue_items);
-    let current_construction = queue_view
+    let queue_for_slot = queue_view
         .iter()
-        .find(|item| item.slot_id == slot_id)
-        .cloned();
-    let active_job = queue_items.iter().find(|item| item.slot_id == slot_id);
+        .filter(|item| item.slot_id == slot_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    let current_construction = queue_for_slot.first().cloned();
 
-    let effective_building = if let Some(job) = active_job {
-        virtual_building_from_job(job, state.server_speed)
-    } else {
-        slot_building.clone()
-    };
+    let effective_building = virtual_building_after_queue(
+        slot_building.clone(),
+        queue_for_slot.last(),
+        state.server_speed,
+    );
 
     let upgrade = effective_building
         .as_ref()
@@ -252,7 +253,7 @@ fn build_template(
         .as_ref()
         .map(|slot| slot.building.cost().upkeep);
 
-    let available_buildings = if slot_building.is_none() && active_job.is_none() {
+    let available_buildings = if slot_building.is_none() && queue_for_slot.is_empty() {
         user.village
             .available_buildings_for_slot(slot_id)
             .into_iter()
@@ -278,17 +279,40 @@ fn build_template(
         current_upkeep,
         csrf_token,
         flash_error,
+        building_queue: queue_view,
         current_construction,
+        queue_for_slot,
         server_time: server_time_context(),
     }
 }
 
-fn virtual_building_from_job(job: &BuildingQueueItem, server_speed: i8) -> Option<VillageBuilding> {
-    let building = Building::new(job.building_name.clone(), server_speed)
-        .at_level(job.target_level, server_speed)
-        .ok()?;
-    Some(VillageBuilding {
-        slot_id: job.slot_id,
-        building,
-    })
+fn virtual_building_after_queue(
+    slot_building: Option<VillageBuilding>,
+    last_queue_item: Option<&BuildingQueueItemView>,
+    server_speed: i8,
+) -> Option<VillageBuilding> {
+    match (slot_building, last_queue_item) {
+        (Some(building), Some(queue)) => {
+            let upgraded = building
+                .building
+                .clone()
+                .at_level(queue.target_level, server_speed)
+                .ok()?;
+            Some(VillageBuilding {
+                slot_id: building.slot_id,
+                building: upgraded,
+            })
+        }
+        (None, Some(queue)) => {
+            let building = Building::new(queue.building_name.clone(), server_speed)
+                .at_level(queue.target_level, server_speed)
+                .ok()?;
+            Some(VillageBuilding {
+                slot_id: queue.slot_id,
+                building,
+            })
+        }
+        (Some(building), None) => Some(building),
+        (None, None) => None,
+    }
 }

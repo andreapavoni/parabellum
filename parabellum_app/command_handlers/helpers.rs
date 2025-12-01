@@ -1,7 +1,12 @@
+use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
+    jobs::{
+        Job,
+        tasks::{AddBuildingTask, BuildingUpgradeTask},
+    },
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
 };
@@ -13,6 +18,68 @@ use parabellum_types::{
     Result,
     errors::{ApplicationError, GameError},
 };
+
+fn job_slot_id(job: &Job) -> Option<u8> {
+    match job.task.task_type.as_str() {
+        "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
+            .ok()
+            .map(|payload| payload.slot_id),
+        "BuildingUpgrade" => serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+            .ok()
+            .map(|payload| payload.slot_id),
+        _ => None,
+    }
+}
+
+fn slot_ready_time(jobs: &[Job], slot_id: u8) -> DateTime<Utc> {
+    let now = Utc::now();
+    let latest = jobs
+        .iter()
+        .filter_map(|job| {
+            let target_slot = job_slot_id(job)?;
+            if target_slot == slot_id {
+                Some(job.completed_at)
+            } else {
+                None
+            }
+        })
+        .max();
+
+    match latest {
+        Some(time) if time > now => time,
+        _ => now,
+    }
+}
+
+fn job_target_level(job: &Job) -> Option<u8> {
+    match job.task.task_type.as_str() {
+        "AddBuilding" => Some(1),
+        "BuildingUpgrade" => serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+            .ok()
+            .map(|payload| payload.level),
+        _ => None,
+    }
+}
+
+pub fn highest_target_level_for_slot(jobs: &[Job], slot_id: u8) -> Option<u8> {
+    jobs.iter()
+        .filter_map(|job| {
+            let job_slot = job_slot_id(job)?;
+            if job_slot == slot_id {
+                job_target_level(job)
+            } else {
+                None
+            }
+        })
+        .max()
+}
+
+pub fn completion_time_for_slot(jobs: &[Job], slot_id: u8, duration_secs: i64) -> DateTime<Utc> {
+    let start_time = slot_ready_time(jobs, slot_id);
+    start_time
+        .checked_add_signed(Duration::seconds(duration_secs))
+        .unwrap_or(start_time)
+}
 
 /// Handles the logic of deploying an army from a village.
 /// Returns the updated Village and the new deployed Army.

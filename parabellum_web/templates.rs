@@ -51,6 +51,21 @@ pub struct VillageTemplate {
     pub server_time: ServerTimeContext,
 }
 
+impl VillageTemplate {
+    pub fn queue_state_class(&self, slot_id: u8) -> Option<&'static str> {
+        self.building_queue
+            .iter()
+            .find(|item| item.slot_id == slot_id)
+            .map(|item| {
+                if item.is_processing {
+                    "construction-active"
+                } else {
+                    "construction-pending"
+                }
+            })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ResourceField {
     pub class: &'static str,
@@ -67,6 +82,7 @@ pub struct BuildingQueueItemView {
     pub is_processing: bool,
     pub time_remaining: String,
     pub time_seconds: u32,
+    pub queue_class: Option<String>,
 }
 
 /// Template for the village center page.
@@ -78,6 +94,21 @@ pub struct ResourcesTemplate {
     pub resource_slots: Vec<ResourceField>,
     pub building_queue: Vec<BuildingQueueItemView>,
     pub server_time: ServerTimeContext,
+}
+
+impl ResourcesTemplate {
+    pub fn queue_state_class(&self, slot_id: u8) -> Option<&'static str> {
+        self.building_queue
+            .iter()
+            .find(|item| item.slot_id == slot_id)
+            .map(|item| {
+                if item.is_processing {
+                    "construction-active"
+                } else {
+                    "construction-pending"
+                }
+            })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -130,7 +161,9 @@ pub struct BuildingTemplate {
     pub current_upkeep: Option<u32>,
     pub csrf_token: String,
     pub flash_error: Option<String>,
+    pub building_queue: Vec<BuildingQueueItemView>,
     pub current_construction: Option<BuildingQueueItemView>,
+    pub queue_for_slot: Vec<BuildingQueueItemView>,
     pub server_time: ServerTimeContext,
 }
 

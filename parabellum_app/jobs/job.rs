@@ -17,19 +17,37 @@ pub struct Job {
 
 impl Job {
     pub fn new(player_id: Uuid, village_id: i32, duration: i64, task: JobPayload) -> Self {
-        let id = Uuid::new_v4();
         let now = Utc::now();
         let completed_at = now.checked_add_signed(Duration::seconds(duration)).unwrap();
+        Self::with_deadline_internal(player_id, village_id, task, completed_at, now)
+    }
 
+    pub fn with_deadline(
+        player_id: Uuid,
+        village_id: i32,
+        task: JobPayload,
+        completed_at: DateTime<Utc>,
+    ) -> Self {
+        let now = Utc::now();
+        Self::with_deadline_internal(player_id, village_id, task, completed_at, now)
+    }
+
+    fn with_deadline_internal(
+        player_id: Uuid,
+        village_id: i32,
+        task: JobPayload,
+        completed_at: DateTime<Utc>,
+        baseline: DateTime<Utc>,
+    ) -> Self {
         Self {
-            id,
+            id: Uuid::new_v4(),
             player_id,
             village_id,
             task,
             status: JobStatus::Pending,
             completed_at,
-            created_at: now,
-            updated_at: now,
+            created_at: baseline,
+            updated_at: baseline,
         }
     }
 }

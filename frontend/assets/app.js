@@ -1,4 +1,67 @@
+function initializeCountdownHelpers() {
+  if (window.updateCountdowns && window.shouldReloadForCountdown) {
+    return;
+  }
+  const pad = (num) => num.toString().padStart(2, '0');
+  window.updateCountdowns = (selector) => {
+    const nodes = Array.from(document.querySelectorAll(selector));
+    if (!nodes.length) {
+      return [];
+    }
+    return nodes.map((timer) => {
+      let remaining = parseInt(timer.dataset.seconds || '0', 10);
+      if (!Number.isFinite(remaining)) {
+        remaining = 0;
+      }
+      if (remaining <= 0) {
+        timer.dataset.seconds = 0;
+        timer.textContent = '00:00:00';
+        return 0;
+      }
+      remaining -= 1;
+      timer.dataset.seconds = remaining;
+      const hours = Math.floor(remaining / 3600);
+      const minutes = Math.floor((remaining % 3600) / 60);
+      const seconds = remaining % 60;
+      timer.textContent = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+      return remaining;
+    });
+  };
+  window.shouldReloadForCountdown = (values) =>
+    Array.isArray(values) && values.some((value) => value === 0);
+}
+
+function startCountdownTicker() {
+  if (window.__countdownTickerStarted) {
+    return;
+  }
+  window.__countdownTickerStarted = true;
+  const selectors = [
+    '.queue-timer[data-seconds]',
+    '.countdown-timer[data-seconds]',
+  ];
+  const tick = () => {
+    if (!window.updateCountdowns || !window.shouldReloadForCountdown) {
+      return;
+    }
+    let reload = false;
+    selectors.forEach((selector) => {
+      const values = window.updateCountdowns(selector);
+      if (window.shouldReloadForCountdown(values)) {
+        reload = true;
+      }
+    });
+    if (reload) {
+      window.location.reload();
+    }
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 (function () {
+  initializeCountdownHelpers();
+  startCountdownTicker();
   const DEFAULT_RADIUS = 7;
   const mapRoot = document.getElementById('map-page');
 

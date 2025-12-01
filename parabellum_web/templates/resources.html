@@ -11,7 +11,7 @@
 
         {% let slots = resource_slots %}
         <div class="map-container-responsive">
-            <a class="hex {{ slots[0].class }} occupied"
+            <a class="hex {{ slots[0].class }} occupied{% if let Some(queue_class) = self.queue_state_class(1) %} {{ queue_class }}{% endif %}"
                href="/build?s=1"
                style="top: 0px; left: 60px;"
                title="{{t!("game.village.slots.occupied", name = slots[0].name, level = slots[0].level)}}">
@@ -19,7 +19,7 @@
                     {{ slots[0].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[1].class }} occupied"
+            <a class="hex {{ slots[1].class }} occupied{% if let Some(queue_class) = self.queue_state_class(2) %} {{ queue_class }}{% endif %}"
                href="/build?s=2"
                style="top: 0px; left: 120px;"
                title="{{t!("game.village.slots.occupied", name = slots[1].name, level = slots[1].level)}}">
@@ -27,7 +27,7 @@
                     {{ slots[1].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[2].class }} occupied"
+            <a class="hex {{ slots[2].class }} occupied{% if let Some(queue_class) = self.queue_state_class(3) %} {{ queue_class }}{% endif %}"
                href="/build?s=3"
                style="top: 0px; left: 180px;"
                title="{{t!("game.village.slots.occupied", name = slots[2].name, level = slots[2].level)}}">
@@ -36,7 +36,7 @@
                 </span>
             </a>
 
-            <a class="hex {{ slots[3].class }} occupied"
+            <a class="hex {{ slots[3].class }} occupied{% if let Some(queue_class) = self.queue_state_class(4) %} {{ queue_class }}{% endif %}"
                href="/build?s=4"
                style="top: 52px; left: 30px;"
                title="{{t!("game.village.slots.occupied", name = slots[3].name, level = slots[3].level)}}">
@@ -44,7 +44,7 @@
                     {{ slots[3].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[4].class }} occupied"
+            <a class="hex {{ slots[4].class }} occupied{% if let Some(queue_class) = self.queue_state_class(5) %} {{ queue_class }}{% endif %}"
                href="/build?s=5"
                style="top: 52px; left: 90px;"
                title="{{t!("game.village.slots.occupied", name = slots[4].name, level = slots[4].level)}}">
@@ -52,7 +52,7 @@
                     {{ slots[4].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[5].class }} occupied"
+            <a class="hex {{ slots[5].class }} occupied{% if let Some(queue_class) = self.queue_state_class(6) %} {{ queue_class }}{% endif %}"
                href="/build?s=6"
                style="top: 52px; left: 150px;"
                title="{{t!("game.village.slots.occupied", name = slots[5].name, level = slots[5].level)}}">
@@ -60,7 +60,7 @@
                     {{ slots[5].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[6].class }} occupied"
+            <a class="hex {{ slots[6].class }} occupied{% if let Some(queue_class) = self.queue_state_class(7) %} {{ queue_class }}{% endif %}"
                href="/build?s=7"
                style="top: 52px; left: 210px;"
                title="{{t!("game.village.slots.occupied", name = slots[6].name, level = slots[6].level)}}">
@@ -69,7 +69,7 @@
                 </span>
             </a>
 
-            <a class="hex {{ slots[7].class }} occupied"
+            <a class="hex {{ slots[7].class }} occupied{% if let Some(queue_class) = self.queue_state_class(8) %} {{ queue_class }}{% endif %}"
                href="/build?s=8"
                style="top: 104px; left: 0px;"
                title="{{t!("game.village.slots.occupied", name = slots[7].name, level = slots[7].level)}}">
@@ -77,7 +77,7 @@
                     {{ slots[7].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[8].class }} occupied"
+            <a class="hex {{ slots[8].class }} occupied{% if let Some(queue_class) = self.queue_state_class(9) %} {{ queue_class }}{% endif %}"
                href="/build?s=9"
                style="top: 104px; left: 60px;"
                title="{{t!("game.village.slots.occupied", name = slots[8].name, level = slots[8].level)}}">
@@ -91,7 +91,7 @@
                title="{{t!("game.village.title")}}">
             </a>
 
-            <a class="hex {{ slots[9].class }} occupied"
+            <a class="hex {{ slots[9].class }} occupied{% if let Some(queue_class) = self.queue_state_class(10) %} {{ queue_class }}{% endif %}"
                href="/build?s=10"
                style="top: 104px; left: 180px;"
                title="{{t!("game.village.slots.occupied", name = slots[9].name, level = slots[9].level)}}">
@@ -99,7 +99,7 @@
                     {{ slots[9].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[10].class }} occupied"
+            <a class="hex {{ slots[10].class }} occupied{% if let Some(queue_class) = self.queue_state_class(11) %} {{ queue_class }}{% endif %}"
                href="/build?s=11"
                style="top: 104px; left: 240px;"
                title="{{t!("game.village.slots.occupied", name = slots[10].name, level = slots[10].level)}}">
@@ -108,7 +108,7 @@
                 </span>
             </a>
 
-            <a class="hex {{ slots[11].class }} occupied"
+            <a class="hex {{ slots[11].class }} occupied{% if let Some(queue_class) = self.queue_state_class(12) %} {{ queue_class }}{% endif %}"
                href="/build?s=12"
                style="top: 156px; left: 30px;"
                title="{{t!("game.village.slots.occupied", name = slots[11].name, level = slots[11].level)}}">
@@ -116,7 +116,7 @@
                     {{ slots[11].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[12].class }} occupied"
+            <a class="hex {{ slots[12].class }} occupied{% if let Some(queue_class) = self.queue_state_class(13) %} {{ queue_class }}{% endif %}"
                href="/build?s=13"
                style="top: 156px; left: 90px;"
                title="{{t!("game.village.slots.occupied", name = slots[12].name, level = slots[12].level)}}">
@@ -124,7 +124,7 @@
                     {{ slots[12].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[13].class }} occupied"
+            <a class="hex {{ slots[13].class }} occupied{% if let Some(queue_class) = self.queue_state_class(14) %} {{ queue_class }}{% endif %}"
                href="/build?s=14"
                style="top: 156px; left: 150px;"
                title="{{t!("game.village.slots.occupied", name = slots[13].name, level = slots[13].level)}}">
@@ -132,7 +132,7 @@
                     {{ slots[13].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[14].class }} occupied"
+            <a class="hex {{ slots[14].class }} occupied{% if let Some(queue_class) = self.queue_state_class(15) %} {{ queue_class }}{% endif %}"
                href="/build?s=15"
                style="top: 156px; left: 210px;"
                title="{{t!("game.village.slots.occupied", name = slots[14].name, level = slots[14].level)}}">
@@ -141,7 +141,7 @@
                 </span>
             </a>
 
-            <a class="hex {{ slots[15].class }} occupied"
+            <a class="hex {{ slots[15].class }} occupied{% if let Some(queue_class) = self.queue_state_class(16) %} {{ queue_class }}{% endif %}"
                href="/build?s=16"
                style="top: 208px; left: 60px;"
                title="{{t!("game.village.slots.occupied", name = slots[15].name, level = slots[15].level)}}">
@@ -149,7 +149,7 @@
                     {{ slots[15].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[16].class }} occupied"
+            <a class="hex {{ slots[16].class }} occupied{% if let Some(queue_class) = self.queue_state_class(17) %} {{ queue_class }}{% endif %}"
                href="/build?s=17"
                style="top: 208px; left: 120px;"
                title="{{t!("game.village.slots.occupied", name = slots[16].name, level = slots[16].level)}}">
@@ -157,7 +157,7 @@
                     {{ slots[16].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[17].class }} occupied"
+            <a class="hex {{ slots[17].class }} occupied{% if let Some(queue_class) = self.queue_state_class(18) %} {{ queue_class }}{% endif %}"
                href="/build?s=18"
                style="top: 208px; left: 180px;"
                title="{{t!("game.village.slots.occupied", name = slots[17].name, level = slots[17].level)}}">
@@ -177,19 +177,19 @@
                 <div class="text-xs space-y-3">
                     <div class="flex justify-between border-b border-gray-100 pb-2">
                         <span>🌲 {{t!("game.village.resources.lumber")}}</span>
-                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.lumber }}/{{t!("game.hour")}}</span>
+                        <span class="font-bold text-gray-900">{{ user.village.production.effective.lumber }}/{{t!("game.hour")}}</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-2">
                         <span>🧱 {{t!("game.village.resources.clay")}}</span>
-                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.clay }}/{{t!("game.hour")}}</span>
+                        <span class="font-bold text-gray-900">{{ user.village.production.effective.clay }}/{{t!("game.hour")}}</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-2">
                         <span>⛏️ {{t!("game.village.resources.iron")}}</span>
-                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.iron }}/{{t!("game.hour")}}</span>
+                        <span class="font-bold text-gray-900">{{ user.village.production.effective.iron }}/{{t!("game.hour")}}</span>
                     </div>
                     <div class="flex justify-between border-b border-gray-100 pb-2">
                         <span>🌾 {{t!("game.village.resources.crop")}}</span>
-                        <span class="font-bold text-gray-900">+{{ user.village.production.effective.crop }}/{{t!("game.hour")}}</span>
+                        <span class="font-bold text-gray-900">{{ user.village.production.effective.crop }}/{{t!("game.hour")}}</span>
                     </div>
                 </div>
             </div>
