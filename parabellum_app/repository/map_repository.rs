@@ -5,6 +5,7 @@ use parabellum_types::errors::ApplicationError;
 pub struct MapRegionTile {
     pub field: MapField,
     pub village_name: Option<String>,
+    pub village_population: Option<i32>,
     pub player_name: Option<String>,
 }
 

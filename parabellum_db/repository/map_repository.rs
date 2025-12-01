@@ -100,6 +100,7 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                 v.id AS fallback_village_id,
                 v.player_id AS fallback_player_id,
                 v.name AS village_name,
+                v.population AS village_population,
                 p.username AS player_name
             FROM map_fields AS mf
             LEFT JOIN villages AS v
@@ -128,6 +129,7 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                 MapRegionTile {
                     field: MapField::from(db_field),
                     village_name: record.village_name,
+                    village_population: record.village_population,
                     player_name: record.player_name,
                 }
             })
@@ -147,6 +149,7 @@ struct DbMapFieldWithOwner {
     fallback_village_id: Option<i32>,
     fallback_player_id: Option<Uuid>,
     village_name: Option<String>,
+    village_population: Option<i32>,
     player_name: Option<String>,
 }
 

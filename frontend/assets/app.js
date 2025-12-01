@@ -59,9 +59,7 @@ function startCountdownTicker() {
   setInterval(tick, 1000);
 }
 
-(function () {
-  initializeCountdownHelpers();
-  startCountdownTicker();
+function startMapHandler() {
   const DEFAULT_RADIUS = 7;
   const mapRoot = document.getElementById('map-page');
 
@@ -236,7 +234,6 @@ function startCountdownTicker() {
         const matchesHomeCoords = x === homeX && y === homeY;
         const isHome = matchesHomeId || matchesHomeCoords;
         const villageLabel = tile.village_name ?? 'Village';
-        const ownerSuffix = tile.player_name ? ` – ${tile.player_name}` : '';
         return {
           icon: '🏠',
           typeClass: isHome ? 'is-own-village' : 'is-village',
@@ -296,22 +293,8 @@ function startCountdownTicker() {
 
     function showDetails(tile, visual, x, y, tileElement) {
       const data = tile || {};
-      // const isVillage =
-      //   data.village_id !== undefined && data.village_id !== null;
-      // const isOasis = data.tile_type === 'oasis';
-      // const valleySummary = data.valley
-      // ? `${data.valley.lumber}-${data.valley.clay}-${data.valley.iron}-${data.valley.crop}`
-      // : null;
-      const ownerLabel = data.player_name || data.player_id || '-';
-      // const oasisLabel = data.oasis || null;
-      // const typeLabel = isVillage
-      //   ? 'Village'
-      //   : isOasis
-      //     ? oasisLabel || 'Oasis'
-      //     : 'Valley';
-      // const topologyLabel = isOasis
-      //   ? oasisLabel || '-'
-      //   : valleySummary || '-';
+      const ownerLabel = data.player_name || '-';
+      const population = data.village_population || '-';
 
       const html = `
       <div class="text-center mb-4">
@@ -331,7 +314,7 @@ function startCountdownTicker() {
         <tr class="border-b border-gray-200">
           <td class="py-2 text-gray-600">Population</td>
           <td class="py-2 text-right font-bold text-black">
-            ${ownerLabel}
+            ${population}
           </td>
         </tr>
       </table>
@@ -395,4 +378,10 @@ function startCountdownTicker() {
 
     updateRegion({ x: currentX, y: currentY });
   }
+}
+
+(function () {
+  initializeCountdownHelpers();
+  startCountdownTicker();
+  startMapHandler();
 })();

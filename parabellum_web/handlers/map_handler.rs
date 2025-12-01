@@ -63,6 +63,8 @@ pub struct MapTileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub village_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub village_population: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub player_name: Option<String>,
     pub tile_type: TileType,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,6 +123,7 @@ impl From<MapRegionTile> for MapTileResponse {
             village_id: field.village_id,
             player_id: field.player_id,
             village_name: tile.village_name,
+            village_population: tile.village_population,
             player_name: tile.player_name,
             tile_type,
             valley,
