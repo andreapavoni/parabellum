@@ -113,8 +113,8 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
   - [x] Layout, basic navbar
   - [x] Login, Register
   - [x] Village Overview (Resources + Buildings)
-    - [ ] Building queue
-  - [ ] Generic building (info + add/upgrade)
+    - [x] Building queue
+  - [x] Generic building (info + add/upgrade)
   - [ ] Special buildings (info + specific actions)
     - [ ] Barracks, Stable, Workshop, etc...
     - [ ] Academy (research units)
@@ -124,6 +124,8 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
       - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
       - [ ] view stationed troops
     - [ ] Merchant, Marketplace
+      - [ ] Send resources to a village
+      - [ ] Sell/buy resources
     - [ ] Hero Mansion (hero stuff)
     - [ ] Castle/Residence (train settlers, expansion slots, culture points)
     - [ ] Town Hall (small/big party)
