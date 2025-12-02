@@ -4,12 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:tailwind": "tailwindcss -i frontend/src/css/tailwind.css -o frontend/assets/tailwind.css --minify",
-    "build:js": "bun build frontend/src/index.ts --outdir frontend/assets --minify",
-    "prod": "bun run build:tailwind && bun run build:js",
-    "dev:tailwind": "tailwindcss -i frontend/src/css/tailwind.css -o frontend/assets/tailwind.css --watch",
-    "dev:js": "bun build frontend/src/index.ts --outdir frontend/assets --watch",
-    "dev": "bun run dev:tailwind && bun run dev:js"
+    "build:tailwind": "tailwindcss -i frontend/src/css/tailwind.css -o frontend/assets/tailwind.css",
+    "build:js": "bun build frontend/src/index.ts --outdir frontend/assets",
+    "build:dev": "bun run build:tailwind --watch && bun run build:js --sourcemap=linked --watch",
+    "build:release": "bun run build:tailwind --minify && bun run build:js --minify"
   },
   "devDependencies": {
     "@types/bun": "latest"
