@@ -7,12 +7,15 @@ use axum_extra::extract::SignedCookieJar;
 
 use parabellum_app::{
     command_handlers::RegisterPlayerCommandHandler,
-    cqrs::{commands::RegisterPlayer, queries::GetUserByEmail},
-    queries_handlers::GetUserByEmailHandler,
+    cqrs::{
+        commands::RegisterPlayer,
+        queries::{AuthenticateUser, GetUserByEmail},
+    },
+    queries_handlers::{AuthenticateUserHandler, GetUserByEmailHandler},
 };
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
-    errors::{AppError, ApplicationError},
+    errors::{AppError, ApplicationError, DbError},
     tribe::Tribe,
 };
 
@@ -22,11 +25,25 @@ use crate::{
         render_template,
     },
     http::AppState,
-    templates::RegisterTemplate,
+    templates::{LoginTemplate, RegisterTemplate},
     view_helpers::server_time_context,
 };
 
-// Form for registration.
+/// Form for login.
+#[derive(serde::Deserialize)]
+pub struct LoginForm {
+    pub email: String,
+    pub password: String,
+    pub csrf_token: String,
+}
+
+impl HasCsrfToken for LoginForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+/// Form for registration.
 #[derive(Clone, serde::Deserialize)]
 pub struct RegisterForm {
     pub username: String,
@@ -41,6 +58,85 @@ impl HasCsrfToken for RegisterForm {
     fn csrf_token(&self) -> &str {
         &self.csrf_token
     }
+}
+
+/// GET /login – Show the login form.
+pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
+    if let Err(redirect) = ensure_not_authenticated(&jar) {
+        return redirect.into_response();
+    }
+    let (jar, csrf_token) = generate_csrf(jar);
+
+    let template = LoginTemplate {
+        csrf_token,
+        current_user: None,
+        nav_active: "login",
+        email_value: String::new(),
+        error: None,
+        server_time: server_time_context(),
+    };
+    (jar, render_template(template, None)).into_response()
+}
+
+/// POST /login – Handle login form submission.
+pub async fn login(
+    State(state): State<AppState>,
+    CsrfForm { jar, inner: form }: CsrfForm<LoginForm>,
+) -> impl IntoResponse {
+    if let Err(redirect) = ensure_not_authenticated(&jar) {
+        return redirect.into_response();
+    }
+
+    let query = AuthenticateUser {
+        email: form.email.clone(),
+        password: form.password.clone(),
+    };
+
+    let (status, err_msg) = match state
+        .app_bus
+        .query(query, AuthenticateUserHandler::new())
+        .await
+    {
+        Ok(user) => match initialize_session(&state, jar, user.id).await {
+            Ok(jar) => {
+                return (jar, Redirect::to("/village")).into_response();
+            }
+            Err(e) => {
+                tracing::error!("Login session initialization failed: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.")
+                    .into_response();
+            }
+        },
+
+        Err(ApplicationError::App(AppError::WrongAuthCredentials)) => (
+            Some(StatusCode::UNAUTHORIZED),
+            Some("Invalid email or password.".to_string()),
+        ),
+
+        Err(ApplicationError::Db(DbError::UserByEmailNotFound(_))) => (
+            Some(StatusCode::UNAUTHORIZED),
+            Some("User not found.".to_string()),
+        ),
+        Err(e) => {
+            tracing::error!("Login error: {}", e);
+            (
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+                Some("Internal server error.".to_string()),
+            )
+        }
+    };
+
+    let (jar, new_csrf_token) = generate_csrf(jar);
+    let template = LoginTemplate {
+        csrf_token: new_csrf_token,
+        current_user: None,
+        nav_active: "login",
+        email_value: form.email.clone(),
+        error: err_msg,
+        server_time: server_time_context(),
+    };
+
+    (jar, render_template(template, status)).into_response()
 }
 
 /// GET /register – Show the signup form.
@@ -60,7 +156,7 @@ pub async fn register_page(
         nav_active: "register",
         username_value: String::new(),
         email_value: String::new(),
-        selected_tribe: "Roman".to_string(), // default selection
+        selected_tribe: "Roman".to_string(),
         selected_quadrant: "NorthEast".to_string(),
         error: None,
         server_time: server_time_context(),
@@ -130,7 +226,6 @@ pub async fn register(
             }
         }
         Err(ApplicationError::App(AppError::PasswordError)) => {
-            // Password hashing error or invalid password (unlikely scenario)
             let (jar, new_csrf_token) = generate_csrf(jar);
             let template = RegisterTemplate {
                 csrf_token: new_csrf_token,
@@ -151,7 +246,6 @@ pub async fn register(
                 .into_response();
         }
         Err(ApplicationError::Db(db_err)) => {
-            // Likely a database error (e.g., duplicate email constraint)
             let err_msg = format!("{}", db_err);
             let user_message = if err_msg.contains("duplicate key value")
                 || err_msg.contains("UNIQUE constraint")
@@ -183,9 +277,18 @@ pub async fn register(
                 .into_response();
         }
         Err(e) => {
-            // Other errors (should be rare)
             tracing::error!("Registration error: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response();
         }
     }
+}
+
+/// GET /logout – Log the user out by clearing the auth cookie.
+pub async fn logout(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
+    if let Some(cookie) = jar.get("user_id") {
+        let updated_jar = jar.remove(cookie);
+        return (updated_jar, Redirect::to("/")).into_response();
+    }
+
+    Redirect::to("/").into_response()
 }

@@ -261,7 +261,6 @@ fn build_template(
         current_upkeep,
         csrf_token,
         flash_error,
-        building_queue: queue_view,
         current_construction,
         queue_for_slot,
         available_resources,
