@@ -71,7 +71,7 @@ async fn test_login_player_wrong_password() -> Result<(), ApplicationError> {
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
     let body = res.text().await.unwrap().to_string();
-    assert!(body.contains("User not found."));
+    assert!(body.contains("Invalid email or password."));
 
     Ok(())
 }

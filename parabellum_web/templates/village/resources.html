@@ -11,76 +11,76 @@
 
         {% let slots = resource_slots %}
         <div class="map-container-responsive">
-            <a class="hex {{ slots[0].class }} occupied{% if let Some(queue_class) = self.queue_state_class(1) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[0], 1) }}"
                href="/build?s=1"
                style="top: 0px; left: 60px;"
-               title="{{t!("game.village.slots.occupied", name = slots[0].name, level = slots[0].level)}}">
+               title="{{ self.slot_title(0) }}">
                 <span class="level">
                     {{ slots[0].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[1].class }} occupied{% if let Some(queue_class) = self.queue_state_class(2) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[1], 2) }}"
                href="/build?s=2"
                style="top: 0px; left: 120px;"
-               title="{{t!("game.village.slots.occupied", name = slots[1].name, level = slots[1].level)}}">
+               title="{{ self.slot_title(1) }}">
                 <span class="level">
                     {{ slots[1].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[2].class }} occupied{% if let Some(queue_class) = self.queue_state_class(3) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[2], 3) }}"
                href="/build?s=3"
                style="top: 0px; left: 180px;"
-               title="{{t!("game.village.slots.occupied", name = slots[2].name, level = slots[2].level)}}">
+               title="{{ self.slot_title(2) }}">
                 <span class="level">
                     {{ slots[2].level }}
                 </span>
             </a>
 
-            <a class="hex {{ slots[3].class }} occupied{% if let Some(queue_class) = self.queue_state_class(4) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[3], 4) }}"
                href="/build?s=4"
                style="top: 52px; left: 30px;"
-               title="{{t!("game.village.slots.occupied", name = slots[3].name, level = slots[3].level)}}">
+               title="{{ self.slot_title(3) }}">
                 <span class="level">
                     {{ slots[3].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[4].class }} occupied{% if let Some(queue_class) = self.queue_state_class(5) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[4], 5) }}"
                href="/build?s=5"
                style="top: 52px; left: 90px;"
-               title="{{t!("game.village.slots.occupied", name = slots[4].name, level = slots[4].level)}}">
+               title="{{ self.slot_title(4) }}">
                 <span class="level">
                     {{ slots[4].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[5].class }} occupied{% if let Some(queue_class) = self.queue_state_class(6) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[5], 6) }}"
                href="/build?s=6"
                style="top: 52px; left: 150px;"
-               title="{{t!("game.village.slots.occupied", name = slots[5].name, level = slots[5].level)}}">
+               title="{{ self.slot_title(5) }}">
                 <span class="level">
                     {{ slots[5].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[6].class }} occupied{% if let Some(queue_class) = self.queue_state_class(7) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[6], 7) }}"
                href="/build?s=7"
                style="top: 52px; left: 210px;"
-               title="{{t!("game.village.slots.occupied", name = slots[6].name, level = slots[6].level)}}">
+               title="{{ self.slot_title(6) }}">
                 <span class="level">
                     {{ slots[6].level }}
                 </span>
             </a>
 
-            <a class="hex {{ slots[7].class }} occupied{% if let Some(queue_class) = self.queue_state_class(8) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[7], 8) }}"
                href="/build?s=8"
                style="top: 104px; left: 0px;"
-               title="{{t!("game.village.slots.occupied", name = slots[7].name, level = slots[7].level)}}">
+               title="{{ self.slot_title(7) }}">
                 <span class="level">
                     {{ slots[7].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[8].class }} occupied{% if let Some(queue_class) = self.queue_state_class(9) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[8], 9) }}"
                href="/build?s=9"
                style="top: 104px; left: 60px;"
-               title="{{t!("game.village.slots.occupied", name = slots[8].name, level = slots[8].level)}}">
+               title="{{ self.slot_title(8) }}">
                 <span class="level">
                     {{ slots[8].level }}
                 </span>
@@ -91,76 +91,76 @@
                title="{{t!("game.village.title")}}">
             </a>
 
-            <a class="hex {{ slots[9].class }} occupied{% if let Some(queue_class) = self.queue_state_class(10) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[9], 10) }}"
                href="/build?s=10"
                style="top: 104px; left: 180px;"
-               title="{{t!("game.village.slots.occupied", name = slots[9].name, level = slots[9].level)}}">
+               title="{{ self.slot_title(9) }}">
                 <span class="level">
                     {{ slots[9].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[10].class }} occupied{% if let Some(queue_class) = self.queue_state_class(11) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[10], 11) }}"
                href="/build?s=11"
                style="top: 104px; left: 240px;"
-               title="{{t!("game.village.slots.occupied", name = slots[10].name, level = slots[10].level)}}">
+               title="{{ self.slot_title(10) }}">
                 <span class="level">
                     {{ slots[10].level }}
                 </span>
             </a>
 
-            <a class="hex {{ slots[11].class }} occupied{% if let Some(queue_class) = self.queue_state_class(12) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[11], 12) }}"
                href="/build?s=12"
                style="top: 156px; left: 30px;"
-               title="{{t!("game.village.slots.occupied", name = slots[11].name, level = slots[11].level)}}">
+               title="{{ self.slot_title(11) }}">
                 <span class="level">
                     {{ slots[11].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[12].class }} occupied{% if let Some(queue_class) = self.queue_state_class(13) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[12], 13) }}"
                href="/build?s=13"
                style="top: 156px; left: 90px;"
-               title="{{t!("game.village.slots.occupied", name = slots[12].name, level = slots[12].level)}}">
+               title="{{ self.slot_title(12) }}">
                 <span class="level">
                     {{ slots[12].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[13].class }} occupied{% if let Some(queue_class) = self.queue_state_class(14) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[13], 14) }}"
                href="/build?s=14"
                style="top: 156px; left: 150px;"
-               title="{{t!("game.village.slots.occupied", name = slots[13].name, level = slots[13].level)}}">
+               title="{{ self.slot_title(13) }}">
                 <span class="level">
                     {{ slots[13].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[14].class }} occupied{% if let Some(queue_class) = self.queue_state_class(15) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[14], 15) }}"
                href="/build?s=15"
                style="top: 156px; left: 210px;"
-               title="{{t!("game.village.slots.occupied", name = slots[14].name, level = slots[14].level)}}">
+               title="{{ self.slot_title(14) }}">
                 <span class="level">
                     {{ slots[14].level }}
                 </span>
             </a>
 
-            <a class="hex {{ slots[15].class }} occupied{% if let Some(queue_class) = self.queue_state_class(16) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[15], 16) }}"
                href="/build?s=16"
                style="top: 208px; left: 60px;"
-               title="{{t!("game.village.slots.occupied", name = slots[15].name, level = slots[15].level)}}">
+               title="{{ self.slot_title(15) }}">
                 <span class="level">
                     {{ slots[15].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[16].class }} occupied{% if let Some(queue_class) = self.queue_state_class(17) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[16], 17) }}"
                href="/build?s=17"
                style="top: 208px; left: 120px;"
-               title="{{t!("game.village.slots.occupied", name = slots[16].name, level = slots[16].level)}}">
+               title="{{ self.slot_title(16) }}">
                 <span class="level">
                     {{ slots[16].level }}
                 </span>
             </a>
-            <a class="hex {{ slots[17].class }} occupied{% if let Some(queue_class) = self.queue_state_class(18) %} {{ queue_class }}{% endif %}"
+            <a class="{{ self.slot_classes(slots[17], 18) }}"
                href="/build?s=18"
                style="top: 208px; left: 180px;"
-               title="{{t!("game.village.slots.occupied", name = slots[17].name, level = slots[17].level)}}">
+               title="{{ self.slot_title(17) }}">
                 <span class="level">
                     {{ slots[17].level }}
                 </span>

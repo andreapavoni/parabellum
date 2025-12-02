@@ -103,10 +103,7 @@
                     <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
                     <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
                 </div>
-                {% let can_upgrade = self.available_resources.lumber >= next.cost.lumber
-                    && self.available_resources.clay >= next.cost.clay
-                    && self.available_resources.iron >= next.cost.iron
-                    && self.available_resources.crop >= next.cost.crop %}
+                {% let can_upgrade = self.can_afford(&next.cost) %}
                 <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                     <input type="hidden" name="slot_id" value="{{ slot_id }}">
                     <input type="hidden" name="action" value="upgrade">
@@ -201,10 +198,7 @@
                             <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
                         </div>
                         {% if current_construction.is_none() %}
-                        {% let can_build = self.available_resources.lumber >= option.cost.lumber
-                            && self.available_resources.clay >= option.cost.clay
-                            && self.available_resources.iron >= option.cost.iron
-                            && self.available_resources.crop >= option.cost.crop %}
+                        {% let can_build = self.can_afford(&option.cost) %}
                         <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                             <input type="hidden" name="slot_id" value="{{ slot_id }}">
                             <input type="hidden" name="action" value="build">

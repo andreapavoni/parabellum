@@ -5,7 +5,7 @@ use crate::{
     handlers::{ensure_not_authenticated, render_template},
     http::AppState,
     templates::HomeTemplate,
-    view_helpers::server_time_context,
+    view_helpers::server_time,
 };
 
 pub async fn home(State(_state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
@@ -16,7 +16,7 @@ pub async fn home(State(_state): State<AppState>, jar: SignedCookieJar) -> impl 
     let template = HomeTemplate {
         current_user: None,
         nav_active: "home",
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
     return render_template(template, None).into_response();
 }

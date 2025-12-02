@@ -21,7 +21,7 @@ use crate::{
     },
     http::AppState,
     templates::{BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo},
-    view_helpers::{building_queue_to_views, format_duration, server_time_context},
+    view_helpers::{building_queue_to_views, format_duration, server_time},
 };
 
 #[derive(Debug, Deserialize)]
@@ -261,11 +261,10 @@ fn build_template(
         current_upkeep,
         csrf_token,
         flash_error,
-        building_queue: queue_view,
         current_construction,
         queue_for_slot,
         available_resources,
-        server_time: server_time_context(),
+        server_time: server_time(),
     }
 }
 
