@@ -159,6 +159,7 @@ pub struct BuildingUpgradeInfo {
 }
 
 /// Template for individual building page.
+#[allow(dead_code)] // for building_queue, which throws a warning, but it's actually used
 #[derive(Debug, Default, Template)]
 #[template(path = "building.html")]
 pub struct BuildingTemplate {
