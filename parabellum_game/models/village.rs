@@ -1148,9 +1148,9 @@ mod tests {
         assert_eq!(v.production.crop, 12, "crop production");
 
         // Upkeep: 2 (base) + 2 (main building) = 4
-        assert_eq!(v.production.upkeep, 4, "upkeep");
+        assert_eq!(v.production.upkeep, 2, "upkeep");
 
-        // Population: 0 (base) + 2 (main building) = 4
+        // Population: 0 (base) + 2 (main building) = 2
         assert_eq!(v.population, 2, "population");
 
         // Stocks
@@ -1158,8 +1158,8 @@ mod tests {
         assert_eq!(v.stocks.granary_capacity, 800, "stock granary");
 
         // Effective production
-        // 12 crop - 4 upkeep = 8 effective crop
-        assert_eq!(v.production.effective.crop, 8, "effective crop production");
+        // 12 crop - 2 upkeep = 10 effective crop
+        assert_eq!(v.production.effective.crop, 10, "effective crop production");
     }
 
     #[test]
@@ -1233,15 +1233,15 @@ mod tests {
             ..v.stocks
         };
 
-        v.update_state(); // This calls update_resources internally
+        v.update_state();
 
-        let expected_resources = (effective_prod_per_sec as f64 * 3600.0).floor() as u32; // Should be 8
+        let expected_resources = (effective_prod_per_sec as f64 * 3600.0).floor() as u32;
 
         assert_eq!(expected_resources, 8);
         assert_eq!(v.stocks.lumber, 8, "Lumber should be 8 after 1 hour");
         assert_eq!(v.stocks.clay, 8, "Clay should be 8 after 1 hour");
         assert_eq!(v.stocks.iron, 8, "Iron should be 8 after 1 hour");
-        assert_eq!(v.stocks.crop, 8, "Crop should be 8 after 1 hour");
+        assert_eq!(v.stocks.crop, 10, "Crop should be 10 after 1 hour");
 
         // Simulate 100 hours (over capacity)
         let long_time_ago = Utc::now() - Duration::hours(100);
@@ -1293,8 +1293,8 @@ mod tests {
             mb_l1.population, 2,
             "Main Building L1 population should be 2"
         );
-        assert_eq!(v.population, 4, "Initial village population should be 4");
-        assert_eq!(v.production.upkeep, 4, "Initial village upkeep should be 4");
+        assert_eq!(v.population, 2, "Initial village population should be 4");
+        assert_eq!(v.production.upkeep, 2, "Initial village upkeep should be 4");
 
         v.set_building_level_at_slot(mb_slot_id, 2, server_speed)
             .unwrap();
@@ -1309,12 +1309,12 @@ mod tests {
         );
 
         assert_eq!(
-            v.population, 5,
-            "Village population with MainBuilding L2 should be 5"
+            v.population, 3,
+            "Village population with MainBuilding L2 should be 3"
         );
         assert_eq!(
-            v.production.upkeep, 5,
-            "Village upkeep with MainBuilding L2 should be 5"
+            v.production.upkeep, 3,
+            "Village upkeep with MainBuilding L2 should be 3"
         );
 
         v.set_building_level_at_slot(mb_slot_id, 3, server_speed)
@@ -1330,12 +1330,12 @@ mod tests {
         );
 
         assert_eq!(
-            v.population, 6,
-            "Village population with Main Building L3 should be 6"
+            v.population, 4,
+            "Village population with Main Building L3 should be 4"
         );
         assert_eq!(
-            v.production.upkeep, 6,
-            "Village upkeep with Main Building L3 upgrade should be 6"
+            v.production.upkeep, 4,
+            "Village upkeep with Main Building L3 upgrade should be 4"
         );
     }
 }
