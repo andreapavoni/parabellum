@@ -2,7 +2,7 @@ use askama::Template;
 
 use crate::handlers::CurrentUser;
 
-use super::shared::ServerTimeContext;
+use super::shared::ServerTime;
 
 /// Template for the login page.
 #[derive(Debug, Default, Template)]
@@ -13,7 +13,7 @@ pub struct LoginTemplate {
     pub nav_active: &'static str,
     pub email_value: String,
     pub error: Option<String>,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }
 
 /// Template for the registration page.
@@ -28,5 +28,5 @@ pub struct RegisterTemplate {
     pub selected_tribe: String,
     pub selected_quadrant: String,
     pub error: Option<String>,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }

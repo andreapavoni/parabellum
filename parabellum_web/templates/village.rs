@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::handlers::CurrentUser;
 
-use super::shared::{BuildingQueueItemView, ResourceCostView, ServerTimeContext};
+use super::shared::{BuildingQueueItemView, ResourceCostView, ServerTime};
 
 /// Template for the village center page.
 #[derive(Debug, Default, Template)]
@@ -16,7 +16,7 @@ pub struct VillageTemplate {
     pub nav_active: &'static str,
     pub building_queue: Vec<BuildingQueueItemView>,
     pub slot_buildings: HashMap<u8, VillageBuilding>,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }
 
 impl VillageTemplate {
@@ -65,7 +65,7 @@ pub struct ResourcesTemplate {
     pub nav_active: &'static str,
     pub resource_slots: Vec<ResourceField>,
     pub building_queue: Vec<BuildingQueueItemView>,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }
 
 impl ResourcesTemplate {
@@ -123,7 +123,7 @@ pub struct BuildingTemplate {
     pub current_construction: Option<BuildingQueueItemView>,
     pub queue_for_slot: Vec<BuildingQueueItemView>,
     pub available_resources: ResourceCostView,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }
 
 impl BuildingTemplate {

@@ -3,7 +3,7 @@ use parabellum_app::{cqrs::queries::BuildingQueueItem, jobs::JobStatus};
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::buildings::BuildingName;
 
-use crate::templates::{BuildingQueueItemView, ServerTimeContext};
+use crate::templates::{BuildingQueueItemView, ServerTime};
 
 /// Formats a duration in seconds to HH:MM:SS.
 pub fn format_duration(total_seconds: u32) -> String {
@@ -52,9 +52,9 @@ pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueue
 }
 
 /// Returns the current server time information for the UI.
-pub fn server_time_context() -> ServerTimeContext {
+pub fn server_time() -> ServerTime {
     let now = Utc::now();
-    ServerTimeContext {
+    ServerTime {
         formatted: now.format("%H:%M:%S").to_string(),
         timestamp: now.timestamp(),
     }

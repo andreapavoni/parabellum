@@ -11,7 +11,7 @@ use crate::{
     handlers::{CurrentUser, render_template},
     http::AppState,
     templates::MapTemplate,
-    view_helpers::server_time_context,
+    view_helpers::server_time,
 };
 use parabellum_app::{
     cqrs::queries::GetMapRegion, queries_handlers::GetMapRegionHandler, repository::MapRegionTile,
@@ -26,7 +26,7 @@ pub async fn map(State(state): State<AppState>, user: CurrentUser) -> impl IntoR
         current_user: Some(user),
         nav_active: "map",
         world_size: state.world_size,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }

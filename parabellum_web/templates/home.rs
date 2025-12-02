@@ -2,7 +2,7 @@ use askama::Template;
 
 use crate::handlers::CurrentUser;
 
-use super::shared::ServerTimeContext;
+use super::shared::ServerTime;
 
 /// Template for the home page.
 #[derive(Debug, Template)]
@@ -10,5 +10,5 @@ use super::shared::ServerTimeContext;
 pub struct HomeTemplate {
     pub current_user: Option<CurrentUser>,
     pub nav_active: &'static str,
-    pub server_time: ServerTimeContext,
+    pub server_time: ServerTime,
 }

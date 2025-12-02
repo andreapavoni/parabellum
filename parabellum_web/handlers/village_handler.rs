@@ -2,7 +2,7 @@ use crate::{
     handlers::{CurrentUser, building_queue_or_empty, render_template},
     http::AppState,
     templates::{ResourceField, ResourcesTemplate, VillageTemplate},
-    view_helpers::{building_queue_to_views, resource_css_class, server_time_context},
+    view_helpers::{building_queue_to_views, resource_css_class, server_time},
 };
 use axum::{extract::State, response::IntoResponse};
 use std::collections::HashMap;
@@ -23,7 +23,7 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
         nav_active: "village",
         building_queue,
         slot_buildings,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }
@@ -49,7 +49,7 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         nav_active: "resources",
         resource_slots,
         building_queue,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }

@@ -26,7 +26,7 @@ use crate::{
     },
     http::AppState,
     templates::{LoginTemplate, RegisterTemplate},
-    view_helpers::server_time_context,
+    view_helpers::server_time,
 };
 
 /// Form for login.
@@ -73,7 +73,7 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
         nav_active: "login",
         email_value: String::new(),
         error: None,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
     (jar, render_template(template, None)).into_response()
 }
@@ -128,7 +128,7 @@ pub async fn login(
         nav_active: "login",
         email_value: form.email.clone(),
         error: err_msg,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
 
     (jar, render_template(template, status)).into_response()
@@ -154,7 +154,7 @@ pub async fn register_page(
         selected_tribe: "Roman".to_string(),
         selected_quadrant: "NorthEast".to_string(),
         error: None,
-        server_time: server_time_context(),
+        server_time: server_time(),
     };
 
     (jar, render_template(template, None)).into_response()
@@ -231,7 +231,7 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some("Invalid password or internal error.".to_string()),
-                server_time: server_time_context(),
+                server_time: server_time(),
             };
 
             return (
@@ -262,7 +262,7 @@ pub async fn register(
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some(user_message.to_string()),
-                server_time: server_time_context(),
+                server_time: server_time(),
             };
 
             return (

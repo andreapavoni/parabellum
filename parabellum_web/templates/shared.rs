@@ -33,7 +33,7 @@ impl From<ResourceGroup> for ResourceCostView {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct ServerTimeContext {
+pub struct ServerTime {
     pub formatted: String,
     pub timestamp: i64,
 }
