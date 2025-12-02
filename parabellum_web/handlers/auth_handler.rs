@@ -107,15 +107,10 @@ pub async fn login(
                     .into_response();
             }
         },
-
-        Err(ApplicationError::App(AppError::WrongAuthCredentials)) => (
+        Err(ApplicationError::App(AppError::WrongAuthCredentials))
+        | Err(ApplicationError::Db(DbError::UserByEmailNotFound(_))) => (
             Some(StatusCode::UNAUTHORIZED),
             Some("Invalid email or password.".to_string()),
-        ),
-
-        Err(ApplicationError::Db(DbError::UserByEmailNotFound(_))) => (
-            Some(StatusCode::UNAUTHORIZED),
-            Some("User not found.".to_string()),
         ),
         Err(e) => {
             tracing::error!("Login error: {}", e);
