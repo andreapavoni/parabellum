@@ -10,8 +10,7 @@
     "build:release": "bun run build:css --minify && bun run build:js --minify"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "daisyui": "^5.5.5"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
