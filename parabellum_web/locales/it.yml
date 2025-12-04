@@ -81,6 +81,7 @@ game:
     no_units_available: Nessuna unità disponibile. Ricerca nuove unità nell'Accademia.
     training_queue_title: Coda addestramento
     training_remaining: Tempo rimanente
+    invalid_training_building: Edificio di addestramento non valido. Seleziona lo slot corretto e riprova.
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

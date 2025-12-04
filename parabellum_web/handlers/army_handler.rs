@@ -12,7 +12,7 @@ use crate::{
     http::AppState,
 };
 
-use super::building_handler::render_with_error;
+use super::building_handler::{MAX_SLOT_ID, render_with_error};
 use rust_i18n::t;
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +42,42 @@ pub async fn train_units(
             user,
             form.slot_id,
             t!("game.building.invalid_training_quantity").to_string(),
+        )
+        .await;
+    }
+
+    if !(1..=MAX_SLOT_ID).contains(&form.slot_id) {
+        return render_with_error(
+            &state,
+            jar,
+            user,
+            form.slot_id,
+            t!("game.building.invalid_training_building").to_string(),
+        )
+        .await;
+    }
+
+    let slot_building = match user.village.get_building_by_slot_id(form.slot_id) {
+        Some(slot) => slot,
+        None => {
+            return render_with_error(
+                &state,
+                jar,
+                user,
+                form.slot_id,
+                t!("game.building.invalid_training_building").to_string(),
+            )
+            .await;
+        }
+    };
+
+    if slot_building.building.name != form.building_name {
+        return render_with_error(
+            &state,
+            jar,
+            user,
+            form.slot_id,
+            t!("game.building.invalid_training_building").to_string(),
         )
         .await;
     }

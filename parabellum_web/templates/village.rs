@@ -67,6 +67,7 @@ pub struct ResourcesTemplate {
     pub resource_slots: Vec<ResourceField>,
     pub building_queue: Vec<BuildingQueueItemView>,
     pub server_time: ServerTime,
+    pub home_troops: Vec<TroopCountView>,
 }
 
 impl ResourcesTemplate {
@@ -114,6 +115,12 @@ pub struct UnitTrainingOption {
     pub cost: ResourceCostView,
     pub upkeep: u32,
     pub time_formatted: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TroopCountView {
+    pub name: String,
+    pub count: u32,
 }
 
 #[derive(Debug, Clone)]

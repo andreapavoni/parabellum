@@ -1,8 +1,8 @@
 use crate::{
     handlers::{CurrentUser, building_queue_or_empty, render_template},
     http::AppState,
-    templates::{ResourceField, ResourcesTemplate, VillageTemplate},
-    view_helpers::{building_queue_to_views, resource_css_class, server_time},
+    templates::{ResourceField, ResourcesTemplate, TroopCountView, VillageTemplate},
+    view_helpers::{building_queue_to_views, resource_css_class, server_time, unit_display_name},
 };
 use axum::{extract::State, response::IntoResponse};
 use std::collections::HashMap;
@@ -44,12 +44,35 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
     let building_queue =
         building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
 
+    let home_troops = user
+        .village
+        .army()
+        .map(|army| {
+            let tribe_units = user.village.tribe.units();
+            army.units()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, quantity)| {
+                    if *quantity == 0 {
+                        return None;
+                    }
+                    let name = unit_display_name(&tribe_units[idx].name);
+                    Some(TroopCountView {
+                        name,
+                        count: *quantity,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
     let template = ResourcesTemplate {
         current_user: Some(user),
         nav_active: "resources",
         resource_slots,
         building_queue,
         server_time: server_time(),
+        home_troops,
     };
     render_template(template, None).into_response()
 }

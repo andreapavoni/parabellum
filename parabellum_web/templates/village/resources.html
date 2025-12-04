@@ -196,9 +196,20 @@
 
             <div class="flex-1 md:mt-8">
                 <h3 class="font-bold mb-2 text-sm md:mt-6">{{t!("game.village.troops.title")}}:</h3>
+                {% if home_troops.is_empty() %}
                 <div class="text-xs text-gray-500 italic">
-                  {{t!("game.village.troops.no_units")}}
+                    {{t!("game.village.troops.no_units")}}
                 </div>
+                {% else %}
+                <div class="text-xs space-y-2">
+                    {% for troop in home_troops %}
+                    <div class="flex justify-between border-b border-gray-100 pb-1">
+                        <span>{{ troop.name }}</span>
+                        <span class="font-semibold text-gray-900">{{ troop.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
