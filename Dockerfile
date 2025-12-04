@@ -5,14 +5,16 @@ COPY . .
 
 ENV SQLX_OFFLINE=true
 
+RUN curl -fsSL https://bun.com/install | bash
+
 RUN cargo build --release
 
 # Runtime stage
 FROM bitnami/minideb:trixie
 
 RUN apt-get update && \
-  apt-get install -y ca-certificates && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m parabellum
 RUN mkdir -p /app/logs && chown -R parabellum:parabellum /app

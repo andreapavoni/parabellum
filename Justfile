@@ -7,6 +7,12 @@ run:
 debug:
     cargo run
 
+dev:
+    #!/usr/bin/env bash
+    trap 'kill $(jobs -p) 2>/dev/null' EXIT
+    bun run build:dev &
+    SKIP_FRONTEND=1 cargo run
+
 # db
 # app
 start target:
