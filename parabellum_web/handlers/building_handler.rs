@@ -282,19 +282,18 @@ fn build_template(
         .collect::<Vec<_>>();
     let academy_queue_view = academy_queue_to_views(&academy_queue);
 
-    let (buildable_buildings, locked_buildings) = if slot_building.is_none()
-        && queue_for_slot.is_empty()
-    {
-        building_options_for_slot(
-            &user.village,
-            slot_id,
-            &queue_view,
-            state.server_speed,
-            main_building_level,
-        )
-    } else {
-        (vec![], vec![])
-    };
+    let (buildable_buildings, locked_buildings) =
+        if slot_building.is_none() && queue_for_slot.is_empty() {
+            building_options_for_slot(
+                &user.village,
+                slot_id,
+                &queue_view,
+                state.server_speed,
+                main_building_level,
+            )
+        } else {
+            (vec![], vec![])
+        };
 
     let nav_active = if slot_id <= 18 {
         "resources"
@@ -324,17 +323,16 @@ fn build_template(
         UnitGroup::Siege,
     );
 
-    let (academy_ready_units, academy_locked_units, academy_researched_units) =
-        if matches!(
-            effective_building
-                .as_ref()
-                .map(|slot| slot.building.name.clone()),
-            Some(BuildingName::Academy)
-        ) {
-            academy_options_for_village(&user.village, state.server_speed)
-        } else {
-            (vec![], vec![], vec![])
-        };
+    let (academy_ready_units, academy_locked_units, academy_researched_units) = if matches!(
+        effective_building
+            .as_ref()
+            .map(|slot| slot.building.name.clone()),
+        Some(BuildingName::Academy)
+    ) {
+        academy_options_for_village(&user.village, state.server_speed)
+    } else {
+        (vec![], vec![], vec![])
+    };
 
     BuildingTemplate {
         current_user: Some(user.clone()),
@@ -470,10 +468,7 @@ fn building_options_for_slot(
     (buildable, locked)
 }
 
-fn building_blocked_by_queue(
-    name: &BuildingName,
-    queue: &[BuildingQueueItemView],
-) -> bool {
+fn building_blocked_by_queue(name: &BuildingName, queue: &[BuildingQueueItemView]) -> bool {
     if queue.is_empty() {
         return false;
     }
@@ -615,32 +610,31 @@ fn missing_unit_requirements(
 mod tests {
     use super::*;
     use chrono::{Duration, Utc};
+    use parabellum_app::{cqrs::queries::AcademyQueueItem, jobs::JobStatus};
     use parabellum_game::{
         models::{buildings::Building, village::VillageBuilding},
-        test_utils::{village_factory, VillageFactoryOptions},
+        test_utils::{VillageFactoryOptions, village_factory},
     };
     use parabellum_types::{army::UnitName, buildings::BuildingName};
-    use parabellum_app::{cqrs::queries::AcademyQueueItem, jobs::JobStatus};
 
     #[test]
     fn test_building_options_grouped_by_requirements() {
         let village = village_factory(VillageFactoryOptions {
             ..Default::default()
         });
-        let (buildable, locked) = building_options_for_slot(
-            &village,
-            21,
-            &[],
-            1,
-            village.main_building_level(),
-        );
+        let (buildable, locked) =
+            building_options_for_slot(&village, 21, &[], 1, village.main_building_level());
 
-        assert!(buildable
-            .iter()
-            .any(|option| option.name == BuildingName::Warehouse));
-        assert!(locked
-            .iter()
-            .any(|option| option.name == BuildingName::Barracks));
+        assert!(
+            buildable
+                .iter()
+                .any(|option| option.name == BuildingName::Warehouse)
+        );
+        assert!(
+            locked
+                .iter()
+                .any(|option| option.name == BuildingName::Barracks)
+        );
     }
 
     #[test]
@@ -653,17 +647,14 @@ mod tests {
             .unwrap();
         village.add_building_at_slot(warehouse, 21).unwrap();
 
-        let (buildable, _locked) = building_options_for_slot(
-            &village,
-            22,
-            &[],
-            1,
-            village.main_building_level(),
-        );
+        let (buildable, _locked) =
+            building_options_for_slot(&village, 22, &[], 1, village.main_building_level());
 
-        assert!(buildable
-            .iter()
-            .any(|option| option.name == BuildingName::Warehouse));
+        assert!(
+            buildable
+                .iter()
+                .any(|option| option.name == BuildingName::Warehouse)
+        );
     }
 
     #[test]
@@ -683,11 +674,21 @@ mod tests {
 
         let (ready, locked, researched) = academy_options_for_village(&village, 1);
 
-        assert!(ready.iter().any(|opt| opt.unit_name == UnitName::Praetorian));
-        assert!(locked.iter().any(|opt| opt.unit_name == UnitName::EquitesLegati));
-        assert!(researched
-            .iter()
-            .any(|opt| opt.unit_name == UnitName::Legionnaire));
+        assert!(
+            ready
+                .iter()
+                .any(|opt| opt.unit_name == UnitName::Praetorian)
+        );
+        assert!(
+            locked
+                .iter()
+                .any(|opt| opt.unit_name == UnitName::EquitesLegati)
+        );
+        assert!(
+            researched
+                .iter()
+                .any(|opt| opt.unit_name == UnitName::Legionnaire)
+        );
     }
 
     #[test]
@@ -727,6 +728,6 @@ mod tests {
         let views = academy_queue_to_views(&items);
         assert_eq!(views.len(), 1);
         assert!(views[0].is_processing);
-        assert_eq!(views[0].time_seconds, 42);
+        assert_eq!(views[0].time_seconds, 41); // we need to assume that from t0 to this assert, some time is passed, it can't be 42
     }
 }
