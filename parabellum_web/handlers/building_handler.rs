@@ -14,7 +14,7 @@ use parabellum_app::{
     },
 };
 use parabellum_game::models::{
-    buildings::Building,
+    buildings::{Building, get_building_data},
     village::{Village, VillageBuilding},
 };
 use parabellum_types::{army::UnitGroup, buildings::BuildingName};
@@ -26,8 +26,8 @@ use crate::{
     },
     http::AppState,
     templates::{
-        BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo,
-        UnitTrainingOption,
+        BuildingOption, BuildingQueueItemView, BuildingRequirementView, BuildingTemplate,
+        BuildingUpgradeInfo, UnitTrainingOption,
     },
     view_helpers::{
         building_queue_to_views, format_duration, server_time, training_queue_to_views,
@@ -163,7 +163,13 @@ pub async fn build_action(
     }
 }
 
-fn build_option(name: BuildingName, server_speed: i8, main_building_level: u8) -> BuildingOption {
+fn build_option(
+    name: BuildingName,
+    server_speed: i8,
+    main_building_level: u8,
+    missing_requirements: Vec<BuildingRequirementView>,
+    can_start: bool,
+) -> BuildingOption {
     let building = Building::new(name.clone(), server_speed);
     let cost = building.cost();
     let time_secs = building.calculate_build_time_secs(&server_speed, &main_building_level);
@@ -173,6 +179,8 @@ fn build_option(name: BuildingName, server_speed: i8, main_building_level: u8) -
         cost: cost.resources.into(),
         upkeep: cost.upkeep,
         time_formatted: format_duration(time_secs),
+        missing_requirements,
+        can_start,
     }
 }
 
@@ -266,10 +274,36 @@ fn build_template(
         .collect::<Vec<_>>();
 
     let available_buildings = if slot_building.is_none() && queue_for_slot.is_empty() {
-        user.village
-            .available_buildings_for_slot(slot_id)
+        user
+            .village
+            .candidate_buildings_for_slot(slot_id)
             .into_iter()
-            .map(|name| build_option(name, state.server_speed, main_building_level))
+            .filter_map(|name| {
+                if building_blocked_by_queue(&name, &queue_view) {
+                    return None;
+                }
+
+                let building = Building::new(name.clone(), state.server_speed);
+                let validation_ok = user
+                    .village
+                    .validate_building_construction(&building)
+                    .is_ok();
+                let missing_requirements =
+                    missing_requirements_for_building(&user.village, &name);
+                let should_show = validation_ok || !missing_requirements.is_empty();
+
+                if !should_show {
+                    return None;
+                }
+
+                Some(build_option(
+                    name,
+                    state.server_speed,
+                    main_building_level,
+                    missing_requirements,
+                    validation_ok,
+                ))
+            })
             .collect::<Vec<BuildingOption>>()
     } else {
         vec![]
@@ -387,6 +421,75 @@ fn training_options_for_group(
                 upkeep: unit.cost.upkeep,
                 time_formatted: format_duration(time_per_unit),
             })
+        })
+        .collect()
+}
+
+fn building_blocked_by_queue(
+    name: &BuildingName,
+    queue: &[BuildingQueueItemView],
+) -> bool {
+    if queue.is_empty() {
+        return false;
+    }
+
+    let Ok(candidate_data) = get_building_data(name) else {
+        return false;
+    };
+
+    queue.iter().any(|job| {
+        let queued_name = &job.building_name;
+        (!candidate_data.rules.allow_multiple && queued_name == name)
+            || candidate_data
+                .rules
+                .conflicts
+                .iter()
+                .any(|conflict| conflict.0 == *queued_name)
+            || conflicts_with_queued(name, queued_name)
+    })
+}
+
+fn conflicts_with_queued(candidate: &BuildingName, queued: &BuildingName) -> bool {
+    match get_building_data(queued) {
+        Ok(data) => {
+            (!data.rules.allow_multiple && queued == candidate)
+                || data
+                    .rules
+                    .conflicts
+                    .iter()
+                    .any(|conflict| conflict.0 == *candidate)
+        }
+        Err(_) => false,
+    }
+}
+
+fn missing_requirements_for_building(
+    village: &Village,
+    name: &BuildingName,
+) -> Vec<BuildingRequirementView> {
+    let Ok(data) = get_building_data(name) else {
+        return vec![];
+    };
+
+    data.rules
+        .requirements
+        .iter()
+        .filter_map(|req| {
+            let level = village
+                .buildings()
+                .iter()
+                .find(|vb| vb.building.name == req.0)
+                .map(|vb| vb.building.level)
+                .unwrap_or(0);
+
+            if level >= req.1 {
+                None
+            } else {
+                Some(BuildingRequirementView {
+                    name: req.0.clone(),
+                    level: req.1,
+                })
+            }
         })
         .collect()
 }

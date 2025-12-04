@@ -72,6 +72,8 @@ game:
     training_multiplier_hint_siege: Percentuale del tempo base richiesta per costruire macchine d'assedio.
     training_bonus: Bonus velocità addestramento
     training_bonus_hint: Più veloce rispetto al tempo di addestramento standard.
+    requirements_title: Requisiti
+    missing_requirements_hint: Completa i requisiti sopra per sbloccare questo edificio.
     train_units: Addestra unità
     training_cost: Costo per unità
     training_time: Tempo per unità

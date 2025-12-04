@@ -240,6 +240,8 @@ game:
     training_multiplier_hint_siege: Percentage of the base time required to build siege engines.
     training_bonus: Training speed bonus
     training_bonus_hint: Faster than the default training time.
+    requirements_title: Requirements
+    missing_requirements_hint: Finish the missing requirements above to unlock this building.
     train_units: Train units
     training_cost: Cost per unit
     training_time: Time per unit

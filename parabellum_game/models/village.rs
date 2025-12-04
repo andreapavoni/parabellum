@@ -497,9 +497,8 @@ impl Village {
         None
     }
 
-    /// Returns the list of buildings that can be constructed inside the given slot.
-    /// Resource and reserved slots (main building, rally point, wall) always return empty lists.
-    pub fn available_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
+    /// Returns all building candidates that are valid for the given slot, ignoring requirements.
+    pub fn candidate_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
         if slot_id == 0
             || slot_id > MAX_VILLAGE_SLOT_ID
             || slot_id <= RESOURCE_FIELDS_LAST_SLOT
@@ -508,14 +507,18 @@ impl Village {
             return vec![];
         }
 
-        let candidates = match slot_id {
+        match slot_id {
             MAIN_BUILDING_SLOT_ID => vec![BuildingName::MainBuilding],
             RALLY_POINT_SLOT_ID => vec![BuildingName::RallyPoint],
             WALL_SLOT_ID => self.tribe.wall().into_iter().collect::<Vec<BuildingName>>(),
             _ => COMMON_BUILDINGS.to_vec(),
-        };
+        }
+    }
 
-        candidates
+    /// Returns the list of buildings that can be constructed inside the given slot.
+    /// Resource and reserved slots (main building, rally point, wall) always return empty lists.
+    pub fn available_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
+        self.candidate_buildings_for_slot(slot_id)
             .into_iter()
             .filter(|name| self.can_start_building(name))
             .collect()

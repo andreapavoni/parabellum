@@ -165,6 +165,16 @@
                         <p class="mt-1 text-gray-600 text-xs">
                             {{ self.building_description(&option.name) }}
                         </p>
+                        {% if !option.missing_requirements.is_empty() %}
+                        <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                            <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                                {% for req in option.missing_requirements %}
+                                <li>{{ req.name }} – Lv {{ req.level }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
                         <div>
                             <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
                             <div class="grid grid-cols-2 gap-2 mt-1">
@@ -195,21 +205,26 @@
                             <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
                         </div>
                         {% if current_construction.is_none() %}
-                        {% let can_build = self.can_afford(&option.cost) %}
+                        {% let has_resources = self.can_afford(&option.cost) %}
+                        {% let can_build_now = has_resources && option.can_start %}
                         <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                             <input type="hidden" name="slot_id" value="{{ slot_id }}">
                             <input type="hidden" name="action" value="build">
                             <input type="hidden" name="building_name" value="{{ option.name }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <button type="submit"
-                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded {% if !can_build %}opacity-60 cursor-not-allowed{% endif %}"
-                                    {% if !can_build %}disabled aria-disabled="true"{% endif %}>
+                                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded {% if !can_build_now %}opacity-60 cursor-not-allowed{% endif %}"
+                                    {% if !can_build_now %}disabled aria-disabled="true"{% endif %}>
                                 {{t!("game.building.build_action")}}
                             </button>
                         </form>
-                        {% if !can_build %}
+                        {% if !has_resources %}
                         <div class="text-xs text-red-600">
                             {{t!("game.building.not_enough_resources")}}
+                        </div>
+                        {% elif !option.can_start %}
+                        <div class="text-xs text-amber-700">
+                            {{t!("game.building.missing_requirements_hint")}}
                         </div>
                         {% endif %}
                         {% else %}

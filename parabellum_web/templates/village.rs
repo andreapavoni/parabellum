@@ -58,6 +58,12 @@ pub struct ResourceField {
     pub level: u8,
 }
 
+#[derive(Debug, Clone)]
+pub struct BuildingRequirementView {
+    pub name: BuildingName,
+    pub level: u8,
+}
+
 /// Template for the resource fields page.
 #[derive(Debug, Template)]
 #[template(path = "village/resources.html")]
@@ -97,6 +103,8 @@ pub struct BuildingOption {
     pub cost: ResourceCostView,
     pub upkeep: u32,
     pub time_formatted: String,
+    pub missing_requirements: Vec<BuildingRequirementView>,
+    pub can_start: bool,
 }
 
 #[derive(Debug, Clone)]
