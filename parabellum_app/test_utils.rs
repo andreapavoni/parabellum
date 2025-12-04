@@ -109,6 +109,20 @@ pub mod tests {
                 .collect())
         }
 
+        async fn list_village_smithy_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
         async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }

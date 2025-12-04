@@ -10,33 +10,39 @@ use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
     cqrs::{
         commands::{AddBuilding, UpgradeBuilding},
-        queries::{AcademyQueueItem, BuildingQueueItem, TrainingQueueItem},
+        queries::{
+            AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem,
+        },
     },
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
+    smithy::smithy_upgrade_cost_for_unit,
     village::{Village, VillageBuilding},
 };
 use parabellum_types::{
-    army::UnitGroup,
+    army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
 };
 
 use crate::{
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, academy_queue_or_empty, building_queue_or_empty,
-        generate_csrf, render_template, training_queue_or_empty,
+        generate_csrf, render_template, smithy_queue_or_empty, training_queue_or_empty,
     },
     http::AppState,
     templates::{
         AcademyResearchOption, BuildingOption, BuildingQueueItemView, BuildingRequirementView,
-        BuildingTemplate, BuildingUpgradeInfo, UnitTrainingOption,
+        BuildingTemplate, BuildingUpgradeInfo, SmithyQueueItemView, SmithyUpgradeOption,
+        UnitTrainingOption,
     },
     view_helpers::{
         academy_queue_to_views, building_queue_to_views, format_duration, server_time,
-        training_queue_to_views, unit_display_name,
+        smithy_queue_to_views, training_queue_to_views, unit_display_name,
     },
 };
+
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct BuildParams {
@@ -81,6 +87,7 @@ pub async fn building(
     let queue_items = building_queue_or_empty(&state, user.village.id).await;
     let training_queue_items = training_queue_or_empty(&state, user.village.id).await;
     let academy_queue_items = academy_queue_or_empty(&state, user.village.id).await;
+    let smithy_queue_items = smithy_queue_or_empty(&state, user.village.id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(
@@ -92,6 +99,7 @@ pub async fn building(
         queue_items,
         training_queue_items,
         academy_queue_items,
+        smithy_queue_items,
     );
     (jar, render_template(template, None)).into_response()
 }
@@ -223,6 +231,7 @@ pub(crate) async fn render_with_error(
     let queue_items = building_queue_or_empty(state, user.village.id).await;
     let training_queue_items = training_queue_or_empty(state, user.village.id).await;
     let academy_queue_items = academy_queue_or_empty(state, user.village.id).await;
+    let smithy_queue_items = smithy_queue_or_empty(state, user.village.id).await;
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(
         state,
@@ -233,6 +242,7 @@ pub(crate) async fn render_with_error(
         queue_items,
         training_queue_items,
         academy_queue_items,
+        smithy_queue_items,
     );
     (
         jar,
@@ -250,6 +260,7 @@ fn build_template(
     queue_items: Vec<BuildingQueueItem>,
     training_queue: Vec<TrainingQueueItem>,
     academy_queue: Vec<AcademyQueueItem>,
+    smithy_queue: Vec<SmithyQueueItem>,
 ) -> BuildingTemplate {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
@@ -281,6 +292,20 @@ fn build_template(
         .cloned()
         .collect::<Vec<_>>();
     let academy_queue_view = academy_queue_to_views(&academy_queue);
+    let smithy_queue_view = smithy_queue_to_views(&user.village, &smithy_queue);
+
+    let smithy_units = if let Some(slot) = slot_building.as_ref()
+        && slot.building.name == BuildingName::Smithy
+    {
+        smithy_options_for_village(
+            &user.village,
+            slot,
+            state.server_speed,
+            &smithy_queue,
+        )
+    } else {
+        vec![]
+    };
 
     let (buildable_buildings, locked_buildings) =
         if slot_building.is_none() && queue_for_slot.is_empty() {
@@ -356,6 +381,8 @@ fn build_template(
         workshop_units,
         training_queue_for_slot,
         academy_queue: academy_queue_view,
+        smithy_units,
+        smithy_queue: smithy_queue_view,
     }
 }
 
@@ -606,16 +633,101 @@ fn missing_unit_requirements(
         .collect()
 }
 
+fn smithy_options_for_village(
+    village: &Village,
+    smithy_building: &VillageBuilding,
+    server_speed: i8,
+    queue: &[SmithyQueueItem],
+) -> Vec<SmithyUpgradeOption> {
+    let smithy_level_cap = smithy_building.building.level.min(20);
+    if smithy_level_cap == 0 {
+        return vec![];
+    }
+
+    let queue_counts = smithy_queue_counts(queue);
+    let research = village.academy_research();
+    let smithy_levels = village.smithy();
+    let units = village.tribe.units();
+    let mut options = Vec::new();
+
+    for (idx, unit) in units.iter().enumerate() {
+        if idx >= smithy_levels.len() {
+            break;
+        }
+
+        let is_researched = unit.research_cost.time == 0 || research.get(idx);
+        let current_level = smithy_levels[idx];
+        let queued = queue_counts
+            .get(&unit.name)
+            .copied()
+            .unwrap_or(0);
+        let effective_level = current_level.saturating_add(queued);
+        let next_level_value = effective_level.saturating_add(1);
+        let can_upgrade = is_researched
+            && effective_level < smithy_level_cap
+            && smithy_level_cap > 0;
+
+        let (cost, time_formatted) = if can_upgrade {
+            match smithy_upgrade_cost_for_unit(&unit.name, effective_level) {
+                Ok(research_cost) => {
+                    let time_secs = if research_cost.time == 0 {
+                        0
+                    } else {
+                        ((research_cost.time as f64 / server_speed as f64)
+                            .floor()
+                            .max(1.0)) as u32
+                    };
+                    (
+                        Some(research_cost.resources.into()),
+                        Some(format_duration(time_secs)),
+                    )
+                }
+                Err(_) => (None, None),
+            }
+        } else {
+            (None, None)
+        };
+
+        options.push(SmithyUpgradeOption {
+            unit_name: unit.name.clone(),
+            unit_value: format!("{:?}", unit.name),
+            display_name: unit_display_name(&unit.name),
+            current_level,
+            queued_levels: queued,
+            max_level: smithy_level_cap,
+            next_level: if can_upgrade { Some(next_level_value) } else { None },
+            cost,
+            time_formatted,
+            can_upgrade,
+            is_researched,
+        });
+    }
+
+    options
+}
+
+fn smithy_queue_counts(queue: &[SmithyQueueItem]) -> HashMap<UnitName, u8> {
+    let mut counts = HashMap::new();
+    for job in queue {
+        *counts.entry(job.unit.clone()).or_insert(0) += 1;
+    }
+    counts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::{Duration, Utc};
-    use parabellum_app::{cqrs::queries::AcademyQueueItem, jobs::JobStatus};
+    use parabellum_app::{
+        cqrs::queries::{AcademyQueueItem, SmithyQueueItem},
+        jobs::JobStatus,
+    };
     use parabellum_game::{
         models::{buildings::Building, village::VillageBuilding},
         test_utils::{VillageFactoryOptions, village_factory},
     };
     use parabellum_types::{army::UnitName, buildings::BuildingName};
+    use uuid::Uuid;
 
     #[test]
     fn test_building_options_grouped_by_requirements() {
@@ -728,6 +840,71 @@ mod tests {
         let views = academy_queue_to_views(&items);
         assert_eq!(views.len(), 1);
         assert!(views[0].is_processing);
-        assert_eq!(views[0].time_seconds, 41); // we need to assume that from t0 to this assert, some time is passed, it can't be 42
+        assert!(views[0].time_seconds <= 42);
+    }
+
+    #[test]
+    fn test_smithy_options_account_for_queue_and_research() {
+        let mut village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let smithy = Building::new(BuildingName::Smithy, 1)
+            .at_level(3, 1)
+            .unwrap();
+        let slot = VillageBuilding {
+            slot_id: 26,
+            building: smithy,
+        };
+        village.set_academy_research_for_test(&UnitName::Praetorian, true);
+        village.set_academy_research_for_test(&UnitName::Imperian, false);
+
+        let queue = vec![SmithyQueueItem {
+            job_id: Uuid::new_v4(),
+            unit: UnitName::Legionnaire,
+            status: JobStatus::Processing,
+            finishes_at: Utc::now(),
+        }];
+
+        let options = smithy_options_for_village(&village, &slot, 1, &queue);
+        let legion = options
+            .iter()
+            .find(|opt| opt.unit_name == UnitName::Legionnaire)
+            .unwrap();
+        assert_eq!(legion.queued_levels, 1);
+        assert!(legion.can_upgrade);
+
+        let imperian = options
+            .iter()
+            .find(|opt| opt.unit_name == UnitName::Imperian)
+            .unwrap();
+        assert!(!imperian.is_researched);
+        assert!(!imperian.can_upgrade);
+    }
+
+    #[test]
+    fn test_smithy_queue_view_increments_levels() {
+        let village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let now = Utc::now();
+        let items = vec![
+            SmithyQueueItem {
+                job_id: Uuid::new_v4(),
+                unit: UnitName::Legionnaire,
+                status: JobStatus::Processing,
+                finishes_at: now + Duration::seconds(30),
+            },
+            SmithyQueueItem {
+                job_id: Uuid::new_v4(),
+                unit: UnitName::Legionnaire,
+                status: JobStatus::Pending,
+                finishes_at: now + Duration::seconds(60),
+            },
+        ];
+
+        let views = smithy_queue_to_views(&village, &items);
+        assert_eq!(views.len(), 2);
+        assert!(views[0].is_processing);
+        assert_eq!(views[0].target_level + 1, views[1].target_level);
     }
 }

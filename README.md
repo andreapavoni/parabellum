@@ -122,7 +122,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
       - [ ] send troops
       - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
     - [x] Academy (research units)
-    - [ ] Smithy (upgrade units)
+    - [x] Smithy (upgrade units)
     - [ ] Merchant, Marketplace
       - [ ] Send resources to a village
       - [ ] Sell/buy resources

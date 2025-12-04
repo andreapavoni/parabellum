@@ -7,6 +7,7 @@ mod get_village_building_queue;
 mod get_village_by_id;
 mod get_village_academy_queue;
 mod get_village_training_queue;
+mod get_village_smithy_queue;
 mod list_villages_by_player_id;
 
 pub use authenticate_user::AuthenticateUserHandler;
@@ -18,4 +19,5 @@ pub use get_village_building_queue::GetVillageBuildingQueueHandler;
 pub use get_village_by_id::GetVillageByIdHandler;
 pub use get_village_academy_queue::GetVillageAcademyQueueHandler;
 pub use get_village_training_queue::GetVillageTrainingQueueHandler;
+pub use get_village_smithy_queue::GetVillageSmithyQueueHandler;
 pub use list_villages_by_player_id::ListVillagesByPlayerIdHandler;

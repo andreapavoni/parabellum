@@ -14,13 +14,13 @@ use uuid::Uuid;
 use parabellum_app::{
     cqrs::queries::{
         AcademyQueueItem, BuildingQueueItem, GetPlayerByUserId, GetUserById,
-        GetVillageAcademyQueue, GetVillageBuildingQueue, GetVillageTrainingQueue,
-        ListVillagesByPlayerId, TrainingQueueItem,
+        GetVillageAcademyQueue, GetVillageBuildingQueue, GetVillageSmithyQueue,
+        GetVillageTrainingQueue, ListVillagesByPlayerId, SmithyQueueItem, TrainingQueueItem,
     },
     queries_handlers::{
         GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageAcademyQueueHandler,
-        GetVillageBuildingQueueHandler, GetVillageTrainingQueueHandler,
-        ListVillagesByPlayerIdHandler,
+        GetVillageBuildingQueueHandler, GetVillageSmithyQueueHandler,
+        GetVillageTrainingQueueHandler, ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -289,6 +289,29 @@ pub async fn training_queue_or_empty(state: &AppState, village_id: u32) -> Vec<T
                 village_id,
                 "Unable to load training queue"
             );
+            vec![]
+        }
+    }
+}
+
+async fn load_smithy_queue(
+    state: &AppState,
+    village_id: u32,
+) -> Result<Vec<SmithyQueueItem>, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageSmithyQueue { village_id },
+            GetVillageSmithyQueueHandler::new(),
+        )
+        .await
+}
+
+pub async fn smithy_queue_or_empty(state: &AppState, village_id: u32) -> Vec<SmithyQueueItem> {
+    match load_smithy_queue(state, village_id).await {
+        Ok(queue) => queue,
+        Err(err) => {
+            tracing::error!(error = ?err, village_id, "Unable to load smithy queue");
             vec![]
         }
     }

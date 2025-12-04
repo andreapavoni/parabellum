@@ -33,6 +33,12 @@ pub trait JobRepository: Send + Sync {
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError>;
 
+    /// Lists pending/processing smithy upgrade jobs for a village.
+    async fn list_village_smithy_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
     /// Finds and locks atomically overdue jobs, setting the status to "Processing".
     /// This prevents several workers getting the  same job.
     async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>, ApplicationError>;

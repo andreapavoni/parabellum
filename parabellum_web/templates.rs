@@ -11,6 +11,6 @@ pub use shared::{BuildingQueueItemView, ServerTime};
 pub use village::{
     AcademyResearchOption, AcademyResearchQueueItemView, BuildingOption,
     BuildingRequirementView, BuildingTemplate, BuildingUpgradeInfo, ResourceField,
-    ResourcesTemplate, TroopCountView, UnitTrainingOption, UnitTrainingQueueItemView,
-    VillageTemplate,
+    ResourcesTemplate, SmithyQueueItemView, SmithyUpgradeOption, TroopCountView,
+    UnitTrainingOption, UnitTrainingQueueItemView, VillageTemplate,
 };

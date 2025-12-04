@@ -1,14 +1,16 @@
 use chrono::Utc;
 use parabellum_app::{
-    cqrs::queries::{AcademyQueueItem, BuildingQueueItem, TrainingQueueItem},
+    cqrs::queries::{AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem},
     jobs::JobStatus,
 };
-use parabellum_game::models::village::VillageBuilding;
+use parabellum_game::models::village::{Village, VillageBuilding};
 use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;
+use std::collections::HashMap;
 
 use crate::templates::{
-    AcademyResearchQueueItemView, BuildingQueueItemView, ServerTime, UnitTrainingQueueItemView,
+    AcademyResearchQueueItemView, BuildingQueueItemView, ServerTime, SmithyQueueItemView,
+    UnitTrainingQueueItemView,
 };
 
 /// Formats a duration in seconds to HH:MM:SS.
@@ -93,6 +95,51 @@ pub fn academy_queue_to_views(items: &[AcademyQueueItem]) -> Vec<AcademyResearch
             }
         })
         .collect()
+}
+
+/// Converts smithy upgrade jobs into view models with countdown timers and target levels.
+pub fn smithy_queue_to_views(
+    village: &Village,
+    items: &[SmithyQueueItem],
+) -> Vec<SmithyQueueItemView> {
+    let now = Utc::now();
+    let mut base_levels = smithy_levels_for_village(village);
+    let mut sorted = items.to_vec();
+    sorted.sort_by_key(|item| item.finishes_at);
+
+    sorted
+        .into_iter()
+        .map(|item| {
+            let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
+            let entry = base_levels.entry(item.unit.clone()).or_insert(0);
+            let target_level = (*entry + 1).min(20);
+            *entry = target_level;
+
+            SmithyQueueItemView {
+                job_id: item.job_id,
+                unit_name: unit_display_name(&item.unit),
+                target_level,
+                time_remaining: format_duration(remaining),
+                time_seconds: remaining,
+                is_processing: matches!(item.status, JobStatus::Processing),
+            }
+        })
+        .collect()
+}
+
+fn smithy_levels_for_village(village: &Village) -> HashMap<UnitName, u8> {
+    let mut levels = HashMap::new();
+    let smithy = village.smithy();
+
+    for (idx, unit) in village.tribe.units().iter().enumerate() {
+        if idx >= smithy.len() {
+            break;
+        }
+
+        levels.insert(unit.name.clone(), smithy[idx]);
+    }
+
+    levels
 }
 
 /// Returns the current server time information for the UI.

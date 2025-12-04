@@ -77,6 +77,7 @@ game:
     requirements_title: Requisiti
     missing_requirements_hint: Completa i requisiti sopra per sbloccare questo edificio.
     invalid_academy_building: Slot dell'Accademia non valido, riprova.
+    invalid_smithy_building: Slot della Fucina non valido, riprova.
     train_units: Addestra unità
     training_cost: Costo per unità
     training_time: Tempo per unità
@@ -98,6 +99,13 @@ game:
     research_cost: Costo ricerca
     research_time: Tempo di ricerca
     research_action: Ricerca
+    smithy_available: Potenziamenti disponibili
+    no_smithy_upgrades: Nessuna unità disponibile per il potenziamento.
+    smithy_queue_title: Coda fucina
+    smithy_unit_locked: Ricerca prima questa unità nell'Accademia.
+    smithy_upgrade_action: Potenzia unità
+    smithy_max_level_hint: Livello massimo raggiunto. Migliora la Fucina per continuare.
+    smithy_queued_hint: "In coda fino al Lv %{level}"
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

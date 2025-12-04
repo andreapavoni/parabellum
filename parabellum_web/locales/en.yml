@@ -243,6 +243,7 @@ game:
     requirements_title: Requirements
     missing_requirements_hint: Finish the missing requirements above to unlock this building.
     invalid_academy_building: Invalid academy slot, please try again.
+    invalid_smithy_building: Invalid smithy slot, please try again.
     train_units: Train units
     training_cost: Cost per unit
     training_time: Time per unit
@@ -286,6 +287,13 @@ game:
     research_action: Research
     not_enough_resources: Not enough resources in storage.
     invalid_training_quantity: Invalid training quantity specified.
+    smithy_available: Available upgrades
+    no_smithy_upgrades: No units available for upgrades yet.
+    smithy_queue_title: Smithy queue
+    smithy_unit_locked: Research this unit in the Academy before upgrading.
+    smithy_upgrade_action: Upgrade unit
+    smithy_max_level_hint: Maximum level reached. Upgrade the Smithy to continue.
+    smithy_queued_hint: "Queued to reach Lv %{level}"
 
     current_wood_bonus: "Current wood bonus:"
     wood_bonus_level: "Wood bonus at level"

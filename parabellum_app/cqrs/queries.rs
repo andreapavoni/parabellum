@@ -121,6 +121,22 @@ impl Query for GetVillageAcademyQueue {
     type Output = Vec<AcademyQueueItem>;
 }
 
+#[derive(Debug, Clone)]
+pub struct SmithyQueueItem {
+    pub job_id: Uuid,
+    pub unit: UnitName,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+pub struct GetVillageSmithyQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageSmithyQueue {
+    type Output = Vec<SmithyQueueItem>;
+}
+
 /// Fetch a square region of the world map.
 pub struct GetMapRegion {
     pub center: Position,

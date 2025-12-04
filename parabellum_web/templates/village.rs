@@ -162,6 +162,31 @@ pub struct AcademyResearchQueueItemView {
     pub is_processing: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct SmithyQueueItemView {
+    pub job_id: Uuid,
+    pub unit_name: String,
+    pub target_level: u8,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+    pub is_processing: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SmithyUpgradeOption {
+    pub unit_name: UnitName,
+    pub unit_value: String,
+    pub display_name: String,
+    pub current_level: u8,
+    pub queued_levels: u8,
+    pub max_level: u8,
+    pub next_level: Option<u8>,
+    pub cost: Option<ResourceCostView>,
+    pub time_formatted: Option<String>,
+    pub can_upgrade: bool,
+    pub is_researched: bool,
+}
+
 /// Template for individual building page.
 #[derive(Debug, Default, Template)]
 #[template(path = "village/building.html")]
@@ -187,6 +212,8 @@ pub struct BuildingTemplate {
     pub workshop_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
     pub academy_queue: Vec<AcademyResearchQueueItemView>,
+    pub smithy_units: Vec<SmithyUpgradeOption>,
+    pub smithy_queue: Vec<SmithyQueueItemView>,
 }
 
 impl BuildingTemplate {
