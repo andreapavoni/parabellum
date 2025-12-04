@@ -1,0 +1,199 @@
+<div class="space-y-6">
+    <div>
+        <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
+        <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
+        <p class="mt-2 text-gray-700 text-sm">
+            {{ self.building_description(&slot.building.name) }}
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.level")}}</div>
+            <div class="text-lg font-bold">{{ slot.building.level }}</div>
+        </div>
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.population")}}</div>
+            <div class="text-lg font-bold">{{ slot.building.population }}</div>
+        </div>
+        {% if let Some(upkeep) = current_upkeep %}
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
+            <div class="text-lg font-bold">{{ upkeep }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if let Some(next) = upgrade %}
+    <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+        <div class="text-sm text-gray-500 uppercase">
+            {% if current_construction.is_some() %}
+                {{t!("game.building.upgrade_after_current", level = next.next_level)}}
+            {% else %}
+                {{t!("game.building.upgrade")}} – Lv {{ next.next_level }}
+            {% endif %}
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                <div class="text-gray-500 flex items-center gap-1">
+                    <span>🌲</span>
+                    <span>{{t!("game.village.resources.lumber")}}</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ next.cost.lumber }}</div>
+            </div>
+            <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                <div class="text-gray-500 flex items-center gap-1">
+                    <span>🧱</span>
+                    <span>{{t!("game.village.resources.clay")}}</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ next.cost.clay }}</div>
+            </div>
+            <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                <div class="text-gray-500 flex items-center gap-1">
+                    <span>⚒️</span>
+                    <span>{{t!("game.village.resources.iron")}}</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ next.cost.iron }}</div>
+            </div>
+            <div class="p-2 border rounded bg-white flex flex-col gap-1">
+                <div class="text-gray-500 flex items-center gap-1">
+                    <span>🌾</span>
+                    <span>{{t!("game.village.resources.crop")}}</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ next.cost.crop }}</div>
+            </div>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+            <div class="text-gray-500 text-sm uppercase">{{t!("game.building.time")}}</div>
+            <div class="text-xl font-semibold text-gray-800">{{ next.time_formatted }}</div>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border rounded bg-white p-3">
+            <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
+            <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
+        </div>
+        {% let can_upgrade = self.can_afford(&next.cost) %}
+        <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
+            <input type="hidden" name="slot_id" value="{{ slot_id }}">
+            <input type="hidden" name="action" value="upgrade">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded {% if !can_upgrade %}opacity-60 cursor-not-allowed{% endif %}"
+                    {% if !can_upgrade %}disabled aria-disabled="true"{% endif %}>
+                {% if current_construction.is_some() %}
+                    {{t!("game.building.queue_upgrade_action", level = next.next_level) }}
+                {% else %}
+                    {{t!("game.building.upgrade_action", level = next.next_level) }}
+                {% endif %}
+            </button>
+        </form>
+        {% if !can_upgrade %}
+        <div class="text-xs text-red-600">
+            {{t!("game.building.not_enough_resources")}}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="space-y-6">
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_available") }}</div>
+            {% if academy_ready_units.is_empty() %}
+            <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_research_available") }}</p>
+            {% else %}
+            <div class="space-y-4 mt-3">
+                {% for option in academy_ready_units %}
+                <div class="border rounded-md p-4 bg-white space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900">{{ option.display_name }}</div>
+                            <div class="text-xs text-gray-500">{{ t!("game.building.research_time") }}: {{ option.time_formatted }}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase text-gray-500">{{ t!("game.building.research_cost") }}</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                                <span class="font-semibold">{{ option.cost.lumber }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                                <span class="font-semibold">{{ option.cost.clay }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                                <span class="font-semibold">{{ option.cost.iron }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                                <span class="font-semibold">{{ option.cost.crop }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% let has_resources = self.can_afford(&option.cost) %}
+                    <form action="/academy/research" method="post" class="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                        <input type="hidden" name="unit_name" value="{{ option.unit_value }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit"
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !has_resources %}opacity-60 cursor-not-allowed{% endif %}"
+                                {% if !has_resources %}disabled aria-disabled="true"{% endif %}>
+                            {{ t!("game.building.research_action") }}
+                        </button>
+                    </form>
+                    {% if !has_resources %}
+                    <div class="text-xs text-red-600">
+                        {{ t!("game.building.not_enough_resources") }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_locked") }}</div>
+            {% if academy_locked_units.is_empty() %}
+            <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_research_locked") }}</p>
+            {% else %}
+            <div class="space-y-4 mt-3">
+                {% for option in academy_locked_units %}
+                <div class="border rounded-md p-4 bg-white space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900">{{ option.display_name }}</div>
+                            <div class="text-xs text-gray-500">{{ t!("game.building.research_time") }}: {{ option.time_formatted }}</div>
+                        </div>
+                        <span class="text-xs text-amber-700 font-semibold uppercase">{{ t!("game.building.missing_requirements_hint") }}</span>
+                    </div>
+                    {% if !option.missing_requirements.is_empty() %}
+                    <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                        <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                        <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                            {% for req in option.missing_requirements %}
+                            <li>{{ req.name }} – Lv {{ req.level }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if !academy_researched_units.is_empty() %}
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_completed") }}</div>
+            <div class="flex flex-wrap gap-2 mt-2">
+                {% for option in academy_researched_units %}
+                <span class="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
+                    {{ option.display_name }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

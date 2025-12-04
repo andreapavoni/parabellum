@@ -1,6 +1,6 @@
 use askama::Template;
 use parabellum_game::models::village::VillageBuilding;
-use parabellum_types::buildings::BuildingName;
+use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -62,6 +62,17 @@ pub struct ResourceField {
 pub struct BuildingRequirementView {
     pub name: BuildingName,
     pub level: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct AcademyResearchOption {
+    #[allow(dead_code)]
+    pub unit_name: UnitName,
+    pub unit_value: String,
+    pub display_name: String,
+    pub cost: ResourceCostView,
+    pub time_formatted: String,
+    pub missing_requirements: Vec<BuildingRequirementView>,
 }
 
 /// Template for the resource fields page.
@@ -152,6 +163,9 @@ pub struct BuildingTemplate {
     pub slot_building: Option<VillageBuilding>,
     pub buildable_buildings: Vec<BuildingOption>,
     pub locked_buildings: Vec<BuildingOption>,
+    pub academy_ready_units: Vec<AcademyResearchOption>,
+    pub academy_locked_units: Vec<AcademyResearchOption>,
+    pub academy_researched_units: Vec<AcademyResearchOption>,
     pub upgrade: Option<BuildingUpgradeInfo>,
     pub current_upkeep: Option<u32>,
     pub csrf_token: String,

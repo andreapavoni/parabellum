@@ -76,6 +76,7 @@ game:
     training_bonus_hint: Più veloce rispetto al tempo di addestramento standard.
     requirements_title: Requisiti
     missing_requirements_hint: Completa i requisiti sopra per sbloccare questo edificio.
+    invalid_academy_building: Slot dell'Accademia non valido, riprova.
     train_units: Addestra unità
     training_cost: Costo per unità
     training_time: Tempo per unità
@@ -86,6 +87,14 @@ game:
     training_queue_title: Coda addestramento
     training_remaining: Tempo rimanente
     invalid_training_building: Edificio di addestramento non valido. Seleziona lo slot corretto e riprova.
+    research_available: Ricerche disponibili
+    no_research_available: Nessuna unità disponibile per la ricerca.
+    research_locked: Ricerche bloccate
+    no_research_locked: Nessuna nuova ricerca sbloccata al momento.
+    research_completed: Unità ricercate
+    research_cost: Costo ricerca
+    research_time: Tempo di ricerca
+    research_action: Ricerca
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

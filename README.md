@@ -121,7 +121,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
     - [ ] Rally Point:
       - [ ] send troops
       - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
-    - [ ] Academy (research units)
+    - [x] Academy (research units)
     - [ ] Smithy (upgrade units)
       - [ ] view stationed troops
     - [ ] Merchant, Marketplace

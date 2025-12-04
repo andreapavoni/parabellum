@@ -9,7 +9,7 @@ pub use home::HomeTemplate;
 pub use map::MapTemplate;
 pub use shared::{BuildingQueueItemView, ServerTime};
 pub use village::{
-    BuildingOption, BuildingRequirementView, BuildingTemplate, BuildingUpgradeInfo, ResourceField,
-    ResourcesTemplate, TroopCountView, UnitTrainingOption, UnitTrainingQueueItemView,
-    VillageTemplate,
+    AcademyResearchOption, BuildingOption, BuildingRequirementView, BuildingTemplate,
+    BuildingUpgradeInfo, ResourceField, ResourcesTemplate, TroopCountView, UnitTrainingOption,
+    UnitTrainingQueueItemView, VillageTemplate,
 };

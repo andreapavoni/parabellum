@@ -17,7 +17,10 @@ use parabellum_game::models::{
     buildings::{Building, get_building_data},
     village::{Village, VillageBuilding},
 };
-use parabellum_types::{army::UnitGroup, buildings::BuildingName};
+use parabellum_types::{
+    army::UnitGroup,
+    buildings::{BuildingName, BuildingRequirement},
+};
 
 use crate::{
     handlers::{
@@ -26,8 +29,8 @@ use crate::{
     },
     http::AppState,
     templates::{
-        BuildingOption, BuildingQueueItemView, BuildingRequirementView, BuildingTemplate,
-        BuildingUpgradeInfo, UnitTrainingOption,
+        AcademyResearchOption, BuildingOption, BuildingQueueItemView, BuildingRequirementView,
+        BuildingTemplate, BuildingUpgradeInfo, UnitTrainingOption,
     },
     view_helpers::{
         building_queue_to_views, format_duration, server_time, training_queue_to_views,
@@ -315,6 +318,18 @@ fn build_template(
         UnitGroup::Siege,
     );
 
+    let (academy_ready_units, academy_locked_units, academy_researched_units) =
+        if matches!(
+            effective_building
+                .as_ref()
+                .map(|slot| slot.building.name.clone()),
+            Some(BuildingName::Academy)
+        ) {
+            academy_options_for_village(&user.village, state.server_speed)
+        } else {
+            (vec![], vec![], vec![])
+        };
+
     BuildingTemplate {
         current_user: Some(user.clone()),
         nav_active,
@@ -322,6 +337,9 @@ fn build_template(
         slot_building,
         buildable_buildings,
         locked_buildings,
+        academy_ready_units,
+        academy_locked_units,
+        academy_researched_units,
         upgrade,
         current_upkeep,
         csrf_token,
@@ -514,6 +532,78 @@ fn missing_requirements_for_building(
         .collect()
 }
 
+fn academy_options_for_village(
+    village: &Village,
+    server_speed: i8,
+) -> (
+    Vec<AcademyResearchOption>,
+    Vec<AcademyResearchOption>,
+    Vec<AcademyResearchOption>,
+) {
+    let mut ready = Vec::new();
+    let mut locked = Vec::new();
+    let mut researched = Vec::new();
+    let research = village.academy_research();
+    let units = village.tribe.units();
+
+    for (idx, unit) in units.iter().enumerate() {
+        let is_researched = research.get(idx);
+        let missing_requirements = missing_unit_requirements(village, unit.get_requirements());
+        let can_research = !is_researched && missing_requirements.is_empty();
+        let time_secs = if unit.research_cost.time == 0 {
+            0
+        } else {
+            ((unit.research_cost.time as f64 / server_speed as f64)
+                .floor()
+                .max(1.0)) as u32
+        };
+        let option = AcademyResearchOption {
+            unit_name: unit.name.clone(),
+            unit_value: format!("{:?}", unit.name),
+            display_name: unit_display_name(&unit.name),
+            cost: unit.research_cost.resources.clone().into(),
+            time_formatted: format_duration(time_secs),
+            missing_requirements,
+        };
+
+        if is_researched {
+            researched.push(option);
+        } else if can_research {
+            ready.push(option);
+        } else {
+            locked.push(option);
+        }
+    }
+
+    (ready, locked, researched)
+}
+
+fn missing_unit_requirements(
+    village: &Village,
+    requirements: &[BuildingRequirement],
+) -> Vec<BuildingRequirementView> {
+    requirements
+        .iter()
+        .filter_map(|req| {
+            let level = village
+                .buildings()
+                .iter()
+                .find(|vb| vb.building.name == req.0)
+                .map(|vb| vb.building.level)
+                .unwrap_or(0);
+
+            if level >= req.1 {
+                None
+            } else {
+                Some(BuildingRequirementView {
+                    name: req.0.clone(),
+                    level: req.1,
+                })
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -521,7 +611,7 @@ mod tests {
         models::{buildings::Building, village::VillageBuilding},
         test_utils::{village_factory, VillageFactoryOptions},
     };
-    use parabellum_types::buildings::BuildingName;
+    use parabellum_types::{army::UnitName, buildings::BuildingName};
 
     #[test]
     fn test_building_options_grouped_by_requirements() {
@@ -565,6 +655,30 @@ mod tests {
         assert!(buildable
             .iter()
             .any(|option| option.name == BuildingName::Warehouse));
+    }
+
+    #[test]
+    fn test_academy_options_group_units() {
+        let mut village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let academy = Building::new(BuildingName::Academy, 1)
+            .at_level(1, 1)
+            .unwrap();
+        village.add_building_at_slot(academy, 23).unwrap();
+        let smithy = Building::new(BuildingName::Smithy, 1)
+            .at_level(1, 1)
+            .unwrap();
+        village.add_building_at_slot(smithy, 24).unwrap();
+        village.set_academy_research_for_test(&UnitName::Praetorian, false);
+
+        let (ready, locked, researched) = academy_options_for_village(&village, 1);
+
+        assert!(ready.iter().any(|opt| opt.unit_name == UnitName::Praetorian));
+        assert!(locked.iter().any(|opt| opt.unit_name == UnitName::EquitesLegati));
+        assert!(researched
+            .iter()
+            .any(|opt| opt.unit_name == UnitName::Legionnaire));
     }
 
     #[test]

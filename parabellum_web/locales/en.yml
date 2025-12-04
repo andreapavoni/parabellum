@@ -242,6 +242,7 @@ game:
     training_bonus_hint: Faster than the default training time.
     requirements_title: Requirements
     missing_requirements_hint: Finish the missing requirements above to unlock this building.
+    invalid_academy_building: Invalid academy slot, please try again.
     train_units: Train units
     training_cost: Cost per unit
     training_time: Time per unit
@@ -272,6 +273,14 @@ game:
     available_ready: Ready to build
     no_available: No buildings unlocked yet.
     locked_list: Locked buildings
+    research_available: Available research
+    no_research_available: No units available for research.
+    research_locked: Locked research
+    no_research_locked: No additional research unlocked yet.
+    research_completed: Researched units
+    research_cost: Research cost
+    research_time: Research time
+    research_action: Research
     not_enough_resources: Not enough resources in storage.
     invalid_training_quantity: Invalid training quantity specified.
 
