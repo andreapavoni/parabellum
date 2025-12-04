@@ -3,7 +3,7 @@
         <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
         <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
         <p class="mt-2 text-gray-700 text-sm">
-            {{ t!("game.buildings.workshop.description") }}
+            {{ self.building_description(&slot.building.name) }}
         </p>
     </div>
 

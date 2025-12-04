@@ -297,21 +297,21 @@ fn build_template(
         &user.village,
         state.server_speed,
         effective_building.as_ref(),
-        BuildingName::Barracks,
+        &[BuildingName::Barracks, BuildingName::GreatBarracks],
         UnitGroup::Infantry,
     );
     let stable_units = training_options_for_group(
         &user.village,
         state.server_speed,
         effective_building.as_ref(),
-        BuildingName::Stable,
+        &[BuildingName::Stable, BuildingName::GreatStable],
         UnitGroup::Cavalry,
     );
     let workshop_units = training_options_for_group(
         &user.village,
         state.server_speed,
         effective_building.as_ref(),
-        BuildingName::Workshop,
+        &[BuildingName::Workshop, BuildingName::GreatWorkshop],
         UnitGroup::Siege,
     );
 
@@ -371,14 +371,14 @@ fn training_options_for_group(
     village: &Village,
     server_speed: i8,
     building: Option<&VillageBuilding>,
-    expected_building: BuildingName,
+    expected_buildings: &[BuildingName],
     group: UnitGroup,
 ) -> Vec<UnitTrainingOption> {
     let Some(slot) = building else {
         return vec![];
     };
 
-    if slot.building.name != expected_building {
+    if !expected_buildings.contains(&slot.building.name) {
         return vec![];
     }
 
@@ -518,7 +518,7 @@ fn missing_requirements_for_building(
 mod tests {
     use super::*;
     use parabellum_game::{
-        models::buildings::Building,
+        models::{buildings::Building, village::VillageBuilding},
         test_utils::{village_factory, VillageFactoryOptions},
     };
     use parabellum_types::buildings::BuildingName;
@@ -565,5 +565,29 @@ mod tests {
         assert!(buildable
             .iter()
             .any(|option| option.name == BuildingName::Warehouse));
+    }
+
+    #[test]
+    fn test_training_options_include_great_buildings() {
+        let village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let building = Building::new(BuildingName::GreatBarracks, 1)
+            .at_level(5, 1)
+            .unwrap();
+        let slot = VillageBuilding {
+            slot_id: 25,
+            building,
+        };
+
+        let units = training_options_for_group(
+            &village,
+            1,
+            Some(&slot),
+            &[BuildingName::Barracks, BuildingName::GreatBarracks],
+            UnitGroup::Infantry,
+        );
+
+        assert!(!units.is_empty());
     }
 }

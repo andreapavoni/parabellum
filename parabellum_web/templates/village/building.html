@@ -34,11 +34,11 @@
             {% match slot.building.name.to_string().as_str() %}
                 {% when "Woodcutter" | "Clay Pit" | "Iron Mine" | "Cropland" %}
                     {% include "village/buildings/_resource_field.html" %}
-                {% when "Barracks" %}
+                {% when "Barracks" | "Great Barracks" %}
                     {% include "village/buildings/_barracks.html" %}
-                {% when "Stable" %}
+                {% when "Stable" | "Great Stable" %}
                     {% include "village/buildings/_stable.html" %}
-                {% when "Workshop" %}
+                {% when "Workshop" | "Great Workshop" %}
                     {% include "village/buildings/_workshop.html" %}
                 {% else %}
                     <div class="space-y-6">
