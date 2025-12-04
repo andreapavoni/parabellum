@@ -819,8 +819,13 @@ impl Village {
                         building.name.clone(),
                     ));
                 }
-                // and has reached max level
-                if building.level != data.rules.max_level {
+                // Require at least one existing building at max level before adding another copy
+                let has_max_level_instance = self
+                    .buildings
+                    .iter()
+                    .filter(|existing| existing.building.name == building.name)
+                    .any(|existing| existing.building.level == data.rules.max_level);
+                if !has_max_level_instance {
                     return Err(GameError::MultipleBuildingMaxNotReached(
                         building.name.clone(),
                     ));
@@ -1125,14 +1130,19 @@ impl Default for VillageStocks {
 #[cfg(test)]
 mod tests {
     use crate::{
-        models::village::VillageStocks,
+        models::{buildings::Building, village::VillageStocks},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
         },
     };
     use chrono::{Duration, Utc};
-    use parabellum_types::{buildings::BuildingName, map::ValleyTopology, tribe::Tribe};
+    use parabellum_types::{
+        buildings::BuildingName,
+        errors::GameError,
+        map::ValleyTopology,
+        tribe::Tribe,
+    };
 
     #[test]
     fn test_new_village() {
@@ -1199,6 +1209,33 @@ mod tests {
         // Effective production
         // 12 crop - 2 upkeep = 10 effective crop
         assert_eq!(v.production.effective.crop, 10, "effective crop production");
+    }
+
+    #[test]
+    fn test_multiple_buildings_require_max_level() {
+        let mut v = village_factory(Default::default());
+        let warehouse = Building::new(BuildingName::Warehouse, 1)
+            .at_level(10, 1)
+            .unwrap();
+        v.add_building_at_slot(warehouse, 20).unwrap();
+
+        let result = v.init_building_construction(21, BuildingName::Warehouse, 1);
+        assert!(matches!(
+            result,
+            Err(GameError::MultipleBuildingMaxNotReached(BuildingName::Warehouse))
+        ));
+    }
+
+    #[test]
+    fn test_multiple_buildings_allowed_after_max_level() {
+        let mut v = village_factory(Default::default());
+        let warehouse = Building::new(BuildingName::Warehouse, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(warehouse, 20).unwrap();
+
+        let available = v.available_buildings_for_slot(21);
+        assert!(available.contains(&BuildingName::Warehouse));
     }
 
     #[test]

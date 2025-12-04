@@ -273,40 +273,18 @@ fn build_template(
         .cloned()
         .collect::<Vec<_>>();
 
-    let available_buildings = if slot_building.is_none() && queue_for_slot.is_empty() {
-        user
-            .village
-            .candidate_buildings_for_slot(slot_id)
-            .into_iter()
-            .filter_map(|name| {
-                if building_blocked_by_queue(&name, &queue_view) {
-                    return None;
-                }
-
-                let building = Building::new(name.clone(), state.server_speed);
-                let validation_ok = user
-                    .village
-                    .validate_building_construction(&building)
-                    .is_ok();
-                let missing_requirements =
-                    missing_requirements_for_building(&user.village, &name);
-                let should_show = validation_ok || !missing_requirements.is_empty();
-
-                if !should_show {
-                    return None;
-                }
-
-                Some(build_option(
-                    name,
-                    state.server_speed,
-                    main_building_level,
-                    missing_requirements,
-                    validation_ok,
-                ))
-            })
-            .collect::<Vec<BuildingOption>>()
+    let (buildable_buildings, locked_buildings) = if slot_building.is_none()
+        && queue_for_slot.is_empty()
+    {
+        building_options_for_slot(
+            &user.village,
+            slot_id,
+            &queue_view,
+            state.server_speed,
+            main_building_level,
+        )
     } else {
-        vec![]
+        (vec![], vec![])
     };
 
     let nav_active = if slot_id <= 18 {
@@ -342,7 +320,8 @@ fn build_template(
         nav_active,
         slot_id,
         slot_building,
-        available_buildings,
+        buildable_buildings,
+        locked_buildings,
         upgrade,
         current_upkeep,
         csrf_token,
@@ -425,6 +404,47 @@ fn training_options_for_group(
         .collect()
 }
 
+fn building_options_for_slot(
+    village: &Village,
+    slot_id: u8,
+    queue_view: &[BuildingQueueItemView],
+    server_speed: i8,
+    main_building_level: u8,
+) -> (Vec<BuildingOption>, Vec<BuildingOption>) {
+    let mut buildable = Vec::new();
+    let mut locked = Vec::new();
+
+    for name in village.candidate_buildings_for_slot(slot_id) {
+        if building_blocked_by_queue(&name, queue_view) {
+            continue;
+        }
+
+        let building = Building::new(name.clone(), server_speed);
+        let validation_ok = village.validate_building_construction(&building).is_ok();
+        let missing_requirements = missing_requirements_for_building(village, &name);
+
+        if !validation_ok && missing_requirements.is_empty() {
+            continue;
+        }
+
+        let option = build_option(
+            name,
+            server_speed,
+            main_building_level,
+            missing_requirements,
+            validation_ok,
+        );
+
+        if validation_ok {
+            buildable.push(option);
+        } else {
+            locked.push(option);
+        }
+    }
+
+    (buildable, locked)
+}
+
 fn building_blocked_by_queue(
     name: &BuildingName,
     queue: &[BuildingQueueItemView],
@@ -492,4 +512,58 @@ fn missing_requirements_for_building(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parabellum_game::{
+        models::buildings::Building,
+        test_utils::{village_factory, VillageFactoryOptions},
+    };
+    use parabellum_types::buildings::BuildingName;
+
+    #[test]
+    fn test_building_options_grouped_by_requirements() {
+        let village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let (buildable, locked) = building_options_for_slot(
+            &village,
+            21,
+            &[],
+            1,
+            village.main_building_level(),
+        );
+
+        assert!(buildable
+            .iter()
+            .any(|option| option.name == BuildingName::Warehouse));
+        assert!(locked
+            .iter()
+            .any(|option| option.name == BuildingName::Barracks));
+    }
+
+    #[test]
+    fn test_building_options_include_multiple_after_max_level() {
+        let mut village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+        let warehouse = Building::new(BuildingName::Warehouse, 1)
+            .at_level(20, 1)
+            .unwrap();
+        village.add_building_at_slot(warehouse, 21).unwrap();
+
+        let (buildable, _locked) = building_options_for_slot(
+            &village,
+            22,
+            &[],
+            1,
+            village.main_building_level(),
+        );
+
+        assert!(buildable
+            .iter()
+            .any(|option| option.name == BuildingName::Warehouse));
+    }
 }

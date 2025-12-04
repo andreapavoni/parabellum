@@ -269,7 +269,9 @@ game:
     empty_slot: This slot is empty.
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings
+    available_ready: Ready to build
     no_available: No buildings unlocked yet.
+    locked_list: Locked buildings
     not_enough_resources: Not enough resources in storage.
     invalid_training_quantity: Invalid training quantity specified.
 

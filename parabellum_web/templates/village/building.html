@@ -147,7 +147,7 @@
                 <p class="text-sm text-gray-500 mt-2">{{t!("game.building.empty_slot_hint")}}</p>
             </div>
 
-            {% if available_buildings.is_empty() %}
+            {% if buildable_buildings.is_empty() && locked_buildings.is_empty() %}
             <div class="text-center text-sm text-gray-500">
                 {% if current_construction.is_some() %}
                     {{t!("game.building.queue_locked")}}
@@ -157,9 +157,10 @@
             </div>
             {% else %}
             <div>
-                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available")}}</div>
+                {% if !buildable_buildings.is_empty() %}
+                <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available_ready")}}</div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                    {% for option in available_buildings %}
+                    {% for option in buildable_buildings %}
                     <div class="p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3">
                         <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
                         <p class="mt-1 text-gray-600 text-xs">
@@ -235,6 +236,62 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% endif %}
+                {% if !locked_buildings.is_empty() %}
+                <div class="text-sm text-gray-500 uppercase mt-8">{{t!("game.building.locked_list")}}</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    {% for option in locked_buildings %}
+                    <div class="p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3">
+                        <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
+                        <p class="mt-1 text-gray-600 text-xs">
+                            {{ self.building_description(&option.name) }}
+                        </p>
+                        {% if !option.missing_requirements.is_empty() %}
+                        <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                            <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                            <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                                {% for req in option.missing_requirements %}
+                                <li>{{ req.name }} – Lv {{ req.level }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
+                            <div class="grid grid-cols-2 gap-2 mt-1">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.lumber }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.clay }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.iron }}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                                    <span class="font-semibold text-gray-900">{{ option.cost.crop }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.time")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.time_formatted }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs uppercase text-gray-500">
+                            <span>{{t!("game.building.upkeep")}}</span>
+                            <span class="text-sm font-semibold text-gray-900">{{ option.upkeep }}</span>
+                        </div>
+                        <div class="text-xs text-amber-700">
+                            {{t!("game.building.missing_requirements_hint")}}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>

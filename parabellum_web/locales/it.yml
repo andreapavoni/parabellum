@@ -64,7 +64,9 @@ game:
     empty_slot: Questo slot è vuoto.
     empty_slot_hint: Scegli un edificio da costruire qui.
     available: Edifici disponibili
+    available_ready: Pronti da costruire
     no_available: Nessun edificio disponibile al momento.
+    locked_list: Edifici bloccati
     not_enough_resources: Risorse insufficienti in magazzino.
     training_multiplier: Moltiplicatore tempo addestramento
     training_multiplier_hint: Percentuale del tempo base richiesta per addestrare la fanteria.
