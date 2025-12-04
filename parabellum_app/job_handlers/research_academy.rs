@@ -106,7 +106,7 @@ mod tests {
             .get_unit_idx_by_name(&unit_to_research)
             .unwrap();
         assert!(
-            saved_village.academy_research()[unit_idx],
+            saved_village.academy_research().get(unit_idx),
             "Unit should be marked as researched"
         );
         Ok(())
