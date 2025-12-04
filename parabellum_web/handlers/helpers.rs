@@ -13,12 +13,14 @@ use uuid::Uuid;
 
 use parabellum_app::{
     cqrs::queries::{
-        BuildingQueueItem, GetPlayerByUserId, GetUserById, GetVillageBuildingQueue,
-        GetVillageTrainingQueue, ListVillagesByPlayerId, TrainingQueueItem,
+        AcademyQueueItem, BuildingQueueItem, GetPlayerByUserId, GetUserById,
+        GetVillageAcademyQueue, GetVillageBuildingQueue, GetVillageTrainingQueue,
+        ListVillagesByPlayerId, TrainingQueueItem,
     },
     queries_handlers::{
-        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageBuildingQueueHandler,
-        GetVillageTrainingQueueHandler, ListVillagesByPlayerIdHandler,
+        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageAcademyQueueHandler,
+        GetVillageBuildingQueueHandler, GetVillageTrainingQueueHandler,
+        ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -287,6 +289,29 @@ pub async fn training_queue_or_empty(state: &AppState, village_id: u32) -> Vec<T
                 village_id,
                 "Unable to load training queue"
             );
+            vec![]
+        }
+    }
+}
+
+async fn load_academy_queue(
+    state: &AppState,
+    village_id: u32,
+) -> Result<Vec<AcademyQueueItem>, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageAcademyQueue { village_id },
+            GetVillageAcademyQueueHandler::new(),
+        )
+        .await
+}
+
+pub async fn academy_queue_or_empty(state: &AppState, village_id: u32) -> Vec<AcademyQueueItem> {
+    match load_academy_queue(state, village_id).await {
+        Ok(queue) => queue,
+        Err(err) => {
+            tracing::error!(error = ?err, village_id, "Unable to load academy queue");
             vec![]
         }
     }

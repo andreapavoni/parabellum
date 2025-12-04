@@ -1,11 +1,11 @@
-<div class="space-y-6">
-    <div>
-        <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
-        <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
-        <p class="mt-2 text-gray-700 text-sm">
-            {{ self.building_description(&slot.building.name) }}
-        </p>
-    </div>
+    <div class="space-y-6">
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
+            <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
+            <p class="mt-2 text-gray-700 text-sm">
+                {{ self.building_description(&slot.building.name) }}
+            </p>
+        </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
         <div class="p-3 border rounded-md bg-gray-50">
@@ -95,6 +95,34 @@
     {% endif %}
 
     <div class="space-y-6">
+        {% if !academy_queue.is_empty() %}
+        <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_queue_title") }}</div>
+            <div class="space-y-2">
+                {% for job in academy_queue %}
+                <div class="bg-white border rounded-md p-3 text-sm space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-gray-900">{{ job.unit_name }}</span>
+                        <span class="text-xs font-semibold {% if job.is_processing %}text-emerald-600{% else %}text-gray-500{% endif %}">
+                            {% if job.is_processing %}
+                                {{ t!("game.building.research_in_progress") }}
+                            {% else %}
+                                {{ t!("game.building.research_pending") }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-600">
+                        <span>{{ t!("game.building.time_remaining") }}</span>
+                        <span class="font-mono countdown-timer" data-seconds="{{ job.time_seconds }}">
+                            {{ job.time_remaining }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div>
             <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_available") }}</div>
             {% if academy_ready_units.is_empty() %}

@@ -1,13 +1,15 @@
 use chrono::Utc;
 use parabellum_app::{
-    cqrs::queries::{BuildingQueueItem, TrainingQueueItem},
+    cqrs::queries::{AcademyQueueItem, BuildingQueueItem, TrainingQueueItem},
     jobs::JobStatus,
 };
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;
 
-use crate::templates::{BuildingQueueItemView, ServerTime, UnitTrainingQueueItemView};
+use crate::templates::{
+    AcademyResearchQueueItemView, BuildingQueueItemView, ServerTime, UnitTrainingQueueItemView,
+};
 
 /// Formats a duration in seconds to HH:MM:SS.
 pub fn format_duration(total_seconds: u32) -> String {
@@ -70,6 +72,24 @@ pub fn training_queue_to_views(items: &[TrainingQueueItem]) -> Vec<UnitTrainingQ
                 time_per_unit: item.time_per_unit,
                 time_remaining: format_duration(remaining),
                 time_seconds: remaining,
+            }
+        })
+        .collect()
+}
+
+/// Converts academy research jobs into view models with countdown timers.
+pub fn academy_queue_to_views(items: &[AcademyQueueItem]) -> Vec<AcademyResearchQueueItemView> {
+    let now = Utc::now();
+    items
+        .iter()
+        .map(|item| {
+            let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
+            AcademyResearchQueueItemView {
+                job_id: item.job_id,
+                unit_name: unit_display_name(&item.unit),
+                time_remaining: format_duration(remaining),
+                time_seconds: remaining,
+                is_processing: matches!(item.status, JobStatus::Processing),
             }
         })
         .collect()

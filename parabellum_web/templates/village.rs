@@ -153,6 +153,15 @@ pub struct UnitTrainingQueueItemView {
     pub time_seconds: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct AcademyResearchQueueItemView {
+    pub job_id: Uuid,
+    pub unit_name: String,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+    pub is_processing: bool,
+}
+
 /// Template for individual building page.
 #[derive(Debug, Default, Template)]
 #[template(path = "village/building.html")]
@@ -177,6 +186,7 @@ pub struct BuildingTemplate {
     pub stable_units: Vec<UnitTrainingOption>,
     pub workshop_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
+    pub academy_queue: Vec<AcademyResearchQueueItemView>,
 }
 
 impl BuildingTemplate {

@@ -278,6 +278,9 @@ game:
     research_locked: Locked research
     no_research_locked: No additional research unlocked yet.
     research_completed: Researched units
+    research_queue_title: Research queue
+    research_in_progress: In progress
+    research_pending: Queued
     research_cost: Research cost
     research_time: Research time
     research_action: Research

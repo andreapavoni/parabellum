@@ -10,7 +10,7 @@ use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
     cqrs::{
         commands::{AddBuilding, UpgradeBuilding},
-        queries::{BuildingQueueItem, TrainingQueueItem},
+        queries::{AcademyQueueItem, BuildingQueueItem, TrainingQueueItem},
     },
 };
 use parabellum_game::models::{
@@ -24,8 +24,8 @@ use parabellum_types::{
 
 use crate::{
     handlers::{
-        CsrfForm, CurrentUser, HasCsrfToken, building_queue_or_empty, generate_csrf,
-        render_template, training_queue_or_empty,
+        CsrfForm, CurrentUser, HasCsrfToken, academy_queue_or_empty, building_queue_or_empty,
+        generate_csrf, render_template, training_queue_or_empty,
     },
     http::AppState,
     templates::{
@@ -33,8 +33,8 @@ use crate::{
         BuildingTemplate, BuildingUpgradeInfo, UnitTrainingOption,
     },
     view_helpers::{
-        building_queue_to_views, format_duration, server_time, training_queue_to_views,
-        unit_display_name,
+        academy_queue_to_views, building_queue_to_views, format_duration, server_time,
+        training_queue_to_views, unit_display_name,
     },
 };
 
@@ -80,6 +80,7 @@ pub async fn building(
 
     let queue_items = building_queue_or_empty(&state, user.village.id).await;
     let training_queue_items = training_queue_or_empty(&state, user.village.id).await;
+    let academy_queue_items = academy_queue_or_empty(&state, user.village.id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(
@@ -90,6 +91,7 @@ pub async fn building(
         None,
         queue_items,
         training_queue_items,
+        academy_queue_items,
     );
     (jar, render_template(template, None)).into_response()
 }
@@ -220,6 +222,7 @@ pub(crate) async fn render_with_error(
 ) -> Response {
     let queue_items = building_queue_or_empty(state, user.village.id).await;
     let training_queue_items = training_queue_or_empty(state, user.village.id).await;
+    let academy_queue_items = academy_queue_or_empty(state, user.village.id).await;
     let (jar, csrf_token) = generate_csrf(jar);
     let template = build_template(
         state,
@@ -229,6 +232,7 @@ pub(crate) async fn render_with_error(
         Some(error),
         queue_items,
         training_queue_items,
+        academy_queue_items,
     );
     (
         jar,
@@ -245,6 +249,7 @@ fn build_template(
     flash_error: Option<String>,
     queue_items: Vec<BuildingQueueItem>,
     training_queue: Vec<TrainingQueueItem>,
+    academy_queue: Vec<AcademyQueueItem>,
 ) -> BuildingTemplate {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
@@ -275,6 +280,7 @@ fn build_template(
         .filter(|item| item.slot_id == slot_id)
         .cloned()
         .collect::<Vec<_>>();
+    let academy_queue_view = academy_queue_to_views(&academy_queue);
 
     let (buildable_buildings, locked_buildings) = if slot_building.is_none()
         && queue_for_slot.is_empty()
@@ -351,6 +357,7 @@ fn build_template(
         stable_units,
         workshop_units,
         training_queue_for_slot,
+        academy_queue: academy_queue_view,
     }
 }
 
@@ -607,11 +614,13 @@ fn missing_unit_requirements(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, Utc};
     use parabellum_game::{
         models::{buildings::Building, village::VillageBuilding},
         test_utils::{village_factory, VillageFactoryOptions},
     };
     use parabellum_types::{army::UnitName, buildings::BuildingName};
+    use parabellum_app::{cqrs::queries::AcademyQueueItem, jobs::JobStatus};
 
     #[test]
     fn test_building_options_grouped_by_requirements() {
@@ -703,5 +712,21 @@ mod tests {
         );
 
         assert!(!units.is_empty());
+    }
+
+    #[test]
+    fn test_academy_queue_view_contains_jobs() {
+        let now = Utc::now();
+        let items = vec![AcademyQueueItem {
+            job_id: uuid::Uuid::new_v4(),
+            unit: UnitName::Praetorian,
+            status: JobStatus::Processing,
+            finishes_at: now + Duration::seconds(42),
+        }];
+
+        let views = academy_queue_to_views(&items);
+        assert_eq!(views.len(), 1);
+        assert!(views[0].is_processing);
+        assert_eq!(views[0].time_seconds, 42);
     }
 }

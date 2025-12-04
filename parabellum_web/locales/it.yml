@@ -92,6 +92,9 @@ game:
     research_locked: Ricerche bloccate
     no_research_locked: Nessuna nuova ricerca sbloccata al momento.
     research_completed: Unità ricercate
+    research_queue_title: Coda ricerca
+    research_in_progress: In corso
+    research_pending: In coda
     research_cost: Costo ricerca
     research_time: Tempo di ricerca
     research_action: Ricerca
