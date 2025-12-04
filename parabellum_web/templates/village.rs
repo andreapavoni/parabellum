@@ -3,8 +3,9 @@ use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::buildings::BuildingName;
 use rust_i18n::t;
 use std::collections::HashMap;
+use uuid::Uuid;
 
-use crate::handlers::CurrentUser;
+use crate::{handlers::CurrentUser, view_helpers};
 
 use super::shared::{BuildingQueueItemView, ResourceCostView, ServerTime};
 
@@ -92,7 +93,6 @@ impl ResourcesTemplate {
 #[derive(Debug, Clone)]
 pub struct BuildingOption {
     pub name: BuildingName,
-    pub key: String,
     pub cost: ResourceCostView,
     pub upkeep: u32,
     pub time_formatted: String,
@@ -105,6 +105,26 @@ pub struct BuildingUpgradeInfo {
     pub current_upkeep: u32,
     pub upkeep: u32,
     pub time_formatted: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnitTrainingOption {
+    pub unit_idx: u8,
+    pub name: String,
+    pub cost: ResourceCostView,
+    pub upkeep: u32,
+    pub time_formatted: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnitTrainingQueueItemView {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub unit_name: String,
+    pub quantity: i32,
+    pub time_per_unit: i32,
+    pub time_remaining: String,
+    pub time_seconds: u32,
 }
 
 /// Template for individual building page.
@@ -121,9 +141,12 @@ pub struct BuildingTemplate {
     pub csrf_token: String,
     pub flash_error: Option<String>,
     pub current_construction: Option<BuildingQueueItemView>,
-    pub queue_for_slot: Vec<BuildingQueueItemView>,
     pub available_resources: ResourceCostView,
     pub server_time: ServerTime,
+    pub barracks_units: Vec<UnitTrainingOption>,
+    pub stable_units: Vec<UnitTrainingOption>,
+    pub workshop_units: Vec<UnitTrainingOption>,
+    pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
 }
 
 impl BuildingTemplate {
@@ -133,6 +156,10 @@ impl BuildingTemplate {
             && self.available_resources.clay >= cost.clay
             && self.available_resources.iron >= cost.iron
             && self.available_resources.crop >= cost.crop
+    }
+
+    pub fn building_description(&self, name: &BuildingName) -> String {
+        view_helpers::building_description(name)
     }
 }
 

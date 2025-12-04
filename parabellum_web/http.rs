@@ -1,4 +1,8 @@
-use axum::{Router, extract::FromRef, routing::get};
+use axum::{
+    Router,
+    extract::FromRef,
+    routing::{get, post},
+};
 use axum_extra::extract::cookie::Key;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -8,7 +12,7 @@ use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
     build_action, building, home, login, login_page, logout, map, map_region, register,
-    register_page, resources, village,
+    register_page, resources, train_units, village,
 };
 
 #[derive(Clone)]
@@ -57,6 +61,7 @@ impl WebRouter {
             .route("/village", get(village))
             .route("/resources", get(resources))
             .route("/build", get(building).post(build_action))
+            .route("/army/train", post(train_units))
             .route("/map", get(map))
             .route("/map/data", get(map_region))
             .route("/logout", get(logout));

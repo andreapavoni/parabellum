@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use parabellum_types::army::{Unit, UnitGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,7 +33,31 @@ pub struct VillageBuilding {
     pub building: Building,
 }
 
-pub type AcademyResearch = [bool; 10];
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AcademyResearch {
+    researches: [bool; 10],
+}
+
+impl AcademyResearch {
+    pub fn get(&self, idx: usize) -> bool {
+        self.researches[idx]
+    }
+
+    pub fn set(&mut self, idx: usize, value: bool) {
+        self.researches[idx] = value;
+    }
+}
+
+impl Default for AcademyResearch {
+    fn default() -> Self {
+        Self {
+            researches: [
+                true, false, false, false, false, false, false, false, false, true,
+            ],
+        }
+    }
+}
 
 const RESOURCE_FIELDS_LAST_SLOT: u8 = 18;
 const MAIN_BUILDING_SLOT_ID: u8 = 19;
@@ -115,7 +140,7 @@ impl Village {
 
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0];
-        let academy_research = [false; 10];
+        let academy_research = AcademyResearch::default();
 
         let mut village = Self {
             id: village_id,
@@ -213,7 +238,7 @@ impl Village {
             .ok_or(GameError::InvalidUnitIndex(unit_idx))?
             .to_owned();
 
-        if !self.academy_research[unit_idx as usize] && unit.research_cost.time > 0 {
+        if !self.academy_research.get(unit_idx as usize) && unit.research_cost.time > 0 {
             return Err(GameError::UnitNotResearched(unit.name.clone()));
         }
 
@@ -275,7 +300,7 @@ impl Village {
     ) -> Result<u32, GameError> {
         let unit_idx = self.tribe.get_unit_idx_by_name(unit).unwrap();
 
-        if self.academy_research()[unit_idx] {
+        if self.academy_research().get(unit_idx) {
             return Err(GameError::UnitAlreadyResearched(unit.clone()));
         }
 
@@ -316,7 +341,7 @@ impl Village {
             }
         }
 
-        if !self.academy_research()[unit_idx] && unit.research_cost.time > 0 {
+        if unit.research_cost.time > 0 && !self.academy_research().get(unit_idx as usize) {
             return Err(GameError::UnitNotResearched(unit_name.clone()));
         }
 
@@ -663,15 +688,26 @@ impl Village {
         Ok(())
     }
 
+    /// Returns units available of a given group for training.
+    pub fn available_units_for_training(&self, group: UnitGroup) -> Vec<&Unit> {
+        self.tribe
+            .units()
+            .iter()
+            .enumerate()
+            .filter(|(idx, u)| self.academy_research().get(*idx) && u.group == group)
+            .map(|(_, u)| u)
+            .collect()
+    }
+
     /// Returns available merchants.
-    pub fn get_available_merchants(&self) -> u8 {
+    pub fn available_merchants(&self) -> u8 {
         self.total_merchants.saturating_sub(self.busy_merchants)
     }
 
     /// Marks a unit name as researched in the academy.
     pub fn research_academy(&mut self, unit: UnitName) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
-            self.academy_research[idx] = true;
+            self.academy_research.set(idx, true);
         }
 
         Ok(())
@@ -692,7 +728,7 @@ impl Village {
     /// **[TEST ONLY]** Set academy research for specific unit.
     pub fn set_academy_research_for_test(&mut self, unit: &UnitName, is_researched: bool) {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
-            self.academy_research[idx] = is_researched;
+            self.academy_research.set(idx, is_researched);
         }
     }
 

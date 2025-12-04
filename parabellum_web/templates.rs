@@ -10,5 +10,5 @@ pub use map::MapTemplate;
 pub use shared::{BuildingQueueItemView, ServerTime};
 pub use village::{
     BuildingOption, BuildingTemplate, BuildingUpgradeInfo, ResourceField, ResourcesTemplate,
-    VillageTemplate,
+    UnitTrainingOption, UnitTrainingQueueItemView, VillageTemplate,
 };

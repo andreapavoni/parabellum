@@ -14,11 +14,11 @@ use uuid::Uuid;
 use parabellum_app::{
     cqrs::queries::{
         BuildingQueueItem, GetPlayerByUserId, GetUserById, GetVillageBuildingQueue,
-        ListVillagesByPlayerId,
+        GetVillageTrainingQueue, ListVillagesByPlayerId, TrainingQueueItem,
     },
     queries_handlers::{
         GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageBuildingQueueHandler,
-        ListVillagesByPlayerIdHandler,
+        GetVillageTrainingQueueHandler, ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -106,7 +106,7 @@ pub trait HasCsrfToken {
 /// On success it yields the parsed form and the cookie jar.
 /// On failure it returns a 400 response.
 pub struct CsrfForm<T> {
-    pub inner: T,
+    pub form: T,
     pub jar: SignedCookieJar,
 }
 
@@ -141,7 +141,7 @@ where
                     .into_response());
             }
 
-            Ok(CsrfForm { inner, jar })
+            Ok(CsrfForm { form: inner, jar })
         }
     }
 }
@@ -219,7 +219,7 @@ fn village_from_cookie<'a>(
 async fn load_villages(state: &AppState, player_id: Uuid) -> Result<Vec<Village>, Redirect> {
     list_player_villages(state, player_id).await.map_err(|e| {
         tracing::error!("Unable to list villages for player {player_id}: {e}");
-        Redirect::to("/login")
+        Redirect::to("/logout")
     })
 }
 
@@ -260,6 +260,34 @@ pub async fn building_queue_or_empty(state: &AppState, village_id: u32) -> Vec<B
                 "Unable to load building queue"
             );
             Vec::new()
+        }
+    }
+}
+
+async fn load_training_queue(
+    state: &AppState,
+    village_id: u32,
+) -> Result<Vec<TrainingQueueItem>, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageTrainingQueue { village_id },
+            GetVillageTrainingQueueHandler::new(),
+        )
+        .await
+}
+
+/// Loads the unit training queue and logs failures.
+pub async fn training_queue_or_empty(state: &AppState, village_id: u32) -> Vec<TrainingQueueItem> {
+    match load_training_queue(state, village_id).await {
+        Ok(queue) => queue,
+        Err(err) => {
+            tracing::error!(
+                error = ?err,
+                village_id,
+                "Unable to load training queue"
+            );
+            vec![]
         }
     }
 }

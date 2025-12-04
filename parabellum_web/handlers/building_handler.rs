@@ -8,29 +8,40 @@ use serde::Deserialize;
 
 use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
-    cqrs::commands::{AddBuilding, UpgradeBuilding},
-    cqrs::queries::BuildingQueueItem,
+    cqrs::{
+        commands::{AddBuilding, UpgradeBuilding},
+        queries::{BuildingQueueItem, TrainingQueueItem},
+    },
 };
-use parabellum_game::models::{buildings::Building, village::VillageBuilding};
-use parabellum_types::buildings::BuildingName;
+use parabellum_game::models::{
+    buildings::Building,
+    village::{Village, VillageBuilding},
+};
+use parabellum_types::{army::UnitGroup, buildings::BuildingName};
 
 use crate::{
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, building_queue_or_empty, generate_csrf,
-        render_template,
+        render_template, training_queue_or_empty,
     },
     http::AppState,
-    templates::{BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo},
-    view_helpers::{building_queue_to_views, format_duration, server_time},
+    templates::{
+        BuildingOption, BuildingQueueItemView, BuildingTemplate, BuildingUpgradeInfo,
+        UnitTrainingOption,
+    },
+    view_helpers::{
+        building_queue_to_views, format_duration, server_time, training_queue_to_views,
+        unit_display_name,
+    },
 };
 
 #[derive(Debug, Deserialize)]
 pub struct BuildParams {
     #[serde(rename = "s", default)]
-    slot_id: Option<u8>,
+    pub slot_id: Option<u8>,
 }
 
-const MAX_SLOT_ID: u8 = 40;
+pub(super) const MAX_SLOT_ID: u8 = 40;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -65,9 +76,18 @@ pub async fn building(
     };
 
     let queue_items = building_queue_or_empty(&state, user.village.id).await;
+    let training_queue_items = training_queue_or_empty(&state, user.village.id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(&state, &user, slot_id, csrf_token, None, queue_items);
+    let template = build_template(
+        &state,
+        &user,
+        slot_id,
+        csrf_token,
+        None,
+        queue_items,
+        training_queue_items,
+    );
     (jar, render_template(template, None)).into_response()
 }
 
@@ -75,7 +95,7 @@ pub async fn build_action(
     State(state): State<AppState>,
     Query(params): Query<BuildParams>,
     user: CurrentUser,
-    CsrfForm { jar, inner: form }: CsrfForm<BuildActionForm>,
+    CsrfForm { jar, form }: CsrfForm<BuildActionForm>,
 ) -> Response {
     let slot_id = match params.slot_id {
         Some(slot) if (1..=MAX_SLOT_ID).contains(&slot) => slot,
@@ -147,15 +167,9 @@ fn build_option(name: BuildingName, server_speed: i8, main_building_level: u8) -
     let building = Building::new(name.clone(), server_speed);
     let cost = building.cost();
     let time_secs = building.calculate_build_time_secs(&server_speed, &main_building_level);
-    let key = serde_json::to_value(&name)
-        .expect("BuildingName should serialize to a string")
-        .as_str()
-        .expect("BuildingName should serialize to a string")
-        .to_string();
 
     BuildingOption {
         name,
-        key,
         cost: cost.resources.into(),
         upkeep: cost.upkeep,
         time_formatted: format_duration(time_secs),
@@ -186,7 +200,7 @@ fn building_upgrade_info(
     })
 }
 
-async fn render_with_error(
+pub(crate) async fn render_with_error(
     state: &AppState,
     jar: SignedCookieJar,
     user: CurrentUser,
@@ -194,8 +208,17 @@ async fn render_with_error(
     error: String,
 ) -> Response {
     let queue_items = building_queue_or_empty(state, user.village.id).await;
+    let training_queue_items = training_queue_or_empty(state, user.village.id).await;
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(state, &user, slot_id, csrf_token, Some(error), queue_items);
+    let template = build_template(
+        state,
+        &user,
+        slot_id,
+        csrf_token,
+        Some(error),
+        queue_items,
+        training_queue_items,
+    );
     (
         jar,
         render_template(template, Some(StatusCode::BAD_REQUEST)),
@@ -210,6 +233,7 @@ fn build_template(
     csrf_token: String,
     flash_error: Option<String>,
     queue_items: Vec<BuildingQueueItem>,
+    training_queue: Vec<TrainingQueueItem>,
 ) -> BuildingTemplate {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
@@ -234,6 +258,13 @@ fn build_template(
         .as_ref()
         .map(|slot| slot.building.cost().upkeep);
 
+    let training_queue_view = training_queue_to_views(&training_queue);
+    let training_queue_for_slot = training_queue_view
+        .iter()
+        .filter(|item| item.slot_id == slot_id)
+        .cloned()
+        .collect::<Vec<_>>();
+
     let available_buildings = if slot_building.is_none() && queue_for_slot.is_empty() {
         user.village
             .available_buildings_for_slot(slot_id)
@@ -250,6 +281,27 @@ fn build_template(
         "village"
     };
     let available_resources = user.village.stored_resources().into();
+    let barracks_units = training_options_for_group(
+        &user.village,
+        state.server_speed,
+        effective_building.as_ref(),
+        BuildingName::Barracks,
+        UnitGroup::Infantry,
+    );
+    let stable_units = training_options_for_group(
+        &user.village,
+        state.server_speed,
+        effective_building.as_ref(),
+        BuildingName::Stable,
+        UnitGroup::Cavalry,
+    );
+    let workshop_units = training_options_for_group(
+        &user.village,
+        state.server_speed,
+        effective_building.as_ref(),
+        BuildingName::Workshop,
+        UnitGroup::Siege,
+    );
 
     BuildingTemplate {
         current_user: Some(user.clone()),
@@ -262,9 +314,12 @@ fn build_template(
         csrf_token,
         flash_error,
         current_construction,
-        queue_for_slot,
         available_resources,
         server_time: server_time(),
+        barracks_units,
+        stable_units,
+        workshop_units,
+        training_queue_for_slot,
     }
 }
 
@@ -297,4 +352,41 @@ fn virtual_building_after_queue(
         (Some(building), None) => Some(building),
         (None, None) => None,
     }
+}
+
+fn training_options_for_group(
+    village: &Village,
+    server_speed: i8,
+    building: Option<&VillageBuilding>,
+    expected_building: BuildingName,
+    group: UnitGroup,
+) -> Vec<UnitTrainingOption> {
+    let Some(slot) = building else {
+        return vec![];
+    };
+
+    if slot.building.name != expected_building {
+        return vec![];
+    }
+
+    let training_multiplier = slot.building.value as f64 / 1000.0;
+    let available_units = village.available_units_for_training(group);
+    let tribe = village.tribe.clone();
+
+    available_units
+        .into_iter()
+        .filter_map(|unit| {
+            let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
+            let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
+            let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
+
+            Some(UnitTrainingOption {
+                unit_idx,
+                name: unit_display_name(&unit.name),
+                cost: unit.cost.resources.clone().into(),
+                upkeep: unit.cost.upkeep,
+                time_formatted: format_duration(time_per_unit),
+            })
+        })
+        .collect()
 }

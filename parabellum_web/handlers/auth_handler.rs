@@ -81,7 +81,7 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
 /// POST /login – Handle login form submission.
 pub async fn login(
     State(state): State<AppState>,
-    CsrfForm { jar, inner: form }: CsrfForm<LoginForm>,
+    CsrfForm { jar, form }: CsrfForm<LoginForm>,
 ) -> impl IntoResponse {
     if let Err(redirect) = ensure_not_authenticated(&jar) {
         return redirect.into_response();
@@ -163,7 +163,7 @@ pub async fn register_page(
 /// POST /register – Handle signup form submission.
 pub async fn register(
     State(state): State<AppState>,
-    CsrfForm { jar, inner: form }: CsrfForm<RegisterForm>,
+    CsrfForm { jar, form }: CsrfForm<RegisterForm>,
 ) -> impl IntoResponse {
     if let Err(redirect) = ensure_not_authenticated(&jar) {
         return redirect.into_response();

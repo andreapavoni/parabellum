@@ -236,6 +236,8 @@ game:
     value: Output
     training_multiplier: Training time multiplier
     training_multiplier_hint: Percentage of the base time required to train infantry units.
+    training_multiplier_hint_cavalry: Percentage of the base time required to train cavalry units.
+    training_multiplier_hint_siege: Percentage of the base time required to build siege engines.
     training_bonus: Training speed bonus
     training_bonus_hint: Faster than the default training time.
     train_units: Train units
@@ -245,6 +247,8 @@ game:
     training_upkeep: Crop upkeep per unit
     train_action: Train
     no_units_available: No infantry units available for training. Research new units in the Academy.
+    training_queue_title: Training queue
+    training_remaining: Time remaining
     upgrade: Next upgrade
     upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"
     queue_upgrade_action: "Queue upgrade to Lv %{level}"

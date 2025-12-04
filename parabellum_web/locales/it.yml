@@ -66,6 +66,21 @@ game:
     available: Edifici disponibili
     no_available: Nessun edificio disponibile al momento.
     not_enough_resources: Risorse insufficienti in magazzino.
+    training_multiplier: Moltiplicatore tempo addestramento
+    training_multiplier_hint: Percentuale del tempo base richiesta per addestrare la fanteria.
+    training_multiplier_hint_cavalry: Percentuale del tempo base richiesta per addestrare la cavalleria.
+    training_multiplier_hint_siege: Percentuale del tempo base richiesta per costruire macchine d'assedio.
+    training_bonus: Bonus velocità addestramento
+    training_bonus_hint: Più veloce rispetto al tempo di addestramento standard.
+    train_units: Addestra unità
+    training_cost: Costo per unità
+    training_time: Tempo per unità
+    training_quantity: Quantità
+    training_upkeep: Consumo di grano per unità
+    train_action: Addestra
+    no_units_available: Nessuna unità disponibile. Ricerca nuove unità nell'Accademia.
+    training_queue_title: Coda addestramento
+    training_remaining: Tempo rimanente
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

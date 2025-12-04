@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
+    army::UnitName,
     buildings::BuildingName,
     common::{Player, User},
     map::Position,
@@ -83,6 +84,25 @@ pub struct GetVillageBuildingQueue {
 
 impl Query for GetVillageBuildingQueue {
     type Output = Vec<BuildingQueueItem>;
+}
+
+#[derive(Debug, Clone)]
+pub struct TrainingQueueItem {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit: i32,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+pub struct GetVillageTrainingQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageTrainingQueue {
+    type Output = Vec<TrainingQueueItem>;
 }
 
 /// Fetch a square region of the world map.
