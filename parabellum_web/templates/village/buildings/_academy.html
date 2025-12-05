@@ -1,0 +1,171 @@
+    <div class="space-y-6">
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
+            <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
+            <p class="mt-2 text-gray-700 text-sm">
+                {{ ctx.building_description(&slot.building.name) }}
+            </p>
+        </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.level")}}</div>
+            <div class="text-lg font-bold">{{ slot.building.level }}</div>
+        </div>
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.population")}}</div>
+            <div class="text-lg font-bold">{{ slot.building.population }}</div>
+        </div>
+        {% if let Some(upkeep) = ctx.current_upkeep %}
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
+            <div class="text-lg font-bold">{{ upkeep }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if let Some(next) = ctx.upgrade.as_ref() %}
+        {% include "village/buildings/_upgrade_block.html" %}
+    {% endif %}
+
+    <div class="space-y-6">
+        {% if !academy_queue.is_empty() %}
+        <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_queue_title") }}</div>
+            <div class="space-y-2">
+                {% for job in academy_queue %}
+                <div class="bg-white border rounded-md p-3 text-sm space-y-1">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-gray-900">{{ job.unit_name }}</span>
+                        <span class="text-xs font-semibold {% if job.is_processing %}text-emerald-600{% else %}text-gray-500{% endif %}">
+                            {% if job.is_processing %}
+                                {{ t!("game.building.research_in_progress") }}
+                            {% else %}
+                                {{ t!("game.building.research_pending") }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-600">
+                        <span>{{ t!("game.building.time_remaining") }}</span>
+                        <span class="font-mono countdown-timer" data-seconds="{{ job.time_seconds }}">
+                            {{ job.time_remaining }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_available") }}</div>
+            {% if academy_ready_units.is_empty() %}
+            <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_research_available") }}</p>
+            {% else %}
+            {% if self.academy_queue_full %}
+            <div class="text-xs text-amber-700 border border-amber-200 bg-amber-50 rounded-md p-2">
+                {{ t!("game.building.academy_queue_full_hint") }}
+            </div>
+            {% endif %}
+            <div class="space-y-4 mt-3">
+                {% for option in academy_ready_units %}
+                <div class="border rounded-md p-4 bg-white space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900">{{ option.display_name }}</div>
+                            <div class="text-xs text-gray-500">{{ t!("game.building.research_time") }}: {{ option.time_formatted }}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase text-gray-500">{{ t!("game.building.research_cost") }}</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                                <span class="font-semibold">{{ option.cost.lumber }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                                <span class="font-semibold">{{ option.cost.clay }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                                <span class="font-semibold">{{ option.cost.iron }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                                <span class="font-semibold">{{ option.cost.crop }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% let has_resources = ctx.can_afford(&option.cost) %}
+                    {% let can_research = has_resources && !self.academy_queue_full %}
+                    <form action="/academy/research" method="post" class="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
+                        <input type="hidden" name="unit_name" value="{{ option.unit_value }}">
+                        <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
+                        <button type="submit"
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !can_research %}opacity-60 cursor-not-allowed{% endif %}"
+                                {% if !can_research %}disabled aria-disabled="true"{% endif %}>
+                            {{ t!("game.building.research_action") }}
+                        </button>
+                    </form>
+                    {% if !has_resources %}
+                    <div class="text-xs text-red-600">
+                        {{ t!("game.building.not_enough_resources") }}
+                    </div>
+                    {% elif self.academy_queue_full %}
+                    <div class="text-xs text-amber-700">
+                        {{ t!("game.building.academy_queue_full_hint") }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_locked") }}</div>
+            {% if academy_locked_units.is_empty() %}
+            <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_research_locked") }}</p>
+            {% else %}
+            <div class="space-y-4 mt-3">
+                {% for option in academy_locked_units %}
+                <div class="border rounded-md p-4 bg-white space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900">{{ option.display_name }}</div>
+                            <div class="text-xs text-gray-500">{{ t!("game.building.research_time") }}: {{ option.time_formatted }}</div>
+                        </div>
+                        <span class="text-xs text-amber-700 font-semibold uppercase">{{ t!("game.building.missing_requirements_hint") }}</span>
+                    </div>
+                    {% if !option.missing_requirements.is_empty() %}
+                    <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                        <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                        <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                            {% for req in option.missing_requirements %}
+                            <li>{{ req.name }} – Lv {{ req.level }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if !academy_researched_units.is_empty() %}
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.research_completed") }}</div>
+            <div class="flex flex-wrap gap-2 mt-2">
+                {% for option in academy_researched_units %}
+                <span class="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
+                    {{ option.display_name }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -13,12 +13,12 @@ use uuid::Uuid;
 
 use parabellum_app::{
     cqrs::queries::{
-        BuildingQueueItem, GetPlayerByUserId, GetUserById, GetVillageBuildingQueue,
-        ListVillagesByPlayerId,
+        GetPlayerByUserId, GetUserById, GetVillageQueues, GetVillageTroopMovements,
+        ListVillagesByPlayerId, VillageQueues, VillageTroopMovements,
     },
     queries_handlers::{
-        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageBuildingQueueHandler,
-        ListVillagesByPlayerIdHandler,
+        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageQueuesHandler,
+        GetVillageTroopMovementsHandler, ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -106,7 +106,7 @@ pub trait HasCsrfToken {
 /// On success it yields the parsed form and the cookie jar.
 /// On failure it returns a 400 response.
 pub struct CsrfForm<T> {
-    pub inner: T,
+    pub form: T,
     pub jar: SignedCookieJar,
 }
 
@@ -141,7 +141,7 @@ where
                     .into_response());
             }
 
-            Ok(CsrfForm { inner, jar })
+            Ok(CsrfForm { form: inner, jar })
         }
     }
 }
@@ -219,7 +219,7 @@ fn village_from_cookie<'a>(
 async fn load_villages(state: &AppState, player_id: Uuid) -> Result<Vec<Village>, Redirect> {
     list_player_villages(state, player_id).await.map_err(|e| {
         tracing::error!("Unable to list villages for player {player_id}: {e}");
-        Redirect::to("/login")
+        Redirect::to("/logout")
     })
 }
 
@@ -236,30 +236,59 @@ async fn list_player_villages(
         .await
 }
 
-pub async fn load_building_queue(
+async fn load_village_queues(
     state: &AppState,
     village_id: u32,
-) -> Result<Vec<BuildingQueueItem>, ApplicationError> {
+) -> Result<VillageQueues, ApplicationError> {
     state
         .app_bus
         .query(
-            GetVillageBuildingQueue { village_id },
-            GetVillageBuildingQueueHandler::new(),
+            GetVillageQueues { village_id },
+            GetVillageQueuesHandler::new(),
         )
         .await
 }
 
-/// Loads the building queue but swallows failures and logs them.
-pub async fn building_queue_or_empty(state: &AppState, village_id: u32) -> Vec<BuildingQueueItem> {
-    match load_building_queue(state, village_id).await {
-        Ok(queue) => queue,
+pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> VillageQueues {
+    match load_village_queues(state, village_id).await {
+        Ok(queues) => queues,
         Err(err) => {
             tracing::error!(
                 error = ?err,
                 village_id,
-                "Unable to load building queue"
+                "Unable to load village queues"
             );
-            Vec::new()
+            VillageQueues::default()
+        }
+    }
+}
+
+async fn load_village_movements(
+    state: &AppState,
+    village_id: u32,
+) -> Result<VillageTroopMovements, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageTroopMovements { village_id },
+            GetVillageTroopMovementsHandler::new(),
+        )
+        .await
+}
+
+pub async fn village_movements_or_empty(
+    state: &AppState,
+    village_id: u32,
+) -> VillageTroopMovements {
+    match load_village_movements(state, village_id).await {
+        Ok(movements) => movements,
+        Err(err) => {
+            tracing::error!(
+                error = ?err,
+                village_id,
+                "Unable to load village troop movements"
+            );
+            VillageTroopMovements::default()
         }
     }
 }

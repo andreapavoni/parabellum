@@ -3,10 +3,13 @@ use std::sync::Arc;
 use parabellum_types::{
     Result,
     errors::{ApplicationError, GameError},
+    tribe::Tribe,
 };
 
 use crate::{
-    command_handlers::helpers::{completion_time_for_slot, highest_target_level_for_slot},
+    command_handlers::helpers::{
+        completion_time_for_slot, enforce_queue_capacity, highest_target_level_for_slot,
+    },
     config::Config,
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
@@ -46,10 +49,26 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
                 slot_id: command.slot_id,
             })?;
 
-        let queue_jobs = job_repo
-            .list_village_building_queue(command.village_id as i32)
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
             .await?;
-        let pending_level = highest_target_level_for_slot(&queue_jobs, command.slot_id)
+        let building_jobs: Vec<Job> = active_jobs
+            .into_iter()
+            .filter(|job| {
+                matches!(
+                    job.task.task_type.as_str(),
+                    "AddBuilding" | "BuildingUpgrade"
+                )
+            })
+            .collect();
+        let building_limit = if matches!(village.tribe, Tribe::Roman) {
+            3
+        } else {
+            2
+        };
+        enforce_queue_capacity("building", &building_jobs, building_limit)?;
+
+        let pending_level = highest_target_level_for_slot(&building_jobs, command.slot_id)
             .unwrap_or(vb.building.level);
         let next_level = pending_level + 1;
         let next_level_building = vb.building.at_level(next_level, config.speed)?;
@@ -68,7 +87,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 
         let job_payload = JobPayload::new("BuildingUpgrade", serde_json::to_value(&payload)?);
         let completion_time =
-            completion_time_for_slot(&queue_jobs, command.slot_id, build_time_secs);
+            completion_time_for_slot(&building_jobs, command.slot_id, build_time_secs);
         let new_job = Job::with_deadline(
             command.player_id,
             command.village_id as i32,

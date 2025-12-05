@@ -1,0 +1,174 @@
+<div class="space-y-6">
+    <div>
+        <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.existing") }}</div>
+        <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
+        <p class="mt-2 text-gray-700 text-sm">
+            {{ ctx.building_description(&slot.building.name) }}
+        </p>
+    </div>
+
+    {% if let Some(next) = ctx.upgrade.as_ref() %}
+        {% include "village/buildings/_upgrade_block.html" %}
+    {% endif %}
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <div class="border rounded-md p-4 bg-white space-y-2">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.home_troops") }}</div>
+            {% if home_troops.is_empty() %}
+                <p class="text-sm text-gray-500">{{ t!("game.rally_point.no_troops_home") }}</p>
+            {% else %}
+                <ul class="space-y-1 text-sm">
+                    {% for troop in home_troops %}
+                        <li class="flex items-center justify-between">
+                            <span>{{ troop.name }}</span>
+                            <span class="font-semibold">{{ troop.count }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <div class="border rounded-md p-4 bg-white space-y-2">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.reinforcements") }}</div>
+            {% if reinforcements.is_empty() %}
+                <p class="text-sm text-gray-500">{{ t!("game.rally_point.no_reinforcements") }}</p>
+            {% else %}
+                <ul class="space-y-1 text-sm">
+                    {% for troop in reinforcements %}
+                        <li class="flex items-center justify-between">
+                            <span>{{ troop.name }}</span>
+                            <span class="font-semibold">{{ troop.count }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <div class="border rounded-md p-4 bg-white space-y-3">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.incoming_movements") }}</div>
+            {% if incoming_movements.is_empty() %}
+                <p class="text-sm text-gray-500">{{ t!("game.rally_point.no_movements") }}</p>
+            {% else %}
+                <div class="space-y-3">
+                    {% for movement in incoming_movements %}
+                        <div class="border rounded-md p-3 bg-gray-50 space-y-1 text-sm">
+                            <div class="font-semibold text-gray-800">
+                                {% match movement.direction %}
+                                    {% when crate::templates::village::MovementDirectionView::Incoming %}
+                                        {{ t!("game.rally_point.direction.incoming") }}
+                                    {% when crate::templates::village::MovementDirectionView::Outgoing %}
+                                        {{ t!("game.rally_point.direction.outgoing") }}
+                                {% endmatch %}
+                                —
+                                {% match movement.kind %}
+                                    {% when crate::templates::village::MovementKindView::Attack %}
+                                        {{ t!("game.rally_point.movement.attack") }}
+                                    {% when crate::templates::village::MovementKindView::Raid %}
+                                        {{ t!("game.rally_point.movement.raid") }}
+                                    {% when crate::templates::village::MovementKindView::Reinforcement %}
+                                        {{ t!("game.rally_point.movement.reinforcement") }}
+                                    {% when crate::templates::village::MovementKindView::Return %}
+                                        {{ t!("game.rally_point.movement.return") }}
+                                {% endmatch %}
+                            </div>
+                            <div class="text-xs text-gray-600">
+                                {{ movement.origin_name }} ({{ movement.origin_x }}|{{ movement.origin_y }}) -> {{ movement.destination_name }} ({{ movement.destination_x }}|{{ movement.destination_y }})
+                            </div>
+                            <div class="text-xs text-gray-500 flex items-center justify-between">
+                                <span>{{ t!("game.rally_point.arrives_in") }}</span>
+                                <span class="font-mono countdown-timer" data-seconds="{{ movement.time_seconds }}">
+                                    {{ movement.time_remaining }}
+                                </span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div class="border rounded-md p-4 bg-white space-y-3">
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.outgoing_movements") }}</div>
+            {% if outgoing_movements.is_empty() %}
+                <p class="text-sm text-gray-500">{{ t!("game.rally_point.no_movements") }}</p>
+            {% else %}
+                <div class="space-y-3">
+                    {% for movement in outgoing_movements %}
+                        <div class="border rounded-md p-3 bg-gray-50 space-y-1 text-sm">
+                            <div class="font-semibold text-gray-800">
+                                {% match movement.direction %}
+                                    {% when crate::templates::village::MovementDirectionView::Incoming %}
+                                        {{ t!("game.rally_point.direction.incoming") }}
+                                    {% when crate::templates::village::MovementDirectionView::Outgoing %}
+                                        {{ t!("game.rally_point.direction.outgoing") }}
+                                {% endmatch %}
+                                —
+                                {% match movement.kind %}
+                                    {% when crate::templates::village::MovementKindView::Attack %}
+                                        {{ t!("game.rally_point.movement.attack") }}
+                                    {% when crate::templates::village::MovementKindView::Raid %}
+                                        {{ t!("game.rally_point.movement.raid") }}
+                                    {% when crate::templates::village::MovementKindView::Reinforcement %}
+                                        {{ t!("game.rally_point.movement.reinforcement") }}
+                                    {% when crate::templates::village::MovementKindView::Return %}
+                                        {{ t!("game.rally_point.movement.return") }}
+                                {% endmatch %}
+                            </div>
+                            <div class="text-xs text-gray-600">
+                                {{ movement.origin_name }} ({{ movement.origin_x }}|{{ movement.origin_y }}) -> {{ movement.destination_name }} ({{ movement.destination_x }}|{{ movement.destination_y }})
+                            </div>
+                            <div class="text-xs text-gray-500 flex items-center justify-between">
+                                <span>{{ t!("game.rally_point.arrives_in") }}</span>
+                                <span class="font-mono countdown-timer" data-seconds="{{ movement.time_seconds }}">
+                                    {{ movement.time_remaining }}
+                                </span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="border rounded-md p-4 bg-white space-y-4">
+        <div>
+            <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.send_troops") }}</div>
+            <p class="text-sm text-gray-500">{{ t!("game.rally_point.send_hint") }}</p>
+        </div>
+        <form action="/army/send?s={{ ctx.slot_id }}" method="post" class="space-y-4">
+            <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
+            <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
+            <div class="grid gap-3 sm:grid-cols-3">
+                <label class="text-sm text-gray-600">
+                    {{ t!("game.rally_point.target_x") }}
+                    <input type="number" name="target_x" required class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+                </label>
+                <label class="text-sm text-gray-600">
+                    {{ t!("game.rally_point.target_y") }}
+                    <input type="number" name="target_y" required class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+                </label>
+                <label class="text-sm text-gray-600">
+                    {{ t!("game.rally_point.movement_type") }}
+                    <select name="movement" class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+                        <option value="attack">{{ t!("game.rally_point.movement.attack") }}</option>
+                        <option value="raid">{{ t!("game.rally_point.movement.raid") }}</option>
+                        <option value="reinforcement">{{ t!("game.rally_point.movement.reinforcement") }}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="space-y-2">
+                <div class="text-sm text-gray-500 uppercase">{{ t!("game.rally_point.select_units") }}</div>
+                {% for unit in sendable_units %}
+                    <label class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2">
+                        <span class="font-semibold">{{ unit.name }}</span>
+                        <span class="text-xs text-gray-500">{{ t!("game.rally_point.available") }}: {{ unit.available }}</span>
+                        <input type="number" min="0" name="units[]" value="0" class="w-full sm:w-32 border rounded px-2 py-1 text-gray-700">
+                    </label>
+                {% endfor %}
+            </div>
+            <button type="submit"
+                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded">
+                {{ t!("game.rally_point.send_button") }}
+            </button>
+        </form>
+    </div>
+</div>

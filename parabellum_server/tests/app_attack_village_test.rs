@@ -10,7 +10,10 @@ pub mod tests {
             tasks::{ArmyReturnTask, AttackTask},
         },
     };
-    use parabellum_game::models::{buildings::Building, village::Village};
+    use parabellum_game::{
+        battle::AttackType,
+        models::{buildings::Building, village::Village},
+    };
     use parabellum_types::Result;
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
@@ -52,6 +55,7 @@ pub mod tests {
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
+            attack_type: AttackType::Normal,
         };
         let handler = AttackVillageCommandHandler::new();
         app.execute(attack_command, handler).await?;
@@ -261,6 +265,7 @@ pub mod tests {
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::Warehouse, BuildingName::Granary],
             hero_id: None,
+            attack_type: AttackType::Normal,
         };
         let handler = AttackVillageCommandHandler::new();
         app.execute(attack_command, handler).await?;

@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use parabellum_game::{
-    battle::ScoutingTarget,
+    battle::{AttackType, ScoutingTarget},
     models::{army::TroopSet, map::MapQuadrant},
 };
 use parabellum_types::{
@@ -51,6 +51,7 @@ pub struct AttackVillage {
     pub target_village_id: u32,
     pub catapult_targets: [BuildingName; 2],
     pub hero_id: Option<Uuid>,
+    pub attack_type: AttackType,
 }
 
 impl Command for AttackVillage {}

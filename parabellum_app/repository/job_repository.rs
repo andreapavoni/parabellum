@@ -15,8 +15,39 @@ pub trait JobRepository: Send + Sync {
     /// Lists jobs created by a player.
     async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError>;
 
+    /// Lists all pending/processing jobs for a village regardless of task type.
+    async fn list_active_jobs_by_village(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
+    /// Lists pending/processing army movement jobs targeting the given village,
+    /// regardless of which village created them.
+    async fn list_village_targeting_movements(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
     /// Lists pending/processing building-related jobs for a village.
     async fn list_village_building_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
+    /// Lists pending/processing train-unit jobs for a village.
+    async fn list_village_training_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
+    /// Lists pending/processing academy research jobs for a village.
+    async fn list_village_academy_queue(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
+    /// Lists pending/processing smithy upgrade jobs for a village.
+    async fn list_village_smithy_queue(
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError>;

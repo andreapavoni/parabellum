@@ -14,4 +14,10 @@ pub enum AppError {
 
     #[error(transparent)]
     PasswordHash(#[from] argon2::password_hash::Error),
+
+    #[error("{queue} queue is full")]
+    QueueLimitReached { queue: &'static str },
+
+    #[error("{queue} queue already contains {item}")]
+    QueueItemAlreadyQueued { queue: &'static str, item: String },
 }

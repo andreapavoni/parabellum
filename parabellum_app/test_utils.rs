@@ -2,6 +2,7 @@
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
+    use serde_json;
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -22,7 +23,10 @@ pub mod tests {
     };
 
     use crate::{
-        jobs::Job,
+        jobs::{
+            Job,
+            tasks::{AttackTask, ReinforcementTask},
+        },
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
             MarketplaceRepository, PlayerRepository, UserRepository, VillageRepository,
@@ -63,11 +67,99 @@ pub mod tests {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
 
+        async fn list_active_jobs_by_village(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
+        async fn list_village_targeting_movements(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            let jobs = self.added_jobs.lock().unwrap();
+            let mut matches = Vec::new();
+            for job in jobs.iter() {
+                match job.task.task_type.as_str() {
+                    "Attack" => {
+                        if let Ok(payload) =
+                            serde_json::from_value::<AttackTask>(job.task.data.clone())
+                        {
+                            if payload.target_village_id == village_id {
+                                matches.push(job.clone());
+                            }
+                        }
+                    }
+                    "Reinforcement" => {
+                        if let Ok(payload) =
+                            serde_json::from_value::<ReinforcementTask>(job.task.data.clone())
+                        {
+                            if payload.village_id == village_id {
+                                matches.push(job.clone());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(matches)
+        }
+
         async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
 
         async fn list_village_building_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
+        async fn list_village_training_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
+        async fn list_village_academy_queue(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
+        async fn list_village_smithy_queue(
             &self,
             village_id: i32,
         ) -> Result<Vec<Job>, ApplicationError> {

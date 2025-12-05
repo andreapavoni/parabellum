@@ -44,7 +44,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
 
         let player = Player {
             id: command.id,
-            username: command.username,
+            username: command.username.clone(),
             tribe: command.tribe,
             user_id: user.id,
         };
@@ -53,7 +53,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
         let valley = map_repo.find_unoccupied_valley(&command.quadrant).await?;
 
         let village = Village::new(
-            "New Village".to_string(),
+            format!("{}'s Village", &command.username),
             &valley,
             &player,
             true,

@@ -1,15 +1,17 @@
 use crate::{
-    handlers::{CurrentUser, building_queue_or_empty, render_template},
+    handlers::{CurrentUser, render_template, village_queues_or_empty},
     http::AppState,
-    templates::{ResourceField, ResourcesTemplate, VillageTemplate},
-    view_helpers::{building_queue_to_views, resource_css_class, server_time},
+    templates::{
+        ResourceField, ResourcesTemplate, TemplateLayout, TroopCountView, VillageTemplate,
+    },
+    view_helpers::{building_queue_to_views, resource_css_class, unit_display_name},
 };
 use axum::{extract::State, response::IntoResponse};
 use std::collections::HashMap;
 
 pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
-    let building_queue =
-        building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
+    let queues = village_queues_or_empty(&state, user.village.id).await;
+    let building_queue = building_queue_to_views(&queues.building);
 
     let slot_buildings = user
         .village
@@ -19,11 +21,9 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
         .collect::<HashMap<_, _>>();
 
     let template = VillageTemplate {
-        current_user: Some(user),
-        nav_active: "village",
+        layout: TemplateLayout::new(Some(user), "village"),
         building_queue,
         slot_buildings,
-        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }
@@ -41,15 +41,36 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         })
         .collect();
 
-    let building_queue =
-        building_queue_to_views(&building_queue_or_empty(&state, user.village.id).await);
+    let queues = village_queues_or_empty(&state, user.village.id).await;
+    let building_queue = building_queue_to_views(&queues.building);
+
+    let home_troops = user
+        .village
+        .army()
+        .map(|army| {
+            let tribe_units = user.village.tribe.units();
+            army.units()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, quantity)| {
+                    if *quantity == 0 {
+                        return None;
+                    }
+                    let name = unit_display_name(&tribe_units[idx].name);
+                    Some(TroopCountView {
+                        name,
+                        count: *quantity,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     let template = ResourcesTemplate {
-        current_user: Some(user),
-        nav_active: "resources",
+        layout: TemplateLayout::new(Some(user), "resources"),
         resource_slots,
         building_queue,
-        server_time: server_time(),
+        home_troops,
     };
     render_template(template, None).into_response()
 }

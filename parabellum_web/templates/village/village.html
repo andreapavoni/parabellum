@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}{{t!("game.village.title")}} – PARABELLUM{% endblock %}
 {% block body %}
-{% if let Some(user) = current_user %}
+{% if let Some(user) = layout.current_user %}
   <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12">
       <div class="flex flex-col items-center w-full md:w-auto">
         <h1 class="text-xl font-bold mb-4 w-full text-left md:text-left">

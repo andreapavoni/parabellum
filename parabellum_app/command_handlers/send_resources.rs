@@ -72,7 +72,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         let merchants_needed =
             Self::calculate_merchants_needed(merchant_stats.capacity, resources_to_send.total())?;
 
-        if sender_village.get_available_merchants() < merchants_needed {
+        if sender_village.available_merchants() < merchants_needed {
             return Err(ApplicationError::Game(GameError::NotEnoughMerchants));
         }
 

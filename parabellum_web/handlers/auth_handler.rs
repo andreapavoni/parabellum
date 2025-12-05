@@ -25,8 +25,7 @@ use crate::{
         render_template,
     },
     http::AppState,
-    templates::{LoginTemplate, RegisterTemplate},
-    view_helpers::server_time,
+    templates::{LoginTemplate, RegisterTemplate, TemplateLayout},
 };
 
 /// Form for login.
@@ -69,11 +68,9 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
 
     let template = LoginTemplate {
         csrf_token,
-        current_user: None,
-        nav_active: "login",
+        layout: TemplateLayout::new(None, "login"),
         email_value: String::new(),
         error: None,
-        server_time: server_time(),
     };
     (jar, render_template(template, None)).into_response()
 }
@@ -81,7 +78,7 @@ pub async fn login_page(State(_state): State<AppState>, jar: SignedCookieJar) ->
 /// POST /login – Handle login form submission.
 pub async fn login(
     State(state): State<AppState>,
-    CsrfForm { jar, inner: form }: CsrfForm<LoginForm>,
+    CsrfForm { jar, form }: CsrfForm<LoginForm>,
 ) -> impl IntoResponse {
     if let Err(redirect) = ensure_not_authenticated(&jar) {
         return redirect.into_response();
@@ -124,11 +121,9 @@ pub async fn login(
     let (jar, new_csrf_token) = generate_csrf(jar);
     let template = LoginTemplate {
         csrf_token: new_csrf_token,
-        current_user: None,
-        nav_active: "login",
+        layout: TemplateLayout::new(None, "login"),
         email_value: form.email.clone(),
         error: err_msg,
-        server_time: server_time(),
     };
 
     (jar, render_template(template, status)).into_response()
@@ -147,14 +142,12 @@ pub async fn register_page(
 
     let template = RegisterTemplate {
         csrf_token,
-        current_user: None,
-        nav_active: "register",
+        layout: TemplateLayout::new(None, "register"),
         username_value: String::new(),
         email_value: String::new(),
         selected_tribe: "Roman".to_string(),
         selected_quadrant: "NorthEast".to_string(),
         error: None,
-        server_time: server_time(),
     };
 
     (jar, render_template(template, None)).into_response()
@@ -163,7 +156,7 @@ pub async fn register_page(
 /// POST /register – Handle signup form submission.
 pub async fn register(
     State(state): State<AppState>,
-    CsrfForm { jar, inner: form }: CsrfForm<RegisterForm>,
+    CsrfForm { jar, form }: CsrfForm<RegisterForm>,
 ) -> impl IntoResponse {
     if let Err(redirect) = ensure_not_authenticated(&jar) {
         return redirect.into_response();
@@ -224,14 +217,12 @@ pub async fn register(
             let (jar, new_csrf_token) = generate_csrf(jar);
             let template = RegisterTemplate {
                 csrf_token: new_csrf_token,
-                current_user: None,
-                nav_active: "register",
+                layout: TemplateLayout::new(None, "register"),
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some("Invalid password or internal error.".to_string()),
-                server_time: server_time(),
             };
 
             return (
@@ -254,15 +245,13 @@ pub async fn register(
             tracing::error!("Registration DB error: {}", db_err);
             let (jar, new_csrf_token) = generate_csrf(jar);
             let template = RegisterTemplate {
-                current_user: None,
-                nav_active: "register",
+                layout: TemplateLayout::new(None, "register"),
                 csrf_token: new_csrf_token,
                 username_value: form.username.clone(),
                 email_value: form.email.clone(),
                 selected_tribe: form.tribe.clone(),
                 selected_quadrant: form.quadrant.clone(),
                 error: Some(user_message.to_string()),
-                server_time: server_time(),
             };
 
             return (

@@ -64,6 +64,7 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
             target_village_id: command.target_village_id as i32,
             target_player_id: defender_village.player_id,
             catapult_targets: command.catapult_targets,
+            attack_type: command.attack_type.clone(),
         };
         let job_payload = JobPayload::new("Attack", serde_json::to_value(&attack_payload)?);
         let new_job = Job::new(
@@ -86,6 +87,7 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_game::battle::AttackType;
     use parabellum_game::test_utils::setup_player_party;
     use parabellum_types::Result;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
@@ -127,6 +129,7 @@ mod tests {
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
+            attack_type: AttackType::Normal,
         };
 
         handler.handle(command, &mock_uow, &config).await?;
@@ -178,6 +181,7 @@ mod tests {
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: Some(attacker_army.hero().unwrap().id),
+            attack_type: AttackType::Normal,
         };
         handler.handle(command, &mock_uow, &config).await?;
 
@@ -250,6 +254,7 @@ mod tests {
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
+            attack_type: AttackType::Normal,
         };
         handler.handle(command, &mock_uow, &config).await?;
 

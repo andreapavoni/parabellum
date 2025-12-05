@@ -3,7 +3,7 @@ use crate::{
         QueryHandler,
         queries::{BuildingQueueItem, GetVillageBuildingQueue},
     },
-    jobs::tasks::{AddBuildingTask, BuildingUpgradeTask},
+    queries_handlers::queue_converters::building_queue_item_from_job,
     uow::UnitOfWork,
 };
 use parabellum_types::{Result, errors::ApplicationError};
@@ -29,30 +29,10 @@ impl QueryHandler<GetVillageBuildingQueue> for GetVillageBuildingQueueHandler {
             .list_village_building_queue(query.village_id as i32)
             .await?;
 
-        let mut entries = Vec::with_capacity(jobs.len());
-        for job in jobs {
-            let parsed = match job.task.task_type.as_str() {
-                "AddBuilding" => serde_json::from_value(job.task.data.clone())
-                    .map(|payload: AddBuildingTask| (payload.slot_id, payload.name, 1)),
-                "BuildingUpgrade" => serde_json::from_value(job.task.data.clone()).map(
-                    |payload: BuildingUpgradeTask| {
-                        (payload.slot_id, payload.building_name, payload.level)
-                    },
-                ),
-                _ => continue,
-            };
-
-            if let Ok((slot_id, building_name, target_level)) = parsed {
-                entries.push(BuildingQueueItem {
-                    job_id: job.id,
-                    slot_id,
-                    building_name,
-                    target_level,
-                    status: job.status,
-                    finishes_at: job.completed_at,
-                });
-            }
-        }
+        let mut entries: Vec<BuildingQueueItem> = jobs
+            .iter()
+            .filter_map(building_queue_item_from_job)
+            .collect();
 
         entries.sort_by_key(|item| item.finishes_at);
         Ok(entries)

@@ -88,6 +88,7 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    use parabellum_game::battle::AttackType;
     use parabellum_types::buildings::BuildingName;
 
     // Helper function to create a dummy AttackTask payload
@@ -99,6 +100,7 @@ mod tests {
             target_village_id: 2,
             target_player_id: Uuid::new_v4(),
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            attack_type: AttackType::Normal,
         };
 
         JobPayload {

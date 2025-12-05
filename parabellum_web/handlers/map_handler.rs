@@ -10,8 +10,7 @@ use uuid::Uuid;
 use crate::{
     handlers::{CurrentUser, render_template},
     http::AppState,
-    templates::MapTemplate,
-    view_helpers::server_time,
+    templates::{MapTemplate, TemplateLayout},
 };
 use parabellum_app::{
     cqrs::queries::GetMapRegion, queries_handlers::GetMapRegionHandler, repository::MapRegionTile,
@@ -23,10 +22,8 @@ const MAP_REGION_RADIUS: i32 = 7;
 
 pub async fn map(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let template = MapTemplate {
-        current_user: Some(user),
-        nav_active: "map",
+        layout: TemplateLayout::new(Some(user), "map"),
         world_size: state.world_size,
-        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }

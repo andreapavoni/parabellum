@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use parabellum_types::army::{Unit, UnitGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -32,7 +33,31 @@ pub struct VillageBuilding {
     pub building: Building,
 }
 
-pub type AcademyResearch = [bool; 10];
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AcademyResearch {
+    researches: [bool; 10],
+}
+
+impl AcademyResearch {
+    pub fn get(&self, idx: usize) -> bool {
+        self.researches[idx]
+    }
+
+    pub fn set(&mut self, idx: usize, value: bool) {
+        self.researches[idx] = value;
+    }
+}
+
+impl Default for AcademyResearch {
+    fn default() -> Self {
+        Self {
+            researches: [
+                true, false, false, false, false, false, false, false, false, true,
+            ],
+        }
+    }
+}
 
 const RESOURCE_FIELDS_LAST_SLOT: u8 = 18;
 const MAIN_BUILDING_SLOT_ID: u8 = 19;
@@ -115,7 +140,7 @@ impl Village {
 
         let production: VillageProduction = Default::default();
         let smithy = [0, 0, 0, 0, 0, 0, 0, 0];
-        let academy_research = [false; 10];
+        let academy_research = AcademyResearch::default();
 
         let mut village = Self {
             id: village_id,
@@ -213,7 +238,7 @@ impl Village {
             .ok_or(GameError::InvalidUnitIndex(unit_idx))?
             .to_owned();
 
-        if !self.academy_research[unit_idx as usize] && unit.research_cost.time > 0 {
+        if !self.academy_research.get(unit_idx as usize) && unit.research_cost.time > 0 {
             return Err(GameError::UnitNotResearched(unit.name.clone()));
         }
 
@@ -275,7 +300,7 @@ impl Village {
     ) -> Result<u32, GameError> {
         let unit_idx = self.tribe.get_unit_idx_by_name(unit).unwrap();
 
-        if self.academy_research()[unit_idx] {
+        if self.academy_research().get(unit_idx) {
             return Err(GameError::UnitAlreadyResearched(unit.clone()));
         }
 
@@ -316,7 +341,7 @@ impl Village {
             }
         }
 
-        if !self.academy_research()[unit_idx] && unit.research_cost.time > 0 {
+        if unit.research_cost.time > 0 && !self.academy_research().get(unit_idx as usize) {
             return Err(GameError::UnitNotResearched(unit_name.clone()));
         }
 
@@ -472,9 +497,8 @@ impl Village {
         None
     }
 
-    /// Returns the list of buildings that can be constructed inside the given slot.
-    /// Resource and reserved slots (main building, rally point, wall) always return empty lists.
-    pub fn available_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
+    /// Returns all building candidates that are valid for the given slot, ignoring requirements.
+    pub fn candidate_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
         if slot_id == 0
             || slot_id > MAX_VILLAGE_SLOT_ID
             || slot_id <= RESOURCE_FIELDS_LAST_SLOT
@@ -483,14 +507,18 @@ impl Village {
             return vec![];
         }
 
-        let candidates = match slot_id {
+        match slot_id {
             MAIN_BUILDING_SLOT_ID => vec![BuildingName::MainBuilding],
             RALLY_POINT_SLOT_ID => vec![BuildingName::RallyPoint],
             WALL_SLOT_ID => self.tribe.wall().into_iter().collect::<Vec<BuildingName>>(),
             _ => COMMON_BUILDINGS.to_vec(),
-        };
+        }
+    }
 
-        candidates
+    /// Returns the list of buildings that can be constructed inside the given slot.
+    /// Resource and reserved slots (main building, rally point, wall) always return empty lists.
+    pub fn available_buildings_for_slot(&self, slot_id: u8) -> Vec<BuildingName> {
+        self.candidate_buildings_for_slot(slot_id)
             .into_iter()
             .filter(|name| self.can_start_building(name))
             .collect()
@@ -663,15 +691,26 @@ impl Village {
         Ok(())
     }
 
+    /// Returns units available of a given group for training.
+    pub fn available_units_for_training(&self, group: UnitGroup) -> Vec<&Unit> {
+        self.tribe
+            .units()
+            .iter()
+            .enumerate()
+            .filter(|(idx, u)| self.academy_research().get(*idx) && u.group == group)
+            .map(|(_, u)| u)
+            .collect()
+    }
+
     /// Returns available merchants.
-    pub fn get_available_merchants(&self) -> u8 {
+    pub fn available_merchants(&self) -> u8 {
         self.total_merchants.saturating_sub(self.busy_merchants)
     }
 
     /// Marks a unit name as researched in the academy.
     pub fn research_academy(&mut self, unit: UnitName) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&unit) {
-            self.academy_research[idx] = true;
+            self.academy_research.set(idx, true);
         }
 
         Ok(())
@@ -692,7 +731,7 @@ impl Village {
     /// **[TEST ONLY]** Set academy research for specific unit.
     pub fn set_academy_research_for_test(&mut self, unit: &UnitName, is_researched: bool) {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(unit) {
-            self.academy_research[idx] = is_researched;
+            self.academy_research.set(idx, is_researched);
         }
     }
 
@@ -780,8 +819,13 @@ impl Village {
                         building.name.clone(),
                     ));
                 }
-                // and has reached max level
-                if building.level != data.rules.max_level {
+                // Require at least one existing building at max level before adding another copy
+                let has_max_level_instance = self
+                    .buildings
+                    .iter()
+                    .filter(|existing| existing.building.name == building.name)
+                    .any(|existing| existing.building.level == data.rules.max_level);
+                if !has_max_level_instance {
                     return Err(GameError::MultipleBuildingMaxNotReached(
                         building.name.clone(),
                     ));
@@ -1086,14 +1130,16 @@ impl Default for VillageStocks {
 #[cfg(test)]
 mod tests {
     use crate::{
-        models::village::VillageStocks,
+        models::{buildings::Building, village::VillageStocks},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
         },
     };
     use chrono::{Duration, Utc};
-    use parabellum_types::{buildings::BuildingName, map::ValleyTopology, tribe::Tribe};
+    use parabellum_types::{
+        buildings::BuildingName, errors::GameError, map::ValleyTopology, tribe::Tribe,
+    };
 
     #[test]
     fn test_new_village() {
@@ -1160,6 +1206,35 @@ mod tests {
         // Effective production
         // 12 crop - 2 upkeep = 10 effective crop
         assert_eq!(v.production.effective.crop, 10, "effective crop production");
+    }
+
+    #[test]
+    fn test_multiple_buildings_require_max_level() {
+        let mut v = village_factory(Default::default());
+        let warehouse = Building::new(BuildingName::Warehouse, 1)
+            .at_level(10, 1)
+            .unwrap();
+        v.add_building_at_slot(warehouse, 20).unwrap();
+
+        let result = v.init_building_construction(21, BuildingName::Warehouse, 1);
+        assert!(matches!(
+            result,
+            Err(GameError::MultipleBuildingMaxNotReached(
+                BuildingName::Warehouse
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_multiple_buildings_allowed_after_max_level() {
+        let mut v = village_factory(Default::default());
+        let warehouse = Building::new(BuildingName::Warehouse, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(warehouse, 20).unwrap();
+
+        let available = v.available_buildings_for_slot(21);
+        assert!(available.contains(&BuildingName::Warehouse));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}{{t!("game.village.map")}} – PARABELLUM{% endblock %}
 {% block body %}
-{% let user = current_user.as_ref().expect("current_user should be present for map template") %}
+{% let user = layout.current_user.as_ref().expect("current_user should be present for map template") %}
 <div
     id="map-page"
     class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12"

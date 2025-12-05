@@ -134,7 +134,7 @@ pub mod tests {
                 sender_village.busy_merchants, merchants_needed
             );
             assert_eq!(
-                sender_village.get_available_merchants(),
+                sender_village.available_merchants(),
                 10 - merchants_needed as u8
             );
 
@@ -181,7 +181,7 @@ pub mod tests {
             let sender_village = uow_assert2.villages().get_by_id(village_a.id).await?;
             assert_eq!(sender_village.busy_merchants, merchants_needed as u8);
             assert_eq!(
-                sender_village.get_available_merchants(),
+                sender_village.available_merchants(),
                 10 - merchants_needed as u8
             );
 
@@ -207,7 +207,7 @@ pub mod tests {
                 "Expected 0 busy merchants, got {}",
                 sender_village.busy_merchants
             );
-            assert_eq!(sender_village.get_available_merchants(), 10);
+            assert_eq!(sender_village.available_merchants(), 10);
 
             uow_assert3.rollback().await?;
         }

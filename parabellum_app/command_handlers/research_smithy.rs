@@ -1,9 +1,11 @@
-use parabellum_types::errors::ApplicationError;
+use parabellum_types::errors::{AppError, ApplicationError};
 
 use crate::{
+    command_handlers::helpers::{completion_time_for_queue, enforce_queue_capacity},
     config::Config,
     cqrs::{CommandHandler, commands::ResearchSmithy},
     jobs::{Job, JobPayload, tasks::ResearchSmithyTask},
+    queries_handlers::queue_converters::smithy_queue_item_from_job,
     uow::UnitOfWork,
 };
 
@@ -35,16 +37,38 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
         let job_repo = uow.jobs();
         let mut village = village_repo.get_by_id(command.village_id).await?;
 
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
+            .await?;
+        let smithy_jobs: Vec<Job> = active_jobs
+            .into_iter()
+            .filter(|job| job.task.task_type == "ResearchSmithy")
+            .collect();
+        enforce_queue_capacity("smithy", &smithy_jobs, 2)?;
+
+        if smithy_jobs
+            .iter()
+            .filter_map(|job| smithy_queue_item_from_job(job))
+            .any(|item| item.unit == command.unit)
+        {
+            return Err(AppError::QueueItemAlreadyQueued {
+                queue: "smithy",
+                item: format!("{:?}", command.unit),
+            }
+            .into());
+        }
+
         let research_time = village.init_smithy_research(&command.unit, config.speed)? as i64;
         village_repo.save(&village).await?;
 
         let payload = ResearchSmithyTask { unit: command.unit };
         let job_payload = JobPayload::new("ResearchSmithy", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
+        let completion_time = completion_time_for_queue(&smithy_jobs, research_time);
+        let new_job = Job::with_deadline(
             village.player_id,
             command.village_id as i32,
-            research_time as i64,
             job_payload,
+            completion_time,
         );
         job_repo.add(&new_job).await?;
 
@@ -56,13 +80,17 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 mod tests {
     use std::sync::Arc;
 
+    use chrono::{Duration, Utc};
     use parabellum_game::{
         models::{buildings::Building, smithy::smithy_upgrade_cost_for_unit, village::Village},
         test_utils::{
             PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
         },
     };
-    use parabellum_types::{Result, errors::GameError};
+    use parabellum_types::{
+        Result,
+        errors::{AppError, ApplicationError, GameError},
+    };
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
@@ -73,7 +101,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        jobs::tasks::ResearchSmithyTask,
+        jobs::{JobPayload, tasks::ResearchSmithyTask},
         test_utils::tests::{MockUnitOfWork, set_village_resources},
         uow::UnitOfWork,
     };
@@ -216,6 +244,137 @@ mod tests {
             }
             .to_string()
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_smithy_handler_queue_limit() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config) = setup_village_for_smithy()?;
+        let village_id = village.id;
+        mock_uow.villages().save(&village).await?;
+
+        let job_repo = mock_uow.jobs();
+        let payload = ResearchSmithyTask {
+            unit: UnitName::Praetorian,
+        };
+        let job_payload = JobPayload::new("ResearchSmithy", serde_json::to_value(&payload)?);
+        job_repo
+            .add(&Job::new(
+                player.id,
+                village_id as i32,
+                60,
+                job_payload.clone(),
+            ))
+            .await?;
+        job_repo
+            .add(&Job::new(player.id, village_id as i32, 60, job_payload))
+            .await?;
+
+        let handler = ResearchSmithyCommandHandler::new();
+        let command = ResearchSmithy {
+            unit: UnitName::Praetorian,
+            village_id,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(
+            matches!(
+                result,
+                Err(ApplicationError::App(AppError::QueueLimitReached { queue }))
+                if queue == "smithy"
+            ),
+            "Expected smithy queue limit error"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_smithy_handler_blocks_duplicate_job() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config) = setup_village_for_smithy()?;
+        let village_id = village.id;
+        mock_uow.villages().save(&village).await?;
+
+        let payload = ResearchSmithyTask {
+            unit: UnitName::Praetorian,
+        };
+        let job_payload = JobPayload::new("ResearchSmithy", serde_json::to_value(&payload)?);
+        mock_uow
+            .jobs()
+            .add(&Job::new(player.id, village_id as i32, 60, job_payload))
+            .await?;
+
+        let handler = ResearchSmithyCommandHandler::new();
+        let command = ResearchSmithy {
+            unit: UnitName::Praetorian,
+            village_id,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(
+            matches!(
+                result,
+                Err(ApplicationError::App(AppError::QueueItemAlreadyQueued { queue, .. }))
+                if queue == "smithy"
+            ),
+            "Expected duplicate smithy job error"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_smithy_handler_respects_queue_order() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config) = setup_village_for_smithy()?;
+        let village_id = village.id;
+        mock_uow.villages().save(&village).await?;
+
+        let job_repo = mock_uow.jobs();
+        let existing_payload = ResearchSmithyTask {
+            unit: UnitName::Legionnaire,
+        };
+        let existing_deadline = Utc::now() + Duration::seconds(120);
+        job_repo
+            .add(&Job::with_deadline(
+                player.id,
+                village_id as i32,
+                JobPayload::new("ResearchSmithy", serde_json::to_value(&existing_payload)?),
+                existing_deadline,
+            ))
+            .await?;
+
+        let handler = ResearchSmithyCommandHandler::new();
+        let command = ResearchSmithy {
+            unit: UnitName::Praetorian,
+            village_id,
+        };
+        handler.handle(command, &mock_uow, &config).await?;
+
+        let jobs = job_repo.list_by_player_id(player.id).await?;
+        let new_job = jobs
+            .iter()
+            .find(|job| {
+                job.task.task_type == "ResearchSmithy"
+                    && serde_json::from_value::<ResearchSmithyTask>(job.task.data.clone())
+                        .map(|task| task.unit == UnitName::Praetorian)
+                        .unwrap_or(false)
+            })
+            .expect("new job");
+
+        let expected_cost = smithy_upgrade_cost_for_unit(&UnitName::Praetorian, 0)?;
+        let expected_duration = ((expected_cost.time as f64 / config.speed as f64)
+            .floor()
+            .max(1.0)) as i64;
+
+        assert_eq!(
+            new_job.completed_at,
+            existing_deadline + Duration::seconds(expected_duration),
+            "Queued smithy job should finish after existing ones"
+        );
+
         Ok(())
     }
 }

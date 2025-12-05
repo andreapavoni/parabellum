@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
+    army::UnitName,
     buildings::BuildingName,
     common::{Player, User},
     map::Position,
@@ -83,6 +84,118 @@ pub struct GetVillageBuildingQueue {
 
 impl Query for GetVillageBuildingQueue {
     type Output = Vec<BuildingQueueItem>;
+}
+
+#[derive(Debug, Clone)]
+pub struct TrainingQueueItem {
+    pub job_id: Uuid,
+    pub slot_id: u8,
+    pub unit: UnitName,
+    pub quantity: i32,
+    pub time_per_unit: i32,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+pub struct GetVillageTrainingQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageTrainingQueue {
+    type Output = Vec<TrainingQueueItem>;
+}
+
+#[derive(Debug, Clone)]
+pub struct AcademyQueueItem {
+    pub job_id: Uuid,
+    pub unit: UnitName,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+pub struct GetVillageAcademyQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageAcademyQueue {
+    type Output = Vec<AcademyQueueItem>;
+}
+
+#[derive(Debug, Clone)]
+pub struct SmithyQueueItem {
+    pub job_id: Uuid,
+    pub unit: UnitName,
+    pub status: JobStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
+pub struct GetVillageSmithyQueue {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageSmithyQueue {
+    type Output = Vec<SmithyQueueItem>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VillageQueues {
+    pub building: Vec<BuildingQueueItem>,
+    pub training: Vec<TrainingQueueItem>,
+    pub academy: Vec<AcademyQueueItem>,
+    pub smithy: Vec<SmithyQueueItem>,
+}
+
+pub struct GetVillageQueues {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageQueues {
+    type Output = VillageQueues;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TroopMovementType {
+    Attack,
+    Raid,
+    Reinforcement,
+    Return,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TroopMovementDirection {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone)]
+pub struct TroopMovement {
+    pub job_id: Uuid,
+    pub movement_type: TroopMovementType,
+    pub direction: TroopMovementDirection,
+    pub origin_village_id: u32,
+    pub origin_village_name: Option<String>,
+    pub origin_player_id: Uuid,
+    pub origin_position: Position,
+    pub target_village_id: u32,
+    pub target_village_name: Option<String>,
+    pub target_player_id: Uuid,
+    pub target_position: Position,
+    pub arrives_at: DateTime<Utc>,
+    pub time_seconds: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VillageTroopMovements {
+    pub outgoing: Vec<TroopMovement>,
+    pub incoming: Vec<TroopMovement>,
+}
+
+pub struct GetVillageTroopMovements {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageTroopMovements {
+    type Output = VillageTroopMovements;
 }
 
 /// Fetch a square region of the world map.

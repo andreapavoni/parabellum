@@ -117,13 +117,12 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
     - [x] Building queue
   - [x] Generic building (info + add/upgrade)
   - [ ] Special buildings (info + specific actions)
-    - [ ] Barracks, Stable, Workshop, etc...
-    - [ ] Academy (research units)
-    - [ ] Smithy (upgrade units)
+    - [x] Barracks, Stable, Workshop, etc...
     - [ ] Rally Point:
       - [ ] send troops
       - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
-      - [ ] view stationed troops
+    - [x] Academy (research units)
+    - [x] Smithy (upgrade units)
     - [ ] Merchant, Marketplace
       - [ ] Send resources to a village
       - [ ] Sell/buy resources

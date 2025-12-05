@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use chrono::{Duration, Utc};
+
 use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::{
@@ -50,6 +52,14 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         )?;
         village_repo.save(&village).await?;
 
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
+            .await?;
+        let training_jobs: Vec<Job> = active_jobs
+            .into_iter()
+            .filter(|job| job.task.task_type == "TrainUnits")
+            .collect();
+
         let payload = TrainUnitsTask {
             slot_id,
             unit: unit_name,
@@ -58,17 +68,66 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         };
 
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
-        // Schedule the *first* unit to be completed.
-        let new_job = Job::new(
+
+        let first_completion =
+            Self::initial_completion_deadline(slot_id, time_per_unit, &training_jobs);
+
+        let new_job = Job::with_deadline(
             command.player_id,
             command.village_id as i32,
-            time_per_unit as i64,
             job_payload,
+            first_completion,
         );
 
         job_repo.add(&new_job).await?;
 
         Ok(())
+    }
+}
+
+impl TrainUnitsCommandHandler {
+    fn initial_completion_deadline(
+        slot_id: u8,
+        time_per_unit: u32,
+        jobs: &[Job],
+    ) -> chrono::DateTime<Utc> {
+        let mut slot_free_at = Utc::now();
+
+        let mut slot_jobs = jobs
+            .into_iter()
+            .filter_map(|job| {
+                if job.task.task_type != "TrainUnits" {
+                    return None;
+                }
+
+                let payload: TrainUnitsTask = serde_json::from_value(job.task.data.clone()).ok()?;
+
+                if payload.slot_id != slot_id {
+                    return None;
+                }
+
+                Some((job.completed_at, payload.quantity, payload.time_per_unit))
+            })
+            .collect::<Vec<_>>();
+
+        slot_jobs.sort_by_key(|(completed_at, ..)| *completed_at);
+
+        for (completed_at, quantity, per_unit_time) in slot_jobs {
+            if completed_at > slot_free_at {
+                slot_free_at = completed_at;
+            }
+
+            let remaining = quantity.saturating_sub(1) as i64;
+            if remaining > 0 {
+                slot_free_at += Duration::seconds(remaining * per_unit_time as i64);
+            }
+        }
+
+        if slot_free_at < Utc::now() {
+            slot_free_at = Utc::now();
+        }
+
+        slot_free_at + Duration::seconds(time_per_unit as i64)
     }
 }
 
@@ -153,7 +212,8 @@ mod tests {
         let job_repo = mock_uow.jobs();
         let village_repo = mock_uow.villages();
 
-        let (player, village, config) = setup_village_with_barracks()?;
+        let (player, mut village, config) = setup_village_with_barracks()?;
+        village.set_academy_research_for_test(&UnitName::Praetorian, true);
         let village_id = village.id;
         village_repo.save(&village).await.unwrap();
 
@@ -354,6 +414,179 @@ mod tests {
             task.slot_id, 22,
             "Task should be linked to the right slot_id"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_allows_cross_slot_jobs() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
+
+        let (player, mut village, config) = setup_village_with_barracks()?;
+        village.set_academy_research_for_test(&UnitName::Praetorian, true);
+        let village_id = village.id;
+        village_repo.save(&village).await.unwrap();
+
+        let base_payload = TrainUnitsTask {
+            slot_id: 20,
+            unit: UnitName::Legionnaire,
+            quantity: 1,
+            time_per_unit: 30,
+        };
+        let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&base_payload)?);
+        let first_job = Job::new(player.id, village_id as i32, 30, job_payload.clone());
+        job_repo.add(&first_job).await?;
+
+        let second_payload = TrainUnitsTask {
+            slot_id: 21,
+            ..base_payload
+        };
+        let second_job_payload =
+            JobPayload::new("TrainUnits", serde_json::to_value(&second_payload)?);
+        let second_job = Job::new(player.id, village_id as i32, 30, second_job_payload);
+        job_repo.add(&second_job).await?;
+
+        let handler = TrainUnitsCommandHandler::new();
+        let command = TrainUnits {
+            player_id: player.id,
+            village_id,
+            unit_idx: 0,
+            quantity: 1,
+            building_name: BuildingName::Barracks,
+        };
+
+        handler.handle(command, &mock_uow, &config).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_allows_other_buildings() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
+
+        let (player, mut village, config) = setup_village_with_stable()?;
+        let village_id = village.id;
+        let barracks = Building::new(BuildingName::Barracks, config.speed)
+            .at_level(5, config.speed)
+            .unwrap();
+        village.add_building_at_slot(barracks, 20)?;
+        village.set_academy_research_for_test(&UnitName::Pathfinder, true);
+        set_village_resources(&mut village, ResourceGroup(800, 800, 800, 800));
+        village_repo.save(&village).await.unwrap();
+
+        let payload = TrainUnitsTask {
+            slot_id: 20,
+            unit: UnitName::Legionnaire,
+            quantity: 1,
+            time_per_unit: 30,
+        };
+        let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
+        let existing_job = Job::new(player.id, village_id as i32, 30, job_payload.clone());
+        job_repo.add(&existing_job).await?;
+        let second_job = Job::new(player.id, village_id as i32, 30, job_payload);
+        job_repo.add(&second_job).await?;
+
+        let handler = TrainUnitsCommandHandler::new();
+
+        handler
+            .handle(
+                TrainUnits {
+                    player_id: player.id,
+                    village_id,
+                    unit_idx: 2,
+                    quantity: 1,
+                    building_name: BuildingName::Stable,
+                },
+                &mock_uow,
+                &config,
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_respects_existing_queue() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
+
+        let (player, village, config) = setup_village_with_barracks()?;
+        let village_id = village.id;
+        village_repo.save(&village).await?;
+
+        let handler = TrainUnitsCommandHandler::new();
+
+        handler
+            .handle(
+                TrainUnits {
+                    player_id: player.id,
+                    village_id,
+                    unit_idx: 0,
+                    quantity: 1,
+                    building_name: BuildingName::Barracks,
+                },
+                &mock_uow,
+                &config,
+            )
+            .await?;
+
+        let jobs_after_first = job_repo.list_by_player_id(player.id).await?;
+        assert_eq!(jobs_after_first.len(), 1);
+        let first_job = jobs_after_first[0].clone();
+        let first_task: TrainUnitsTask = serde_json::from_value(first_job.task.data.clone())?;
+
+        handler
+            .handle(
+                TrainUnits {
+                    player_id: player.id,
+                    village_id,
+                    unit_idx: 0,
+                    quantity: 2,
+                    building_name: BuildingName::Barracks,
+                },
+                &mock_uow,
+                &config,
+            )
+            .await?;
+
+        let jobs_after_second = job_repo.list_by_player_id(player.id).await?;
+        assert_eq!(jobs_after_second.len(), 2);
+        let second_job = jobs_after_second[1].clone();
+
+        let delta = (second_job.completed_at - first_job.completed_at).num_seconds();
+        let expected_offset = (first_task.time_per_unit as i64) * (first_task.quantity as i64);
+
+        assert!(
+            delta >= expected_offset,
+            "Second training job should start after the queued duration ({} >= {})",
+            delta,
+            expected_offset
+        );
+
+        handler
+            .handle(
+                TrainUnits {
+                    player_id: player.id,
+                    village_id,
+                    unit_idx: 0,
+                    quantity: 1,
+                    building_name: BuildingName::Barracks,
+                },
+                &mock_uow,
+                &config,
+            )
+            .await?;
+        let jobs_after_third = job_repo.list_by_player_id(player.id).await?;
+        assert_eq!(
+            jobs_after_third.len(),
+            3,
+            "Third queue item should be accepted"
+        );
+
         Ok(())
     }
 }

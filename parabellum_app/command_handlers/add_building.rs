@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use parabellum_types::Result;
+use parabellum_game::models::buildings::get_building_data;
+use parabellum_types::{Result, buildings::BuildingName, errors::GameError, tribe::Tribe};
 
 use crate::{
-    command_handlers::helpers::completion_time_for_slot,
+    command_handlers::helpers::{completion_time_for_slot, enforce_queue_capacity},
     config::Config,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
@@ -36,6 +37,26 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         let job_repo = uow.jobs();
 
         let mut village = villages_repo.get_by_id(cmd.village_id).await?;
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(cmd.village_id as i32)
+            .await?;
+        let building_jobs: Vec<Job> = active_jobs
+            .into_iter()
+            .filter(|job| {
+                matches!(
+                    job.task.task_type.as_str(),
+                    "AddBuilding" | "BuildingUpgrade"
+                )
+            })
+            .collect();
+        let building_limit = if matches!(village.tribe, Tribe::Roman) {
+            3
+        } else {
+            2
+        };
+        enforce_queue_capacity("building", &building_jobs, building_limit)?;
+        ensure_queue_allows_building(&cmd.name, &building_jobs)?;
+
         let build_time_secs =
             village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
         villages_repo.save(&village).await?;
@@ -46,11 +67,8 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             name: cmd.name,
         };
         let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
-        let queue_jobs = job_repo
-            .list_village_building_queue(cmd.village_id as i32)
-            .await?;
         let completion_time =
-            completion_time_for_slot(&queue_jobs, cmd.slot_id, build_time_secs as i64);
+            completion_time_for_slot(&building_jobs, cmd.slot_id, build_time_secs as i64);
         let new_job = Job::with_deadline(
             cmd.player_id,
             cmd.village_id as i32,
@@ -63,13 +81,63 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
     }
 }
 
+fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Result<(), GameError> {
+    if jobs.is_empty() {
+        return Ok(());
+    }
+
+    let candidate_data = get_building_data(candidate)?;
+
+    for job in jobs {
+        if job.task.task_type != "AddBuilding" {
+            continue;
+        }
+
+        let Some(payload) = serde_json::from_value::<AddBuildingTask>(job.task.data.clone()).ok()
+        else {
+            continue;
+        };
+
+        let queued_name = payload.name;
+
+        if queued_name == *candidate && !candidate_data.rules.allow_multiple {
+            return Err(GameError::NoMultipleBuildingConstraint(candidate.clone()));
+        }
+
+        if candidate_data
+            .rules
+            .conflicts
+            .iter()
+            .any(|conflict| conflict.0 == queued_name)
+        {
+            return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
+        }
+
+        if let Ok(queued_data) = get_building_data(&queued_name) {
+            if queued_data
+                .rules
+                .conflicts
+                .iter()
+                .any(|conflict| conflict.0 == *candidate)
+            {
+                return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use parabellum_game::{
         models::{buildings::Building, village::Village},
         test_utils::setup_player_party,
     };
-    use parabellum_types::{Result, errors::GameError};
+    use parabellum_types::{
+        Result,
+        errors::{AppError, ApplicationError, GameError},
+    };
     use parabellum_types::{
         buildings::BuildingName,
         common::{Player, ResourceGroup},
@@ -181,6 +249,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_add_building_handler_blocks_duplicate_queue() -> Result<()> {
+        let config = Config::from_env();
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, mut village, config) = setup_village(&config)?;
+        let village_id = village.id;
+        let player_id = player.id;
+
+        set_village_resources(&mut village, ResourceGroup(20000, 20000, 20000, 20000));
+        mock_uow.villages().save(&village).await?;
+
+        let queued_payload = AddBuildingTask {
+            village_id: village_id as i32,
+            slot_id: 22,
+            name: BuildingName::Palace,
+        };
+        let queued_job_payload =
+            JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
+        let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
+        mock_uow.jobs().add(&queued_job).await?;
+
+        let handler = AddBuildingCommandHandler::new();
+        let command = AddBuilding {
+            player_id,
+            village_id,
+            slot_id: 23,
+            name: BuildingName::Palace,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Game(
+                GameError::NoMultipleBuildingConstraint(_)
+            ))
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_building_handler_blocks_conflicting_queue() -> Result<()> {
+        let config = Config::from_env();
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, mut village, config) = setup_village(&config)?;
+        let village_id = village.id;
+        let player_id = player.id;
+
+        set_village_resources(&mut village, ResourceGroup(20000, 20000, 20000, 20000));
+        mock_uow.villages().save(&village).await?;
+
+        let queued_payload = AddBuildingTask {
+            village_id: village_id as i32,
+            slot_id: 22,
+            name: BuildingName::Palace,
+        };
+        let queued_job_payload =
+            JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
+        let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
+        mock_uow.jobs().add(&queued_job).await?;
+
+        let handler = AddBuildingCommandHandler::new();
+        let command = AddBuilding {
+            player_id,
+            village_id,
+            slot_id: 24,
+            name: BuildingName::Residence,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Game(GameError::BuildingConflict(
+                BuildingName::Residence,
+                BuildingName::Palace
+            )))
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_add_building_handler_slot_occupied() -> Result<()> {
         let config = Config::from_env();
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
@@ -246,6 +393,101 @@ mod tests {
             }
             .to_string()
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_building_handler_queue_limit_non_roman() -> Result<()> {
+        let config = Config::from_env();
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, mut village, config) = setup_village(&config)?;
+        village.tribe = Tribe::Gaul;
+        let village_id = village.id;
+        let player_id = player.id;
+        mock_uow.villages().save(&village).await?;
+
+        let payload = AddBuildingTask {
+            village_id: village_id as i32,
+            slot_id: 22,
+            name: BuildingName::Barracks,
+        };
+        let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
+        mock_uow
+            .jobs()
+            .add(&Job::new(
+                player_id,
+                village_id as i32,
+                60,
+                job_payload.clone(),
+            ))
+            .await?;
+        mock_uow
+            .jobs()
+            .add(&Job::new(player_id, village_id as i32, 60, job_payload))
+            .await?;
+
+        let handler = AddBuildingCommandHandler::new();
+        let command = AddBuilding {
+            player_id,
+            village_id,
+            slot_id: 23,
+            name: BuildingName::Stable,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(
+            matches!(
+                result,
+                Err(ApplicationError::App(AppError::QueueLimitReached { queue }))
+                if queue == "building"
+            ),
+            "Expected building queue limit error"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_building_handler_roman_allows_third_job() -> Result<()> {
+        let config = Config::from_env();
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config) = setup_village(&config)?;
+        let village_id = village.id;
+        let player_id = player.id;
+        mock_uow.villages().save(&village).await?;
+
+        let payload = AddBuildingTask {
+            village_id: village_id as i32,
+            slot_id: 22,
+            name: BuildingName::Barracks,
+        };
+        let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
+        mock_uow
+            .jobs()
+            .add(&Job::new(
+                player_id,
+                village_id as i32,
+                60,
+                job_payload.clone(),
+            ))
+            .await?;
+        mock_uow
+            .jobs()
+            .add(&Job::new(player_id, village_id as i32, 60, job_payload))
+            .await?;
+
+        let handler = AddBuildingCommandHandler::new();
+        let command = AddBuilding {
+            player_id,
+            village_id,
+            slot_id: 24,
+            name: BuildingName::Cranny,
+        };
+
+        handler.handle(command, &mock_uow, &config).await?;
+        let added_jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
+        assert_eq!(added_jobs.len(), 3, "Romans should allow a third job");
+
         Ok(())
     }
 }

@@ -44,7 +44,7 @@ pub enum UnitRole {
     Settler,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnitGroup {
     Infantry,
     Cavalry,

@@ -1,0 +1,142 @@
+{% extends "village/building.html" %}
+{% block building_content %}
+<div class="space-y-6 py-6">
+    <div class="text-center">
+        <p class="text-lg text-gray-600">{{t!("game.building.empty_slot")}}</p>
+        <p class="text-sm text-gray-500 mt-2">{{t!("game.building.empty_slot_hint")}}</p>
+    </div>
+
+    {% if buildable_buildings.is_empty() && locked_buildings.is_empty() %}
+    <div class="text-center text-sm text-gray-500">
+        {% if ctx.current_construction.is_some() %}
+            {{t!("game.building.queue_locked")}}
+        {% else %}
+            {{t!("game.building.no_available")}}
+        {% endif %}
+    </div>
+    {% else %}
+    <div>
+        {% if !buildable_buildings.is_empty() %}
+        <div class="text-sm text-gray-500 uppercase">{{t!("game.building.available_ready")}}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            {% for option in buildable_buildings %}
+            <div class="p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3">
+                <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
+                <p class="mt-1 text-gray-600 text-xs">
+                    {{ ctx.building_description(&option.name) }}
+                </p>
+                {% if !option.missing_requirements.is_empty() %}
+                <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                    <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                    <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                        {% for req in option.missing_requirements %}
+                        <li>{{ req.name }} – Lv {{ req.level }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
+                    <div class="grid grid-cols-2 gap-2 mt-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.lumber }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.clay }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.iron }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.crop }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-500 pt-1">
+                    <span>{{t!("game.building.time")}}</span>
+                    <span class="font-semibold text-gray-900">{{ option.time_formatted }}</span>
+                </div>
+                <form action="/build?s={{ ctx.slot_id }}" method="post" class="pt-2">
+                    <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
+                    <input type="hidden" name="action" value="build">
+                    <input type="hidden" name="building_name" value="{{ option.name }}">
+                    <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
+                    <button type="submit"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded {% if !option.can_start || ctx.building_queue_full %}opacity-60 cursor-not-allowed{% endif %}"
+                            {% if !option.can_start || ctx.building_queue_full %}disabled aria-disabled="true"{% endif %}>
+                        {{t!("game.building.construct_action")}}
+                    </button>
+                </form>
+                {% if !option.can_start %}
+                <div class="text-xs text-red-600">
+                    {{t!("game.building.missing_requirements_hint")}}
+                </div>
+                {% elif ctx.building_queue_full %}
+                <div class="text-xs text-amber-700">
+                    {{ t!("game.building.construction_queue_full_short") }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if !locked_buildings.is_empty() %}
+        <div class="text-sm text-gray-500 uppercase mt-6">{{t!("game.building.available_locked")}}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            {% for option in locked_buildings %}
+            <div class="p-3 border rounded-md bg-white text-left text-sm text-gray-700 space-y-3 opacity-70">
+                <div class="text-base font-semibold text-gray-800">{{ option.name }}</div>
+                <p class="mt-1 text-gray-600 text-xs">
+                    {{ ctx.building_description(&option.name) }}
+                </p>
+                {% if !option.missing_requirements.is_empty() %}
+                <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                    <div class="font-semibold tracking-wide uppercase">{{t!("game.building.requirements_title")}}</div>
+                    <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                        {% for req in option.missing_requirements %}
+                        <li>{{ req.name }} – Lv {{ req.level }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="text-xs uppercase text-gray-500">{{t!("game.building.cost")}}</div>
+                    <div class="grid grid-cols-2 gap-2 mt-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🌲 {{t!("game.village.resources.lumber")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.lumber }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🧱 {{t!("game.village.resources.clay")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.clay }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>⚒️ {{t!("game.village.resources.iron")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.iron }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span>🌾 {{t!("game.village.resources.crop")}}</span>
+                            <span class="font-semibold text-gray-900">{{ option.cost.crop }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-500 pt-1">
+                    <span>{{t!("game.building.time")}}</span>
+                    <span class="font-semibold text-gray-900">{{ option.time_formatted }}</span>
+                </div>
+                <div class="text-xs text-amber-700 font-semibold uppercase">
+                    {{ t!("game.building.missing_requirements_hint") }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

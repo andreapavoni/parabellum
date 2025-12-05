@@ -1,0 +1,138 @@
+<div class="space-y-6">
+    <div>
+        <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.existing") }}</div>
+        <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
+        <p class="mt-2 text-gray-700 text-sm">
+            {{ ctx.building_description(&slot.building.name) }}
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{ t!("game.building.level") }}</div>
+            <div class="text-lg font-bold">{{ slot.building.level }}</div>
+        </div>
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{ t!("game.building.population") }}</div>
+            <div class="text-lg font-bold">{{ slot.building.population }}</div>
+        </div>
+        {% if let Some(upkeep) = ctx.current_upkeep %}
+        <div class="p-3 border rounded-md bg-gray-50">
+            <div class="text-gray-500">{{ t!("game.building.upkeep") }}</div>
+            <div class="text-lg font-bold">{{ upkeep }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if let Some(next) = ctx.upgrade.as_ref() %}
+        {% include "village/buildings/_upgrade_block.html" %}
+    {% endif %}
+
+    {% if !smithy_queue.is_empty() %}
+    <div class="border rounded-md p-4 bg-gray-50 space-y-2">
+        <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.smithy_queue_title") }}</div>
+        {% for job in smithy_queue %}
+        <div class="p-3 bg-white border rounded-md space-y-1 text-sm">
+            <div class="flex items-center justify-between font-semibold text-gray-800">
+                <span>{{ job.unit_name }} → Lv {{ job.target_level }}</span>
+                <span class="text-xs font-semibold {% if job.is_processing %}text-emerald-600{% else %}text-gray-500{% endif %}">
+                    {% if job.is_processing %}
+                        {{ t!("game.building.research_in_progress") }}
+                    {% else %}
+                        {{ t!("game.building.research_pending") }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-600">
+                <span>{{ t!("game.building.time_remaining") }}</span>
+                <span class="font-mono countdown-timer" data-seconds="{{ job.time_seconds }}">
+                    {{ job.time_remaining }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div>
+        <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.smithy_available") }}</div>
+        {% if smithy_units.is_empty() %}
+        <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_smithy_upgrades") }}</p>
+        {% else %}
+        {% if self.smithy_queue_full %}
+        <div class="text-xs text-amber-700 border border-amber-200 bg-amber-50 rounded-md p-2">
+            {{ t!("game.building.smithy_queue_full_hint") }}
+        </div>
+        {% endif %}
+        <div class="space-y-4 mt-3">
+            {% for option in smithy_units %}
+            <div class="border rounded-md p-4 bg-white space-y-3 text-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                        <div class="text-lg font-semibold text-gray-900">{{ option.display_name }}</div>
+                        <div class="text-xs text-gray-500">
+                            {{ t!("game.building.current_level") }} {{ option.current_level }}
+                            {% if option.queued_levels > 0 %}
+                                • {{ t!("game.building.smithy_queued_hint", level = option.current_level + option.queued_levels) }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        {{ t!("game.building.max_level") }} {{ option.max_level }}
+                    </div>
+                </div>
+
+                {% if !option.is_researched %}
+                <div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-2">
+                    {{ t!("game.building.smithy_unit_locked") }}
+                </div>
+                {% else %}
+                {% if let Some(cost) = option.cost.as_ref() %}
+                <div>
+                    <div class="text-xs uppercase text-gray-500">{{ t!("game.building.cost") }}</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-xs">
+                        <div class="flex items-center justify-between">
+                            <span>🌲 {{ t!("game.village.resources.lumber") }}</span>
+                            <span class="font-semibold">{{ cost.lumber }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>🧱 {{ t!("game.village.resources.clay") }}</span>
+                            <span class="font-semibold">{{ cost.clay }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>⚒️ {{ t!("game.village.resources.iron") }}</span>
+                            <span class="font-semibold">{{ cost.iron }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span>🌾 {{ t!("game.village.resources.crop") }}</span>
+                            <span class="font-semibold">{{ cost.crop }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% if let Some(time_formatted) = option.time_formatted.as_ref() %}
+                <div class="text-xs text-gray-600">
+                    {{ t!("game.building.research_time") }}: {{ time_formatted }}
+                </div>
+                {% endif %}
+                <form action="/smithy/research" method="post" class="flex flex-col sm:flex-row sm:items-end gap-3">
+                    <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
+                    <input type="hidden" name="unit_name" value="{{ option.unit_value }}">
+                    <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
+                    <button type="submit"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !option.can_upgrade %}opacity-60 cursor-not-allowed{% endif %}"
+                            {% if !option.can_upgrade %}disabled aria-disabled="true"{% endif %}>
+                        {{ t!("game.building.smithy_upgrade_action") }}
+                    </button>
+                </form>
+                {% else %}
+                <div class="text-xs text-gray-500">
+                    {{ t!("game.building.smithy_max_level_hint") }}
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>

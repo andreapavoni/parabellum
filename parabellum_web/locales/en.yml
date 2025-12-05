@@ -5,6 +5,7 @@ user:
   email: Email
   password: Password
   confirm_password: Confirm Password
+
 game:
   hour: Hour
   village:
@@ -30,9 +31,6 @@ game:
     main_building_slot:
       empty: "Main Building - empty"
       occupied: "Main Building - Lv %{level}"
-    buildings:
-      warehouse: Warehouse
-      granary: Granary
     resources:
       title: Production
       lumber: Lumber
@@ -42,6 +40,220 @@ game:
     troops:
       title: Troops
       no_units: No units in the village
+  rally_point:
+    home_troops: Troops at home
+    reinforcements: Reinforcements stationed
+    no_troops_home: No troops are currently stationed at home.
+    no_reinforcements: No reinforcements are stationed in this village.
+    incoming_movements: Incoming movements
+    outgoing_movements: Outgoing movements
+    no_movements: No troop movements to show.
+    direction:
+      incoming: Incoming
+      outgoing: Outgoing
+    movement:
+      attack: Attack
+      raid: Raid
+      reinforcement: Reinforcement
+      return: Returning
+    arrives_in: Arrives in
+    send_troops: Send troops
+    send_hint: Choose the target coordinates, movement type, and units to send.
+    target_x: Target X
+    target_y: Target Y
+    movement_type: Movement type
+    select_units: Units to send
+    available: Available
+    send_button: Dispatch troops
+    unknown_village: Unknown village
+    invalid_target: No village found at those coordinates.
+    invalid_units: Select at least one unit to send.
+    invalid_building: You can only send troops from the Rally Point.
+    army_missing: There are no troops stationed in this village.
+
+  units:
+    romans:
+      legionnaire: Legionnaire
+      praetorian: Praetorian
+      imperian: Imperian
+      equites_legati: Equites Legati
+      equites_imperatoris: Equites Imperatoris
+      equites_caesaris: Equites Caesaris
+      battering_ram: Battering Ram
+      fire_catapult: Fire Catapult
+      senator: Senator
+      settler: Settler
+    teutons:
+      maceman: Clubswinger
+      spearman: Spearman
+      axeman: Axeman
+      scout: Scout
+      paladin: Paladin
+      teutonic_knight: Teutonic Knight
+      ram: Ram
+      catapult: Catapult
+      chief: Chief
+      settler: Settler
+    gauls:
+      phalanx: Phalanx
+      swordsman: Swordsman
+      pathfinder: Pathfinder
+      theutates_thunder: Theutates Thunder
+      druidrider: Druidrider
+      haeduan: Haeduan
+      ram: Ram
+      trebuchet: Trebuchet
+      chieftain: Chieftain
+      settler: Settler
+      trap: Trap
+    nature:
+      rat: Rat
+      spider: Spider
+      snake: Snake
+      bat: Bat
+      wild_boar: Wild Boar
+      wolf: Wolf
+      bear: Bear
+      crocodile: Crocodile
+      tiger: Tiger
+      elephant: Elephant
+    natars:
+      pikeman: Pikeman
+      thorned_warrior: Thorned Warrior
+      guardsman: Guardsman
+      birds_of_prey: Birds Of Prey
+      axerider: Axerider
+      natarian_knight: Natarian Knight
+      warelephant: War Elephant
+      ballista: Ballista
+      natarian_emperor: Natarian Emperor
+      natarian_settler: Natarian Settler
+
+  buildings:
+    woodcutter:
+      name: Woodcutter
+      description: "The woodcutter cuts down trees in order to produce lumber. The further you extend the woodcutter, the more lumber is produced.<br>By constructing a sawmill, you can further increase the production"
+    clay_pit:
+      name: Clay Pit
+      description: "Here, clay is produced. By increasing its level, you increase clay production.<br>By constructing a brickyard, you can further increase the production"
+    iron_mine:
+      name: Iron Mine
+      description: "Here, miners gather the precious resource of iron. By increasing the mine's level, you increase its iron production.<br>By constructing an iron foundry, you can further increase the production"
+    cropland:
+      name: Cropland
+      description: "Your population's food is produced here. By increasing the cropland's level, you increase crop production.<br>By constructing a grain mill and a bakery, you can further increase the production"
+    sawmill:
+      name: Sawmill
+      description: "Lumber cut by your woodcutters is processed here. The Sawmill boosts wood production in the village. At Level 1, it increases wood production by 5%, and every time you upgrade it, the production is increased by 5% more, for a total of 25% after 5 levels.<br>The bonus from the Sawmill and all buildings providing resource bonuses only apply to the village in which the building is built.<br>Note that the Sawmill bonus does not apply to other bonus effects such as Oasis income or the 10% PLUS bonus.<br>There are also villages consisting of 3 or 5 wood fields. The more fields in a village, more the Sawmill levels can be efficiently"
+    brickyard:
+      name: Brickyard
+      description: "Clay converts into bricks here. The Brickyard boosts clay production in the village. At Level 1, it increases clay production by 5%, and every time you upgrade it, the production is increased by 5% more, for a total of 25% after 5 levels.<br>The bonus from the Brickyard and all buildings providing resource bonuses only apply to the village in which the building is built.<br>Note that the Brickyard bonus does not apply to other bonus effects such as Oasis income or the 10% PLUS bonus.<br>There are also villages consisting of 3 or 5 clay fields. The more fields in a village, more the Brickyard levels can be efficiently"
+    iron_foundry:
+      name: Iron Foundry
+      description: "Iron melts here. The Iron Foundry boosts iron production in the village. At Level 1, it increases iron production by 5%, and every time you upgrade it, the production is increased by 5% more, for a total of 25% after 5 levels.<br>The bonus from the Iron Foundry and all buildings providing resource bonuses only apply to the village in which the building is built.<br>Note that the Iron Foundry bonus does not apply to other bonus effects such as Oasis income or the 10% PLUS bonus.<br>There are also villages consisting of 3 or 5 iron fields. The more fields in a village, more the Iron Foundry levels can be efficiently"
+    grain_mill:
+      name: Grain Mill
+      description: "Grain grinds into flour here. The Grain Mill boosts food production in the village. At Level 1, it increases food production by 5%, and every time you upgrade it, the production is increased by 5% more, for a total of 25% after 5 levels.<br>Use in conjunction with the Bakery for an overall crop production increase of up to 50%.<br>The bonus from the Grain Mill and all buildings providing resource bonuses only apply to the village in which the building is built.<br>Note that the Grain Mill bonus does not apply to other bonus effects such as Oasis income or the 10% PLUS bonus.<br>There are also villages consisting of 9 or 15 crop fields. The more fields in a village, more the Grain Mill levels can be efficiently"
+    bakery:
+      name: Bakery
+      description: "Bread bakes from flour here. The Bakery boosts food production in the village. At Level 1, it increases food production by 5%, and every time you upgrade it, the production is increased by 5% more, for a total of 25% after 5 levels.<br>When used in conjunction with the Grain Mill it can increase crop production by up to 50%.<br>The bonus from the Bakery and all buildings providing resource bonuses only apply to the village in which the building is built.<br>Note that the Bakery bonus does not apply to other bonus effects such as Oasis income or the 10% PLUS bonus.<br>There are also villages consisting of 9 or 15 crop fields. The more fields in a village, more the Bakery levels can be efficiently"
+    warehouse:
+      name: Warehouse
+      description: "The resources lumber, clay and iron are stored in the warehouse. By increasing its level, you increase your warehouse's capacity. Can be built multiple times, once one is built to max level"
+    granary:
+      name: Granary
+      description: "The crop produced on your farms is stored in the granary. By increasing its level, you increase the granary's capacity. Can be built multiple times, once one is built to max level"
+    smithy:
+      name: Smithy
+      description: "The weapons of your warriors are enhanced in the smithy's melting furnaces. By increasing its level, you can order the fabrication of even better weapons and armors"
+    tournament_square:
+      name: Tournament Square
+      description: "Your troops can increase their stamina at the Tournament Square. The further the building is upgraded, the faster your troops are beyond a minimum distance of 30 squares"
+    main_building:
+      name: Main Building
+      description: "The village's master builders live in the main building. The higher its level the faster your master builders complete the construction of new buildings."
+    rally_point:
+      name: Rally Point
+      description: "Your village's troops gather here. From here, you can send them out to conquer, raid or reinforce other villages.<br>If there are less attacking units than the level of the rally point, you can see the type of unit attacking."
+    marketplace:
+      name: Marketplace
+      description: "At the marketplace, you can trade resources with other players. The higher its level, the more resources can be transported by your merchants at the same time"
+    embassy:
+      name: Embassy
+      description: "The embassy is a place for diplomats. At level 1 you can join an alliance, and after extending it to level 3 you may even found one yourself.<br>The maximum number of members in an alliance is 60"
+    barracks:
+      name: Barracks
+      description: "Infantry can be trained in the barracks. The higher its level, the faster the troops are trained"
+    stable:
+      name: Stable
+      description: "Cavalry can be trained in the stable. The higher its level, the faster the troops are trained"
+    workshop:
+      name: Workshop
+      description: "Siege engines, like catapults and rams, can be built in the workshop. The higher its level, the faster these units are produced"
+    academy:
+      name: Academy
+      description: "New unit types can be researched in the academy. By increasing its level, you can order the research of better units"
+    cranny:
+      name: Cranny
+      description: "The cranny hides some of your resources in case the village gets attacked. These resources cannot get stolen.<br>At level 1 the cranny can hold 200 of each resource. The capacity of Gallic crannies is 1.5 times larger.<br>If a Teutonic hero attacks a village, crannies can hide only 80% of their normal capacity"
+    town_hall:
+      name: Town Hall
+      description: "In the town hall, you can hold pompous celebrations. Such a celebration increases your culture points.<br>Culture points are necessary to found or conquer new villages. Each building produces culture points and the higher its level, the more culture points it produces"
+    residence:
+      name: Residence
+      description: "The Residence protects the village against enemy conquests. You can build one residence per village. Units that can found a new village or conquer existing villages can be trained here.<br>Additionally, the residence provides an expansion slot at levels 10 and 20 each"
+    palace:
+      name: Palace
+      description: "The palace building is unique. You can only build one in your whole realm and you can proclaim that village as your capital. It also protects the village against enemy conquests. Units that can found a new village or conquer existing villages can be trained here.<br>Additionally, the palace provides an expansion slot at levels 10, 15 and 20 each"
+    treasury:
+      name: Treasury
+      description: "The riches of your empire are kept in the treasury. A treasury can only store one artefact at a time.<br>You need a treasury at level 10 for a small artefact, or level 20 for a great one"
+    trade_office:
+      name: Trade Office
+      description: "In the trade office, the merchants' carts get improved and equipped with more powerful horses. The higher its level, the more your merchants are able to carry"
+    great_barracks:
+      name: Great Barracks
+      description: "The Great Barracks allows you to build a second Barracks in the same village, but the troops cost 3 times the original amount.<br>Combined with the regular Barracks, you can train your troops twice as fast in one village"
+    great_stable:
+      name: Great Stable
+      description: "The Great Stable allows you to build a second Stable in the same village, but the troops cost 3 times the original amount.<br>Combined with the regular Stable, you can train your troops twice as fast in one village"
+    city_wall:
+      name: City Wall
+      description: "Provides a defense bonus for your troops (((1.03 ^ level) * 100)% + 10) defensive points per level to the basic defensive value for a village. The higher level Wall will give your troops a higher defence bonus.<br>Tribe-specific: Romans only"
+    earth_wall:
+      name: Earth Wall
+      description: "Provides a defense bonus for your troops (((1.02 ^ level) * 100)% + 6) defensive points per level to the basic defensive value for a village. A higher level Earth Wall will give your troops a higher defence bonus.<br>Tribe-specific: Teutons only"
+    palisade:
+      name: Palisade
+      description: "Provides a defense bonus for your troops (((1.025 ^ level) * 100)% + 8) defensive points per level to the basic defensive value for a village. A higher level Palisade will give your troops a higher defence bonus.<br>Tribe-specific: Gauls only"
+    stonemason:
+      name: "Stonemason's Lodge"
+      description: "The Stonemason is an expert it cutting stone. The higher the level of the Stonemason's Lodge, the greater the stability of your village's buildings. For each level this building will increase durability by 10% for a maximum of 200% durability for your buildings.<br>This building can only be built in an accounts Capital"
+    brewery:
+      name: Brewery
+      description: "Tasty mead is brewed here.Drinks make your soldiers braver and stronger when attacking others (1% per Brewery level). Unfortunately, the persuasive power of leaders is reduced by 50% and catapults can only make random hits. Can only be built in the capital, but affects all your villages. The mead-festivals always last 72 hours.<br>Tribe-specific: Teutons only"
+    trapper:
+      name: Trapper
+      description: "The trapper protects your village with well hidden traps. This means that unwary enemies can be imprisoned and won't be able to harm your village any more.<br>Troops cannot be freed with a raid. If the owner of the traps release the captives all of the traps will be repaired automatically.<br>Tribe-specific: Gauls only"
+    heros_mansion:
+      name: "Hero's Mansion"
+      description: "The hero's mansion is the home of your glorious hero.<br>At building levels 10, 15 and 20, you can use your hero to annex an unoccupied oasis to your village, one per each of these levels respectively. Depending on the oasis, you will get a production increase for a certain type of resource (or even two resources, from some oases)"
+    great_warehouse:
+      name: Great Warehouse
+      description: "The great warehouse has 3 times the capacity of a normal warehouse.<br>This building can only be built in wonder of the world villages or with a special Natarian artefact"
+    great_granary:
+      name: Great Granary
+      description: "The great granary has 3 times the capacity of a normal granary.<br>This building can only be built in wonder of the world villages or with a special Natarian artefact"
+    wonder:
+      name: Wonder of the World
+      description: "A Wonder of the World (also known as WW) is as astonishing as it sounds. Every level costs a lot of resources. It is nearly impossible for a single player to build a WW on their own. The reason is that you not only need a lot of resources, but also the troops to protect your precious building.<br>To build WW you need an Ancient Construction Plan. You can get this by attacking a Natar Village with your hero. You need to have an empty level 10 treasury and your hero must survive. With those plan and an extremely high level of resources, you can start the world wonder.<br>Once it gets to level 50, you will need someone else in your alliance to have a second construction plan active. You cannot do it all by yourself.<br>Finishing a WW lvl 100, you will win the Travian server and its the end of a game world.<br>Once you finish, a message will come up telling who won and statistics. You can no longer build, but you can message people until the server restarts"
+    horse_drinking:
+      name: Horse Drinking Trough
+      description: "Decreases the training time and the upkeep of cavalry. It can also be built in Roman Wonder of the World villages.<br>Speeds up the training time of cavalry units by 1% per level and lowers the crop consumption of some units depending on its level.<br>Tribe-specific: Romans only"
+    great_workshop:
+      name: Great Workshop
+      description: "The Great Workshop allows you to build a second Workshop in the same village, but catapults and rams cost 3 times the original amount.<br>Combined with the regular Workshop, you can train your troops twice as fast in one village"
+
   building:
     title: Building
     slot: "Slot %{slot}"
@@ -49,6 +261,26 @@ game:
     level: Level
     population: Population
     value: Output
+    training_multiplier: Training time multiplier
+    training_multiplier_hint: Percentage of the base time required to train infantry units.
+    training_multiplier_hint_cavalry: Percentage of the base time required to train cavalry units.
+    training_multiplier_hint_siege: Percentage of the base time required to build siege engines.
+    training_bonus: Training speed bonus
+    training_bonus_hint: Faster than the default training time.
+    requirements_title: Requirements
+    missing_requirements_hint: Finish the missing requirements above to unlock this building.
+    invalid_academy_building: Invalid academy slot, please try again.
+    invalid_smithy_building: Invalid smithy slot, please try again.
+    train_units: Train units
+    training_cost: Cost per unit
+    training_time: Time per unit
+    training_quantity: Quantity
+    training_upkeep: Crop upkeep per unit
+    train_action: Train
+    no_units_available: No infantry units available for training. Research new units in the Academy.
+    training_queue_title: Training queue
+    training_remaining: Time remaining
+    invalid_training_building: Invalid training building selected. Pick the correct slot and retry.
     upgrade: Next upgrade
     upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"
     queue_upgrade_action: "Queue upgrade to Lv %{level}"
@@ -60,21 +292,109 @@ game:
     upgrade_action: "Upgrade to Lv %{level}"
     construction_in_progress: "%{name} to level %{level} is currently under construction."
     queue_locked: Another construction is already queued for this slot.
-    queue_upgrade_action: "Queue upgrade to Lv %{level}"
+    construction_queue_full: Construction queue is full. Wait for an ongoing build to finish.
+    construction_queue_full_short: Construction queue is full.
     slot_queue_title: Slot queue
     queue_item_current: "%{name} → Lv %{level} (in progress)"
     queue_item_pending: "Queued: %{name} → Lv %{level}"
     empty_slot: This slot is empty.
     empty_slot_hint: Choose a building to construct here.
     available: Available buildings
+    available_ready: Ready to build
     no_available: No buildings unlocked yet.
+    locked_list: Locked buildings
+    research_available: Available research
+    no_research_available: No units available for research.
+    research_locked: Locked research
+    no_research_locked: No additional research unlocked yet.
+    research_completed: Researched units
+    research_queue_title: Research queue
+    research_in_progress: In progress
+    research_pending: Queued
+    research_cost: Research cost
+    research_time: Research time
+    research_action: Research
+    academy_queue_full_hint: Research queue is full. Wait for the current research to finish.
     not_enough_resources: Not enough resources in storage.
+    invalid_training_quantity: Invalid training quantity specified.
+    smithy_available: Available upgrades
+    no_smithy_upgrades: No units available for upgrades yet.
+    smithy_queue_title: Smithy queue
+    smithy_unit_locked: Research this unit in the Academy before upgrading.
+    smithy_upgrade_action: Upgrade unit
+    smithy_max_level_hint: Maximum level reached. Upgrade the Smithy to continue.
+    smithy_queued_hint: "Queued to reach Lv %{level}"
+    smithy_queue_full_hint: Smithy queue is full. Wait for the current upgrades to finish.
+
+    current_wood_bonus: "Current wood bonus:"
+    wood_bonus_level: "Wood bonus at level"
+    current_clay_bonus: "Current clay bonus:"
+    clay_bonus_level: "Clay bonus at level"
+    current_iron_bonus: "Current iron bonus:"
+    iron_bonus_level: "Iron bonus at level"
+    current_crop_bonus: "Current crop bonus:"
+    crop_bonus_level: "Crop bonus at level"
+
+    max_level: "Building already at max level"
+    percent: "Percent"
+
+    current_capacity: "Current capacity:"
+    capacity_level: "Capacity at level"
+    resource_units: "Resource units"
+    crop_units: "Crop units"
+
+    action: "Action"
+    upgrade_label: "Upgrade"
+    upgrade_in_progress: "Upgrade in<br>progress"
+    upgrade_smithy: "Upgrade<br>smithy"
+    upgrades_commence_smithy: "Upgrades can commence when smithy is completed."
+    maximum_level: "Maximum<br>level"
+    expand_warehouse: "Expand<br>warehouse"
+    expand_granary: "Expand<br>granary"
+    enough_resources: "Enough resources"
+    crop_negative: "Crop production is negative so you will never reach the required resources"
+    too_few_resources: "Too few<br>resources"
+    upgrading: "Upgrading"
+    duration: "Duration"
+    complete: "Complete"
+    current_speed: "Current speed bonus:"
+    speed_level: "Speed bonus at level"
+    current_construction_time: "Current construction time:"
+    construction_time_level: "Construction time at level"
+    demolition_building: "Demolition of the building:</h2><p>If you no longer need a building, you can order the demolition of the building.</p>"
+    demolish: "Demolish"
+    demolition_of: "Demolition of "
+    rally_point_commence: "Troops movement will be displayed when the Rally Point is completed"
+    overview: "Overview"
+    reinforcement: "Reinforcement"
+    evasion_settings: "evasion settings"
+    send_troops_away_max: "Send troops away a maximum of"
+    times: "times"
+    per_evasion: "per evasion"
+    combat_simulator: "Combat Simulator"
+
+    capital: "This is your capital"
+    residence_culture_desc: "In order to extend your empire you need culture points. These culture points increase in the course of time and do so faster as your building levels increase."
+    residence_loyalty_desc: "By attacking with senators, chiefs or chieftains a village's loyalty can be brought down. If it reaches zero, the village joins the realm of the attacker. The loyalty of this village is currently at "
+    palace_train_desc: "In order to found a new village you need a level 10, 15 or 20 palace and 3 settlers. In order to conquer a new village you need a level 10, 15 or 20 palace and a senator, chief or chieftain."
+
+    current_stability: "Current stability bonus:"
+    stability_level: "Stability bonus at level"
+    current_bonus: "Current bonus:"
+    bonus_level: "Bonus at level"
+
+    current_traps: "Currect maximum traps to train:"
+    traps_level: "Maximum traps to train at level"
+
+    training_commence_great_workshop: "Training can commence when great workshop is completed."
+
   starting_position:
     title: Starting position
     north_east: North-East %{key}
     north_west: North-West %{key}
     south_east: South-East %{key}
     south_west: South-West %{key}
+
   tribes:
     roman:
       title: Romans (For newcomers)
@@ -88,6 +408,96 @@ game:
       title: Teutons (Aggressive raiders)
       description: >
         The most offensive tribe. Cheap units but slow and weak in defense.
+
+  artefacts:
+    owner: "Owner"
+    area_effect: "Area of effect"
+    village_effect: "Village effect"
+    account_effect: "Account effect"
+    unique_effect: "Unique effect"
+    required_level: "Required level"
+    time_conquer: "Time of conquer"
+    time_activation: "Time of activation"
+    next_effect: " Next effect"
+    former_owner: "Former owner(s)"
+    building_stronger: "Building stronger with"
+    building_weaker: "Building weaker with"
+    troops_faster: "Makes troops faster with"
+    troops_slowest: "Makes troops slowest with"
+    spies_increase: "Spies increase ability with"
+    spies_decrese: "Spies decrese ability with"
+    consume_less: "All troops consume less with"
+    consume_high: "All troops consume high with"
+    troops_make_faster: "Troops make faster with"
+    troops_make_slowest: "Troops make slowest with"
+    you_can_construct: "You can construct "
+    cranny_increased: "Cranny capacity is increased by"
+    cranny_decrese: "Cranny capacity is decrese by"
+    ww_building_plan: "You can build the Wonder of the World"
+    no_ww: "There are no Wonders of the World"
+    no_previous_owners: "There are no previous owners."
+    ww_village: "WW village"
+    architects:
+      description: "All buildings in the area of effect are stronger. This means that you will need more catapults to damage buildings protected by this artefacts powers."
+      small: "The architects slight secret"
+      small_village: "Diamond Chisel"
+      large: "The architects great secret"
+      large_village: "Giant Marble Hammer"
+      unique: "The architects unique secret"
+      unique_village: "Hemons Scrolls"
+    haste:
+      description: "All troops in the area of effect move faster."
+      small: "The slight titan boots"
+      small_village: "Opal Horseshoe"
+      large: "The great titan boots"
+      large_village: "Golden Chariot"
+      unique: "The unique titan boots"
+      unique_village: "Pheidippides Sandals"
+    eyesight:
+      description: "All spies (Scouts, Pathfinders, and Equites Legati) increase their spying ability. In addition, with all versions of this artefact you can see the incoming TYPE of troops but not how many there are."
+      small: "The eagles slight eyes"
+      small_village: "Tale of a Rat"
+      large: "The eagles great eyes"
+      large_village: "Generals Letter"
+      unique: "The eagles unique eyes"
+      unique_village: "Diary of Sun Tzu"
+    diet:
+      description: "All troops in the artefacts range consume less wheat, making it possible to maintain a larger army."
+      small: "Slight diet control"
+      small_village: "Silver Platter"
+      large: "Great diet control"
+      large_village: "Sacred Hunting Bow"
+      unique: "Unique diet control"
+      unique_village: "King Arthurs Chalice"
+    academic:
+      description: "Troops are built a certain percentage faster within the scope of the artefact."
+      small: "The trainers slight talent"
+      small_village: "Scribed Soldiers Oath"
+      large: "The trainers great talent"
+      large_village: "Declaration of War"
+      unique: "The trainers unique talent"
+      unique_village: "Memoirs of Alexander the Great"
+    storage:
+      description: "With this building plan you are able to build the Great Granary or Great Warehouse in the Village with the artefact, or the whole account depending on the artefact. As long as you posses that artefact you are able to build and enlarge those buildings."
+      small: "Slight storage masterplan"
+      small_village: "Builders Sketch"
+      large: "Great storage masterplan"
+      large_village: "Babylonian Tablet"
+    confusion:
+      description: "Cranny capacity is increased by a certain amount for each type of artefact. Catapults can only shoot random on villages within this artefacts power. Exceptions are the WW which can always be targeted and the treasure chamber which can always be targeted, except with the unique artefact. When aiming at a resource field only random resource fields can be hit, when aiming at a building only random buildings can be hit."
+      small: "Rivals slight confusion"
+      small_village: "Map of the Hidden Caverns"
+      large: "Rivals great confusion"
+      large_village: "Bottomless Satchel"
+      unique: "Rivals unique confusion"
+      unique_village: "Trojan Horse"
+    fool:
+      description: "Every 24 hours it gets a random effect, bonus, or penalty (all are possible with the exception of great warehouse, great granary and WW building plans). They change effect AND scope every 24 hours. The unique artefact will always take positive bonuses."
+      small: "Artefact of the slight fool"
+      small_village: "Pendant of Mischief"
+      unique: "Artefact of the unique fool"
+      unique_village: "Forbidden Manuscript"
+
 home:
   title: Home
   welcome: Welcome to Parabellum
@@ -103,12 +513,15 @@ home:
   players: Players
   active_today: Active Today
   server_starting: Server starting
+
 nav:
   logout: Logout
   login: Login
   register: Register
+
 footer:
   not_affiliated: Not affiliated to %{name}
+
 login:
   title: Login
   register_question: Need an account?
@@ -116,6 +529,7 @@ login:
   form:
     title: Access Your Village
     submit: ENTER
+
 register:
   title: Register
   login_question: Already owning a village?
