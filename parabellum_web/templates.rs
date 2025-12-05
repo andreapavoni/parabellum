@@ -11,8 +11,9 @@ pub use shared::{BuildingQueueItemView, ServerTime, TemplateLayout};
 pub use village::{
     AcademyResearchOption, AcademyResearchQueueItemView, AcademyTemplate, BarracksTemplate,
     BuildingOption, BuildingPageContext, BuildingRequirementView, BuildingUpgradeInfo,
-    EmptySlotTemplate, GenericBuildingTemplate, ResourceField, ResourceFieldTemplate,
+    EmptySlotTemplate, GenericBuildingTemplate, MovementDirectionView, MovementKindView,
+    RallyPointTemplate, RallyPointUnitView, ResourceField, ResourceFieldTemplate,
     ResourcesTemplate, SmithyQueueItemView, SmithyTemplate, SmithyUpgradeOption, StableTemplate,
-    TroopCountView, UnitTrainingOption, UnitTrainingQueueItemView, VillageTemplate,
-    WorkshopTemplate,
+    TroopCountView, TroopMovementView, UnitTrainingOption, UnitTrainingQueueItemView,
+    VillageTemplate, WorkshopTemplate,
 };

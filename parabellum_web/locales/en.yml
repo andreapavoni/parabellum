@@ -40,6 +40,36 @@ game:
     troops:
       title: Troops
       no_units: No units in the village
+  rally_point:
+    home_troops: Troops at home
+    reinforcements: Reinforcements stationed
+    no_troops_home: No troops are currently stationed at home.
+    no_reinforcements: No reinforcements are stationed in this village.
+    incoming_movements: Incoming movements
+    outgoing_movements: Outgoing movements
+    no_movements: No troop movements to show.
+    direction:
+      incoming: Incoming
+      outgoing: Outgoing
+    movement:
+      attack: Attack
+      raid: Raid
+      reinforcement: Reinforcement
+      return: Returning
+    arrives_in: Arrives in
+    send_troops: Send troops
+    send_hint: Choose the target coordinates, movement type, and units to send.
+    target_x: Target X
+    target_y: Target Y
+    movement_type: Movement type
+    select_units: Units to send
+    available: Available
+    send_button: Dispatch troops
+    unknown_village: Unknown village
+    invalid_target: No village found at those coordinates.
+    invalid_units: Select at least one unit to send.
+    invalid_building: You can only send troops from the Rally Point.
+    army_missing: There are no troops stationed in this village.
 
   units:
     romans:

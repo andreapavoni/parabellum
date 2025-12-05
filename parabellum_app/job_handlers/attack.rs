@@ -1,10 +1,7 @@
 use async_trait::async_trait;
 use tracing::{info, instrument};
 
-use parabellum_game::{
-    battle::{AttackType, Battle},
-    models::buildings::Building,
-};
+use parabellum_game::{battle::Battle, models::buildings::Building};
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::ApplicationError;
 
@@ -64,7 +61,7 @@ impl JobHandler for AttackJobHandler {
         let catapult_targets: [Building; 2] = catapult_targets.try_into().unwrap();
 
         let battle = Battle::new(
-            AttackType::Normal,
+            self.payload.attack_type.clone(),
             atk_army.clone(),
             atk_village.clone(),
             def_village.clone(),

@@ -10,7 +10,10 @@ use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
     cqrs::{
         commands::{AddBuilding, UpgradeBuilding},
-        queries::{AcademyQueueItem, SmithyQueueItem, TrainingQueueItem, VillageQueues},
+        queries::{
+            AcademyQueueItem, SmithyQueueItem, TrainingQueueItem, TroopMovement,
+            TroopMovementDirection, TroopMovementType, VillageQueues, VillageTroopMovements,
+        },
     },
 };
 use parabellum_game::models::{
@@ -23,19 +26,21 @@ use parabellum_types::{
     buildings::{BuildingName, BuildingRequirement},
     tribe::Tribe,
 };
+use rust_i18n::t;
 
 use crate::{
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, render_template,
-        village_queues_or_empty,
+        village_movements_or_empty, village_queues_or_empty,
     },
     http::AppState,
     templates::{
         AcademyResearchOption, AcademyTemplate, BarracksTemplate, BuildingOption,
         BuildingPageContext, BuildingQueueItemView, BuildingRequirementView, BuildingUpgradeInfo,
-        EmptySlotTemplate, GenericBuildingTemplate, ResourceFieldTemplate, SmithyTemplate,
-        SmithyUpgradeOption, StableTemplate, TemplateLayout, UnitTrainingOption,
-        UnitTrainingQueueItemView, WorkshopTemplate,
+        EmptySlotTemplate, GenericBuildingTemplate, MovementDirectionView, MovementKindView,
+        RallyPointTemplate, RallyPointUnitView, ResourceFieldTemplate, SmithyTemplate,
+        SmithyUpgradeOption, StableTemplate, TemplateLayout, TroopCountView, TroopMovementView,
+        UnitTrainingOption, UnitTrainingQueueItemView, WorkshopTemplate,
     },
     view_helpers::{
         academy_queue_to_views, building_queue_to_views, format_duration, smithy_queue_to_views,
@@ -86,9 +91,10 @@ pub async fn building(
     };
 
     let queues = village_queues_or_empty(&state, user.village.id).await;
+    let movements = rally_point_movements_for_slot(&state, &user, slot_id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
-    let page = build_page(&state, &user, slot_id, csrf_token, None, queues);
+    let page = build_page(&state, &user, slot_id, csrf_token, None, queues, movements);
     (jar, render_page(page, None)).into_response()
 }
 
@@ -216,9 +222,36 @@ pub(crate) async fn render_with_error(
     error: String,
 ) -> Response {
     let queues = village_queues_or_empty(state, user.village.id).await;
+    let movements = rally_point_movements_for_slot(state, &user, slot_id).await;
     let (jar, csrf_token) = generate_csrf(jar);
-    let page = build_page(state, &user, slot_id, csrf_token, Some(error), queues);
+    let page = build_page(
+        state,
+        &user,
+        slot_id,
+        csrf_token,
+        Some(error),
+        queues,
+        movements,
+    );
     (jar, render_page(page, Some(StatusCode::BAD_REQUEST))).into_response()
+}
+
+async fn rally_point_movements_for_slot(
+    state: &AppState,
+    user: &CurrentUser,
+    slot_id: u8,
+) -> VillageTroopMovements {
+    let is_rally_point = user
+        .village
+        .get_building_by_slot_id(slot_id)
+        .map(|slot| matches!(slot.building.name, BuildingName::RallyPoint))
+        .unwrap_or(false);
+
+    if is_rally_point {
+        village_movements_or_empty(state, user.village.id).await
+    } else {
+        VillageTroopMovements::default()
+    }
 }
 
 enum BuildingPage {
@@ -229,6 +262,7 @@ enum BuildingPage {
     Workshop(WorkshopTemplate),
     Academy(AcademyTemplate),
     Smithy(SmithyTemplate),
+    RallyPoint(RallyPointTemplate),
     Generic(GenericBuildingTemplate),
 }
 
@@ -241,6 +275,7 @@ fn render_page(page: BuildingPage, status: Option<StatusCode>) -> Response {
         BuildingPage::Workshop(template) => render_template(template, status).into_response(),
         BuildingPage::Academy(template) => render_template(template, status).into_response(),
         BuildingPage::Smithy(template) => render_template(template, status).into_response(),
+        BuildingPage::RallyPoint(template) => render_template(template, status).into_response(),
         BuildingPage::Generic(template) => render_template(template, status).into_response(),
     }
 }
@@ -252,6 +287,7 @@ fn build_page(
     csrf_token: String,
     flash_error: Option<String>,
     queues: VillageQueues,
+    movements: VillageTroopMovements,
 ) -> BuildingPage {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
@@ -398,6 +434,23 @@ fn build_page(
                     smithy_units,
                     smithy_queue,
                     smithy_queue_full,
+                })
+            }
+            BuildingName::RallyPoint => {
+                let home_troops = home_troops_view(&user.village);
+                let reinforcements = reinforcement_troops_view(&user.village);
+                let sendable_units = rally_point_unit_views(&user.village);
+                let incoming_movements = troop_movements_to_views(&movements.incoming);
+                let outgoing_movements = troop_movements_to_views(&movements.outgoing);
+
+                BuildingPage::RallyPoint(RallyPointTemplate {
+                    layout: layout.clone(),
+                    ctx,
+                    home_troops,
+                    reinforcements,
+                    incoming_movements,
+                    outgoing_movements,
+                    sendable_units,
                 })
             }
             _ => BuildingPage::Generic(GenericBuildingTemplate {
@@ -764,6 +817,98 @@ fn smithy_queue_counts(queue: &[SmithyQueueItem]) -> HashMap<UnitName, u8> {
     counts
 }
 
+fn home_troops_view(village: &Village) -> Vec<TroopCountView> {
+    let Some(army) = village.army() else {
+        return vec![];
+    };
+    let tribe_units = village.tribe.units();
+
+    army.units()
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, quantity)| {
+            if *quantity == 0 {
+                return None;
+            }
+            Some(TroopCountView {
+                name: unit_display_name(&tribe_units[idx].name),
+                count: *quantity,
+            })
+        })
+        .collect()
+}
+
+fn reinforcement_troops_view(village: &Village) -> Vec<TroopCountView> {
+    let mut totals: HashMap<UnitName, u32> = HashMap::new();
+
+    for army in village.reinforcements() {
+        let tribe_units = army.tribe.units();
+        for (idx, quantity) in army.units().iter().enumerate() {
+            if *quantity == 0 {
+                continue;
+            }
+            let unit_name = tribe_units[idx].name.clone();
+            *totals.entry(unit_name).or_insert(0) += *quantity;
+        }
+    }
+
+    let mut views: Vec<TroopCountView> = totals
+        .into_iter()
+        .map(|(unit_name, count)| TroopCountView {
+            name: unit_display_name(&unit_name),
+            count,
+        })
+        .collect();
+    views.sort_by(|a, b| a.name.cmp(&b.name));
+    views
+}
+
+fn rally_point_unit_views(village: &Village) -> Vec<RallyPointUnitView> {
+    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
+    let tribe_units = village.tribe.units();
+
+    tribe_units
+        .iter()
+        .enumerate()
+        .map(|(idx, unit)| RallyPointUnitView {
+            name: unit_display_name(&unit.name),
+            available: available_units[idx],
+        })
+        .collect()
+}
+
+fn troop_movements_to_views(movements: &[TroopMovement]) -> Vec<TroopMovementView> {
+    movements
+        .iter()
+        .map(|movement| TroopMovementView {
+            direction: match movement.direction {
+                TroopMovementDirection::Incoming => MovementDirectionView::Incoming,
+                TroopMovementDirection::Outgoing => MovementDirectionView::Outgoing,
+            },
+            kind: match movement.movement_type {
+                TroopMovementType::Attack => MovementKindView::Attack,
+                TroopMovementType::Raid => MovementKindView::Raid,
+                TroopMovementType::Reinforcement => MovementKindView::Reinforcement,
+                TroopMovementType::Return => MovementKindView::Return,
+            },
+            origin_name: movement
+                .origin_village_name
+                .clone()
+                .unwrap_or_else(|| t!("game.rally_point.unknown_village").to_string()),
+            origin_x: movement.origin_position.x,
+            origin_y: movement.origin_position.y,
+            destination_name: movement
+                .target_village_name
+                .clone()
+                .unwrap_or_else(|| t!("game.rally_point.unknown_village").to_string()),
+            destination_x: movement.target_position.x,
+            destination_y: movement.target_position.y,
+            time_remaining: format_duration(movement.time_seconds),
+            time_seconds: movement.time_seconds,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -960,7 +1105,15 @@ mod tests {
             ..Default::default()
         };
 
-        let page = build_page(&state, &current_user, slot_id, String::new(), None, queues);
+        let page = build_page(
+            &state,
+            &current_user,
+            slot_id,
+            String::new(),
+            None,
+            queues,
+            VillageTroopMovements::default(),
+        );
 
         match page {
             BuildingPage::Barracks(template) => {
@@ -1014,7 +1167,15 @@ mod tests {
             ..Default::default()
         };
 
-        let page = build_page(&state, &current_user, 20, String::new(), None, queues);
+        let page = build_page(
+            &state,
+            &current_user,
+            20,
+            String::new(),
+            None,
+            queues,
+            VillageTroopMovements::default(),
+        );
         match page {
             BuildingPage::Barracks(template) => {
                 assert_eq!(template.training_queue_for_slot.len(), 1);

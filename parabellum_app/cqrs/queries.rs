@@ -153,6 +153,51 @@ impl Query for GetVillageQueues {
     type Output = VillageQueues;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TroopMovementType {
+    Attack,
+    Raid,
+    Reinforcement,
+    Return,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TroopMovementDirection {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone)]
+pub struct TroopMovement {
+    pub job_id: Uuid,
+    pub movement_type: TroopMovementType,
+    pub direction: TroopMovementDirection,
+    pub origin_village_id: u32,
+    pub origin_village_name: Option<String>,
+    pub origin_player_id: Uuid,
+    pub origin_position: Position,
+    pub target_village_id: u32,
+    pub target_village_name: Option<String>,
+    pub target_player_id: Uuid,
+    pub target_position: Position,
+    pub arrives_at: DateTime<Utc>,
+    pub time_seconds: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VillageTroopMovements {
+    pub outgoing: Vec<TroopMovement>,
+    pub incoming: Vec<TroopMovement>,
+}
+
+pub struct GetVillageTroopMovements {
+    pub village_id: u32,
+}
+
+impl Query for GetVillageTroopMovements {
+    type Output = VillageTroopMovements;
+}
+
 /// Fetch a square region of the world map.
 pub struct GetMapRegion {
     pub center: Position,

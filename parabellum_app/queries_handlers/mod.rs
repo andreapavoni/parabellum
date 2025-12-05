@@ -9,6 +9,7 @@ mod get_village_by_id;
 mod get_village_queues;
 mod get_village_smithy_queue;
 mod get_village_training_queue;
+mod get_village_troop_movements;
 mod list_villages_by_player_id;
 pub(crate) mod queue_converters;
 
@@ -23,4 +24,5 @@ pub use get_village_by_id::GetVillageByIdHandler;
 pub use get_village_queues::GetVillageQueuesHandler;
 pub use get_village_smithy_queue::GetVillageSmithyQueueHandler;
 pub use get_village_training_queue::GetVillageTrainingQueueHandler;
+pub use get_village_troop_movements::GetVillageTroopMovementsHandler;
 pub use list_villages_by_player_id::ListVillagesByPlayerIdHandler;

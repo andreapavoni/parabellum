@@ -9,7 +9,7 @@ mod smithy_handler;
 mod village_handler;
 
 pub use academy_handler::research_unit;
-pub use army_handler::train_units;
+pub use army_handler::{send_troops, train_units};
 pub use auth_handler::{RegisterForm, login, login_page, logout, register, register_page};
 pub use building_handler::{build_action, building};
 pub(crate) use helpers::*;

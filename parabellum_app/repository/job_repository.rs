@@ -21,6 +21,13 @@ pub trait JobRepository: Send + Sync {
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError>;
 
+    /// Lists pending/processing army movement jobs targeting the given village,
+    /// regardless of which village created them.
+    async fn list_village_targeting_movements(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
     /// Lists pending/processing building-related jobs for a village.
     async fn list_village_building_queue(
         &self,

@@ -94,6 +94,32 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
 
+    async fn list_village_targeting_movements(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+        let jobs = sqlx::query_as!(
+            db_models::Job,
+            r#"
+            SELECT id, player_id, village_id, task, status as "status: _", completed_at, created_at, updated_at
+            FROM jobs
+            WHERE status IN ('Pending', 'Processing')
+              AND (
+                (task ->> 'task_type' = 'Attack' AND (task -> 'data' ->> 'target_village_id')::integer = $1)
+                OR (task ->> 'task_type' = 'Reinforcement' AND (task -> 'data' ->> 'village_id')::integer = $1)
+              )
+            ORDER BY completed_at ASC
+            "#,
+            village_id
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
+    }
+
     async fn list_village_building_queue(
         &self,
         village_id: i32,

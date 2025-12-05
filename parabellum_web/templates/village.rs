@@ -138,6 +138,40 @@ pub struct TroopCountView {
 }
 
 #[derive(Debug, Clone)]
+pub struct RallyPointUnitView {
+    pub name: String,
+    pub available: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MovementDirectionView {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MovementKindView {
+    Attack,
+    Raid,
+    Reinforcement,
+    Return,
+}
+
+#[derive(Debug, Clone)]
+pub struct TroopMovementView {
+    pub direction: MovementDirectionView,
+    pub kind: MovementKindView,
+    pub origin_name: String,
+    pub origin_x: i32,
+    pub origin_y: i32,
+    pub destination_name: String,
+    pub destination_x: i32,
+    pub destination_y: i32,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct UnitTrainingQueueItemView {
     pub job_id: Uuid,
     pub slot_id: u8,
@@ -276,6 +310,18 @@ pub struct SmithyTemplate {
 pub struct GenericBuildingTemplate {
     pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/rally_point.html")]
+pub struct RallyPointTemplate {
+    pub layout: TemplateLayout,
+    pub ctx: BuildingPageContext,
+    pub home_troops: Vec<TroopCountView>,
+    pub reinforcements: Vec<TroopCountView>,
+    pub incoming_movements: Vec<TroopMovementView>,
+    pub outgoing_movements: Vec<TroopMovementView>,
+    pub sendable_units: Vec<RallyPointUnitView>,
 }
 
 fn queue_state_class(

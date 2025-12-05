@@ -13,11 +13,12 @@ use uuid::Uuid;
 
 use parabellum_app::{
     cqrs::queries::{
-        GetPlayerByUserId, GetUserById, GetVillageQueues, ListVillagesByPlayerId, VillageQueues,
+        GetPlayerByUserId, GetUserById, GetVillageQueues, GetVillageTroopMovements,
+        ListVillagesByPlayerId, VillageQueues, VillageTroopMovements,
     },
     queries_handlers::{
         GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageQueuesHandler,
-        ListVillagesByPlayerIdHandler,
+        GetVillageTroopMovementsHandler, ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -258,6 +259,36 @@ pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> Villa
                 "Unable to load village queues"
             );
             VillageQueues::default()
+        }
+    }
+}
+
+async fn load_village_movements(
+    state: &AppState,
+    village_id: u32,
+) -> Result<VillageTroopMovements, ApplicationError> {
+    state
+        .app_bus
+        .query(
+            GetVillageTroopMovements { village_id },
+            GetVillageTroopMovementsHandler::new(),
+        )
+        .await
+}
+
+pub async fn village_movements_or_empty(
+    state: &AppState,
+    village_id: u32,
+) -> VillageTroopMovements {
+    match load_village_movements(state, village_id).await {
+        Ok(movements) => movements,
+        Err(err) => {
+            tracing::error!(
+                error = ?err,
+                village_id,
+                "Unable to load village troop movements"
+            );
+            VillageTroopMovements::default()
         }
     }
 }
