@@ -5,6 +5,7 @@ use chrono::{Duration, Utc};
 use parabellum_types::errors::{ApplicationError, GameError};
 
 use crate::{
+    command_handlers::helpers::enforce_queue_capacity,
     config::Config,
     cqrs::{CommandHandler, commands::TrainUnits},
     jobs::{Job, JobPayload, tasks::TrainUnitsTask},
@@ -44,6 +45,15 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             }));
         }
 
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
+            .await?;
+        let training_jobs: Vec<Job> = active_jobs
+            .into_iter()
+            .filter(|job| job.task.task_type == "TrainUnits")
+            .collect();
+        enforce_queue_capacity("training", &training_jobs, 2)?;
+
         let (slot_id, unit_name, time_per_unit) = village.init_unit_training(
             command.unit_idx,
             &command.building_name,
@@ -60,12 +70,9 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
         };
 
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
-        let queued_jobs = job_repo
-            .list_village_training_queue(command.village_id as i32)
-            .await?;
 
         let first_completion =
-            Self::initial_completion_deadline(slot_id, time_per_unit, queued_jobs);
+            Self::initial_completion_deadline(slot_id, time_per_unit, &training_jobs);
 
         let new_job = Job::with_deadline(
             command.player_id,
@@ -84,7 +91,7 @@ impl TrainUnitsCommandHandler {
     fn initial_completion_deadline(
         slot_id: u8,
         time_per_unit: u32,
-        jobs: Vec<Job>,
+        jobs: &[Job],
     ) -> chrono::DateTime<Utc> {
         let mut slot_free_at = Utc::now();
 
@@ -138,6 +145,7 @@ mod tests {
         },
     };
     use parabellum_types::Result;
+    use parabellum_types::errors::{AppError, ApplicationError};
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
@@ -409,6 +417,51 @@ mod tests {
             task.slot_id, 22,
             "Task should be linked to the right slot_id"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_train_units_handler_queue_limit() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let job_repo = mock_uow.jobs();
+        let village_repo = mock_uow.villages();
+
+        let (player, mut village, config) = setup_village_with_barracks()?;
+        village.set_academy_research_for_test(&UnitName::Praetorian, true);
+        let village_id = village.id;
+        village_repo.save(&village).await.unwrap();
+
+        let payload = TrainUnitsTask {
+            slot_id: 20,
+            unit: UnitName::Legionnaire,
+            quantity: 1,
+            time_per_unit: 30,
+        };
+        let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
+        let existing_job = Job::new(player.id, village_id as i32, 30, job_payload.clone());
+        job_repo.add(&existing_job).await?;
+        let second_job = Job::new(player.id, village_id as i32, 30, job_payload);
+        job_repo.add(&second_job).await?;
+
+        let handler = TrainUnitsCommandHandler::new();
+        let command = TrainUnits {
+            player_id: player.id,
+            village_id,
+            unit_idx: 0,
+            quantity: 1,
+            building_name: BuildingName::Barracks,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(
+            matches!(
+                result,
+                Err(ApplicationError::App(AppError::QueueLimitReached { queue }))
+                if queue == "training"
+            ),
+            "Expected training queue limit error"
+        );
+
         Ok(())
     }
 

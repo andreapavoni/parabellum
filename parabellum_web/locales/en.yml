@@ -253,6 +253,7 @@ game:
     no_units_available: No infantry units available for training. Research new units in the Academy.
     training_queue_title: Training queue
     training_remaining: Time remaining
+    training_queue_full_hint: Training queue is full. Wait for current orders to finish.
     invalid_training_building: Invalid training building selected. Pick the correct slot and retry.
     upgrade: Next upgrade
     upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"
@@ -265,6 +266,8 @@ game:
     upgrade_action: "Upgrade to Lv %{level}"
     construction_in_progress: "%{name} to level %{level} is currently under construction."
     queue_locked: Another construction is already queued for this slot.
+    construction_queue_full: Construction queue is full. Wait for an ongoing build to finish.
+    construction_queue_full_short: Construction queue is full.
     slot_queue_title: Slot queue
     queue_item_current: "%{name} → Lv %{level} (in progress)"
     queue_item_pending: "Queued: %{name} → Lv %{level}"
@@ -285,6 +288,7 @@ game:
     research_cost: Research cost
     research_time: Research time
     research_action: Research
+    academy_queue_full_hint: Research queue is full. Wait for the current research to finish.
     not_enough_resources: Not enough resources in storage.
     invalid_training_quantity: Invalid training quantity specified.
     smithy_available: Available upgrades
@@ -294,6 +298,7 @@ game:
     smithy_upgrade_action: Upgrade unit
     smithy_max_level_hint: Maximum level reached. Upgrade the Smithy to continue.
     smithy_queued_hint: "Queued to reach Lv %{level}"
+    smithy_queue_full_hint: Smithy queue is full. Wait for the current upgrades to finish.
 
     current_wood_bonus: "Current wood bonus:"
     wood_bonus_level: "Wood bonus at level"

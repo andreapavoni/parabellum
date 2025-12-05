@@ -15,6 +15,12 @@ pub trait JobRepository: Send + Sync {
     /// Lists jobs created by a player.
     async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError>;
 
+    /// Lists all pending/processing jobs for a village regardless of task type.
+    async fn list_active_jobs_by_village(
+        &self,
+        village_id: i32,
+    ) -> Result<Vec<Job>, ApplicationError>;
+
     /// Lists pending/processing building-related jobs for a village.
     async fn list_village_building_queue(
         &self,

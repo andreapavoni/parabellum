@@ -71,7 +71,8 @@
             <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
             <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
         </div>
-        {% let can_upgrade = self.can_afford(&next.cost) %}
+        {% let has_resources = self.can_afford(&next.cost) %}
+        {% let can_upgrade = has_resources && !self.building_queue_full %}
         <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
             <input type="hidden" name="slot_id" value="{{ slot_id }}">
             <input type="hidden" name="action" value="upgrade">
@@ -86,9 +87,13 @@
                 {% endif %}
             </button>
         </form>
-        {% if !can_upgrade %}
+        {% if !has_resources %}
         <div class="text-xs text-red-600">
             {{t!("game.building.not_enough_resources")}}
+        </div>
+        {% elif self.building_queue_full %}
+        <div class="text-xs text-amber-700">
+            {{ t!("game.building.construction_queue_full_short") }}
         </div>
         {% endif %}
     </div>
@@ -128,6 +133,11 @@
             {% if academy_ready_units.is_empty() %}
             <p class="text-sm text-gray-500 mt-2">{{ t!("game.building.no_research_available") }}</p>
             {% else %}
+            {% if self.academy_queue_full %}
+            <div class="text-xs text-amber-700 border border-amber-200 bg-amber-50 rounded-md p-2">
+                {{ t!("game.building.academy_queue_full_hint") }}
+            </div>
+            {% endif %}
             <div class="space-y-4 mt-3">
                 {% for option in academy_ready_units %}
                 <div class="border rounded-md p-4 bg-white space-y-3">
@@ -159,19 +169,24 @@
                         </div>
                     </div>
                     {% let has_resources = self.can_afford(&option.cost) %}
+                    {% let can_research = has_resources && !self.academy_queue_full %}
                     <form action="/academy/research" method="post" class="flex flex-col sm:flex-row sm:items-end gap-3">
                         <input type="hidden" name="slot_id" value="{{ slot_id }}">
                         <input type="hidden" name="unit_name" value="{{ option.unit_value }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit"
-                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !has_resources %}opacity-60 cursor-not-allowed{% endif %}"
-                                {% if !has_resources %}disabled aria-disabled="true"{% endif %}>
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !can_research %}opacity-60 cursor-not-allowed{% endif %}"
+                                {% if !can_research %}disabled aria-disabled="true"{% endif %}>
                             {{ t!("game.building.research_action") }}
                         </button>
                     </form>
                     {% if !has_resources %}
                     <div class="text-xs text-red-600">
                         {{ t!("game.building.not_enough_resources") }}
+                    </div>
+                    {% elif self.academy_queue_full %}
+                    <div class="text-xs text-amber-700">
+                        {{ t!("game.building.academy_queue_full_hint") }}
                     </div>
                     {% endif %}
                 </div>

@@ -197,6 +197,7 @@ pub struct BuildingTemplate {
     pub slot_building: Option<VillageBuilding>,
     pub buildable_buildings: Vec<BuildingOption>,
     pub locked_buildings: Vec<BuildingOption>,
+    pub building_queue_full: bool,
     pub academy_ready_units: Vec<AcademyResearchOption>,
     pub academy_locked_units: Vec<AcademyResearchOption>,
     pub academy_researched_units: Vec<AcademyResearchOption>,
@@ -211,9 +212,12 @@ pub struct BuildingTemplate {
     pub stable_units: Vec<UnitTrainingOption>,
     pub workshop_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
+    pub training_queue_full: bool,
     pub academy_queue: Vec<AcademyResearchQueueItemView>,
+    pub academy_queue_full: bool,
     pub smithy_units: Vec<SmithyUpgradeOption>,
     pub smithy_queue: Vec<SmithyQueueItemView>,
+    pub smithy_queue_full: bool,
 }
 
 impl BuildingTemplate {

@@ -3,7 +3,7 @@ use crate::{
         QueryHandler,
         queries::{GetVillageTrainingQueue, TrainingQueueItem},
     },
-    jobs::tasks::TrainUnitsTask,
+    queries_handlers::queue_converters::training_queue_item_from_job,
     uow::UnitOfWork,
 };
 use parabellum_types::{Result, errors::ApplicationError};
@@ -29,23 +29,10 @@ impl QueryHandler<GetVillageTrainingQueue> for GetVillageTrainingQueueHandler {
             .list_village_training_queue(query.village_id as i32)
             .await?;
 
-        let mut entries = Vec::with_capacity(jobs.len());
-        for job in jobs {
-            let Ok(payload) = serde_json::from_value::<TrainUnitsTask>(job.task.data.clone())
-            else {
-                continue;
-            };
-
-            entries.push(TrainingQueueItem {
-                job_id: job.id,
-                slot_id: payload.slot_id,
-                unit: payload.unit,
-                quantity: payload.quantity,
-                time_per_unit: payload.time_per_unit,
-                status: job.status.clone(),
-                finishes_at: job.completed_at,
-            });
-        }
+        let mut entries: Vec<TrainingQueueItem> = jobs
+            .iter()
+            .filter_map(training_queue_item_from_job)
+            .collect();
 
         entries.sort_by_key(|item| item.finishes_at);
         Ok(entries)

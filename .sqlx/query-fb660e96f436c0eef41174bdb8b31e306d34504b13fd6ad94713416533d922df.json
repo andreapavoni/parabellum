@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, player_id, village_id, task, status as \"status: _\", completed_at, created_at, updated_at\n            FROM jobs\n            WHERE village_id = $1\n              AND status IN ('Pending', 'Processing')\n            ORDER BY completed_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "task",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: _",
+        "type_info": {
+          "Custom": {
+            "name": "job_status",
+            "kind": {
+              "Enum": [
+                "Pending",
+                "Processing",
+                "Completed",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fb660e96f436c0eef41174bdb8b31e306d34504b13fd6ad94713416533d922df"
+}

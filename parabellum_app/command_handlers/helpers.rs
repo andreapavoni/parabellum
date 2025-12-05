@@ -16,7 +16,7 @@ use parabellum_game::models::{
 };
 use parabellum_types::{
     Result,
-    errors::{ApplicationError, GameError},
+    errors::{AppError, ApplicationError, GameError},
 };
 
 fn job_slot_id(job: &Job) -> Option<u8> {
@@ -79,6 +79,29 @@ pub fn completion_time_for_slot(jobs: &[Job], slot_id: u8, duration_secs: i64) -
     start_time
         .checked_add_signed(Duration::seconds(duration_secs))
         .unwrap_or(start_time)
+}
+
+fn queue_ready_time(jobs: &[Job]) -> DateTime<Utc> {
+    let now = Utc::now();
+    match jobs.iter().map(|job| job.completed_at).max() {
+        Some(time) if time > now => time,
+        _ => now,
+    }
+}
+
+pub fn completion_time_for_queue(jobs: &[Job], duration_secs: i64) -> DateTime<Utc> {
+    let start_time = queue_ready_time(jobs);
+    start_time
+        .checked_add_signed(Duration::seconds(duration_secs))
+        .unwrap_or(start_time)
+}
+
+pub fn enforce_queue_capacity(queue_name: &'static str, jobs: &[Job], limit: usize) -> Result<()> {
+    if jobs.len() >= limit {
+        Err(AppError::QueueLimitReached { queue: queue_name }.into())
+    } else {
+        Ok(())
+    }
 }
 
 /// Handles the logic of deploying an army from a village.

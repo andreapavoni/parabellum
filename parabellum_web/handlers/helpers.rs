@@ -13,14 +13,11 @@ use uuid::Uuid;
 
 use parabellum_app::{
     cqrs::queries::{
-        AcademyQueueItem, BuildingQueueItem, GetPlayerByUserId, GetUserById,
-        GetVillageAcademyQueue, GetVillageBuildingQueue, GetVillageSmithyQueue,
-        GetVillageTrainingQueue, ListVillagesByPlayerId, SmithyQueueItem, TrainingQueueItem,
+        GetPlayerByUserId, GetUserById, GetVillageQueues, ListVillagesByPlayerId, VillageQueues,
     },
     queries_handlers::{
-        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageAcademyQueueHandler,
-        GetVillageBuildingQueueHandler, GetVillageSmithyQueueHandler,
-        GetVillageTrainingQueueHandler, ListVillagesByPlayerIdHandler,
+        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageQueuesHandler,
+        ListVillagesByPlayerIdHandler,
     },
 };
 use parabellum_game::models::village::Village;
@@ -238,104 +235,29 @@ async fn list_player_villages(
         .await
 }
 
-pub async fn load_building_queue(
+async fn load_village_queues(
     state: &AppState,
     village_id: u32,
-) -> Result<Vec<BuildingQueueItem>, ApplicationError> {
+) -> Result<VillageQueues, ApplicationError> {
     state
         .app_bus
         .query(
-            GetVillageBuildingQueue { village_id },
-            GetVillageBuildingQueueHandler::new(),
+            GetVillageQueues { village_id },
+            GetVillageQueuesHandler::new(),
         )
         .await
 }
 
-/// Loads the building queue but swallows failures and logs them.
-pub async fn building_queue_or_empty(state: &AppState, village_id: u32) -> Vec<BuildingQueueItem> {
-    match load_building_queue(state, village_id).await {
-        Ok(queue) => queue,
+pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> VillageQueues {
+    match load_village_queues(state, village_id).await {
+        Ok(queues) => queues,
         Err(err) => {
             tracing::error!(
                 error = ?err,
                 village_id,
-                "Unable to load building queue"
+                "Unable to load village queues"
             );
-            Vec::new()
-        }
-    }
-}
-
-async fn load_training_queue(
-    state: &AppState,
-    village_id: u32,
-) -> Result<Vec<TrainingQueueItem>, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            GetVillageTrainingQueue { village_id },
-            GetVillageTrainingQueueHandler::new(),
-        )
-        .await
-}
-
-/// Loads the unit training queue and logs failures.
-pub async fn training_queue_or_empty(state: &AppState, village_id: u32) -> Vec<TrainingQueueItem> {
-    match load_training_queue(state, village_id).await {
-        Ok(queue) => queue,
-        Err(err) => {
-            tracing::error!(
-                error = ?err,
-                village_id,
-                "Unable to load training queue"
-            );
-            vec![]
-        }
-    }
-}
-
-async fn load_smithy_queue(
-    state: &AppState,
-    village_id: u32,
-) -> Result<Vec<SmithyQueueItem>, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            GetVillageSmithyQueue { village_id },
-            GetVillageSmithyQueueHandler::new(),
-        )
-        .await
-}
-
-pub async fn smithy_queue_or_empty(state: &AppState, village_id: u32) -> Vec<SmithyQueueItem> {
-    match load_smithy_queue(state, village_id).await {
-        Ok(queue) => queue,
-        Err(err) => {
-            tracing::error!(error = ?err, village_id, "Unable to load smithy queue");
-            vec![]
-        }
-    }
-}
-
-async fn load_academy_queue(
-    state: &AppState,
-    village_id: u32,
-) -> Result<Vec<AcademyQueueItem>, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            GetVillageAcademyQueue { village_id },
-            GetVillageAcademyQueueHandler::new(),
-        )
-        .await
-}
-
-pub async fn academy_queue_or_empty(state: &AppState, village_id: u32) -> Vec<AcademyQueueItem> {
-    match load_academy_queue(state, village_id).await {
-        Ok(queue) => queue,
-        Err(err) => {
-            tracing::error!(error = ?err, village_id, "Unable to load academy queue");
-            vec![]
+            VillageQueues::default()
         }
     }
 }

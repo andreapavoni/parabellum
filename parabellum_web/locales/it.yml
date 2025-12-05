@@ -61,6 +61,8 @@ game:
     queue_item_pending: "In coda: %{name} → Lv %{level}"
     construction_in_progress: "%{name} verso il livello %{level} è in costruzione."
     queue_locked: Un'altra costruzione è già in coda per questo slot.
+    construction_queue_full: La coda di costruzione è piena. Attendi che un lavoro termini.
+    construction_queue_full_short: Coda di costruzione piena.
     empty_slot: Questo slot è vuoto.
     empty_slot_hint: Scegli un edificio da costruire qui.
     available: Edifici disponibili
@@ -87,6 +89,7 @@ game:
     no_units_available: Nessuna unità disponibile. Ricerca nuove unità nell'Accademia.
     training_queue_title: Coda addestramento
     training_remaining: Tempo rimanente
+    training_queue_full_hint: La coda di addestramento è piena. Attendi il completamento di un ordine.
     invalid_training_building: Edificio di addestramento non valido. Seleziona lo slot corretto e riprova.
     research_available: Ricerche disponibili
     no_research_available: Nessuna unità disponibile per la ricerca.
@@ -99,6 +102,7 @@ game:
     research_cost: Costo ricerca
     research_time: Tempo di ricerca
     research_action: Ricerca
+    academy_queue_full_hint: La coda di ricerca è piena. Attendi che la ricerca in corso finisca.
     smithy_available: Potenziamenti disponibili
     no_smithy_upgrades: Nessuna unità disponibile per il potenziamento.
     smithy_queue_title: Coda fucina
@@ -106,6 +110,7 @@ game:
     smithy_upgrade_action: Potenzia unità
     smithy_max_level_hint: Livello massimo raggiunto. Migliora la Fucina per continuare.
     smithy_queued_hint: "In coda fino al Lv %{level}"
+    smithy_queue_full_hint: La coda della fucina è piena. Attendi che gli upgrade terminino.
   starting_position:
     title: Posizione iniziale
     north_east: Nord-Est %{key}

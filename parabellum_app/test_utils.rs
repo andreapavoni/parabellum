@@ -63,6 +63,20 @@ pub mod tests {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
 
+        async fn list_active_jobs_by_village(
+            &self,
+            village_id: i32,
+        ) -> Result<Vec<Job>, ApplicationError> {
+            Ok(self
+                .added_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|job| job.village_id == village_id)
+                .cloned()
+                .collect())
+        }
+
         async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
             Ok(self.added_jobs.lock().unwrap().clone())
         }
