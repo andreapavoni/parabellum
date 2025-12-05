@@ -261,7 +261,6 @@ fn build_template(
         .map(|slot| slot.building.cost().upkeep);
 
     let training_queue_view = training_queue_to_views(&queues.training);
-    let training_queue_full = queues.training.len() >= 2;
     let training_queue_for_slot = training_queue_view
         .iter()
         .filter(|item| item.slot_id == slot_id)
@@ -360,7 +359,6 @@ fn build_template(
         stable_units,
         workshop_units,
         training_queue_for_slot,
-        training_queue_full,
         academy_queue: academy_queue_view,
         academy_queue_full,
         smithy_units,
@@ -646,14 +644,11 @@ fn smithy_options_for_village(
         let current_level = smithy_levels[idx];
         let queued = queue_counts.get(&unit.name).copied().unwrap_or(0);
         let effective_level = current_level.saturating_add(queued);
-        let next_level_value = effective_level.saturating_add(1);
-        let can_upgrade = is_researched
-            && effective_level < smithy_level_cap
-            && smithy_level_cap > 0
-            && queued == 0
-            && !queue_full;
+        let available_for_upgrade =
+            is_researched && effective_level < smithy_level_cap && smithy_level_cap > 0;
+        let can_upgrade = available_for_upgrade && queued == 0 && !queue_full;
 
-        let (cost, time_formatted) = if can_upgrade {
+        let (cost, time_formatted) = if available_for_upgrade {
             match smithy_upgrade_cost_for_unit(&unit.name, effective_level) {
                 Ok(research_cost) => {
                     let time_secs = if research_cost.time == 0 {
@@ -675,17 +670,11 @@ fn smithy_options_for_village(
         };
 
         options.push(SmithyUpgradeOption {
-            unit_name: unit.name.clone(),
             unit_value: format!("{:?}", unit.name),
             display_name: unit_display_name(&unit.name),
             current_level,
             queued_levels: queued,
             max_level: smithy_level_cap,
-            next_level: if can_upgrade {
-                Some(next_level_value)
-            } else {
-                None
-            },
             cost,
             time_formatted,
             can_upgrade,
@@ -709,15 +698,24 @@ mod tests {
     use super::*;
     use chrono::{Duration, Utc};
     use parabellum_app::{
-        cqrs::queries::{AcademyQueueItem, SmithyQueueItem},
+        app::AppBus,
+        config::Config,
+        cqrs::queries::{AcademyQueueItem, SmithyQueueItem, TrainingQueueItem},
         jobs::JobStatus,
+        test_utils::tests::MockUnitOfWorkProvider,
     };
     use parabellum_game::{
         models::{buildings::Building, village::VillageBuilding},
-        test_utils::{VillageFactoryOptions, village_factory},
+        test_utils::{
+            PlayerFactoryOptions, UserFactoryOptions, VillageFactoryOptions, player_factory,
+            user_factory, village_factory,
+        },
     };
     use parabellum_types::{army::UnitName, buildings::BuildingName};
+    use std::sync::Arc;
     use uuid::Uuid;
+
+    use crate::{handlers::CurrentUser, http::AppState};
 
     #[test]
     fn test_building_options_grouped_by_requirements() {
@@ -845,6 +843,103 @@ mod tests {
         );
 
         assert!(!units.is_empty());
+    }
+
+    #[test]
+    fn test_build_template_lists_training_queue_without_limit() {
+        let config = Arc::new(Config::from_env());
+        let bus = Arc::new(AppBus::new(
+            config.clone(),
+            Arc::new(MockUnitOfWorkProvider::new()),
+        ));
+        let state = AppState::new(bus, &config);
+
+        let user = user_factory(UserFactoryOptions::default());
+        let player = player_factory(PlayerFactoryOptions::default());
+        let mut village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        let barracks = Building::new(BuildingName::Barracks, state.server_speed)
+            .at_level(3, state.server_speed)
+            .unwrap();
+        let slot_id = 20;
+        village.add_building_at_slot(barracks, slot_id).unwrap();
+
+        let current_user = CurrentUser {
+            account: user,
+            player: player.clone(),
+            village: village.clone(),
+            villages: vec![village.clone()],
+        };
+
+        let now = Utc::now();
+        let queue_job = |slot_id| TrainingQueueItem {
+            job_id: Uuid::new_v4(),
+            slot_id,
+            unit: UnitName::Legionnaire,
+            quantity: 1,
+            time_per_unit: 30,
+            status: JobStatus::Processing,
+            finishes_at: now + Duration::seconds(30),
+        };
+
+        let queues = VillageQueues {
+            training: vec![queue_job(slot_id), queue_job(slot_id)],
+            ..Default::default()
+        };
+
+        let template = build_template(&state, &current_user, slot_id, String::new(), None, queues);
+
+        assert_eq!(template.training_queue_for_slot.len(), 2);
+    }
+
+    #[test]
+    fn test_build_template_lists_training_queue_per_slot() {
+        let config = Arc::new(Config::from_env());
+        let bus = Arc::new(AppBus::new(
+            config.clone(),
+            Arc::new(MockUnitOfWorkProvider::new()),
+        ));
+        let state = AppState::new(bus, &config);
+
+        let user = user_factory(UserFactoryOptions::default());
+        let player = player_factory(PlayerFactoryOptions::default());
+        let mut village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+
+        let barracks = Building::new(BuildingName::Barracks, state.server_speed)
+            .at_level(3, state.server_speed)
+            .unwrap();
+        village.add_building_at_slot(barracks, 20).unwrap();
+
+        let current_user = CurrentUser {
+            account: user,
+            player: player.clone(),
+            village: village.clone(),
+            villages: vec![village.clone()],
+        };
+
+        let now = Utc::now();
+        let queue_job = |slot_id| TrainingQueueItem {
+            job_id: Uuid::new_v4(),
+            slot_id,
+            unit: UnitName::Legionnaire,
+            quantity: 1,
+            time_per_unit: 30,
+            status: JobStatus::Processing,
+            finishes_at: now + Duration::seconds(30),
+        };
+
+        let queues = VillageQueues {
+            training: vec![queue_job(20), queue_job(21)],
+            ..Default::default()
+        };
+
+        let template = build_template(&state, &current_user, 20, String::new(), None, queues);
+        assert_eq!(template.training_queue_for_slot.len(), 1);
     }
 
     #[test]

@@ -89,7 +89,6 @@ game:
     no_units_available: Nessuna unità disponibile. Ricerca nuove unità nell'Accademia.
     training_queue_title: Coda addestramento
     training_remaining: Tempo rimanente
-    training_queue_full_hint: La coda di addestramento è piena. Attendi il completamento di un ordine.
     invalid_training_building: Edificio di addestramento non valido. Seleziona lo slot corretto e riprova.
     research_available: Ricerche disponibili
     no_research_available: Nessuna unità disponibile per la ricerca.

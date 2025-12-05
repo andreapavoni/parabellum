@@ -253,7 +253,6 @@ game:
     no_units_available: No infantry units available for training. Research new units in the Academy.
     training_queue_title: Training queue
     training_remaining: Time remaining
-    training_queue_full_hint: Training queue is full. Wait for current orders to finish.
     invalid_training_building: Invalid training building selected. Pick the correct slot and retry.
     upgrade: Next upgrade
     upgrade_after_current: "Upcoming upgrade after current build – Lv %{level}"

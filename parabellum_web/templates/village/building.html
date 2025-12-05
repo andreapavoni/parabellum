@@ -125,7 +125,8 @@
                                 <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
                                 <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
                             </div>
-                            {% let can_upgrade = self.can_afford(&next.cost) %}
+                            {% let has_resources = self.can_afford(&next.cost) %}
+                            {% let can_upgrade = has_resources && !self.building_queue_full %}
                             <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
                                 <input type="hidden" name="slot_id" value="{{ slot_id }}">
                                 <input type="hidden" name="action" value="upgrade">
@@ -140,9 +141,13 @@
                                     {% endif %}
                                 </button>
                             </form>
-                            {% if !can_upgrade %}
+                            {% if !has_resources %}
                             <div class="text-xs text-red-600">
                                 {{t!("game.building.not_enough_resources")}}
+                            </div>
+                            {% elif self.building_queue_full %}
+                            <div class="text-xs text-amber-700">
+                                {{ t!("game.building.construction_queue_full_short") }}
                             </div>
                             {% endif %}
                         </div>

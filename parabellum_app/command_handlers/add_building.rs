@@ -481,7 +481,7 @@ mod tests {
             player_id,
             village_id,
             slot_id: 24,
-            name: BuildingName::Stable,
+            name: BuildingName::Cranny,
         };
 
         handler.handle(command, &mock_uow, &config).await?;

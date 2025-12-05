@@ -114,11 +114,6 @@
 
     <div class="space-y-3">
         <div class="text-sm text-gray-500 uppercase">{{ t!("game.building.train_units") }}</div>
-        {% if self.training_queue_full %}
-        <div class="text-xs text-amber-700 border border-amber-200 bg-amber-50 rounded-md p-2">
-            {{ t!("game.building.training_queue_full_hint") }}
-        </div>
-        {% endif %}
         {% if barracks_units.is_empty() %}
             <p class="text-sm text-gray-500">{{ t!("game.building.no_units_available") }}</p>
         {% else %}
@@ -168,8 +163,7 @@
                                    class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
                         </label>
                         <button type="submit"
-                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if self.training_queue_full %}opacity-60 cursor-not-allowed{% endif %}"
-                                {% if self.training_queue_full %}disabled aria-disabled="true"{% endif %}>
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded">
                             {{ t!("game.building.train_action") }}
                         </button>
                     </form>

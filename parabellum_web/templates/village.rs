@@ -174,13 +174,11 @@ pub struct SmithyQueueItemView {
 
 #[derive(Debug, Clone)]
 pub struct SmithyUpgradeOption {
-    pub unit_name: UnitName,
     pub unit_value: String,
     pub display_name: String,
     pub current_level: u8,
     pub queued_levels: u8,
     pub max_level: u8,
-    pub next_level: Option<u8>,
     pub cost: Option<ResourceCostView>,
     pub time_formatted: Option<String>,
     pub can_upgrade: bool,
@@ -212,7 +210,6 @@ pub struct BuildingTemplate {
     pub stable_units: Vec<UnitTrainingOption>,
     pub workshop_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
-    pub training_queue_full: bool,
     pub academy_queue: Vec<AcademyResearchQueueItemView>,
     pub academy_queue_full: bool,
     pub smithy_units: Vec<SmithyUpgradeOption>,
