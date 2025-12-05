@@ -983,14 +983,14 @@ mod tests {
         let options = smithy_options_for_village(&village, &slot, 1, &queue, false);
         let legion = options
             .iter()
-            .find(|opt| opt.unit_name == UnitName::Legionnaire)
+            .find(|opt| opt.unit_value == "Legionnaire")
             .unwrap();
         assert_eq!(legion.queued_levels, 1);
         assert!(!legion.can_upgrade);
 
         let imperian = options
             .iter()
-            .find(|opt| opt.unit_name == UnitName::Imperian)
+            .find(|opt| opt.unit_value == "Imperian")
             .unwrap();
         assert!(!imperian.is_researched);
         assert!(!imperian.can_upgrade);

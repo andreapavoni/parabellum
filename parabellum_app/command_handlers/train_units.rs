@@ -143,7 +143,6 @@ mod tests {
         },
     };
     use parabellum_types::Result;
-    use parabellum_types::errors::{AppError, ApplicationError};
     use parabellum_types::{
         army::UnitName,
         buildings::BuildingName,
@@ -527,7 +526,7 @@ mod tests {
                     player_id: player.id,
                     village_id,
                     unit_idx: 0,
-                    quantity: 3,
+                    quantity: 1,
                     building_name: BuildingName::Barracks,
                 },
                 &mock_uow,
