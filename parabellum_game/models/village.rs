@@ -1138,10 +1138,7 @@ mod tests {
     };
     use chrono::{Duration, Utc};
     use parabellum_types::{
-        buildings::BuildingName,
-        errors::GameError,
-        map::ValleyTopology,
-        tribe::Tribe,
+        buildings::BuildingName, errors::GameError, map::ValleyTopology, tribe::Tribe,
     };
 
     #[test]
@@ -1222,7 +1219,9 @@ mod tests {
         let result = v.init_building_construction(21, BuildingName::Warehouse, 1);
         assert!(matches!(
             result,
-            Err(GameError::MultipleBuildingMaxNotReached(BuildingName::Warehouse))
+            Err(GameError::MultipleBuildingMaxNotReached(
+                BuildingName::Warehouse
+            ))
         ));
     }
 

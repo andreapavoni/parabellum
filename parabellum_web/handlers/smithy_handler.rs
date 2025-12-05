@@ -3,8 +3,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use parabellum_app::{
-    command_handlers::ResearchSmithyCommandHandler,
-    cqrs::commands::ResearchSmithy,
+    command_handlers::ResearchSmithyCommandHandler, cqrs::commands::ResearchSmithy,
 };
 use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;
@@ -15,7 +14,7 @@ use crate::{
     http::AppState,
 };
 
-use super::building_handler::{render_with_error, MAX_SLOT_ID};
+use super::building_handler::{MAX_SLOT_ID, render_with_error};
 
 #[derive(Debug, Deserialize)]
 pub struct SmithyResearchForm {

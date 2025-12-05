@@ -3,7 +3,7 @@
             <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
             <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
             <p class="mt-2 text-gray-700 text-sm">
-                {{ self.building_description(&slot.building.name) }}
+                {{ ctx.building_description(&slot.building.name) }}
             </p>
         </div>
 
@@ -16,7 +16,7 @@
             <div class="text-gray-500">{{t!("game.building.population")}}</div>
             <div class="text-lg font-bold">{{ slot.building.population }}</div>
         </div>
-        {% if let Some(upkeep) = current_upkeep %}
+        {% if let Some(upkeep) = ctx.current_upkeep %}
         <div class="p-3 border rounded-md bg-gray-50">
             <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
             <div class="text-lg font-bold">{{ upkeep }}</div>
@@ -24,10 +24,10 @@
         {% endif %}
     </div>
 
-    {% if let Some(next) = upgrade %}
+    {% if let Some(next) = ctx.upgrade.as_ref() %}
     <div class="border rounded-md p-4 bg-gray-50 space-y-3">
         <div class="text-sm text-gray-500 uppercase">
-            {% if current_construction.is_some() %}
+            {% if ctx.current_construction.is_some() %}
                 {{t!("game.building.upgrade_after_current", level = next.next_level)}}
             {% else %}
                 {{t!("game.building.upgrade")}} – Lv {{ next.next_level }}
@@ -71,16 +71,16 @@
             <div class="text-gray-500 text-sm uppercase">{{t!("game.building.upkeep")}}</div>
             <div class="text-base font-semibold text-gray-800">{{ next.current_upkeep }} → {{ next.upkeep }}</div>
         </div>
-        {% let has_resources = self.can_afford(&next.cost) %}
-        {% let can_upgrade = has_resources && !self.building_queue_full %}
-        <form action="/build?s={{ slot_id }}" method="post" class="pt-2">
-            <input type="hidden" name="slot_id" value="{{ slot_id }}">
+        {% let has_resources = ctx.can_afford(&next.cost) %}
+        {% let can_upgrade = has_resources && !ctx.building_queue_full %}
+        <form action="/build?s={{ ctx.slot_id }}" method="post" class="pt-2">
+            <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
             <input type="hidden" name="action" value="upgrade">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
             <button type="submit"
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded {% if !can_upgrade %}opacity-60 cursor-not-allowed{% endif %}"
                     {% if !can_upgrade %}disabled aria-disabled="true"{% endif %}>
-                {% if current_construction.is_some() %}
+                {% if ctx.current_construction.is_some() %}
                     {{t!("game.building.queue_upgrade_action", level = next.next_level) }}
                 {% else %}
                     {{t!("game.building.upgrade_action", level = next.next_level) }}
@@ -91,7 +91,7 @@
         <div class="text-xs text-red-600">
             {{t!("game.building.not_enough_resources")}}
         </div>
-        {% elif self.building_queue_full %}
+        {% elif ctx.building_queue_full %}
         <div class="text-xs text-amber-700">
             {{ t!("game.building.construction_queue_full_short") }}
         </div>
@@ -168,12 +168,12 @@
                             </div>
                         </div>
                     </div>
-                    {% let has_resources = self.can_afford(&option.cost) %}
+                    {% let has_resources = ctx.can_afford(&option.cost) %}
                     {% let can_research = has_resources && !self.academy_queue_full %}
                     <form action="/academy/research" method="post" class="flex flex-col sm:flex-row sm:items-end gap-3">
-                        <input type="hidden" name="slot_id" value="{{ slot_id }}">
+                        <input type="hidden" name="slot_id" value="{{ ctx.slot_id }}">
                         <input type="hidden" name="unit_name" value="{{ option.unit_value }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="csrf_token" value="{{ ctx.csrf_token }}">
                         <button type="submit"
                                 class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded {% if !can_research %}opacity-60 cursor-not-allowed{% endif %}"
                                 {% if !can_research %}disabled aria-disabled="true"{% endif %}>

@@ -10,7 +10,7 @@ use parabellum_app::{
     command_handlers::{AddBuildingCommandHandler, UpgradeBuildingCommandHandler},
     cqrs::{
         commands::{AddBuilding, UpgradeBuilding},
-        queries::{AcademyQueueItem, SmithyQueueItem, VillageQueues},
+        queries::{AcademyQueueItem, SmithyQueueItem, TrainingQueueItem, VillageQueues},
     },
 };
 use parabellum_game::models::{
@@ -31,8 +31,11 @@ use crate::{
     },
     http::AppState,
     templates::{
-        AcademyResearchOption, BuildingOption, BuildingQueueItemView, BuildingRequirementView,
-        BuildingTemplate, BuildingUpgradeInfo, SmithyUpgradeOption, UnitTrainingOption,
+        AcademyResearchOption, AcademyTemplate, BarracksTemplate, BuildingOption,
+        BuildingPageContext, BuildingQueueItemView, BuildingRequirementView, BuildingUpgradeInfo,
+        EmptySlotTemplate, GenericBuildingTemplate, ResourceFieldTemplate, SmithyTemplate,
+        SmithyUpgradeOption, StableTemplate, UnitTrainingOption, UnitTrainingQueueItemView,
+        WorkshopTemplate,
     },
     view_helpers::{
         academy_queue_to_views, building_queue_to_views, format_duration, server_time,
@@ -85,8 +88,8 @@ pub async fn building(
     let queues = village_queues_or_empty(&state, user.village.id).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(&state, &user, slot_id, csrf_token, None, queues);
-    (jar, render_template(template, None)).into_response()
+    let page = build_page(&state, &user, slot_id, csrf_token, None, queues);
+    (jar, render_page(page, None)).into_response()
 }
 
 pub async fn build_action(
@@ -215,22 +218,42 @@ pub(crate) async fn render_with_error(
 ) -> Response {
     let queues = village_queues_or_empty(state, user.village.id).await;
     let (jar, csrf_token) = generate_csrf(jar);
-    let template = build_template(state, &user, slot_id, csrf_token, Some(error), queues);
-    (
-        jar,
-        render_template(template, Some(StatusCode::BAD_REQUEST)),
-    )
-        .into_response()
+    let page = build_page(state, &user, slot_id, csrf_token, Some(error), queues);
+    (jar, render_page(page, Some(StatusCode::BAD_REQUEST))).into_response()
 }
 
-fn build_template(
+enum BuildingPage {
+    Empty(EmptySlotTemplate),
+    Resource(ResourceFieldTemplate),
+    Barracks(BarracksTemplate),
+    Stable(StableTemplate),
+    Workshop(WorkshopTemplate),
+    Academy(AcademyTemplate),
+    Smithy(SmithyTemplate),
+    Generic(GenericBuildingTemplate),
+}
+
+fn render_page(page: BuildingPage, status: Option<StatusCode>) -> Response {
+    match page {
+        BuildingPage::Empty(template) => render_template(template, status).into_response(),
+        BuildingPage::Resource(template) => render_template(template, status).into_response(),
+        BuildingPage::Barracks(template) => render_template(template, status).into_response(),
+        BuildingPage::Stable(template) => render_template(template, status).into_response(),
+        BuildingPage::Workshop(template) => render_template(template, status).into_response(),
+        BuildingPage::Academy(template) => render_template(template, status).into_response(),
+        BuildingPage::Smithy(template) => render_template(template, status).into_response(),
+        BuildingPage::Generic(template) => render_template(template, status).into_response(),
+    }
+}
+
+fn build_page(
     state: &AppState,
     user: &CurrentUser,
     slot_id: u8,
     csrf_token: String,
     flash_error: Option<String>,
     queues: VillageQueues,
-) -> BuildingTemplate {
+) -> BuildingPage {
     let slot_building = user.village.get_building_by_slot_id(slot_id);
     let main_building_level = user.village.main_building_level();
     let queue_view = building_queue_to_views(&queues.building);
@@ -260,111 +283,177 @@ fn build_template(
         .as_ref()
         .map(|slot| slot.building.cost().upkeep);
 
-    let training_queue_view = training_queue_to_views(&queues.training);
-    let training_queue_for_slot = training_queue_view
-        .iter()
-        .filter(|item| item.slot_id == slot_id)
-        .cloned()
-        .collect::<Vec<_>>();
-    let academy_queue_view = academy_queue_to_views(&queues.academy);
-    let academy_queue_full = queues.academy.len() >= 2;
-    let smithy_queue_view = smithy_queue_to_views(&user.village, &queues.smithy);
-    let smithy_queue_full = queues.smithy.len() >= 2;
-
-    let smithy_units = if let Some(slot) = slot_building.as_ref()
-        && slot.building.name == BuildingName::Smithy
-    {
-        smithy_options_for_village(
-            &user.village,
-            slot,
-            state.server_speed,
-            &queues.smithy,
-            smithy_queue_full,
-        )
-    } else {
-        vec![]
-    };
-
-    let (buildable_buildings, locked_buildings) =
-        if slot_building.is_none() && queue_for_slot.is_empty() {
-            building_options_for_slot(
-                &user.village,
-                slot_id,
-                &queue_view,
-                state.server_speed,
-                main_building_level,
-            )
-        } else {
-            (vec![], vec![])
-        };
-
     let nav_active = if slot_id <= 18 {
         "resources"
     } else {
         "village"
     };
     let available_resources = user.village.stored_resources().into();
-    let barracks_units = training_options_for_group(
-        &user.village,
-        state.server_speed,
-        effective_building.as_ref(),
-        &[BuildingName::Barracks, BuildingName::GreatBarracks],
-        UnitGroup::Infantry,
-    );
-    let stable_units = training_options_for_group(
-        &user.village,
-        state.server_speed,
-        effective_building.as_ref(),
-        &[BuildingName::Stable, BuildingName::GreatStable],
-        UnitGroup::Cavalry,
-    );
-    let workshop_units = training_options_for_group(
-        &user.village,
-        state.server_speed,
-        effective_building.as_ref(),
-        &[BuildingName::Workshop, BuildingName::GreatWorkshop],
-        UnitGroup::Siege,
-    );
+    let current_user = Some(user.clone());
+    let server_time = server_time();
 
-    let (academy_ready_units, academy_locked_units, academy_researched_units) = if matches!(
-        effective_building
-            .as_ref()
-            .map(|slot| slot.building.name.clone()),
-        Some(BuildingName::Academy)
-    ) {
-        academy_options_for_village(&user.village, state.server_speed, &queues.academy)
-    } else {
-        (vec![], vec![], vec![])
-    };
-
-    BuildingTemplate {
-        current_user: Some(user.clone()),
-        nav_active,
+    let ctx = BuildingPageContext {
         slot_id,
-        slot_building,
-        buildable_buildings,
-        locked_buildings,
+        slot_building: slot_building.clone(),
         building_queue_full,
-        academy_ready_units,
-        academy_locked_units,
-        academy_researched_units,
         upgrade,
         current_upkeep,
         csrf_token,
         flash_error,
         current_construction,
         available_resources,
-        server_time: server_time(),
-        barracks_units,
-        stable_units,
-        workshop_units,
-        training_queue_for_slot,
-        academy_queue: academy_queue_view,
-        academy_queue_full,
-        smithy_units,
-        smithy_queue: smithy_queue_view,
-        smithy_queue_full,
+    };
+
+    match (slot_building, ctx) {
+        (Some(slot), ctx) => match slot.building.name {
+            BuildingName::Woodcutter
+            | BuildingName::ClayPit
+            | BuildingName::IronMine
+            | BuildingName::Cropland => BuildingPage::Resource(ResourceFieldTemplate {
+                current_user: current_user.clone(),
+                nav_active,
+                server_time: server_time.clone(),
+                ctx,
+            }),
+            BuildingName::Barracks | BuildingName::GreatBarracks => {
+                let barracks_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    effective_building.as_ref(),
+                    &[BuildingName::Barracks, BuildingName::GreatBarracks],
+                    UnitGroup::Infantry,
+                );
+                let training_queue_for_slot =
+                    training_queue_views_for_slot(slot_id, &queues.training);
+
+                BuildingPage::Barracks(BarracksTemplate {
+                    current_user: current_user.clone(),
+                    nav_active,
+                    server_time: server_time.clone(),
+                    ctx,
+                    barracks_units,
+                    training_queue_for_slot,
+                })
+            }
+            BuildingName::Stable | BuildingName::GreatStable => {
+                let stable_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    effective_building.as_ref(),
+                    &[BuildingName::Stable, BuildingName::GreatStable],
+                    UnitGroup::Cavalry,
+                );
+                let training_queue_for_slot =
+                    training_queue_views_for_slot(slot_id, &queues.training);
+
+                BuildingPage::Stable(StableTemplate {
+                    current_user: current_user.clone(),
+                    nav_active,
+                    server_time: server_time.clone(),
+                    ctx,
+                    stable_units,
+                    training_queue_for_slot,
+                })
+            }
+            BuildingName::Workshop | BuildingName::GreatWorkshop => {
+                let workshop_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    effective_building.as_ref(),
+                    &[BuildingName::Workshop, BuildingName::GreatWorkshop],
+                    UnitGroup::Siege,
+                );
+                let training_queue_for_slot =
+                    training_queue_views_for_slot(slot_id, &queues.training);
+
+                BuildingPage::Workshop(WorkshopTemplate {
+                    current_user: current_user.clone(),
+                    nav_active,
+                    server_time: server_time.clone(),
+                    ctx,
+                    workshop_units,
+                    training_queue_for_slot,
+                })
+            }
+            BuildingName::Academy => {
+                let (academy_ready_units, academy_locked_units, academy_researched_units) =
+                    academy_options_for_village(&user.village, state.server_speed, &queues.academy);
+                let academy_queue = academy_queue_to_views(&queues.academy);
+                let academy_queue_full = queues.academy.len() >= 2;
+
+                BuildingPage::Academy(AcademyTemplate {
+                    current_user: current_user.clone(),
+                    nav_active,
+                    server_time: server_time.clone(),
+                    ctx,
+                    academy_ready_units,
+                    academy_locked_units,
+                    academy_researched_units,
+                    academy_queue,
+                    academy_queue_full,
+                })
+            }
+            BuildingName::Smithy => {
+                let smithy_queue_full = queues.smithy.len() >= 2;
+                let smithy_queue = smithy_queue_to_views(&user.village, &queues.smithy);
+                let smithy_units = smithy_options_for_village(
+                    &user.village,
+                    &slot,
+                    state.server_speed,
+                    &queues.smithy,
+                    smithy_queue_full,
+                );
+
+                BuildingPage::Smithy(SmithyTemplate {
+                    current_user: current_user.clone(),
+                    nav_active,
+                    server_time: server_time.clone(),
+                    ctx,
+                    smithy_units,
+                    smithy_queue,
+                    smithy_queue_full,
+                })
+            }
+            _ => BuildingPage::Generic(GenericBuildingTemplate {
+                current_user: current_user.clone(),
+                nav_active,
+                server_time: server_time.clone(),
+                ctx,
+            }),
+        },
+        (None, ctx) => {
+            let (buildable_buildings, locked_buildings) = if queue_for_slot.is_empty() {
+                building_options_for_slot(
+                    &user.village,
+                    slot_id,
+                    &queue_view,
+                    state.server_speed,
+                    main_building_level,
+                )
+            } else {
+                (vec![], vec![])
+            };
+
+            BuildingPage::Empty(EmptySlotTemplate {
+                current_user,
+                nav_active,
+                server_time,
+                ctx,
+                buildable_buildings,
+                locked_buildings,
+            })
+        }
     }
+}
+
+fn training_queue_views_for_slot(
+    slot_id: u8,
+    queue: &[TrainingQueueItem],
+) -> Vec<UnitTrainingQueueItemView> {
+    training_queue_to_views(queue)
+        .into_iter()
+        .filter(|item| item.slot_id == slot_id)
+        .collect()
 }
 
 fn virtual_building_after_queue(
@@ -846,7 +935,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_template_lists_training_queue_without_limit() {
+    fn test_barracks_page_lists_training_queue_without_limit() {
         let config = Arc::new(Config::from_env());
         let bus = Arc::new(AppBus::new(
             config.clone(),
@@ -889,13 +978,18 @@ mod tests {
             ..Default::default()
         };
 
-        let template = build_template(&state, &current_user, slot_id, String::new(), None, queues);
+        let page = build_page(&state, &current_user, slot_id, String::new(), None, queues);
 
-        assert_eq!(template.training_queue_for_slot.len(), 2);
+        match page {
+            BuildingPage::Barracks(template) => {
+                assert_eq!(template.training_queue_for_slot.len(), 2);
+            }
+            _ => panic!("expected barracks page"),
+        }
     }
 
     #[test]
-    fn test_build_template_lists_training_queue_per_slot() {
+    fn test_barracks_page_lists_training_queue_per_slot() {
         let config = Arc::new(Config::from_env());
         let bus = Arc::new(AppBus::new(
             config.clone(),
@@ -938,8 +1032,13 @@ mod tests {
             ..Default::default()
         };
 
-        let template = build_template(&state, &current_user, 20, String::new(), None, queues);
-        assert_eq!(template.training_queue_for_slot.len(), 1);
+        let page = build_page(&state, &current_user, 20, String::new(), None, queues);
+        match page {
+            BuildingPage::Barracks(template) => {
+                assert_eq!(template.training_queue_for_slot.len(), 1);
+            }
+            _ => panic!("expected barracks page"),
+        }
     }
 
     #[test]

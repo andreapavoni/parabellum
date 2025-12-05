@@ -3,8 +3,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use parabellum_app::{
-    command_handlers::ResearchAcademyCommandHandler,
-    cqrs::commands::ResearchAcademy,
+    command_handlers::ResearchAcademyCommandHandler, cqrs::commands::ResearchAcademy,
 };
 use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;

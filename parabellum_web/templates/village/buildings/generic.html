@@ -1,19 +1,12 @@
+{% extends "village/building.html" %}
+{% block building_content %}
+{% if let Some(slot) = ctx.slot_building.as_ref() %}
 <div class="space-y-6">
     <div>
         <div class="text-sm text-gray-500 uppercase">{{t!("game.building.existing")}}</div>
         <div class="text-2xl font-semibold">{{ slot.building.name.to_string() }}</div>
         <p class="mt-2 text-gray-700 text-sm">
-            {% match slot.building.name.to_string().as_str() %}
-                {% when "Woodcutter" %}
-                    {{ t!("game.buildings.woodcutter.description") }}
-                {% when "Clay Pit" %}
-                    {{ t!("game.buildings.clay_pit.description") }}
-                {% when "Iron Mine" %}
-                    {{ t!("game.buildings.iron_mine.description") }}
-                {% when "Cropland" %}
-                    {{ t!("game.buildings.cropland.description") }}
-                {% else %}
-            {% endmatch %}
+            {{ ctx.building_description(&slot.building.name) }}
         </p>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
@@ -26,7 +19,7 @@
             <div class="text-lg font-bold">{{ slot.building.population }}</div>
         </div>
         <div class="p-3 border rounded-md bg-gray-50">
-            <div class="text-gray-500">{{t!("game.village.resources.title")}}</div>
+            <div class="text-gray-500">{{t!("game.building.value")}}</div>
             <div class="text-lg font-bold">{{ slot.building.value }}</div>
         </div>
         {% if let Some(upkeep) = ctx.current_upkeep %}
@@ -111,3 +104,5 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
+{% endblock %}

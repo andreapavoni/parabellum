@@ -9,8 +9,10 @@ pub use home::HomeTemplate;
 pub use map::MapTemplate;
 pub use shared::{BuildingQueueItemView, ServerTime};
 pub use village::{
-    AcademyResearchOption, AcademyResearchQueueItemView, BuildingOption,
-    BuildingRequirementView, BuildingTemplate, BuildingUpgradeInfo, ResourceField,
-    ResourcesTemplate, SmithyQueueItemView, SmithyUpgradeOption, TroopCountView,
-    UnitTrainingOption, UnitTrainingQueueItemView, VillageTemplate,
+    AcademyResearchOption, AcademyResearchQueueItemView, AcademyTemplate, BarracksTemplate,
+    BuildingOption, BuildingPageContext, BuildingRequirementView, BuildingUpgradeInfo,
+    EmptySlotTemplate, GenericBuildingTemplate, ResourceField, ResourceFieldTemplate,
+    ResourcesTemplate, SmithyQueueItemView, SmithyTemplate, SmithyUpgradeOption, StableTemplate,
+    TroopCountView, UnitTrainingOption, UnitTrainingQueueItemView, VillageTemplate,
+    WorkshopTemplate,
 };

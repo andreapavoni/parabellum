@@ -133,12 +133,9 @@ game:
     granary:
       name: Granary
       description: "The crop produced on your farms is stored in the granary. By increasing its level, you increase the granary's capacity. Can be built multiple times, once one is built to max level"
-    blacksmith:
-      name: Blacksmith
-      description: "The weapons of your warriors are enhanced in the blacksmith's melting furnaces. By increasing its level, you can order the fabrication of even better weapons"
-    armoury:
-      name: Armoury
-      description: "The armor of your warriors are enhanced in the armoury's melting furnaces. By increasing its level, you can order the fabrication of even better armor"
+    smithy:
+      name: Smithy
+      description: "The weapons of your warriors are enhanced in the smithy's melting furnaces. By increasing its level, you can order the fabrication of even better weapons and armors"
     tournament_square:
       name: Tournament Square
       description: "Your troops can increase their stamina at the Tournament Square. The further the building is upgraded, the faster your troops are beyond a minimum distance of 30 squares"
@@ -319,8 +316,8 @@ game:
     action: "Action"
     upgrade_label: "Upgrade"
     upgrade_in_progress: "Upgrade in<br>progress"
-    upgrade_blacksmith: "Upgrade<br>blacksmith"
-    upgrades_commence_blacksmith: "Upgrades can commence when blacksmith is completed."
+    upgrade_smithy: "Upgrade<br>smithy"
+    upgrades_commence_smithy: "Upgrades can commence when smithy is completed."
     maximum_level: "Maximum<br>level"
     expand_warehouse: "Expand<br>warehouse"
     expand_granary: "Expand<br>granary"
@@ -330,19 +327,13 @@ game:
     upgrading: "Upgrading"
     duration: "Duration"
     complete: "Complete"
-
-    upgrade_armoury: "Upgrade<br>Armoury"
-    upgrades_commence_armoury: "Upgrades can commence when armoury is completed."
-
     current_speed: "Current speed bonus:"
     speed_level: "Speed bonus at level"
-
     current_construction_time: "Current construction time:"
     construction_time_level: "Construction time at level"
     demolition_building: "Demolition of the building:</h2><p>If you no longer need a building, you can order the demolition of the building.</p>"
     demolish: "Demolish"
     demolition_of: "Demolition of "
-
     rally_point_commence: "Troops movement will be displayed when the Rally Point is completed"
     overview: "Overview"
     reinforcement: "Reinforcement"

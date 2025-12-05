@@ -185,40 +185,20 @@ pub struct SmithyUpgradeOption {
     pub is_researched: bool,
 }
 
-/// Template for individual building page.
-#[derive(Debug, Default, Template)]
-#[template(path = "village/building.html")]
-pub struct BuildingTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
+#[derive(Debug, Clone)]
+pub struct BuildingPageContext {
     pub slot_id: u8,
     pub slot_building: Option<VillageBuilding>,
-    pub buildable_buildings: Vec<BuildingOption>,
-    pub locked_buildings: Vec<BuildingOption>,
     pub building_queue_full: bool,
-    pub academy_ready_units: Vec<AcademyResearchOption>,
-    pub academy_locked_units: Vec<AcademyResearchOption>,
-    pub academy_researched_units: Vec<AcademyResearchOption>,
     pub upgrade: Option<BuildingUpgradeInfo>,
     pub current_upkeep: Option<u32>,
     pub csrf_token: String,
     pub flash_error: Option<String>,
     pub current_construction: Option<BuildingQueueItemView>,
     pub available_resources: ResourceCostView,
-    pub server_time: ServerTime,
-    pub barracks_units: Vec<UnitTrainingOption>,
-    pub stable_units: Vec<UnitTrainingOption>,
-    pub workshop_units: Vec<UnitTrainingOption>,
-    pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
-    pub academy_queue: Vec<AcademyResearchQueueItemView>,
-    pub academy_queue_full: bool,
-    pub smithy_units: Vec<SmithyUpgradeOption>,
-    pub smithy_queue: Vec<SmithyQueueItemView>,
-    pub smithy_queue_full: bool,
 }
 
-impl BuildingTemplate {
-    #[allow(dead_code)]
+impl BuildingPageContext {
     pub fn can_afford(&self, cost: &ResourceCostView) -> bool {
         self.available_resources.lumber >= cost.lumber
             && self.available_resources.clay >= cost.clay
@@ -229,6 +209,94 @@ impl BuildingTemplate {
     pub fn building_description(&self, name: &BuildingName) -> String {
         view_helpers::building_description(name)
     }
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/empty_slot.html")]
+pub struct EmptySlotTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub buildable_buildings: Vec<BuildingOption>,
+    pub locked_buildings: Vec<BuildingOption>,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/resource.html")]
+pub struct ResourceFieldTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/barracks.html")]
+pub struct BarracksTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub barracks_units: Vec<UnitTrainingOption>,
+    pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/stable.html")]
+pub struct StableTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub stable_units: Vec<UnitTrainingOption>,
+    pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/workshop.html")]
+pub struct WorkshopTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub workshop_units: Vec<UnitTrainingOption>,
+    pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/academy.html")]
+pub struct AcademyTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub academy_ready_units: Vec<AcademyResearchOption>,
+    pub academy_locked_units: Vec<AcademyResearchOption>,
+    pub academy_researched_units: Vec<AcademyResearchOption>,
+    pub academy_queue: Vec<AcademyResearchQueueItemView>,
+    pub academy_queue_full: bool,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/smithy.html")]
+pub struct SmithyTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
+    pub smithy_units: Vec<SmithyUpgradeOption>,
+    pub smithy_queue: Vec<SmithyQueueItemView>,
+    pub smithy_queue_full: bool,
+}
+
+#[derive(Debug, Template)]
+#[template(path = "village/buildings/generic.html")]
+pub struct GenericBuildingTemplate {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+    pub ctx: BuildingPageContext,
 }
 
 fn queue_state_class(
