@@ -34,12 +34,12 @@ use crate::{
         AcademyResearchOption, AcademyTemplate, BarracksTemplate, BuildingOption,
         BuildingPageContext, BuildingQueueItemView, BuildingRequirementView, BuildingUpgradeInfo,
         EmptySlotTemplate, GenericBuildingTemplate, ResourceFieldTemplate, SmithyTemplate,
-        SmithyUpgradeOption, StableTemplate, UnitTrainingOption, UnitTrainingQueueItemView,
-        WorkshopTemplate,
+        SmithyUpgradeOption, StableTemplate, TemplateLayout, UnitTrainingOption,
+        UnitTrainingQueueItemView, WorkshopTemplate,
     },
     view_helpers::{
-        academy_queue_to_views, building_queue_to_views, format_duration, server_time,
-        smithy_queue_to_views, training_queue_to_views, unit_display_name,
+        academy_queue_to_views, building_queue_to_views, format_duration, smithy_queue_to_views,
+        training_queue_to_views, unit_display_name,
     },
 };
 
@@ -178,7 +178,6 @@ fn build_option(
     BuildingOption {
         name,
         cost: cost.resources.into(),
-        upkeep: cost.upkeep,
         time_formatted: format_duration(time_secs),
         missing_requirements,
         can_start,
@@ -289,8 +288,7 @@ fn build_page(
         "village"
     };
     let available_resources = user.village.stored_resources().into();
-    let current_user = Some(user.clone());
-    let server_time = server_time();
+    let layout = TemplateLayout::new(Some(user.clone()), nav_active);
 
     let ctx = BuildingPageContext {
         slot_id,
@@ -310,9 +308,7 @@ fn build_page(
             | BuildingName::ClayPit
             | BuildingName::IronMine
             | BuildingName::Cropland => BuildingPage::Resource(ResourceFieldTemplate {
-                current_user: current_user.clone(),
-                nav_active,
-                server_time: server_time.clone(),
+                layout: layout.clone(),
                 ctx,
             }),
             BuildingName::Barracks | BuildingName::GreatBarracks => {
@@ -327,9 +323,7 @@ fn build_page(
                     training_queue_views_for_slot(slot_id, &queues.training);
 
                 BuildingPage::Barracks(BarracksTemplate {
-                    current_user: current_user.clone(),
-                    nav_active,
-                    server_time: server_time.clone(),
+                    layout: layout.clone(),
                     ctx,
                     barracks_units,
                     training_queue_for_slot,
@@ -347,9 +341,7 @@ fn build_page(
                     training_queue_views_for_slot(slot_id, &queues.training);
 
                 BuildingPage::Stable(StableTemplate {
-                    current_user: current_user.clone(),
-                    nav_active,
-                    server_time: server_time.clone(),
+                    layout: layout.clone(),
                     ctx,
                     stable_units,
                     training_queue_for_slot,
@@ -367,9 +359,7 @@ fn build_page(
                     training_queue_views_for_slot(slot_id, &queues.training);
 
                 BuildingPage::Workshop(WorkshopTemplate {
-                    current_user: current_user.clone(),
-                    nav_active,
-                    server_time: server_time.clone(),
+                    layout: layout.clone(),
                     ctx,
                     workshop_units,
                     training_queue_for_slot,
@@ -382,9 +372,7 @@ fn build_page(
                 let academy_queue_full = queues.academy.len() >= 2;
 
                 BuildingPage::Academy(AcademyTemplate {
-                    current_user: current_user.clone(),
-                    nav_active,
-                    server_time: server_time.clone(),
+                    layout: layout.clone(),
                     ctx,
                     academy_ready_units,
                     academy_locked_units,
@@ -405,9 +393,7 @@ fn build_page(
                 );
 
                 BuildingPage::Smithy(SmithyTemplate {
-                    current_user: current_user.clone(),
-                    nav_active,
-                    server_time: server_time.clone(),
+                    layout: layout.clone(),
                     ctx,
                     smithy_units,
                     smithy_queue,
@@ -415,9 +401,7 @@ fn build_page(
                 })
             }
             _ => BuildingPage::Generic(GenericBuildingTemplate {
-                current_user: current_user.clone(),
-                nav_active,
-                server_time: server_time.clone(),
+                layout: layout.clone(),
                 ctx,
             }),
         },
@@ -435,9 +419,7 @@ fn build_page(
             };
 
             BuildingPage::Empty(EmptySlotTemplate {
-                current_user,
-                nav_active,
-                server_time,
+                layout,
                 ctx,
                 buildable_buildings,
                 locked_buildings,

@@ -5,19 +5,17 @@ use rust_i18n::t;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{handlers::CurrentUser, view_helpers};
+use crate::view_helpers;
 
-use super::shared::{BuildingQueueItemView, ResourceCostView, ServerTime};
+use super::shared::{BuildingQueueItemView, ResourceCostView, TemplateLayout};
 
 /// Template for the village center page.
 #[derive(Debug, Default, Template)]
 #[template(path = "village/village.html")]
 pub struct VillageTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
+    pub layout: TemplateLayout,
     pub building_queue: Vec<BuildingQueueItemView>,
     pub slot_buildings: HashMap<u8, VillageBuilding>,
-    pub server_time: ServerTime,
 }
 
 impl VillageTemplate {
@@ -79,11 +77,9 @@ pub struct AcademyResearchOption {
 #[derive(Debug, Template)]
 #[template(path = "village/resources.html")]
 pub struct ResourcesTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
+    pub layout: TemplateLayout,
     pub resource_slots: Vec<ResourceField>,
     pub building_queue: Vec<BuildingQueueItemView>,
-    pub server_time: ServerTime,
     pub home_troops: Vec<TroopCountView>,
 }
 
@@ -112,7 +108,6 @@ impl ResourcesTemplate {
 pub struct BuildingOption {
     pub name: BuildingName,
     pub cost: ResourceCostView,
-    pub upkeep: u32,
     pub time_formatted: String,
     pub missing_requirements: Vec<BuildingRequirementView>,
     pub can_start: bool,
@@ -214,9 +209,7 @@ impl BuildingPageContext {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/empty_slot.html")]
 pub struct EmptySlotTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub buildable_buildings: Vec<BuildingOption>,
     pub locked_buildings: Vec<BuildingOption>,
@@ -225,18 +218,14 @@ pub struct EmptySlotTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/resource.html")]
 pub struct ResourceFieldTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
 }
 
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/barracks.html")]
 pub struct BarracksTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub barracks_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
@@ -245,9 +234,7 @@ pub struct BarracksTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/stable.html")]
 pub struct StableTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub stable_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
@@ -256,9 +243,7 @@ pub struct StableTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/workshop.html")]
 pub struct WorkshopTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub workshop_units: Vec<UnitTrainingOption>,
     pub training_queue_for_slot: Vec<UnitTrainingQueueItemView>,
@@ -267,9 +252,7 @@ pub struct WorkshopTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/academy.html")]
 pub struct AcademyTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub academy_ready_units: Vec<AcademyResearchOption>,
     pub academy_locked_units: Vec<AcademyResearchOption>,
@@ -281,9 +264,7 @@ pub struct AcademyTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/smithy.html")]
 pub struct SmithyTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
     pub smithy_units: Vec<SmithyUpgradeOption>,
     pub smithy_queue: Vec<SmithyQueueItemView>,
@@ -293,9 +274,7 @@ pub struct SmithyTemplate {
 #[derive(Debug, Template)]
 #[template(path = "village/buildings/generic.html")]
 pub struct GenericBuildingTemplate {
-    pub current_user: Option<CurrentUser>,
-    pub nav_active: &'static str,
-    pub server_time: ServerTime,
+    pub layout: TemplateLayout,
     pub ctx: BuildingPageContext,
 }
 

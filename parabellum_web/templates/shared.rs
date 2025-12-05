@@ -1,6 +1,8 @@
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use uuid::Uuid;
 
+use crate::{handlers::CurrentUser, view_helpers::server_time};
+
 #[derive(Debug, Clone)]
 pub struct BuildingQueueItemView {
     pub job_id: Uuid,
@@ -36,4 +38,27 @@ impl From<ResourceGroup> for ResourceCostView {
 pub struct ServerTime {
     pub formatted: String,
     pub timestamp: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TemplateLayout {
+    pub current_user: Option<CurrentUser>,
+    pub nav_active: &'static str,
+    pub server_time: ServerTime,
+}
+
+impl TemplateLayout {
+    pub fn new(current_user: Option<CurrentUser>, nav_active: &'static str) -> Self {
+        Self {
+            current_user,
+            nav_active,
+            server_time: server_time(),
+        }
+    }
+}
+
+impl Default for TemplateLayout {
+    fn default() -> Self {
+        Self::new(None, "home")
+    }
 }

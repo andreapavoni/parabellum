@@ -1,0 +1,29 @@
+{% let training_percent = slot.building.value as f64 / 10.0 %}
+{% let training_bonus = (100.0 - training_percent).max(0.0) %}
+
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+    <div class="p-3 border rounded-md bg-gray-50">
+        <div class="text-gray-500">{{t!("game.building.level")}}</div>
+        <div class="text-lg font-bold">{{ slot.building.level }}</div>
+    </div>
+    <div class="p-3 border rounded-md bg-gray-50">
+        <div class="text-gray-500">{{t!("game.building.population")}}</div>
+        <div class="text-lg font-bold">{{ slot.building.population }}</div>
+    </div>
+    <div class="p-3 border rounded-md bg-gray-50">
+        <div class="text-gray-500">{{t!("game.building.training_multiplier")}}</div>
+        <div class="text-lg font-bold">{{ format!("{training_percent:.1}%") }}</div>
+        <div class="text-xs text-gray-500">{{ multiplier_hint }}</div>
+    </div>
+    <div class="p-3 border rounded-md bg-gray-50">
+        <div class="text-gray-500">{{t!("game.building.training_bonus")}}</div>
+        <div class="text-lg font-bold text-emerald-700">{{ format!("{training_bonus:.1}%") }}</div>
+        <div class="text-xs text-gray-500">{{t!("game.building.training_bonus_hint")}}</div>
+    </div>
+    {% if let Some(upkeep) = ctx.current_upkeep %}
+    <div class="p-3 border rounded-md bg-gray-50">
+        <div class="text-gray-500">{{t!("game.building.upkeep")}}</div>
+        <div class="text-lg font-bold">{{ upkeep }}</div>
+    </div>
+    {% endif %}
+</div>

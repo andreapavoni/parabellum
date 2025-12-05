@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 {% block title %}{{t!("game.building.title")}} – PARABELLUM{% endblock %}
 {% block body %}
-{% if current_user.is_some() %}
+{% if layout.current_user.is_some() %}
 <div class="container mx-auto mt-6 px-4 pb-12">
     <div class="max-w-2xl mx-auto bg-white shadow rounded-lg border border-gray-200 p-6">
         {% if let Some(error) = ctx.flash_error %}

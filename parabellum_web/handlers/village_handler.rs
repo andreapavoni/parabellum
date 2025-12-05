@@ -1,8 +1,10 @@
 use crate::{
     handlers::{CurrentUser, render_template, village_queues_or_empty},
     http::AppState,
-    templates::{ResourceField, ResourcesTemplate, TroopCountView, VillageTemplate},
-    view_helpers::{building_queue_to_views, resource_css_class, server_time, unit_display_name},
+    templates::{
+        ResourceField, ResourcesTemplate, TemplateLayout, TroopCountView, VillageTemplate,
+    },
+    view_helpers::{building_queue_to_views, resource_css_class, unit_display_name},
 };
 use axum::{extract::State, response::IntoResponse};
 use std::collections::HashMap;
@@ -19,11 +21,9 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
         .collect::<HashMap<_, _>>();
 
     let template = VillageTemplate {
-        current_user: Some(user),
-        nav_active: "village",
+        layout: TemplateLayout::new(Some(user), "village"),
         building_queue,
         slot_buildings,
-        server_time: server_time(),
     };
     render_template(template, None).into_response()
 }
@@ -67,11 +67,9 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         .unwrap_or_default();
 
     let template = ResourcesTemplate {
-        current_user: Some(user),
-        nav_active: "resources",
+        layout: TemplateLayout::new(Some(user), "resources"),
         resource_slots,
         building_queue,
-        server_time: server_time(),
         home_troops,
     };
     render_template(template, None).into_response()
