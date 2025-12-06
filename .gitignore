@@ -11,6 +11,7 @@ frontend/assets/
 # Bun .gitignore
 # dependencies (bun install)
 node_modules
+package-lock.json
 
 # output
 out

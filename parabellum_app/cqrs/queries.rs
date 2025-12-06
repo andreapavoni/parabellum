@@ -5,6 +5,7 @@ use parabellum_types::{
     buildings::BuildingName,
     common::{Player, User},
     map::Position,
+    reports::ReportPayload,
 };
 use uuid::Uuid;
 
@@ -196,6 +197,30 @@ pub struct GetVillageTroopMovements {
 
 impl Query for GetVillageTroopMovements {
     type Output = VillageTroopMovements;
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportView {
+    pub id: Uuid,
+    pub report_type: String,
+    pub payload: ReportPayload,
+    pub created_at: DateTime<Utc>,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportAudience {
+    pub player_id: Uuid,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+pub struct GetReportsForPlayer {
+    pub player_id: Uuid,
+    pub limit: i64,
+}
+
+impl Query for GetReportsForPlayer {
+    type Output = Vec<ReportView>;
 }
 
 /// Fetch a square region of the world map.

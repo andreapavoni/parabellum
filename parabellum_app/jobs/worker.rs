@@ -43,7 +43,7 @@ impl JobWorker {
             loop {
                 interval.tick().await;
                 if let Err(e) = self.process_due_jobs().await {
-                    error!(error = ?e, "Error while processing job queue");
+                    error!(error = ?e.to_string(), "Error while processing job queue");
                 }
             }
         });
@@ -83,24 +83,26 @@ impl JobWorker {
             let _enter = span.enter();
             info!("Processing job");
 
-            let handler: Box<dyn JobHandler> =
-                match self.registry.get_handler(&job_type, &job.task.data) {
-                    Ok(handler) => handler,
-                    Err(e) => {
-                        error!(job_id = %job.id, error = ?e, "Failed to create handler for job");
-                        // This error could be due to deserialization
-                        // or an unregistered task_type.
-                        // Mark the job as failed and continue.
-                        context.uow.rollback().await?;
-                        let uow_fail = self.uow_provider.tx().await?;
-                        uow_fail
-                            .jobs()
-                            .mark_as_failed(job_id, &e.to_string())
-                            .await?;
-                        uow_fail.commit().await?;
-                        continue; // Go to the next job
-                    }
-                };
+            let handler: Box<dyn JobHandler> = match self
+                .registry
+                .get_handler(&job_type, &job.task.data)
+            {
+                Ok(handler) => handler,
+                Err(e) => {
+                    error!(job_id = %job.id, error = ?e.to_string(), "Failed to create handler for job");
+                    // This error could be due to deserialization
+                    // or an unregistered task_type.
+                    // Mark the job as failed and continue.
+                    context.uow.rollback().await?;
+                    let uow_fail = self.uow_provider.tx().await?;
+                    uow_fail
+                        .jobs()
+                        .mark_as_failed(job_id, &e.to_string())
+                        .await?;
+                    uow_fail.commit().await?;
+                    continue; // Go to the next job
+                }
+            };
             let task_result = handler.handle(&context, job).await;
 
             match task_result {
@@ -110,7 +112,7 @@ impl JobWorker {
                     info!(job_id = %job.id, "Job completed successfully");
                 }
                 Err(e) => {
-                    error!(job_id = %job.id, error = ?e, "Job failed");
+                    error!(job_id = %job.id, error = ?e.to_string(), "Job failed");
                     context.uow.rollback().await?;
 
                     let uow_fail = self.uow_provider.tx().await?;

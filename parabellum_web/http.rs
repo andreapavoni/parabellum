@@ -12,7 +12,8 @@ use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
     build_action, building, home, login, login_page, logout, map, map_region, register,
-    register_page, research_smithy, research_unit, resources, send_troops, train_units, village,
+    register_page, reports, research_smithy, research_unit, resources, send_troops, train_units,
+    village,
 };
 
 #[derive(Clone)]
@@ -65,6 +66,7 @@ impl WebRouter {
             .route("/army/send", post(send_troops))
             .route("/academy/research", post(research_unit))
             .route("/smithy/research", post(research_smithy))
+            .route("/reports", get(reports))
             .route("/map", get(map))
             .route("/map/data", get(map_region))
             .route("/logout", get(logout));

@@ -26,7 +26,9 @@
     <a href='/map'>🗺️</a>
   </div>
   <div class="nav-icon" title="Stats">📊</div>
-  <div class="nav-icon" title="Reports">📜</div>
+  <div class='nav-icon {% if layout.nav_active == "reports" %}nav-active{% endif %}' title="Reports">
+    <a href='/reports'>📜</a>
+  </div>
   <div class="nav-icon" title="Messages">✉️</div>
 </div>
 <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">

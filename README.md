@@ -109,33 +109,33 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 
 ### In Progress
+**API / UI**: Getting the minimal viable views to navigate the game:
+
 - [ ] **i18n**: add translations in several languages.
-- [ ] **API / UI**: Getting the minimal viable views to navigate the game
-  - [x] Layout, basic navbar
-  - [x] Login, Register
-  - [x] Village Overview (Resources + Buildings)
-    - [x] Building queue
-  - [x] Generic building (info + add/upgrade)
-  - [ ] Special buildings (info + specific actions)
-    - [x] Barracks, Stable, Workshop, etc...
-    - [ ] Rally Point:
-      - [x] send troops
-      - [x] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
-      - [ ] view reinforcements in own and other villages
-    - [ ] Reports (marketplace, troop movements)
-    - [x] Academy (research units)
-    - [x] Smithy (upgrade units)
-    - [ ] Merchant, Marketplace
-      - [ ] Send resources to a village
-      - [ ] Sell/buy resources
-    - [ ] Hero Mansion (hero stuff)
-    - [ ] Castle/Residence (train settlers, expansion slots, culture points)
-    - [ ] Town Hall (small/big party)
-    - [ ] Main Building (downgrades)
-  - [ ] Map
+- [x] Layout, basic navbar
+- [x] Login, Register
+- [x] Village Overview (Resources + Buildings)
+  - [x] Building queue
+- [x] Generic building (info + add/upgrade)
+- [ ] Special buildings (info + specific actions)
+  - [x] Barracks, Stable, Workshop, etc...
+  - [ ] Rally Point:
+    - [x] send troops
+    - [x] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
+    - [ ] view reinforcements in own and other villages
+  - [ ] Reports (marketplace, troop movements)
+  - [x] Academy (research units)
+  - [x] Smithy (upgrade units)
+  - [ ] Merchant, Marketplace
+    - [ ] Send resources to a village
+    - [ ] Sell/buy resources
+  - [ ] Hero Mansion (hero stuff)
+  - [ ] Castle/Residence (train settlers, expansion slots, culture points)
+  - [ ] Town Hall (small/big party)
+  - [ ] Main Building (downgrades)
+- [ ] Map
 
 ### ToDo (Not Started)
-- [ ] **Reports**: reports for armies/merchants.
 - [ ] **Alliances**: Creating and managing alliances.
 - [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not settlers training), and conquering.
 - [ ] **Oases**: Capturing and managing oases (models exist, logic does not). Nature troops in free oases.

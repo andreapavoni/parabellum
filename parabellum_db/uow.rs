@@ -60,6 +60,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresJobRepository::new(self.tx.clone()))
     }
 
+    fn reports(&self) -> Arc<dyn ReportRepository + 'a> {
+        Arc::new(PostgresReportRepository::new(self.tx.clone()))
+    }
+
     fn map(&self) -> Arc<dyn MapRepository + 'a> {
         Arc::new(PostgresMapRepository::new(self.tx.clone()))
     }

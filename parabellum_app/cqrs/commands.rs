@@ -151,6 +151,14 @@ pub struct TrainUnits {
 impl Command for TrainUnits {}
 
 #[derive(Debug, Clone)]
+pub struct MarkReportRead {
+    pub report_id: Uuid,
+    pub player_id: Uuid,
+}
+
+impl Command for MarkReportRead {}
+
+#[derive(Debug, Clone)]
 pub struct SendResources {
     pub village_id: u32,
     pub player_id: Uuid,

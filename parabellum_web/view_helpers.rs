@@ -4,7 +4,7 @@ use parabellum_app::{
     jobs::JobStatus,
 };
 use parabellum_game::models::village::{Village, VillageBuilding};
-use parabellum_types::{army::UnitName, buildings::BuildingName};
+use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 use std::collections::HashMap;
 
@@ -204,6 +204,17 @@ pub fn unit_display_name(unit: &UnitName) -> String {
     };
 
     name.to_string()
+}
+
+/// Formats a resource group into a short inline summary.
+pub fn format_resource_summary(resources: &ResourceGroup) -> String {
+    format!(
+        "🌲 {} 🧱 {} ⛏️ {} 🌾 {}",
+        resources.lumber(),
+        resources.clay(),
+        resources.iron(),
+        resources.crop()
+    )
 }
 
 /// Returns the localized description for a building.

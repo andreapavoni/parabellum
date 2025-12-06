@@ -5,6 +5,7 @@ mod building_handler;
 mod helpers;
 mod home_handler;
 mod map_handler;
+mod report_handler;
 mod smithy_handler;
 mod village_handler;
 
@@ -15,5 +16,6 @@ pub use building_handler::{build_action, building};
 pub(crate) use helpers::*;
 pub use home_handler::home;
 pub use map_handler::{map, map_region};
+pub use report_handler::reports;
 pub use smithy_handler::research_smithy;
 pub use village_handler::{resources, village};
