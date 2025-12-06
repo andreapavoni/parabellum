@@ -110,7 +110,6 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 
 ### In Progress
 **API / UI**: Getting the minimal viable views to navigate the game:
-
 - [ ] **i18n**: add translations in several languages.
 - [x] Layout, basic navbar
 - [x] Login, Register
