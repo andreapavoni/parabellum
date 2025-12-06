@@ -119,8 +119,10 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
   - [ ] Special buildings (info + specific actions)
     - [x] Barracks, Stable, Workshop, etc...
     - [ ] Rally Point:
-      - [ ] send troops
-      - [ ] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
+      - [x] send troops
+      - [x] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
+      - [ ] view reinforcements in own and other villages
+    - [ ] Reports (marketplace, troop movements)
     - [x] Academy (research units)
     - [x] Smithy (upgrade units)
     - [ ] Merchant, Marketplace
