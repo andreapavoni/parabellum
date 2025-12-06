@@ -15,7 +15,7 @@ fn main() {
     println!("cargo::rerun-if-changed=../package.json");
 
     let status = Command::new("bun")
-        .args(&["run", "build:release"])
+        .args(["run", "build:release"])
         .current_dir("..")
         .status();
 

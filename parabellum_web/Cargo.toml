@@ -10,6 +10,10 @@ keywords = { workspace = true }
 [lib]
 path = "lib.rs"
 
+[lints.clippy]
+manual_async_fn = "allow"
+result_large_err = "allow"
+
 [dependencies]
 parabellum_app = { path = "../parabellum_app" }
 parabellum_game = { path = "../parabellum_game" }

@@ -1128,6 +1128,7 @@ impl Default for VillageStocks {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_cast)]
 mod tests {
     use crate::{
         models::{buildings::Building, village::VillageStocks},
