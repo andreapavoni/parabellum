@@ -179,3 +179,123 @@ impl JobHandler for AttackJobHandler {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::Config,
+        jobs::handler::JobHandlerContext,
+        repository::ReportRepository,
+        test_utils::tests::{MockReportRepository, MockUnitOfWork},
+        uow::UnitOfWork,
+    };
+    use parabellum_game::{
+        battle::AttackType,
+        models::map::Valley,
+        test_utils::{
+            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            army_factory, player_factory, valley_factory, village_factory,
+        },
+    };
+    use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_attack_job_persists_reports_with_audience_state() {
+        let uow = MockUnitOfWork::new();
+        let report_repo: Arc<MockReportRepository> = uow.report_repo();
+        let config = Arc::new(Config {
+            world_size: 100,
+            speed: 1,
+            auth_cookie_secret: "test-secret".to_string(),
+        });
+
+        let attacker_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let defender_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+
+        let attacker_valley: Valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 0, y: 0 }),
+            ..Default::default()
+        });
+        let defender_valley: Valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 5, y: 5 }),
+            ..Default::default()
+        });
+
+        let attacker_village = village_factory(VillageFactoryOptions {
+            player: Some(attacker_player.clone()),
+            valley: Some(attacker_valley),
+            ..Default::default()
+        });
+        let defender_village = village_factory(VillageFactoryOptions {
+            player: Some(defender_player.clone()),
+            valley: Some(defender_valley),
+            ..Default::default()
+        });
+
+        let attacker_army = army_factory(ArmyFactoryOptions {
+            player_id: Some(attacker_player.id),
+            village_id: Some(attacker_village.id),
+            units: Some([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        uow.players().save(&attacker_player).await.unwrap();
+        uow.players().save(&defender_player).await.unwrap();
+        uow.villages().save(&attacker_village).await.unwrap();
+        uow.villages().save(&defender_village).await.unwrap();
+        uow.armies().save(&attacker_army).await.unwrap();
+
+        let payload = AttackTask {
+            army_id: attacker_army.id,
+            attacker_village_id: attacker_village.id as i32,
+            attacker_player_id: attacker_player.id,
+            target_village_id: defender_village.id as i32,
+            target_player_id: defender_player.id,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            attack_type: AttackType::Normal,
+        };
+
+        let handler = AttackJobHandler::new(payload);
+        let dummy_job = Job::new(
+            attacker_player.id,
+            attacker_village.id as i32,
+            0,
+            JobPayload::new("Attack", json!({})),
+        );
+        let ctx = JobHandlerContext {
+            uow: Box::new(uow),
+            config,
+        };
+
+        handler.handle(&ctx, &dummy_job).await.unwrap();
+
+        let attacker_reports = report_repo
+            .list_for_player(attacker_player.id, 10)
+            .await
+            .unwrap();
+        assert_eq!(attacker_reports.len(), 1);
+        assert!(
+            attacker_reports[0].read_at.is_some(),
+            "attacker report should be marked read"
+        );
+
+        let defender_reports = report_repo
+            .list_for_player(defender_player.id, 10)
+            .await
+            .unwrap();
+        assert_eq!(defender_reports.len(), 1);
+        assert!(
+            defender_reports[0].read_at.is_none(),
+            "defender report should be unread"
+        );
+    }
+}

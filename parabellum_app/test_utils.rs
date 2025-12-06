@@ -236,6 +236,24 @@ pub mod tests {
             Ok(results)
         }
 
+        async fn get_for_player(
+            &self,
+            report_id: Uuid,
+            player_id: Uuid,
+        ) -> Result<Option<ReportRecord>, ApplicationError> {
+            let store = self.reports.lock().unwrap();
+            for (record, audiences) in store.iter() {
+                if record.id == report_id {
+                    if let Some(audience) = audiences.iter().find(|a| a.player_id == player_id) {
+                        let mut cloned = record.clone();
+                        cloned.read_at = audience.read_at;
+                        return Ok(Some(cloned));
+                    }
+                }
+            }
+            Ok(None)
+        }
+
         async fn mark_as_read(
             &self,
             report_id: Uuid,
@@ -645,6 +663,10 @@ pub mod tests {
     impl MockUnitOfWork {
         pub fn new() -> Self {
             Default::default()
+        }
+
+        pub fn report_repo(&self) -> Arc<MockReportRepository> {
+            self.reports.clone()
         }
     }
 

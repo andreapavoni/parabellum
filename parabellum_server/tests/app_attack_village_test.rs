@@ -36,7 +36,7 @@ pub mod tests {
         };
 
         let original_home_army_id = attacker_army.id;
-        let (_defender_player, defender_village, _defender_army, _, _) = {
+        let (defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -199,6 +199,28 @@ pub mod tests {
             assert_ne!(
                 home_army.id, original_home_army_id,
                 "Home army ID should be new after merge"
+            );
+
+            // Ensure a report exists for both attacker and defender with correct read state
+            let report_repo = uow_assert3.reports();
+            let attacker_reports = report_repo.list_for_player(attacker_player.id, 5).await?;
+            assert!(
+                attacker_reports.iter().any(|r| r.report_type == "battle"),
+                "Attacker should receive a battle report"
+            );
+            assert!(
+                attacker_reports.iter().any(|r| r.read_at.is_some()),
+                "Attacker report should be marked read"
+            );
+
+            let defender_reports = report_repo.list_for_player(defender_player.id, 5).await?;
+            assert!(
+                defender_reports.iter().any(|r| r.report_type == "battle"),
+                "Defender should receive a battle report"
+            );
+            assert!(
+                defender_reports.iter().any(|r| r.read_at.is_none()),
+                "Defender report should remain unread"
             );
 
             uow_assert3.rollback().await?;

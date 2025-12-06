@@ -223,6 +223,15 @@ impl Query for GetReportsForPlayer {
     type Output = Vec<ReportView>;
 }
 
+pub struct GetReportForPlayer {
+    pub report_id: Uuid,
+    pub player_id: Uuid,
+}
+
+impl Query for GetReportForPlayer {
+    type Output = Option<ReportView>;
+}
+
 /// Fetch a square region of the world map.
 pub struct GetMapRegion {
     pub center: Position,

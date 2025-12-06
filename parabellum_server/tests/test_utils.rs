@@ -17,15 +17,15 @@ pub mod tests {
         jobs::worker::JobWorker,
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, UserRepository, VillageRepository,
+            PlayerRepository, ReportRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
     use parabellum_db::{
         PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
         PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresUserRepository, PostgresVillageRepository, bootstrap_world_map,
-        establish_test_connection_pool,
+        PostgresReportRepository, PostgresUserRepository, PostgresVillageRepository,
+        bootstrap_world_map, establish_test_connection_pool,
     };
     use parabellum_game::{
         models::{
@@ -69,6 +69,10 @@ pub mod tests {
 
         fn jobs(&self) -> Arc<dyn JobRepository + 'p> {
             Arc::new(PostgresJobRepository::new(self.tx.clone()))
+        }
+
+        fn reports(&self) -> Arc<dyn ReportRepository + 'p> {
+            Arc::new(PostgresReportRepository::new(self.tx.clone()))
         }
 
         fn map(&self) -> Arc<dyn MapRepository + 'p> {

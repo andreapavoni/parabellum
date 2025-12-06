@@ -47,5 +47,11 @@ pub trait ReportRepository: Send + Sync {
         limit: i64,
     ) -> Result<Vec<ReportRecord>, ApplicationError>;
 
+    async fn get_for_player(
+        &self,
+        report_id: Uuid,
+        player_id: Uuid,
+    ) -> Result<Option<ReportRecord>, ApplicationError>;
+
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError>;
 }

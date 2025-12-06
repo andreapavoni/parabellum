@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id, r.report_type, r.payload, r.actor_player_id, r.actor_village_id, r.target_player_id, r.target_village_id, r.created_at, rr.read_at\n            FROM reports r\n            JOIN report_reads rr ON rr.report_id = r.id\n            WHERE r.id = $1 AND rr.player_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "report_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor_player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "actor_village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "target_player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "target_village_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "read_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "20a970c40a38c05a600d4cd7aa88e6056a197c32ec162f606160ad8077800ce7"
+}

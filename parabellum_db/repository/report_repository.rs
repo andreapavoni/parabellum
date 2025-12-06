@@ -105,6 +105,43 @@ impl<'a> ReportRepository for PostgresReportRepository<'a> {
         Ok(records)
     }
 
+    async fn get_for_player(
+        &self,
+        report_id: Uuid,
+        player_id: Uuid,
+    ) -> Result<Option<ReportRecord>, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+        let row = sqlx::query!(
+            r#"
+            SELECT r.id, r.report_type, r.payload, r.actor_player_id, r.actor_village_id, r.target_player_id, r.target_village_id, r.created_at, rr.read_at
+            FROM reports r
+            JOIN report_reads rr ON rr.report_id = r.id
+            WHERE r.id = $1 AND rr.player_id = $2
+            "#,
+            report_id,
+            player_id
+        )
+        .fetch_optional(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(row
+            .map(|row| -> Result<ReportRecord, ApplicationError> {
+                Ok(ReportRecord {
+                    id: row.id,
+                    report_type: row.report_type,
+                    payload: serde_json::from_value(row.payload)?,
+                    actor_player_id: row.actor_player_id,
+                    actor_village_id: row.actor_village_id.map(|id| id as u32),
+                    target_player_id: row.target_player_id,
+                    target_village_id: row.target_village_id.map(|id| id as u32),
+                    created_at: row.created_at,
+                    read_at: row.read_at,
+                })
+            })
+            .transpose()?)
+    }
+
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         sqlx::query!(

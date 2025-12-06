@@ -75,9 +75,19 @@ game:
     total: "%{count} reports"
     empty: No reports yet.
     unread: Unread
+    back: Back to reports
+    detail_id: "Report %{id}"
     battle_success: Victory
     battle_failure: Defeat
     battle_summary: "%{attacker} engaged %{defender}. Result: %{result}. Bounty: %{bounty}"
+    battle_detail:
+      title: Battle
+      attacker: Attacker
+      defender: Defender
+      result: Outcome
+      bounty: Bounty
+    generic_title: Report
+    generic_message: This report type is not supported yet, but it has been marked as read.
 
   units:
     romans:
