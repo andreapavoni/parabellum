@@ -1,7 +1,7 @@
 # Check manuat at https://just.systems/man/en/
 default: bacon
 
-bacon:
+bacon: start_db
     bacon
 
 run: start_db
@@ -10,7 +10,7 @@ run: start_db
 debug: start_db
     cargo run
 
-dev:
+dev: start_db
     #!/usr/bin/env bash
     trap 'kill $(jobs -p) 2>/dev/null' EXIT
     bun run build:dev &

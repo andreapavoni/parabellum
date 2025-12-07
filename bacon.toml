@@ -85,6 +85,23 @@ allow_warnings = true
 background = false
 on_change_strategy = "kill_then_restart"
 kill = ["pkill", "-TERM", "-P"]
+watch = [
+    "frontend/src/**/*.{js,ts,css,scss}",
+    "parabellum_game/**/*.rs",
+    "parabellum_game/cargo.toml",
+    "parabellum_app/**/*.rs",
+    "parabellum_db/**/*.rs",
+    "parabellum_db/cargo.toml",
+    "parabellum_server/*.rs",
+    "parabellum_server/cargo.toml",
+    "parabellum_types/**/*.rs",
+    "parabellum_types/cargo.toml",
+    "parabellum_web/**/*.{rs,html,yml}",
+    "parabellum_web/cargo.toml",
+    "Cargo.toml",
+    "package.json",
+    "tsconfig.json",
+]
 
 # You may define here keybindings that would be specific to
 # a project, for example a shortcut to launch a specific job.
