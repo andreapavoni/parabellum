@@ -14,7 +14,7 @@ pub use academy_handler::research_unit;
 pub use army_handler::{send_troops, train_units};
 pub use auth_handler::{RegisterForm, login, login_page, logout, register, register_page};
 pub use building_handler::{build_action, building};
-pub use dioxus_handler::{resources_api, resources_dioxus};
+pub use dioxus_handler::resources_dioxus;
 pub(crate) use helpers::*;
 pub use home_handler::home;
 pub use map_handler::{map, map_region};

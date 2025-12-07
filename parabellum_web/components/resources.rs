@@ -7,8 +7,32 @@ pub struct ResourceSlot {
     pub slot_id: u8,
     pub building_name: BuildingName,
     pub level: u8,
-    pub css_class: String,
     pub queue_state: Option<QueueState>,
+}
+
+impl ResourceSlot {
+    /// Get the CSS class for this resource type
+    pub fn css_class(&self) -> &'static str {
+        match &self.building_name {
+            BuildingName::Woodcutter => "wood",
+            BuildingName::ClayPit => "clay",
+            BuildingName::IronMine => "iron",
+            BuildingName::Cropland => "crop",
+            _ => "wood",
+        }
+    }
+
+    /// Get the full CSS classes for rendering including queue state
+    pub fn render_classes(&self) -> String {
+        let mut classes = format!("hex {} occupied", self.css_class());
+        if let Some(ref queue_state) = self.queue_state {
+            match queue_state {
+                QueueState::Active => classes.push_str(" construction-active"),
+                QueueState::Pending => classes.push_str(" construction-pending"),
+            }
+        }
+        classes
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -117,14 +141,7 @@ fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
                 {
                     let (top, left) = positions[idx];
                     let slot_number = idx + 1;
-                    let mut classes = format!("hex {} occupied", slot.css_class);
-
-                    if let Some(ref queue_state) = slot.queue_state {
-                        match queue_state {
-                            QueueState::Active => classes.push_str(" construction-active"),
-                            QueueState::Pending => classes.push_str(" construction-pending"),
-                        }
-                    }
+                    let classes = slot.render_classes();
 
                     rsx! {
                         a {
