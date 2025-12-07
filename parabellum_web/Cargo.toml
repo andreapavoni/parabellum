@@ -31,6 +31,10 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 askama = { version = "0.14", features = ["blocks", "full", "serde_json"] }
 rust-i18n = { version = "3.1.5" }
 
+# Dioxus 0.7 for SSR
+dioxus = { version = "0.7", features = ["ssr"] }
+dioxus-ssr = "0.7"
+
 [dev-dependencies]
 # Enable "test-utils" for parabellum_app
 parabellum_game = { path = "../parabellum_game", features = ["test-utils"] }

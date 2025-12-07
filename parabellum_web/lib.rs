@@ -1,3 +1,4 @@
+pub mod components;
 pub mod handlers;
 mod http;
 mod templates;
