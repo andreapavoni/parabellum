@@ -1,8 +1,8 @@
 use crate::{
     components::{
-        BuildingQueueItem, LayoutBody, LayoutData, ProductionInfo, QueueState, ResourceProduction,
+        BuildingQueueItem, LayoutData, PageLayout, ProductionInfo, QueueState, ResourceProduction,
         ResourceSlot, ResourcesPage, ResourcesPageData, TroopInfo, UserInfo, VillageCapacity,
-        VillageHeaderData, VillageInfo, VillageResources, wrap_in_html_shell,
+        VillageHeaderData, VillageInfo, VillageResources, wrap_in_html,
     },
     handlers::{CurrentUser, village_queues_or_empty},
     http::AppState,
@@ -139,14 +139,15 @@ pub async fn resources_dioxus(
         nav_active: "resources".to_string(),
     };
 
-    // Render with Dioxus SSR using full layout
+    // Render body with Dioxus SSR
     let body_content = dioxus_ssr::render_element(rsx! {
-        LayoutBody {
+        PageLayout {
             data: layout_data,
             ResourcesPage { data: data }
         }
     });
 
-    let html = wrap_in_html_shell(&body_content);
+    // Wrap in full HTML document (includes app.js with tickers)
+    let html = wrap_in_html(&body_content);
     Html(html)
 }

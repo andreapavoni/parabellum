@@ -44,9 +44,9 @@ pub struct LayoutData {
     pub nav_active: String,
 }
 
-/// Main body layout component (to be wrapped in HTML shell)
+/// Page body layout (will be wrapped in HTML shell)
 #[component]
-pub fn LayoutBody(data: LayoutData, children: Element) -> Element {
+pub fn PageLayout(data: LayoutData, children: Element) -> Element {
     rsx! {
         Header { data: data.clone() }
         main { class: "flex-grow container mx-auto",
@@ -56,8 +56,29 @@ pub fn LayoutBody(data: LayoutData, children: Element) -> Element {
     }
 }
 
+/// Wrap rendered body content in full HTML document shell
+pub fn wrap_in_html(body_content: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PARABELLUM</title>
+    <link rel="stylesheet" href="/assets/tailwind.css">
+    <link rel="stylesheet" href="/assets/index.css">
+</head>
+<body class="flex flex-col min-h-screen">
+{}
+<script src="/assets/index.js" type="application/javascript"></script>
+</body>
+</html>"#,
+        body_content
+    )
+}
+
 #[component]
-fn Header(data: LayoutData) -> Element {
+pub fn Header(data: LayoutData) -> Element {
     rsx! {
         header { class: "bg-white border-b border-gray-300 shadow-sm",
             if let Some(user) = &data.user {
@@ -105,7 +126,7 @@ fn Header(data: LayoutData) -> Element {
 }
 
 #[component]
-fn NavBar(active: String) -> Element {
+pub fn NavBar(active: String) -> Element {
     let nav_class = |page: &str| -> String {
         if active == page {
             "nav-icon nav-active".to_string()
@@ -135,7 +156,7 @@ fn NavBar(active: String) -> Element {
 }
 
 #[component]
-fn ResourceBar(village: VillageHeaderData) -> Element {
+pub fn ResourceBar(village: VillageHeaderData) -> Element {
     rsx! {
         div { class: "flex justify-center items-center py-2 bg-white flex-wrap px-2",
             ResourceDisplay {
@@ -175,7 +196,7 @@ fn ResourceBar(village: VillageHeaderData) -> Element {
 }
 
 #[component]
-fn ResourceDisplay(
+pub fn ResourceDisplay(
     icon: String,
     amount: u32,
     capacity: u32,
@@ -198,7 +219,7 @@ fn ResourceDisplay(
 }
 
 #[component]
-fn Footer() -> Element {
+pub fn Footer() -> Element {
     rsx! {
         footer { class: "bg-gray-100 border-t border-gray-300 py-4 mt-auto",
             div { class: "container mx-auto text-center text-sm text-gray-600",
@@ -212,95 +233,4 @@ fn format_server_time(timestamp: i64) -> String {
     use chrono::prelude::*;
     let dt = DateTime::from_timestamp(timestamp, 0).unwrap_or_default();
     format!("{:02}:{:02}:{:02}", dt.hour(), dt.minute(), dt.second())
-}
-
-/// Generate the complete HTML document with embedded scripts
-pub fn wrap_in_html_shell(body_content: &str) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PARABELLUM</title>
-    <link rel="stylesheet" href="/assets/tailwind.css">
-    <link rel="stylesheet" href="/assets/index.css">
-</head>
-<body class="flex flex-col min-h-screen">
-{}
-<script src="/assets/index.js" type="application/javascript"></script>
-<script>
-// Server clock ticker
-window.__serverClock = window.__serverClock || (function() {{
-    const pad = (num) => num.toString().padStart(2, '0');
-    const element = document.getElementById('server-time');
-    if (!element) return true;
-
-    let timestamp = parseInt(element.dataset.timestamp || '0', 10);
-    if (!Number.isFinite(timestamp) || timestamp <= 0) return true;
-
-    const tick = () => {{
-        timestamp += 1;
-        const date = new Date(timestamp * 1000);
-        const hours = pad(date.getUTCHours());
-        const minutes = pad(date.getUTCMinutes());
-        const seconds = pad(date.getUTCSeconds());
-        element.textContent = `${{hours}}:${{minutes}}:${{seconds}}`;
-        element.dataset.timestamp = timestamp;
-    }};
-
-    setInterval(tick, 1000);
-    return true;
-}})();
-
-// Resource ticker
-window.__resourceTicker = window.__resourceTicker || (function() {{
-    const parseNumber = (value) => {{
-        const parsed = parseFloat(value);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }};
-
-    const resources = Array.from(document.querySelectorAll('.res-value[data-prod-per-hour]')).map((el) => {{
-        const amount = parseNumber(el.dataset.amount);
-        const capacity = parseNumber(el.dataset.capacity);
-        const prodPerHour = parseNumber(el.dataset.prodPerHour);
-        return {{
-            el,
-            amount,
-            capacity,
-            capacityDisplay: Math.floor(capacity),
-            perSecond: prodPerHour / 3600,
-        }};
-    }});
-
-    if (!resources.length) return true;
-
-    const render = (resource) => {{
-        const amountInt = Math.max(0, Math.floor(resource.amount));
-        resource.el.textContent = `${{amountInt}}/${{resource.capacityDisplay}}`;
-    }};
-
-    let lastTick = Date.now();
-    const tick = () => {{
-        const now = Date.now();
-        const deltaSeconds = Math.max(0, (now - lastTick) / 1000);
-        lastTick = now;
-
-        resources.forEach((resource) => {{
-            if (resource.perSecond === 0) return;
-            resource.amount += resource.perSecond * deltaSeconds;
-            resource.amount = Math.min(resource.capacity, Math.max(0, resource.amount));
-            render(resource);
-        }});
-    }};
-
-    resources.forEach(render);
-    setInterval(tick, 1000);
-    return true;
-}})();
-</script>
-</body>
-</html>"#,
-        body_content
-    )
 }
