@@ -1,10 +1,13 @@
 # Check manuat at https://just.systems/man/en/
-default: run
+default: bacon
 
-run:
+bacon:
+    bacon
+
+run: start_db
     cargo run --release
 
-debug:
+debug: start_db
     cargo run
 
 dev:
@@ -13,18 +16,18 @@ dev:
     bun run build:dev &
     SKIP_FRONTEND=1 cargo run
 
-# db
-# app
-start target:
-    docker-compose up -d {{target}}
+start_db:
+    docker-compose up -d db
 
-start-all:
-    docker-compose up -d
+start_app:
+    docker-compose up app
 
-stop-all:
+start_all: start_db start_app
+
+stop_all:
     docker-compose stop
 
-setup-db:
+setup_db:
     ./setup-db
 
 test:
