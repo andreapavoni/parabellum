@@ -9,13 +9,7 @@ pub struct BuildingSlot {
     pub slot_id: u8,
     pub building_name: Option<BuildingName>,
     pub level: u8,
-    pub queue_state: Option<QueueState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum QueueState {
-    Active,
-    Pending,
+    pub is_processing: bool,
 }
 
 impl BuildingSlot {
@@ -27,11 +21,8 @@ impl BuildingSlot {
             classes.push_str(" occupied");
         }
 
-        if let Some(ref queue_state) = self.queue_state {
-            match queue_state {
-                QueueState::Active => classes.push_str(" construction-active"),
-                QueueState::Pending => classes.push_str(" construction-pending"),
-            }
+        if self.is_processing {
+            classes.push_str(" construction-active");
         }
 
         classes
@@ -51,8 +42,10 @@ impl BuildingSlot {
     }
 }
 
+// VillageInfo moved to common.rs
+// We extend it here with is_current flag for the village list
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillageInfo {
+pub struct VillageListItem {
     pub id: i64,
     pub name: String,
     pub x: i32,
@@ -67,7 +60,7 @@ pub struct VillagePageData {
     pub village_y: i32,
     pub building_slots: Vec<BuildingSlot>,
     pub building_queue: Vec<super::common::BuildingQueueItem>,
-    pub villages: Vec<VillageInfo>,
+    pub villages: Vec<VillageListItem>,
 }
 
 #[component]
@@ -184,7 +177,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
 }
 
 #[component]
-fn VillagesList(villages: Vec<VillageInfo>) -> Element {
+fn VillagesList(villages: Vec<VillageListItem>) -> Element {
     rsx! {
         div { class: "w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none",
             h3 { class: "font-bold mb-3 text-sm border-b border-gray-300 pb-2",

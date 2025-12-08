@@ -11,9 +11,9 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    build_action, building, home, login, login_page, logout, map, map_region, register,
-    register_page, report_detail, reports, research_smithy, research_unit, resources,
-    resources_dioxus, send_troops, train_units, village,
+    build_action, building, dioxus, home, login, login_page, logout, map, map_region, register,
+    register_page, report_detail, reports, research_smithy, research_unit, resources, send_troops,
+    train_units, village,
 };
 
 #[derive(Clone)]
@@ -60,8 +60,9 @@ impl WebRouter {
         // Protected routes (require authenticated user)
         let protected_routes = Router::new()
             .route("/village", get(village))
+            .route("/dioxus/village", get(dioxus::village))
             .route("/resources", get(resources))
-            .route("/resources/dioxus", get(resources_dioxus))
+            .route("/dioxus/resources", get(dioxus::resources))
             .route("/build", get(building).post(build_action))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))

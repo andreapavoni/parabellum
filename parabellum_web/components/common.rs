@@ -12,6 +12,15 @@ pub struct BuildingQueueItem {
     pub is_processing: bool,
 }
 
+/// Village information (used in lists and headers)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VillageInfo {
+    pub id: i64,
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+}
+
 /// Reusable building queue component
 #[component]
 pub fn BuildingQueue(queue: Vec<BuildingQueueItem>) -> Element {

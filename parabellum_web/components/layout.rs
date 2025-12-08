@@ -58,23 +58,8 @@ pub fn PageLayout(data: LayoutData, children: Element) -> Element {
 
 /// Wrap rendered body content in full HTML document shell
 pub fn wrap_in_html(body_content: &str) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PARABELLUM</title>
-    <link rel="stylesheet" href="/assets/tailwind.css">
-    <link rel="stylesheet" href="/assets/index.css">
-</head>
-<body class="flex flex-col min-h-screen">
-{}
-<script src="/assets/index.js" type="application/javascript"></script>
-</body>
-</html>"#,
-        body_content
-    )
+    static TEMPLATE: &str = include_str!("../templates/base.html");
+    TEMPLATE.replace("{{BODY}}", body_content)
 }
 
 #[component]

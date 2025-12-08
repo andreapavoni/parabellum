@@ -9,7 +9,7 @@ pub struct ResourceSlot {
     pub slot_id: u8,
     pub building_name: BuildingName,
     pub level: u8,
-    pub queue_state: Option<QueueState>,
+    pub is_processing: bool,
 }
 
 impl ResourceSlot {
@@ -27,20 +27,11 @@ impl ResourceSlot {
     /// Get the full CSS classes for rendering including queue state
     pub fn render_classes(&self) -> String {
         let mut classes = format!("hex {} occupied", self.css_class());
-        if let Some(ref queue_state) = self.queue_state {
-            match queue_state {
-                QueueState::Active => classes.push_str(" construction-active"),
-                QueueState::Pending => classes.push_str(" construction-pending"),
-            }
+        if self.is_processing {
+            classes.push_str(" construction-active");
         }
         classes
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum QueueState {
-    Active,
-    Pending,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -57,18 +48,14 @@ pub struct TroopInfo {
     pub count: u32,
 }
 
-// BuildingQueueItem moved to common.rs
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillageInfo {
-    pub name: String,
-    pub x: i32,
-    pub y: i32,
-}
+// BuildingQueueItem and VillageInfo moved to common.rs
+// Note: Resources page uses a simplified VillageInfo (no id field needed)
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResourcesPageData {
-    pub village: VillageInfo,
+    pub village_name: String,
+    pub village_x: i32,
+    pub village_y: i32,
     pub resource_slots: Vec<ResourceSlot>,
     pub production: ProductionInfo,
     pub troops: Vec<TroopInfo>,
@@ -81,7 +68,7 @@ pub fn ResourcesPage(data: ResourcesPageData) -> Element {
         div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
             div { class: "flex flex-col items-center w-full md:w-auto",
                 h1 { class: "text-xl font-bold mb-4 w-full text-left md:text-left",
-                    "{data.village.name} ({data.village.x}|{data.village.y})"
+                    "{data.village_name} ({data.village_x}|{data.village_y})"
                 }
 
                 // Resource fields map
