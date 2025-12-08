@@ -118,15 +118,9 @@ pub async fn login(
         }
     };
 
-    let (jar, new_csrf_token) = generate_csrf(jar);
-    let template = LoginTemplate {
-        csrf_token: new_csrf_token,
-        layout: TemplateLayout::new(None, "login"),
-        email_value: form.email.clone(),
-        error: err_msg,
-    };
-
-    (jar, render_template(template, status)).into_response()
+    // Use Dioxus renderer for error display
+    crate::handlers::dioxus::render_login_with_error(jar, form.email.clone(), err_msg)
+        .into_response()
 }
 
 /// GET /register – Show the signup form.

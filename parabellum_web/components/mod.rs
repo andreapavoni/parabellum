@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod buildings;
 pub mod common;
 pub mod layout;
@@ -6,6 +7,7 @@ pub mod reports;
 pub mod resources;
 pub mod village;
 
+pub use auth::{HomePage, LoginPage, RegisterPage};
 pub use buildings::{
     AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
     GenericBuildingPage, MissingRequirements, RallyPointPage, ResourceCost, ResourceFieldPage,

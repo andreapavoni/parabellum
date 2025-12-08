@@ -138,7 +138,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                     href: "/build/19",
                     style: "top: 50%; left: 50%;",
                     title: "{main.title()}",
-                    span { class: "slot-label", "Main Building" }
+                    span { class: "slot-label", "Main" }
                 }
             }
 

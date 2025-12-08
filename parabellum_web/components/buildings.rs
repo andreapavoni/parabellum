@@ -1092,40 +1092,65 @@ pub fn RallyPointPage(
                     csrf_token: csrf_token.clone(),
                 }
 
-                // Home troops and reinforcements
-                div { class: "grid gap-4 md:grid-cols-2",
-                    // Home troops
-                    div { class: "border rounded-md p-4 bg-white space-y-2",
-                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.home_troops\")}" }
-                        if home_troops.is_empty() {
-                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_troops_home\")}" }
-                        } else {
-                            ul { class: "space-y-1 text-sm",
-                                for troop in home_troops.iter() {
-                                    li { class: "flex items-center justify-between",
-                                        span { "{troop.name}" }
-                                        span { class: "font-semibold", "{troop.count}" }
+                // Troops overview - full army table
+                div { class: "border rounded-md p-4 bg-white space-y-3",
+                    div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.troops_overview\")}" }
+
+                    // Table showing all units with icons
+                    div { class: "overflow-x-auto",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "border-b",
+                                    th { class: "text-left p-2 text-xs font-semibold text-gray-600", "Unit" }
+                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Home" }
+                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Support" }
+                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Total" }
+                                }
+                            }
+                            tbody {
+                                for unit in sendable_units.iter() {
+                                    {
+                                        // Find reinforcement count for this unit
+                                        let support_count = reinforcements.iter()
+                                            .find(|r| r.name == unit.name)
+                                            .map(|r| r.count)
+                                            .unwrap_or(0);
+                                        let total = unit.available + support_count;
+
+                                        // Only show row if there are any troops
+                                        if total > 0 {
+                                            rsx! {
+                                                tr { class: "border-b hover:bg-gray-50",
+                                                    td { class: "p-2 font-medium text-gray-800", "{unit.name}" }
+                                                    td { class: "p-2 text-right tabular-nums",
+                                                        if unit.available > 0 {
+                                                            span { class: "text-gray-900", "{unit.available}" }
+                                                        } else {
+                                                            span { class: "text-gray-400", "—" }
+                                                        }
+                                                    }
+                                                    td { class: "p-2 text-right tabular-nums",
+                                                        if support_count > 0 {
+                                                            span { class: "text-blue-600", "{support_count}" }
+                                                        } else {
+                                                            span { class: "text-gray-400", "—" }
+                                                        }
+                                                    }
+                                                    td { class: "p-2 text-right tabular-nums font-semibold", "{total}" }
+                                                }
+                                            }
+                                        } else {
+                                            rsx! { }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Reinforcements
-                    div { class: "border rounded-md p-4 bg-white space-y-2",
-                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.reinforcements\")}" }
-                        if reinforcements.is_empty() {
-                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_reinforcements\")}" }
-                        } else {
-                            ul { class: "space-y-1 text-sm",
-                                for troop in reinforcements.iter() {
-                                    li { class: "flex items-center justify-between",
-                                        span { "{troop.name}" }
-                                        span { class: "font-semibold", "{troop.count}" }
-                                    }
-                                }
-                            }
-                        }
+                    // Summary
+                    div { class: "pt-2 border-t text-xs text-gray-500",
+                        p { "🏠 Home troops  •  🛡️ Support troops (reinforcements from other villages)" }
                     }
                 }
 

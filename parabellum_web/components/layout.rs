@@ -173,11 +173,21 @@ pub fn ResourceDisplay(
 #[component]
 pub fn Footer() -> Element {
     rsx! {
-        footer { class: "bg-gray-100 border-t border-gray-300 py-4 mt-auto",
-            div { class: "container mx-auto text-center text-sm text-gray-600",
-                "PARABELLUM - A Travian 3.x inspired game"
+        footer { class: "bg-white border-t border-gray-300 py-4 text-center text-xs text-gray-400",
+                p {
+                    "A "
+                    a { class: "hover:underline", href: "https://pavonz.com", "pavonz" }
+                    " joint | © 2025 | "
+                    a {
+                        class: "hover:underline",
+                        href: "https://github.com/andreapavoni/parabellum",
+                        "Github"
+                    }
+                }
+                div { class: "mt-2 space-x-3",
+                    span { "{t!(\"footer.not_affiliated\", name = \"Travian Games GmbH\")}" }
+                }
             }
-        }
     }
 }
 

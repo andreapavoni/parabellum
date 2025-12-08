@@ -11,8 +11,11 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    dioxus, home, login, login_page, logout, register, register_page, research_smithy,
-    research_unit, send_troops, train_units,
+    dioxus::{
+        build_action, building, home, login_page, map, map_region, register_page, report_detail,
+        reports, resources, village,
+    },
+    login, logout, register, research_smithy, research_unit, send_troops, train_units,
 };
 
 #[derive(Clone)]
@@ -59,16 +62,13 @@ impl WebRouter {
         // Protected routes (require authenticated user)
         let protected_routes = Router::new()
             // Dioxus routes (primary)
-            .route("/village", get(dioxus::village))
-            .route("/resources", get(dioxus::resources))
-            .route("/map", get(dioxus::map))
-            .route("/map/data", get(dioxus::map_region))
-            .route("/reports", get(dioxus::reports))
-            .route("/reports/{id}", get(dioxus::report_detail))
-            .route(
-                "/build/{slot_id}",
-                get(dioxus::building).post(dioxus::build_action),
-            )
+            .route("/village", get(village))
+            .route("/resources", get(resources))
+            .route("/map", get(map))
+            .route("/map/data", get(map_region))
+            .route("/reports", get(reports))
+            .route("/reports/{id}", get(report_detail))
+            .route("/build/{slot_id}", get(building).post(build_action))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
             .route("/academy/research", post(research_unit))

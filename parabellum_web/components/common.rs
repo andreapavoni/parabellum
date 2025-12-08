@@ -71,11 +71,11 @@ pub fn BuildingQueue(queue: Vec<BuildingQueueItem>) -> Element {
     rsx! {
         div { class: "w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1",
             div { class: "font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1",
-                "Building Queue:"
+              "{t!(\"game.village.building_queue\")}"
             }
             if queue.is_empty() {
                 div { class: "text-xs text-gray-500",
-                    "No buildings in queue"
+                  "{t!(\"game.village.building_queue_empty\")}"
                 }
             } else {
                 for item in queue {
