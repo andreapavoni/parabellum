@@ -7,10 +7,9 @@ pub mod village;
 
 pub use common::{BuildingQueueItem, VillageInfo};
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
-pub use map::{MapPage, MapPageData};
+pub use map::MapPage;
 pub use reports::{
-    BattleReportData, BattleReportPage, GenericReportData, GenericReportPage, ReportListEntry,
-    ReportsPage, ReportsPageData,
+    BattleReportPage, GenericReportData, GenericReportPage, ReportListEntry, ReportsPage,
 };
-pub use resources::{ProductionInfo, ResourceSlot, ResourcesPage, ResourcesPageData, TroopInfo};
-pub use village::{BuildingSlot, VillageListItem, VillagePage, VillagePageData};
+pub use resources::{ResourceSlot, ResourcesPage};
+pub use village::{BuildingSlot, VillageListItem, VillagePage};

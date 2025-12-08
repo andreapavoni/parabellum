@@ -1,7 +1,6 @@
 use crate::{
     components::{
-        BuildingQueueItem, BuildingSlot, PageLayout, VillageListItem, VillagePage, VillagePageData,
-        wrap_in_html,
+        BuildingQueueItem, BuildingSlot, PageLayout, VillageListItem, VillagePage, wrap_in_html,
     },
     handlers::{CurrentUser, village_queues_or_empty},
     http::AppState,
@@ -63,21 +62,17 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
         })
         .collect();
 
-    let data = VillagePageData {
-        village_name: user.village.name.clone(),
-        village_x: user.village.position.x,
-        village_y: user.village.position.y,
-        building_slots,
-        building_queue,
-        villages,
-    };
-
     let layout_data = create_layout_data(&user, "village");
 
     let body_content = dioxus_ssr::render_element(rsx! {
         PageLayout {
-            data: layout_data,
-            VillagePage { data: data }
+            data: layout_data.clone(),
+            VillagePage {
+                village: layout_data.village.unwrap(),
+                building_slots,
+                building_queue,
+                villages
+            }
         }
     });
 

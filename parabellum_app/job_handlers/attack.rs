@@ -6,7 +6,7 @@ use parabellum_game::{battle::Battle, models::buildings::Building};
 use parabellum_types::{
     common::ResourceGroup,
     errors::ApplicationError,
-    reports::{BattleReportPayload, ReportPayload},
+    reports::{BattlePartyPayload, BattleReportPayload, ReportPayload},
 };
 
 use crate::jobs::{
@@ -145,6 +145,28 @@ impl JobHandler for AttackJobHandler {
             .map(|def| def.survivors.iter().copied().sum::<u32>() == 0)
             .unwrap_or(true);
 
+        let attacker_payload = BattlePartyPayload {
+            army_before: *report.attacker.army_before.units(),
+            survivors: report.attacker.survivors,
+            losses: report.attacker.losses,
+        };
+
+        let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
+            army_before: *def.army_before.units(),
+            survivors: def.survivors,
+            losses: def.losses,
+        });
+
+        let reinforcements_payload: Vec<BattlePartyPayload> = report
+            .reinforcements
+            .iter()
+            .map(|reinf| BattlePartyPayload {
+                army_before: *reinf.army_before.units(),
+                survivors: reinf.survivors,
+                losses: reinf.losses,
+            })
+            .collect();
+
         let battle_payload = BattleReportPayload {
             attacker_player: attacker_player.username.clone(),
             attacker_village: atk_village.name.clone(),
@@ -152,6 +174,9 @@ impl JobHandler for AttackJobHandler {
             defender_village: def_village.name.clone(),
             success,
             bounty,
+            attacker: Some(attacker_payload),
+            defender: defender_payload,
+            reinforcements: reinforcements_payload,
         };
 
         let new_report = NewReport {

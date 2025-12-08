@@ -46,8 +46,8 @@ impl BuildingSlot {
     }
 }
 
-// VillageInfo moved to common.rs
-// We extend it here with is_current flag for the village list
+use parabellum_game::models::village::Village;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VillageListItem {
     pub id: i64,
@@ -57,31 +57,26 @@ pub struct VillageListItem {
     pub is_current: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillagePageData {
-    pub village_name: String,
-    pub village_x: i32,
-    pub village_y: i32,
-    pub building_slots: Vec<BuildingSlot>,
-    pub building_queue: Vec<super::common::BuildingQueueItem>,
-    pub villages: Vec<VillageListItem>,
-}
-
 #[component]
-pub fn VillagePage(data: VillagePageData) -> Element {
+pub fn VillagePage(
+    village: Village,
+    building_slots: Vec<BuildingSlot>,
+    building_queue: Vec<super::common::BuildingQueueItem>,
+    villages: Vec<VillageListItem>,
+) -> Element {
     rsx! {
         div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
             div { class: "flex flex-col items-center w-full md:w-auto",
                 h1 { class: "text-xl font-bold mb-4 w-full text-left md:text-left",
-                    "{data.village_name} ({data.village_x}|{data.village_y})"
+                    "{village.name} ({village.position.x}|{village.position.y})"
                 }
 
-                VillageMap { slots: data.building_slots }
+                VillageMap { slots: building_slots.clone() }
 
-                BuildingQueue { queue: data.building_queue }
+                BuildingQueue { queue: building_queue }
             }
 
-            VillagesList { villages: data.villages }
+            VillagesList { villages: villages }
         }
     }
 }

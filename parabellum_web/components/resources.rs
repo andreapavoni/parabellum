@@ -38,58 +38,43 @@ impl ResourceSlot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProductionInfo {
-    pub lumber: u32,
-    pub clay: u32,
-    pub iron: u32,
-    pub crop: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TroopInfo {
-    pub name: String,
-    pub count: u32,
-}
-
-// BuildingQueueItem and VillageInfo moved to common.rs
-// Note: Resources page uses a simplified VillageInfo (no id field needed)
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ResourcesPageData {
-    pub village_name: String,
-    pub village_x: i32,
-    pub village_y: i32,
-    pub resource_slots: Vec<ResourceSlot>,
-    pub production: ProductionInfo,
-    pub troops: Vec<TroopInfo>,
-    pub building_queue: Vec<super::common::BuildingQueueItem>,
-}
+use parabellum_game::models::village::Village;
 
 #[component]
-pub fn ResourcesPage(data: ResourcesPageData) -> Element {
+pub fn ResourcesPage(
+    village: Village,
+    resource_slots: Vec<ResourceSlot>,
+    building_queue: Vec<super::common::BuildingQueueItem>,
+) -> Element {
+    let production = &village.production.effective;
+
     rsx! {
         div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
             div { class: "flex flex-col items-center w-full md:w-auto",
                 h1 { class: "text-xl font-bold mb-4 w-full text-left md:text-left",
-                    "{data.village_name} ({data.village_x}|{data.village_y})"
+                    "{village.name} ({village.position.x}|{village.position.y})"
                 }
 
                 // Resource fields map
-                ResourceFieldsMap { slots: data.resource_slots.clone() }
+                ResourceFieldsMap { slots: resource_slots.clone() }
 
                 // Building queue
-                BuildingQueue { queue: data.building_queue }
+                BuildingQueue { queue: building_queue }
             }
 
             div { class: "w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none",
                 div { class: "flex flex-row md:flex-col justify-between md:justify-start gap-8 md:gap-0",
 
                     // Production info
-                    ProductionPanel { production: data.production }
+                    ProductionPanel {
+                        lumber: production.lumber,
+                        clay: production.clay,
+                        iron: production.iron,
+                        crop: production.crop as u32
+                    }
 
                     // Troops
-                    TroopsPanel { troops: data.troops }
+                    TroopsPanel { village: village.clone() }
                 }
             }
         }
@@ -153,26 +138,26 @@ fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
 // BuildingQueue component moved to common.rs
 
 #[component]
-fn ProductionPanel(production: ProductionInfo) -> Element {
+fn ProductionPanel(lumber: u32, clay: u32, iron: u32, crop: u32) -> Element {
     rsx! {
         div { class: "flex-1",
             h3 { class: "font-bold mb-3 text-sm", "Production:" }
             div { class: "text-xs space-y-3",
                 div { class: "flex justify-between border-b border-gray-100 pb-2",
                     span { "🌲 Lumber" }
-                    span { class: "font-bold text-gray-900", "{production.lumber}/hour" }
+                    span { class: "font-bold text-gray-900", "{lumber}/hour" }
                 }
                 div { class: "flex justify-between border-b border-gray-100 pb-2",
                     span { "🧱 Clay" }
-                    span { class: "font-bold text-gray-900", "{production.clay}/hour" }
+                    span { class: "font-bold text-gray-900", "{clay}/hour" }
                 }
                 div { class: "flex justify-between border-b border-gray-100 pb-2",
                     span { "⛏️ Iron" }
-                    span { class: "font-bold text-gray-900", "{production.iron}/hour" }
+                    span { class: "font-bold text-gray-900", "{iron}/hour" }
                 }
                 div { class: "flex justify-between border-b border-gray-100 pb-2",
                     span { "🌾 Crop" }
-                    span { class: "font-bold text-gray-900", "{production.crop}/hour" }
+                    span { class: "font-bold text-gray-900", "{crop}/hour" }
                 }
             }
         }
@@ -180,7 +165,27 @@ fn ProductionPanel(production: ProductionInfo) -> Element {
 }
 
 #[component]
-fn TroopsPanel(troops: Vec<TroopInfo>) -> Element {
+fn TroopsPanel(village: Village) -> Element {
+    use crate::view_helpers::unit_display_name;
+
+    let troops: Vec<(String, u32)> = village
+        .army()
+        .map(|army| {
+            let tribe_units = village.tribe.units();
+            army.units()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, quantity)| {
+                    if *quantity == 0 {
+                        return None;
+                    }
+                    let name = unit_display_name(&tribe_units[idx].name);
+                    Some((name, *quantity))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
     rsx! {
         div { class: "flex-1 md:mt-8",
             h3 { class: "font-bold mb-2 text-sm md:mt-6", "Troops:" }
@@ -190,10 +195,10 @@ fn TroopsPanel(troops: Vec<TroopInfo>) -> Element {
                 }
             } else {
                 div { class: "text-xs space-y-2",
-                    for troop in troops {
+                    for (name , count) in troops {
                         div { class: "flex justify-between border-b border-gray-100 pb-1",
-                            span { "{troop.name}" }
-                            span { class: "font-semibold text-gray-900", "{troop.count}" }
+                            span { "{name}" }
+                            span { class: "font-semibold text-gray-900", "{count}" }
                         }
                     }
                 }

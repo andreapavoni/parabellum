@@ -1,28 +1,18 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MapPageData {
-    pub center_x: i32,
-    pub center_y: i32,
-    pub home_x: i32,
-    pub home_y: i32,
-    pub home_village_id: u32,
-    pub world_size: i32,
-}
+use parabellum_game::models::village::Village;
 
 #[component]
-pub fn MapPage(data: MapPageData) -> Element {
+pub fn MapPage(village: Village, world_size: i32) -> Element {
     rsx! {
         div {
             id: "map-page",
             class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
-            "data-center-x": "{data.center_x}",
-            "data-center-y": "{data.center_y}",
-            "data-home-x": "{data.home_x}",
-            "data-home-y": "{data.home_y}",
-            "data-home-village-id": "{data.home_village_id}",
-            "data-world-size": "{data.world_size}",
+            "data-center-x": "{village.position.x}",
+            "data-center-y": "{village.position.y}",
+            "data-home-x": "{village.position.x}",
+            "data-home-y": "{village.position.y}",
+            "data-home-village-id": "{village.id}",
+            "data-world-size": "{world_size}",
 
             div { class: "map-container-main relative w-full md:w-auto",
                 div { class: "flex flex-col md:flex-row justify-between items-center w-full max-w-[560px] mb-4 px-2 md:pl-4",
@@ -31,7 +21,7 @@ pub fn MapPage(data: MapPageData) -> Element {
                         span {
                             id: "header-coords",
                             class: "text-gray-700",
-                            "({data.center_x}|{data.center_y})"
+                            "({village.position.x}|{village.position.y})"
                         }
                     }
                 }
@@ -75,14 +65,14 @@ pub fn MapPage(data: MapPageData) -> Element {
                     input {
                         r#type: "text",
                         id: "input-x",
-                        value: "{data.center_x}",
+                        value: "{village.position.x}",
                         class: "w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold"
                     }
                     span { class: "font-bold text-sm text-gray-700", "y" }
                     input {
                         r#type: "text",
                         id: "input-y",
-                        value: "{data.center_y}",
+                        value: "{village.position.y}",
                         class: "w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold"
                     }
                     button {

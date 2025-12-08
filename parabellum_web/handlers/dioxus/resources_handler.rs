@@ -1,11 +1,8 @@
 use crate::{
-    components::{
-        BuildingQueueItem, PageLayout, ProductionInfo, ResourceSlot, ResourcesPage,
-        ResourcesPageData, TroopInfo, wrap_in_html,
-    },
+    components::{BuildingQueueItem, PageLayout, ResourceSlot, ResourcesPage, wrap_in_html},
     handlers::{CurrentUser, village_queues_or_empty},
     http::AppState,
-    view_helpers::{building_queue_to_views, unit_display_name},
+    view_helpers::building_queue_to_views,
 };
 use axum::{
     extract::State,
@@ -53,56 +50,18 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         })
         .collect();
 
-    // Get production info
-    let production = ProductionInfo {
-        lumber: user.village.production.effective.lumber,
-        clay: user.village.production.effective.clay,
-        iron: user.village.production.effective.iron,
-        crop: user.village.production.effective.crop as u32,
-    };
-
-    // Get troops
-    let troops: Vec<TroopInfo> = user
-        .village
-        .army()
-        .map(|army| {
-            let tribe_units = user.village.tribe.units();
-            army.units()
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, quantity)| {
-                    if *quantity == 0 {
-                        return None;
-                    }
-                    let name = unit_display_name(&tribe_units[idx].name);
-                    Some(TroopInfo {
-                        name,
-                        count: *quantity,
-                    })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    // Prepare data for component
-    let data = ResourcesPageData {
-        village_name: user.village.name.clone(),
-        village_x: user.village.position.x,
-        village_y: user.village.position.y,
-        resource_slots,
-        production,
-        troops,
-        building_queue,
-    };
-
     // Prepare layout data
     let layout_data = create_layout_data(&user, "resources");
 
     // Render body with Dioxus SSR
     let body_content = dioxus_ssr::render_element(rsx! {
         PageLayout {
-            data: layout_data,
-            ResourcesPage { data: data }
+            data: layout_data.clone(),
+            ResourcesPage {
+                village: layout_data.village.unwrap(),
+                resource_slots,
+                building_queue
+            }
         }
     });
 

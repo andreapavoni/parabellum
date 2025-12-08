@@ -16,13 +16,14 @@ use parabellum_app::{
 
 use crate::{
     components::{
-        BattleReportData, BattleReportPage, GenericReportData, GenericReportPage, PageLayout,
-        ReportListEntry, ReportsPage, ReportsPageData, wrap_in_html,
+        BattleReportPage, GenericReportData, GenericReportPage, PageLayout, ReportListEntry,
+        ReportsPage, wrap_in_html,
     },
     handlers::{CurrentUser, dioxus::helpers::create_layout_data},
     http::AppState,
     view_helpers::format_resource_summary,
 };
+use parabellum_types::reports::ReportPayload;
 use rust_i18n::t;
 
 pub async fn reports(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
@@ -39,16 +40,11 @@ pub async fn reports(State(state): State<AppState>, user: CurrentUser) -> impl I
         .unwrap_or_default();
 
     let report_entries: Vec<ReportListEntry> = raw_reports.into_iter().map(map_report).collect();
-
     let layout_data = create_layout_data(&user, "reports");
-    let page_data = ReportsPageData {
-        reports: report_entries,
-    };
-
     let body_content = dioxus_ssr::render_element(rsx! {
         PageLayout {
             data: layout_data,
-            ReportsPage { data: page_data }
+            ReportsPage { reports: report_entries }
         }
     });
 
@@ -77,8 +73,6 @@ pub async fn report_detail(
     };
 
     let layout_data = create_layout_data(&user, "reports");
-    let page_data = report_page(report);
-
     let _ = state
         .app_bus
         .execute(
@@ -90,7 +84,7 @@ pub async fn report_detail(
         )
         .await;
 
-    render_report_page(page_data, layout_data)
+    render_report_page(report, layout_data)
 }
 
 fn map_report(report: ReportView) -> ReportListEntry {
@@ -129,26 +123,36 @@ fn map_report(report: ReportView) -> ReportListEntry {
     }
 }
 
-enum ReportDetailPage {
-    Battle(BattleReportData),
-    Generic(GenericReportData),
-}
-
-fn render_report_page(
-    page: ReportDetailPage,
-    layout_data: crate::components::LayoutData,
-) -> Response {
-    match page {
-        ReportDetailPage::Battle(data) => {
+fn render_report_page(report: ReportView, layout_data: crate::components::LayoutData) -> Response {
+    match report.payload {
+        ReportPayload::Battle(payload) => {
             let body_content = dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
-                    BattleReportPage { data: data }
+                    BattleReportPage {
+                        report_id: report.id,
+                        created_at: report.created_at,
+                        payload: payload
+                    }
                 }
             });
             Html(wrap_in_html(&body_content)).into_response()
         }
-        ReportDetailPage::Generic(data) => {
+        _ => {
+            // Generic report fallback
+            let created_at_formatted = report.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+            let report_reference = report.id.to_string();
+            let report_reference_label =
+                t!("game.reports.detail_id", id = report_reference.clone()).into_owned();
+
+            let data = GenericReportData {
+                report_reference,
+                report_reference_label,
+                created_at_formatted,
+                heading: t!("game.reports.generic_title").to_string(),
+                message: t!("game.reports.generic_message").to_string(),
+            };
+
             let body_content = dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
@@ -157,42 +161,5 @@ fn render_report_page(
             });
             Html(wrap_in_html(&body_content)).into_response()
         }
-    }
-}
-
-#[allow(unreachable_patterns)]
-fn report_page(report: ReportView) -> ReportDetailPage {
-    let created_at_formatted = report.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
-    let report_reference = report.id.to_string();
-    let report_reference_label =
-        t!("game.reports.detail_id", id = report_reference.clone()).into_owned();
-    match report.payload {
-        parabellum_types::reports::ReportPayload::Battle(payload) => {
-            let result_label = if payload.success {
-                t!("game.reports.battle_success")
-            } else {
-                t!("game.reports.battle_failure")
-            }
-            .into_owned();
-            ReportDetailPage::Battle(BattleReportData {
-                report_reference: report_reference.clone(),
-                report_reference_label: report_reference_label.clone(),
-                created_at_formatted,
-                attacker_player: payload.attacker_player,
-                attacker_village: payload.attacker_village,
-                defender_player: payload.defender_player,
-                defender_village: payload.defender_village,
-                result_label,
-                success: payload.success,
-                bounty_summary: format_resource_summary(&payload.bounty),
-            })
-        }
-        _ => ReportDetailPage::Generic(GenericReportData {
-            report_reference,
-            report_reference_label,
-            created_at_formatted,
-            heading: t!("game.reports.generic_title").to_string(),
-            message: t!("game.reports.generic_message").to_string(),
-        }),
     }
 }
