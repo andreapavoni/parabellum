@@ -198,6 +198,10 @@ fn render_building_page(
     };
     let queue_full = queues.building.len() >= building_queue_capacity;
 
+    // Check if this specific slot is being upgraded (so we don't show upgrade twice)
+    let building_queue_views = building_queue_to_views(&queues.building);
+    let slot_is_upgrading = |slot_id: u8| building_queue_views.iter().any(|q| q.slot_id == slot_id);
+
     // If slot is empty, show EmptySlotPage
     let Some(slot_building) = slot_building else {
         let queue_views = building_queue_to_views(&queues.building);
@@ -228,9 +232,23 @@ fn render_building_page(
         return Html(wrap_in_html(&body_content)).into_response();
     };
 
-    // Calculate upgrade info
+    // Calculate upgrade info accounting for queued upgrades
     let main_building_level = user.village.main_building_level();
-    let next_level = slot_building.building.level.saturating_add(1);
+    let current_level = slot_building.building.level;
+
+    // Count how many upgrades are queued for this slot
+    let building_queue_views = building_queue_to_views(&queues.building);
+    let queued_upgrades = building_queue_views
+        .iter()
+        .filter(|q| q.slot_id == slot_id)
+        .count() as u8;
+
+    // The next level to upgrade TO should account for queued upgrades
+    let effective_level = current_level.saturating_add(queued_upgrades);
+    let next_level = effective_level.saturating_add(1);
+
+    // Just use the queue_full status - user can queue multiple upgrades for same building
+    let effective_queue_full = queue_full;
 
     // Try to calculate upgrade cost - if at max level, we'll still show the page but with disabled upgrade
     let upgrade_info = slot_building
@@ -271,7 +289,7 @@ fn render_building_page(
                         cost: cost,
                         time_secs: time_secs,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                     }
@@ -302,7 +320,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
                         csrf_token: csrf_token,
@@ -335,7 +353,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
                         csrf_token: csrf_token,
@@ -368,7 +386,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
                         csrf_token: csrf_token,
@@ -397,7 +415,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         ready_units: ready_units,
                         locked_units: locked_units,
                         researched_units: researched_units,
@@ -434,7 +452,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         smithy_units: smithy_units,
                         smithy_queue: smithy_queue,
                         smithy_queue_full: smithy_queue_full,
@@ -460,7 +478,7 @@ fn render_building_page(
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
-                        queue_full: queue_full,
+                        queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                     }

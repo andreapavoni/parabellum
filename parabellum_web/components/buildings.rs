@@ -32,6 +32,23 @@ pub fn UpgradeBlock(
     slot_id: u8,
     csrf_token: String,
 ) -> Element {
+    // Check if at max level - time_secs will be 0 when we can't upgrade
+    // (handler sets it to 0 when upgrade_info is None)
+    let at_max_level = time_secs == 0 && next_level == current_level + 1;
+
+    if at_max_level {
+        return rsx! {
+            div { class: "border rounded-lg p-4 bg-gray-100 shadow-sm",
+                h3 { class: "text-lg font-bold text-gray-800 mb-3",
+                    "{t!(\"game.building.max_level_reached\")}"
+                }
+                p { class: "text-sm text-gray-600",
+                    "{building_name:?} is at maximum level ({current_level})"
+                }
+            }
+        };
+    }
+
     // Format time in component
     let time_formatted = format_duration(time_secs);
 
@@ -47,34 +64,34 @@ pub fn UpgradeBlock(
     rsx! {
         div { class: "border rounded-lg p-4 bg-white shadow-sm",
             h3 { class: "text-lg font-bold text-gray-800 mb-3",
-                "{t!(\"game.building.upgrade_to_level\", level = next_level)}"
+                "Upgrade to level {next_level}"
             }
 
             div { class: "mb-3",
-                p { class: "text-sm text-gray-600 mb-2", "{t!(\"game.building.cost\")}:" }
+                p { class: "text-sm text-gray-600 mb-2", "Cost:" }
                 ResourceCost { cost: cost }
             }
 
             div { class: "grid grid-cols-2 gap-2 text-sm mb-3",
                 div {
-                    span { class: "text-gray-600", "{t!(\"game.building.duration\")}: " }
+                    span { class: "text-gray-600", "Duration: " }
                     span { class: "font-semibold", "{time_formatted}" }
                 }
                 div {
-                    span { class: "text-gray-600", "{t!(\"game.building.upkeep\")}: " }
+                    span { class: "text-gray-600", "Upkeep: " }
                     span { class: "font-semibold", "{current_upkeep} → {next_upkeep}" }
                 }
             }
 
             if queue_full {
                 p { class: "text-sm text-yellow-600 mb-2",
-                    "⚠️ {t!(\"game.building.queue_full\")}"
+                    "⚠️ Queue is full"
                 }
             }
 
             if !can_afford {
                 p { class: "text-sm text-red-600 mb-2",
-                    "❌ {t!(\"game.building.insufficient_resources\")}"
+                    "❌ Insufficient resources"
                 }
             }
 
@@ -87,13 +104,14 @@ pub fn UpgradeBlock(
 
                 button {
                     r#type: "submit",
-                    class: if can_upgrade {
-                        "w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded"
+                    class: "w-full text-white font-semibold py-2 px-4 rounded",
+                    style: if can_upgrade {
+                        "background-color: #16a34a;"
                     } else {
-                        "w-full bg-gray-300 text-gray-500 font-semibold py-2 px-4 rounded cursor-not-allowed"
+                        "background-color: #9ca3af; cursor: not-allowed; opacity: 0.7;"
                     },
                     disabled: !can_upgrade,
-                    "{t!(\"game.building.upgrade\")}"
+                    "Upgrade"
                 }
             }
         }

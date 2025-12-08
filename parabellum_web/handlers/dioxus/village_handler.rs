@@ -19,21 +19,34 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
     let queues = village_queues_or_empty(&state, user.village.id).await;
     let building_queue_views = building_queue_to_views(&queues.building);
 
-    let building_slots: Vec<BuildingSlot> = user
-        .village
-        .buildings()
-        .iter()
-        .map(|vb| {
+    // Create building slots for ALL slots (19-40), including empty ones
+    let building_slots: Vec<BuildingSlot> = (19..=40)
+        .map(|slot_id| {
+            let building = user
+                .village
+                .buildings()
+                .iter()
+                .find(|vb| vb.slot_id == slot_id);
+
             let in_queue = building_queue_views
                 .iter()
-                .find(|q| q.slot_id == vb.slot_id)
+                .find(|q| q.slot_id == slot_id)
                 .map(|q| q.is_processing);
 
-            BuildingSlot {
-                slot_id: vb.slot_id,
-                building_name: Some(vb.building.name.clone()),
-                level: vb.building.level,
-                in_queue,
+            if let Some(vb) = building {
+                BuildingSlot {
+                    slot_id,
+                    building_name: Some(vb.building.name.clone()),
+                    level: vb.building.level,
+                    in_queue,
+                }
+            } else {
+                BuildingSlot {
+                    slot_id,
+                    building_name: None,
+                    level: 0,
+                    in_queue,
+                }
             }
         })
         .collect();
