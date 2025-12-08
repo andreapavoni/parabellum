@@ -6,7 +6,10 @@ pub mod reports;
 pub mod resources;
 pub mod village;
 
-pub use buildings::{GenericBuildingPage, MissingRequirements, ResourceCost, UpgradeBlock};
+pub use buildings::{
+    BuildingOption, EmptySlotPage, GenericBuildingPage, MissingRequirements, ResourceCost,
+    ResourceFieldPage, UpgradeBlock,
+};
 pub use common::{BuildingQueueItem, VillageInfo};
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
 pub use map::MapPage;
