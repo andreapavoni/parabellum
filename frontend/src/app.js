@@ -391,8 +391,84 @@ function startMapHandler() {
   }
 }
 
+function startServerClock() {
+  if (window.__serverClockStarted) {
+    return;
+  }
+  window.__serverClockStarted = true;
+
+  const pad = (num) => num.toString().padStart(2, '0');
+  const element = document.getElementById('server-time');
+  if (!element) {
+    return;
+  }
+  let timestamp = parseInt(element.dataset.timestamp || '0', 10);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return;
+  }
+  const tick = () => {
+    timestamp += 1;
+    const date = new Date(timestamp * 1000);
+    const hours = pad(date.getUTCHours());
+    const minutes = pad(date.getUTCMinutes());
+    const seconds = pad(date.getUTCSeconds());
+    element.textContent = `${hours}:${minutes}:${seconds}`;
+    element.dataset.timestamp = timestamp;
+  };
+  setInterval(tick, 1000);
+}
+
+function startResourceTicker() {
+  if (window.__resourceTickerStarted) {
+    return;
+  }
+  window.__resourceTickerStarted = true;
+
+  const parseNumber = (value) => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const resources = Array.from(document.querySelectorAll('.res-value[data-prod-per-hour]')).map((el) => {
+    const amount = parseNumber(el.dataset.amount);
+    const capacity = parseNumber(el.dataset.capacity);
+    const prodPerHour = parseNumber(el.dataset.prodPerHour);
+    return {
+      el,
+      amount,
+      capacity,
+      capacityDisplay: Math.floor(capacity),
+      perSecond: prodPerHour / 3600,
+    };
+  });
+  if (!resources.length) {
+    return;
+  }
+  const render = (resource) => {
+    const amountInt = Math.max(0, Math.floor(resource.amount));
+    resource.el.textContent = `${amountInt}/${resource.capacityDisplay}`;
+  };
+  let lastTick = Date.now();
+  const tick = () => {
+    const now = Date.now();
+    const deltaSeconds = Math.max(0, (now - lastTick) / 1000);
+    lastTick = now;
+    resources.forEach((resource) => {
+      if (resource.perSecond === 0) {
+        return;
+      }
+      resource.amount += resource.perSecond * deltaSeconds;
+      resource.amount = Math.min(resource.capacity, Math.max(0, resource.amount));
+      render(resource);
+    });
+  };
+  resources.forEach(render);
+  setInterval(tick, 1000);
+}
+
 (function () {
   initializeCountdownHelpers();
   startCountdownTicker();
+  startServerClock();
+  startResourceTicker();
   startMapHandler();
 })();
