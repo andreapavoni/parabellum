@@ -79,7 +79,7 @@ pub async fn research_unit(
         .await;
 
     match result {
-        Ok(()) => Redirect::to(&format!("/build?s={}", form.slot_id)).into_response(),
+        Ok(()) => Redirect::to(&format!("/build/{}", form.slot_id)).into_response(),
         Err(err) => render_with_error(&state, jar, user, form.slot_id, err.to_string()).await,
     }
 }

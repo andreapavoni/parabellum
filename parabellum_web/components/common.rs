@@ -21,6 +21,50 @@ pub struct VillageInfo {
     pub y: i32,
 }
 
+/// Troop count display (used in RallyPoint)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TroopCount {
+    pub name: String,
+    pub count: u32,
+}
+
+/// Unit available for sending (used in RallyPoint)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RallyPointUnit {
+    pub name: String,
+    pub unit_idx: usize,
+    pub available: u32,
+}
+
+/// Troop movement display
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TroopMovement {
+    pub direction: MovementDirection,
+    pub kind: MovementKind,
+    pub origin_name: String,
+    pub origin_x: i32,
+    pub origin_y: i32,
+    pub destination_name: String,
+    pub destination_x: i32,
+    pub destination_y: i32,
+    pub time_remaining: String,
+    pub time_seconds: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum MovementDirection {
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum MovementKind {
+    Attack,
+    Raid,
+    Reinforcement,
+    Return,
+}
+
 /// Reusable building queue component
 #[component]
 pub fn BuildingQueue(queue: Vec<BuildingQueueItem>) -> Element {
@@ -38,7 +82,7 @@ pub fn BuildingQueue(queue: Vec<BuildingQueueItem>) -> Element {
                     div { class: "flex justify-between w-full items-center",
                         a {
                             class: "flex items-center gap-2 text-gray-800 hover:text-gray-900 hover:underline",
-                            href: "/dioxus/build/{item.slot_id}",
+                            href: "/build/{item.slot_id}",
                             span {
                                 class: if item.is_processing { "text-green-600" } else { "text-yellow-600" },
                                 "⏳"

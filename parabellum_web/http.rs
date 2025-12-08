@@ -11,9 +11,8 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    build_action, building, dioxus, home, login, login_page, logout, map, map_region, register,
-    register_page, report_detail, reports, research_smithy, research_unit, resources, send_troops,
-    train_units, village,
+    dioxus, home, login, login_page, logout, register, register_page, research_smithy,
+    research_unit, send_troops, train_units,
 };
 
 #[derive(Clone)]
@@ -59,26 +58,27 @@ impl WebRouter {
 
         // Protected routes (require authenticated user)
         let protected_routes = Router::new()
-            .route("/village", get(village))
-            .route("/dioxus/village", get(dioxus::village))
-            .route("/resources", get(resources))
-            .route("/dioxus/resources", get(dioxus::resources))
-            .route("/dioxus/map", get(dioxus::map))
-            .route("/dioxus/reports", get(dioxus::reports))
-            .route("/dioxus/reports/{id}", get(dioxus::report_detail))
+            // Dioxus routes (primary)
+            .route("/village", get(dioxus::village))
+            .route("/resources", get(dioxus::resources))
+            .route("/map", get(dioxus::map))
+            .route("/map/data", get(dioxus::map_region))
+            .route("/reports", get(dioxus::reports))
+            .route("/reports/{id}", get(dioxus::report_detail))
             .route(
-                "/dioxus/build/{slot_id}",
+                "/build/{slot_id}",
                 get(dioxus::building).post(dioxus::build_action),
             )
-            .route("/build", get(building).post(build_action))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
             .route("/academy/research", post(research_unit))
             .route("/smithy/research", post(research_smithy))
-            .route("/reports", get(reports))
-            .route("/reports/{id}", get(report_detail))
-            .route("/map", get(map))
-            .route("/map/data", get(map_region))
+            // .route("/askama/village", get(village))
+            // .route("/askama/resources", get(resources))
+            // .route("/askama/build", get(building).post(build_action))
+            // .route("/askama/reports", get(reports))
+            // .route("/askama/reports/{id}", get(report_detail))
+            // .route("/askama/map", get(map))
             .route("/logout", get(logout));
 
         let router = Router::new()

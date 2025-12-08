@@ -97,7 +97,7 @@ pub fn UpgradeBlock(
 
             form {
                 method: "post",
-                action: "/dioxus/build/{slot_id}",
+                action: "/build/{slot_id}",
                 input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }
                 input { r#type: "hidden", name: "action", value: "upgrade" }
                 input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
@@ -501,7 +501,7 @@ fn BuildingOptionCard(
             if !locked {
                 form {
                     method: "post",
-                    action: "/dioxus/build/{slot_id}",
+                    action: "/build/{slot_id}",
                     input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }
                     input { r#type: "hidden", name: "action", value: "build" }
                     input { r#type: "hidden", name: "building_name", value: "{option.name}" }
@@ -1030,6 +1030,261 @@ pub fn SmithyPage(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Rally Point page - send troops and view movements
+#[component]
+pub fn RallyPointPage(
+    village: Village,
+    slot_id: u8,
+    building_name: BuildingName,
+    current_level: u8,
+    next_level: u8,
+    cost: ResourceGroup,
+    time_secs: u32,
+    current_upkeep: u32,
+    next_upkeep: u32,
+    queue_full: bool,
+    home_troops: Vec<super::common::TroopCount>,
+    reinforcements: Vec<super::common::TroopCount>,
+    sendable_units: Vec<super::common::RallyPointUnit>,
+    incoming_movements: Vec<super::common::TroopMovement>,
+    outgoing_movements: Vec<super::common::TroopMovement>,
+    csrf_token: String,
+    flash_error: Option<String>,
+) -> Element {
+    use super::common::{MovementDirection, MovementKind};
+
+    rsx! {
+        div { class: "container mx-auto px-4 py-6 max-w-6xl",
+            h1 { class: "text-3xl font-bold text-gray-900 mb-2",
+                "{building_name:?} (Level {current_level})"
+            }
+            p { class: "text-gray-600 mb-6",
+                "{village.name} ({village.position.x}|{village.position.y})"
+            }
+
+            if let Some(error) = flash_error {
+                div { class: "mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded",
+                    "{error}"
+                }
+            }
+
+            div { class: "space-y-6",
+                // Upgrade block
+                UpgradeBlock {
+                    village: village.clone(),
+                    building_name: building_name,
+                    current_level: current_level,
+                    next_level: next_level,
+                    cost: cost,
+                    time_secs: time_secs,
+                    current_upkeep: current_upkeep,
+                    next_upkeep: next_upkeep,
+                    queue_full: queue_full,
+                    slot_id: slot_id,
+                    csrf_token: csrf_token.clone(),
+                }
+
+                // Home troops and reinforcements
+                div { class: "grid gap-4 md:grid-cols-2",
+                    // Home troops
+                    div { class: "border rounded-md p-4 bg-white space-y-2",
+                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.home_troops\")}" }
+                        if home_troops.is_empty() {
+                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_troops_home\")}" }
+                        } else {
+                            ul { class: "space-y-1 text-sm",
+                                for troop in home_troops.iter() {
+                                    li { class: "flex items-center justify-between",
+                                        span { "{troop.name}" }
+                                        span { class: "font-semibold", "{troop.count}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Reinforcements
+                    div { class: "border rounded-md p-4 bg-white space-y-2",
+                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.reinforcements\")}" }
+                        if reinforcements.is_empty() {
+                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_reinforcements\")}" }
+                        } else {
+                            ul { class: "space-y-1 text-sm",
+                                for troop in reinforcements.iter() {
+                                    li { class: "flex items-center justify-between",
+                                        span { "{troop.name}" }
+                                        span { class: "font-semibold", "{troop.count}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Incoming and outgoing movements
+                div { class: "grid gap-4 md:grid-cols-2",
+                    // Incoming movements
+                    div { class: "border rounded-md p-4 bg-white space-y-3",
+                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.incoming_movements\")}" }
+                        if incoming_movements.is_empty() {
+                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_movements\")}" }
+                        } else {
+                            div { class: "space-y-3",
+                                for movement in incoming_movements.iter() {
+                                    {
+                                        let direction_text = match movement.direction {
+                                            MovementDirection::Incoming => t!("game.rally_point.direction.incoming"),
+                                            MovementDirection::Outgoing => t!("game.rally_point.direction.outgoing"),
+                                        };
+                                        let kind_text = match movement.kind {
+                                            MovementKind::Attack => t!("game.rally_point.movement.attack"),
+                                            MovementKind::Raid => t!("game.rally_point.movement.raid"),
+                                            MovementKind::Reinforcement => t!("game.rally_point.movement.reinforcement"),
+                                            MovementKind::Return => t!("game.rally_point.movement.return"),
+                                        };
+                                        rsx! {
+                                            div { class: "border rounded-md p-3 bg-gray-50 space-y-1 text-sm",
+                                                div { class: "font-semibold text-gray-800",
+                                                    "{direction_text} — {kind_text}"
+                                                }
+                                                div { class: "text-xs text-gray-600",
+                                                    "{movement.origin_name} ({movement.origin_x}|{movement.origin_y}) → {movement.destination_name} ({movement.destination_x}|{movement.destination_y})"
+                                                }
+                                                div { class: "text-xs text-gray-500 flex items-center justify-between",
+                                                    span { "{t!(\"game.rally_point.arrives_in\")}" }
+                                                    span {
+                                                        class: "font-mono countdown-timer",
+                                                        "data-seconds": "{movement.time_seconds}",
+                                                        "{movement.time_remaining}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Outgoing movements
+                    div { class: "border rounded-md p-4 bg-white space-y-3",
+                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.outgoing_movements\")}" }
+                        if outgoing_movements.is_empty() {
+                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_movements\")}" }
+                        } else {
+                            div { class: "space-y-3",
+                                for movement in outgoing_movements.iter() {
+                                    {
+                                        let direction_text = match movement.direction {
+                                            MovementDirection::Incoming => t!("game.rally_point.direction.incoming"),
+                                            MovementDirection::Outgoing => t!("game.rally_point.direction.outgoing"),
+                                        };
+                                        let kind_text = match movement.kind {
+                                            MovementKind::Attack => t!("game.rally_point.movement.attack"),
+                                            MovementKind::Raid => t!("game.rally_point.movement.raid"),
+                                            MovementKind::Reinforcement => t!("game.rally_point.movement.reinforcement"),
+                                            MovementKind::Return => t!("game.rally_point.movement.return"),
+                                        };
+                                        rsx! {
+                                            div { class: "border rounded-md p-3 bg-gray-50 space-y-1 text-sm",
+                                                div { class: "font-semibold text-gray-800",
+                                                    "{direction_text} — {kind_text}"
+                                                }
+                                                div { class: "text-xs text-gray-600",
+                                                    "{movement.origin_name} ({movement.origin_x}|{movement.origin_y}) → {movement.destination_name} ({movement.destination_x}|{movement.destination_y})"
+                                                }
+                                                div { class: "text-xs text-gray-500 flex items-center justify-between",
+                                                    span { "{t!(\"game.rally_point.arrives_in\")}" }
+                                                    span {
+                                                        class: "font-mono countdown-timer",
+                                                        "data-seconds": "{movement.time_seconds}",
+                                                        "{movement.time_remaining}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Send troops form
+                div { class: "border rounded-md p-4 bg-white space-y-4",
+                    div {
+                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.send_troops\")}" }
+                        p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.send_hint\")}" }
+                    }
+                    form {
+                        action: "/army/send?s={slot_id}",
+                        method: "post",
+                        class: "space-y-4",
+                        input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }
+                        input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
+
+                        div { class: "grid gap-3 sm:grid-cols-3",
+                            label { class: "text-sm text-gray-600",
+                                "{t!(\"game.rally_point.target_x\")}"
+                                input {
+                                    r#type: "number",
+                                    name: "target_x",
+                                    required: true,
+                                    class: "mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                                }
+                            }
+                            label { class: "text-sm text-gray-600",
+                                "{t!(\"game.rally_point.target_y\")}"
+                                input {
+                                    r#type: "number",
+                                    name: "target_y",
+                                    required: true,
+                                    class: "mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                                }
+                            }
+                            label { class: "text-sm text-gray-600",
+                                "{t!(\"game.rally_point.movement_type\")}"
+                                select {
+                                    name: "movement",
+                                    class: "mt-1 w-full border rounded px-3 py-2 text-gray-700",
+                                    option { value: "attack", "{t!(\"game.rally_point.movement.attack\")}" }
+                                    option { value: "raid", "{t!(\"game.rally_point.movement.raid\")}" }
+                                    option { value: "reinforcement", "{t!(\"game.rally_point.movement.reinforcement\")}" }
+                                }
+                            }
+                        }
+
+                        div { class: "space-y-2",
+                            div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.select_units\")}" }
+                            for unit in sendable_units.iter() {
+                                label {
+                                    class: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2",
+                                    span { class: "font-semibold", "{unit.name}" }
+                                    span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.available\")}: {unit.available}" }
+                                    input {
+                                        r#type: "number",
+                                        min: "0",
+                                        max: "{unit.available}",
+                                        name: "units[]",
+                                        value: "0",
+                                        class: "w-full sm:w-32 border rounded px-2 py-1 text-gray-700"
+                                    }
+                                }
+                            }
+                        }
+
+                        button {
+                            r#type: "submit",
+                            class: "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded",
+                            "{t!(\"game.rally_point.send_button\")}"
                         }
                     }
                 }

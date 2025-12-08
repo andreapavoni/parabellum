@@ -27,9 +27,10 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     components::{
         AcademyPage, AcademyQueueItem as AcademyQueueView, AcademyResearchOption, BuildingOption,
-        EmptySlotPage, GenericBuildingPage, PageLayout, ResourceFieldPage, SmithyPage,
+        EmptySlotPage, GenericBuildingPage, MovementDirection, MovementKind, PageLayout,
+        RallyPointPage, RallyPointUnit, ResourceFieldPage, SmithyPage,
         SmithyQueueItem as SmithyQueueView, SmithyUpgradeOption, TrainingBuildingPage,
-        TrainingQueueItem, UnitTrainingOption, wrap_in_html,
+        TrainingQueueItem, TroopCount, TroopMovement, UnitTrainingOption, wrap_in_html,
     },
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, village_movements_or_empty,
@@ -73,7 +74,7 @@ pub async fn building(
 ) -> impl IntoResponse {
     // Validate slot_id
     if !(1..=MAX_SLOT_ID).contains(&slot_id) {
-        return Redirect::to("/dioxus/village").into_response();
+        return Redirect::to("/village").into_response();
     }
 
     let queues = village_queues_or_empty(&state, user.village.id).await;
@@ -104,7 +105,7 @@ pub async fn build_action(
 ) -> Response {
     // Validate slot_id
     if !(1..=MAX_SLOT_ID).contains(&slot_id) {
-        return Redirect::to("/dioxus/village").into_response();
+        return Redirect::to("/village").into_response();
     }
 
     // Validate form slot_id matches path
@@ -164,7 +165,7 @@ pub async fn build_action(
     };
 
     match result {
-        Ok(()) => Redirect::to(&format!("/dioxus/build/{slot_id}")).into_response(),
+        Ok(()) => Redirect::to(&format!("/build/{slot_id}")).into_response(),
         Err(err) => render_with_error(&state, jar, user, slot_id, err.to_string()).await,
     }
 }
@@ -177,7 +178,7 @@ fn render_building_page(
     csrf_token: String,
     flash_error: Option<String>,
     queues: VillageQueues,
-    _movements: VillageTroopMovements,
+    movements: VillageTroopMovements,
 ) -> Response {
     let layout_data = create_layout_data(
         user,
@@ -199,8 +200,8 @@ fn render_building_page(
     let queue_full = queues.building.len() >= building_queue_capacity;
 
     // Check if this specific slot is being upgraded (so we don't show upgrade twice)
-    let building_queue_views = building_queue_to_views(&queues.building);
-    let slot_is_upgrading = |slot_id: u8| building_queue_views.iter().any(|q| q.slot_id == slot_id);
+    // let building_queue_views = building_queue_to_views(&queues.building);
+    // let slot_is_upgrading = |slot_id: u8| building_queue_views.iter().any(|q| q.slot_id == slot_id);
 
     // If slot is empty, show EmptySlotPage
     let Some(slot_building) = slot_building else {
@@ -462,9 +463,41 @@ fn render_building_page(
                 }
             })
         }
+        BuildingName::RallyPoint => {
+            // Rally point - troop movements and sending
+            let home_troops = home_troops_view(&user.village);
+            let reinforcements = reinforcement_troops_view(&user.village);
+            let sendable_units = rally_point_unit_views(&user.village);
+            let incoming_movements = troop_movements_to_views(&movements.incoming);
+            let outgoing_movements = troop_movements_to_views(&movements.outgoing);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    RallyPointPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: effective_queue_full,
+                        home_troops: home_troops,
+                        reinforcements: reinforcements,
+                        sendable_units: sendable_units,
+                        incoming_movements: incoming_movements,
+                        outgoing_movements: outgoing_movements,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
         _ => {
             // Generic buildings - just upgrade block
-            // TODO: Add specific page for RallyPoint
             dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
@@ -903,4 +936,128 @@ fn smithy_queue_for_slot(
             }
         })
         .collect()
+}
+
+/// Convert village army to troop counts for display
+fn home_troops_view(village: &parabellum_game::models::village::Village) -> Vec<TroopCount> {
+    let Some(army) = village.army() else {
+        return vec![];
+    };
+    let tribe_units = village.tribe.units();
+
+    army.units()
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, quantity)| {
+            if *quantity == 0 {
+                return None;
+            }
+            Some(TroopCount {
+                name: unit_display_name(&tribe_units[idx].name),
+                count: *quantity,
+            })
+        })
+        .collect()
+}
+
+/// Convert reinforcements to troop counts for display
+fn reinforcement_troops_view(
+    village: &parabellum_game::models::village::Village,
+) -> Vec<TroopCount> {
+    let mut totals: HashMap<UnitName, u32> = HashMap::new();
+
+    for army in village.reinforcements() {
+        let tribe_units = army.tribe.units();
+        for (idx, quantity) in army.units().iter().enumerate() {
+            if *quantity == 0 {
+                continue;
+            }
+            if idx >= tribe_units.len() {
+                continue;
+            }
+            *totals.entry(tribe_units[idx].name.clone()).or_insert(0) += *quantity;
+        }
+    }
+
+    totals
+        .into_iter()
+        .map(|(unit_name, count)| TroopCount {
+            name: unit_display_name(&unit_name),
+            count,
+        })
+        .collect()
+}
+
+/// Get units available for sending from rally point
+fn rally_point_unit_views(
+    village: &parabellum_game::models::village::Village,
+) -> Vec<RallyPointUnit> {
+    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
+    let tribe_units = village.tribe.units();
+
+    tribe_units
+        .iter()
+        .enumerate()
+        .map(|(idx, unit)| RallyPointUnit {
+            name: unit_display_name(&unit.name),
+            unit_idx: idx,
+            available: available_units[idx],
+        })
+        .collect()
+}
+
+/// Convert troop movements to view models
+fn troop_movements_to_views(
+    movements: &[parabellum_app::cqrs::queries::TroopMovement],
+) -> Vec<TroopMovement> {
+    use parabellum_app::cqrs::queries::{TroopMovementDirection, TroopMovementType};
+
+    movements
+        .iter()
+        .map(|movement| {
+            let now = chrono::Utc::now();
+            let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+            let time_remaining = format_duration(time_remaining_secs);
+
+            TroopMovement {
+                direction: match movement.direction {
+                    TroopMovementDirection::Incoming => MovementDirection::Incoming,
+                    TroopMovementDirection::Outgoing => MovementDirection::Outgoing,
+                },
+                kind: match movement.movement_type {
+                    TroopMovementType::Attack => MovementKind::Attack,
+                    TroopMovementType::Raid => MovementKind::Raid,
+                    TroopMovementType::Reinforcement => MovementKind::Reinforcement,
+                    TroopMovementType::Return => MovementKind::Return,
+                },
+                origin_name: movement
+                    .origin_village_name
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                origin_x: movement.origin_position.x,
+                origin_y: movement.origin_position.y,
+                destination_name: movement
+                    .target_village_name
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                destination_x: movement.target_position.x,
+                destination_y: movement.target_position.y,
+                time_remaining,
+                time_seconds: time_remaining_secs,
+            }
+        })
+        .collect()
+}
+
+/// Format duration in HH:MM:SS or MM:SS format
+fn format_duration(seconds: u32) -> String {
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+
+    if hours > 0 {
+        format!("{:02}:{:02}:{:02}", hours, minutes, secs)
+    } else {
+        format!("{:02}:{:02}", minutes, secs)
+    }
 }
