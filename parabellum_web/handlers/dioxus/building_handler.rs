@@ -14,19 +14,19 @@ use parabellum_app::{
     },
 };
 use parabellum_game::models::buildings::{Building, get_building_data};
-use parabellum_types::{buildings::BuildingName, tribe::Tribe};
+use parabellum_types::{army::UnitGroup, buildings::BuildingName, tribe::Tribe};
 
 use crate::{
     components::{
         BuildingOption, EmptySlotPage, GenericBuildingPage, PageLayout, ResourceFieldPage,
-        wrap_in_html,
+        TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption, wrap_in_html,
     },
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, village_movements_or_empty,
         village_queues_or_empty,
     },
     http::AppState,
-    view_helpers::building_queue_to_views,
+    view_helpers::{building_queue_to_views, training_queue_to_views, unit_display_name},
 };
 
 use super::helpers::create_layout_data;
@@ -270,9 +270,108 @@ fn render_building_page(
                 }
             })
         }
+        BuildingName::Barracks | BuildingName::GreatBarracks => {
+            // Infantry training
+            let training_units = training_options_for_group(
+                &user.village,
+                state.server_speed,
+                Some(&slot_building),
+                &[BuildingName::Barracks, BuildingName::GreatBarracks],
+                UnitGroup::Infantry,
+            );
+            let training_queue = training_queue_for_slot(slot_id, &queues.training);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    TrainingBuildingPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost.resources,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: cost.upkeep,
+                        queue_full: queue_full,
+                        training_units: training_units,
+                        training_queue: training_queue,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
+        BuildingName::Stable | BuildingName::GreatStable => {
+            // Cavalry training
+            let training_units = training_options_for_group(
+                &user.village,
+                state.server_speed,
+                Some(&slot_building),
+                &[BuildingName::Stable, BuildingName::GreatStable],
+                UnitGroup::Cavalry,
+            );
+            let training_queue = training_queue_for_slot(slot_id, &queues.training);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    TrainingBuildingPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost.resources,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: cost.upkeep,
+                        queue_full: queue_full,
+                        training_units: training_units,
+                        training_queue: training_queue,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
+        BuildingName::Workshop | BuildingName::GreatWorkshop => {
+            // Siege training
+            let training_units = training_options_for_group(
+                &user.village,
+                state.server_speed,
+                Some(&slot_building),
+                &[BuildingName::Workshop, BuildingName::GreatWorkshop],
+                UnitGroup::Siege,
+            );
+            let training_queue = training_queue_for_slot(slot_id, &queues.training);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    TrainingBuildingPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost.resources,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: cost.upkeep,
+                        queue_full: queue_full,
+                        training_units: training_units,
+                        training_queue: training_queue,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
         _ => {
             // Generic buildings - just upgrade block
-            // TODO: Add specific pages for Barracks, Stable, Workshop, Academy, Smithy, RallyPoint
+            // TODO: Add specific pages for Academy, Smithy, RallyPoint
             dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
@@ -447,6 +546,62 @@ fn missing_requirements_for_building(
             } else {
                 Some((req.0.clone(), req.1))
             }
+        })
+        .collect()
+}
+
+/// Calculate training options for a unit group
+fn training_options_for_group(
+    village: &parabellum_game::models::village::Village,
+    server_speed: i8,
+    building: Option<&parabellum_game::models::village::VillageBuilding>,
+    expected_buildings: &[BuildingName],
+    group: UnitGroup,
+) -> Vec<UnitTrainingOption> {
+    let Some(slot) = building else {
+        return vec![];
+    };
+
+    if !expected_buildings.contains(&slot.building.name) {
+        return vec![];
+    }
+
+    let training_multiplier = slot.building.value as f64 / 1000.0;
+    let available_units = village.available_units_for_training(group);
+    let tribe = village.tribe.clone();
+
+    available_units
+        .into_iter()
+        .filter_map(|unit| {
+            let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
+            let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
+            let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
+
+            Some(UnitTrainingOption {
+                unit_idx,
+                name: unit_display_name(&unit.name),
+                cost: unit.cost.resources.clone(),
+                upkeep: unit.cost.upkeep,
+                time_secs: time_per_unit,
+            })
+        })
+        .collect()
+}
+
+/// Get training queue for a specific slot
+fn training_queue_for_slot(
+    slot_id: u8,
+    queue: &[parabellum_app::cqrs::queries::TrainingQueueItem],
+) -> Vec<TrainingQueueItem> {
+    let queue_views = training_queue_to_views(queue);
+    queue_views
+        .into_iter()
+        .filter(|item| item.slot_id == slot_id)
+        .map(|item| TrainingQueueItem {
+            quantity: item.quantity as u32,
+            unit_name: item.unit_name,
+            time_per_unit: item.time_per_unit as u32,
+            time_remaining_secs: item.time_seconds,
         })
         .collect()
 }
