@@ -7,7 +7,7 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Building {
     pub name: BuildingName,
     pub group: BuildingGroup,

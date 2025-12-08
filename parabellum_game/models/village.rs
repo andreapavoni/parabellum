@@ -27,13 +27,13 @@ use super::{
     smithy::SmithyUpgrades,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VillageBuilding {
     pub slot_id: u8,
     pub building: Building,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AcademyResearch {
     researches: [bool; 10],
@@ -101,7 +101,7 @@ const COMMON_BUILDINGS: [BuildingName; 32] = [
 
 // TODO: add standalone rally point? Not yet
 // TODO: add standalone wall? Not yet
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Village {
     pub id: u32,
     pub name: String,
@@ -1002,7 +1002,7 @@ impl Village {
 }
 
 // Gross production of a village with upkeep and bonuses values ready to apply.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct VillageProduction {
     pub lumber: u32,
     pub clay: u32,
@@ -1047,7 +1047,7 @@ impl VillageProduction {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct VillageEffectiveProduction {
     pub lumber: u32,
     pub clay: u32,
@@ -1056,7 +1056,7 @@ pub struct VillageEffectiveProduction {
 }
 
 // Bonus to be applied to resources production.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct ProductionBonus {
     pub lumber: u8,
     pub clay: u8,

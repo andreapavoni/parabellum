@@ -27,15 +27,16 @@ pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl
         .resource_fields()
         .into_iter()
         .map(|slot| {
-            let is_processing = building_queue_views
+            let in_queue = building_queue_views
                 .iter()
-                .any(|q| q.slot_id == slot.slot_id && q.is_processing);
+                .find(|q| q.slot_id == slot.slot_id)
+                .map(|q| q.is_processing);
 
             ResourceSlot {
                 slot_id: slot.slot_id,
                 building_name: slot.building.name.clone(),
                 level: slot.building.level,
-                is_processing,
+                in_queue,
             }
         })
         .collect();

@@ -9,7 +9,7 @@ pub struct BuildingSlot {
     pub slot_id: u8,
     pub building_name: Option<BuildingName>,
     pub level: u8,
-    pub is_processing: bool,
+    pub in_queue: Option<bool>, // None = not in queue, Some(true) = processing, Some(false) = pending
 }
 
 impl BuildingSlot {
@@ -21,8 +21,12 @@ impl BuildingSlot {
             classes.push_str(" occupied");
         }
 
-        if self.is_processing {
-            classes.push_str(" construction-active");
+        if let Some(is_processing) = self.in_queue {
+            if is_processing {
+                classes.push_str(" construction-active");
+            } else {
+                classes.push_str(" construction-pending");
+            }
         }
 
         classes

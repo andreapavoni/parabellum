@@ -25,15 +25,16 @@ pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl I
         .buildings()
         .iter()
         .map(|vb| {
-            let is_processing = building_queue_views
+            let in_queue = building_queue_views
                 .iter()
-                .any(|q| q.slot_id == vb.slot_id && q.is_processing);
+                .find(|q| q.slot_id == vb.slot_id)
+                .map(|q| q.is_processing);
 
             BuildingSlot {
                 slot_id: vb.slot_id,
                 building_name: Some(vb.building.name.clone()),
                 level: vb.building.level,
-                is_processing,
+                in_queue,
             }
         })
         .collect();

@@ -1,45 +1,12 @@
 use dioxus::prelude::*;
+use parabellum_game::models::village::Village;
+use parabellum_types::common::Player;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct UserInfo {
-    pub username: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillageResources {
-    pub lumber: u32,
-    pub clay: u32,
-    pub iron: u32,
-    pub crop: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ResourceProduction {
-    pub lumber: u32,
-    pub clay: u32,
-    pub iron: u32,
-    pub crop: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillageCapacity {
-    pub warehouse: u32,
-    pub granary: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VillageHeaderData {
-    pub resources: VillageResources,
-    pub production: ResourceProduction,
-    pub capacity: VillageCapacity,
-    pub population: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayoutData {
-    pub user: Option<UserInfo>,
-    pub village: Option<VillageHeaderData>,
+    pub player: Option<Player>,
+    pub village: Option<Village>,
     pub server_time: i64,
     pub nav_active: String,
 }
@@ -66,7 +33,7 @@ pub fn wrap_in_html(body_content: &str) -> String {
 pub fn Header(data: LayoutData) -> Element {
     rsx! {
         header { class: "bg-white border-b border-gray-300 shadow-sm",
-            if let Some(user) = &data.user {
+            if let Some(player) = &data.player {
                 // Authenticated user header
                 div { class: "flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs",
                     div { class: "font-serif font-bold text-lg text-gray-700 tracking-wide",
@@ -74,7 +41,7 @@ pub fn Header(data: LayoutData) -> Element {
                     }
 
                     div { class: "flex items-center gap-3 text-gray-600",
-                        span { class: "font-bold text-gray-800", "{user.username}" }
+                        span { class: "font-bold text-gray-800", "{player.username}" }
                         span { class: "cursor-pointer font-bold hover:text-green-600 text-green-700 hover:underline",
                             a { href: "/logout", "Logout" }
                         }
@@ -141,35 +108,35 @@ pub fn NavBar(active: String) -> Element {
 }
 
 #[component]
-pub fn ResourceBar(village: VillageHeaderData) -> Element {
+pub fn ResourceBar(village: Village) -> Element {
     rsx! {
         div { class: "flex justify-center items-center py-2 bg-white flex-wrap px-2",
             ResourceDisplay {
                 icon: "🌲",
-                amount: village.resources.lumber,
-                capacity: village.capacity.warehouse,
-                prod_per_hour: village.production.lumber,
+                amount: village.stored_resources().lumber(),
+                capacity: village.warehouse_capacity(),
+                prod_per_hour: village.production.effective.lumber,
                 resource_type: "lumber"
             }
             ResourceDisplay {
                 icon: "🧱",
-                amount: village.resources.clay,
-                capacity: village.capacity.warehouse,
-                prod_per_hour: village.production.clay,
+                amount: village.stored_resources().clay(),
+                capacity: village.warehouse_capacity(),
+                prod_per_hour: village.production.effective.clay,
                 resource_type: "clay"
             }
             ResourceDisplay {
                 icon: "⛏️",
-                amount: village.resources.iron,
-                capacity: village.capacity.warehouse,
-                prod_per_hour: village.production.iron,
+                amount: village.stored_resources().iron(),
+                capacity: village.warehouse_capacity(),
+                prod_per_hour: village.production.effective.iron,
                 resource_type: "iron"
             }
             ResourceDisplay {
                 icon: "🌾",
-                amount: village.resources.crop,
-                capacity: village.capacity.granary,
-                prod_per_hour: village.production.crop,
+                amount: village.stored_resources().crop(),
+                capacity: village.granary_capacity(),
+                prod_per_hour: village.production.effective.crop as u32,
                 resource_type: "crop"
             }
             div { class: "res-item",

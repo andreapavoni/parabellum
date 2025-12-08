@@ -9,7 +9,7 @@ pub struct ResourceSlot {
     pub slot_id: u8,
     pub building_name: BuildingName,
     pub level: u8,
-    pub is_processing: bool,
+    pub in_queue: Option<bool>, // None = not in queue, Some(true) = processing, Some(false) = pending
 }
 
 impl ResourceSlot {
@@ -27,8 +27,12 @@ impl ResourceSlot {
     /// Get the full CSS classes for rendering including queue state
     pub fn render_classes(&self) -> String {
         let mut classes = format!("hex {} occupied", self.css_class());
-        if self.is_processing {
-            classes.push_str(" construction-active");
+        if let Some(is_processing) = self.in_queue {
+            if is_processing {
+                classes.push_str(" construction-active");
+            } else {
+                classes.push_str(" construction-pending");
+            }
         }
         classes
     }
