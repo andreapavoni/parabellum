@@ -116,7 +116,7 @@ fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
                     rsx! {
                         a {
                             class: "{classes}",
-                            href: "/build?s={slot_number}",
+                            href: "/dioxus/build/{slot_number}",
                             style: "top: {top}px; left: {left}px;",
                             title: "{slot.building_name} (Level {slot.level})",
                             span { class: "level", "{slot.level}" }

@@ -1,3 +1,4 @@
+pub mod buildings;
 pub mod common;
 pub mod layout;
 pub mod map;
@@ -5,6 +6,7 @@ pub mod reports;
 pub mod resources;
 pub mod village;
 
+pub use buildings::{GenericBuildingPage, MissingRequirements, ResourceCost, UpgradeBlock};
 pub use common::{BuildingQueueItem, VillageInfo};
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
 pub use map::MapPage;

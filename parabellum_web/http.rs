@@ -66,6 +66,10 @@ impl WebRouter {
             .route("/dioxus/map", get(dioxus::map))
             .route("/dioxus/reports", get(dioxus::reports))
             .route("/dioxus/reports/{id}", get(dioxus::report_detail))
+            .route(
+                "/dioxus/build/{slot_id}",
+                get(dioxus::building).post(dioxus::build_action),
+            )
             .route("/build", get(building).post(build_action))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))

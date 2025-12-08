@@ -117,7 +117,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
             if let Some(wall) = wall_slot {
                 a {
                     class: "{wall.render_classes(\"wall-ring-link\", false)}",
-                    href: "/build?s=40",
+                    href: "/dioxus/build/40",
                     title: "{wall.title()}",
                     "aria-label": "{wall.title()}",
                     svg {
@@ -135,7 +135,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
             if let Some(main) = main_building {
                 a {
                     class: "{main.render_classes(\"building-slot main-building\", true)}",
-                    href: "/build?s=19",
+                    href: "/dioxus/build/19",
                     style: "top: 50%; left: 50%;",
                     title: "{main.title()}",
                     span { class: "slot-label", "Main Building" }
@@ -146,7 +146,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
             if let Some(rally) = rally_point {
                 a {
                     class: "{rally.render_classes(\"building-slot rally-point\", true)}",
-                    href: "/build?s=39",
+                    href: "/dioxus/build/39",
                     style: "top: 55%; left: 67%;",
                     title: "{rally.title()}"
                 }
@@ -160,7 +160,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                         rsx! {
                             a {
                                 class: "{slot.render_classes(\"building-slot\", true)}",
-                                href: "/build?s={slot_id}",
+                                href: "/dioxus/build/{slot_id}",
                                 style: "top: {top}; left: {left};",
                                 title: "{slot.title()}",
                                 span { class: "slot-label", "{label}" }

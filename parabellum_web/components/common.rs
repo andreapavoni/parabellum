@@ -38,7 +38,7 @@ pub fn BuildingQueue(queue: Vec<BuildingQueueItem>) -> Element {
                     div { class: "flex justify-between w-full items-center",
                         a {
                             class: "flex items-center gap-2 text-gray-800 hover:text-gray-900 hover:underline",
-                            href: "/build?s={item.slot_id}",
+                            href: "/dioxus/build/{item.slot_id}",
                             span {
                                 class: if item.is_processing { "text-green-600" } else { "text-yellow-600" },
                                 "⏳"
