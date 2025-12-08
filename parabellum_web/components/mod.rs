@@ -7,8 +7,10 @@ pub mod resources;
 pub mod village;
 
 pub use buildings::{
-    BuildingOption, EmptySlotPage, GenericBuildingPage, MissingRequirements, ResourceCost,
-    ResourceFieldPage, TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption, UpgradeBlock,
+    AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
+    GenericBuildingPage, MissingRequirements, ResourceCost, ResourceFieldPage, SmithyPage,
+    SmithyQueueItem, SmithyUpgradeOption, TrainingBuildingPage, TrainingQueueItem,
+    UnitTrainingOption, UpgradeBlock,
 };
 pub use common::{BuildingQueueItem, VillageInfo};
 pub use layout::{LayoutData, PageLayout, wrap_in_html};

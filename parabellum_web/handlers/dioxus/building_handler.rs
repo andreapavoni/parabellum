@@ -13,13 +13,23 @@ use parabellum_app::{
         queries::{VillageQueues, VillageTroopMovements},
     },
 };
-use parabellum_game::models::buildings::{Building, get_building_data};
-use parabellum_types::{army::UnitGroup, buildings::BuildingName, tribe::Tribe};
+use parabellum_game::models::{
+    buildings::{Building, get_building_data},
+    smithy::smithy_upgrade_cost_for_unit,
+};
+use parabellum_types::{
+    army::{UnitGroup, UnitName},
+    buildings::{BuildingName, BuildingRequirement},
+    tribe::Tribe,
+};
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     components::{
-        BuildingOption, EmptySlotPage, GenericBuildingPage, PageLayout, ResourceFieldPage,
-        TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption, wrap_in_html,
+        AcademyPage, AcademyQueueItem as AcademyQueueView, AcademyResearchOption, BuildingOption,
+        EmptySlotPage, GenericBuildingPage, PageLayout, ResourceFieldPage, SmithyPage,
+        SmithyQueueItem as SmithyQueueView, SmithyUpgradeOption, TrainingBuildingPage,
+        TrainingQueueItem, UnitTrainingOption, wrap_in_html,
     },
     handlers::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, village_movements_or_empty,
@@ -222,24 +232,22 @@ fn render_building_page(
     let main_building_level = user.village.main_building_level();
     let next_level = slot_building.building.level.saturating_add(1);
 
-    let upgraded = match slot_building
+    // Try to calculate upgrade cost - if at max level, we'll still show the page but with disabled upgrade
+    let upgrade_info = slot_building
         .building
         .clone()
         .at_level(next_level, state.server_speed)
-    {
-        Ok(b) => b,
-        Err(_) => {
-            // Max level reached
-            let body_content = format!(
-                "<div class='p-4'>{} at max level ({})</div>",
-                slot_building.building.name, slot_building.building.level
-            );
-            return Html(wrap_in_html(&body_content)).into_response();
-        }
-    };
+        .ok();
 
-    let cost = upgraded.cost();
-    let time_secs = upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level);
+    let (cost, time_secs, next_upkeep) = if let Some(ref upgraded) = upgrade_info {
+        let c = upgraded.cost();
+        let t = upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level);
+        (c.resources, t, c.upkeep)
+    } else {
+        // At max level - use dummy values (won't be shown since upgrade is disabled)
+        let current_cost = slot_building.building.cost();
+        (current_cost.resources, 0, current_cost.upkeep)
+    };
 
     // Route to appropriate page component based on building type
     let body_content = match slot_building.building.name {
@@ -260,9 +268,9 @@ fn render_building_page(
                         population: slot_building.building.population,
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_level: next_level,
-                        cost: cost.resources,
+                        cost: cost,
                         time_secs: time_secs,
-                        next_upkeep: cost.upkeep,
+                        next_upkeep: next_upkeep,
                         queue_full: queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
@@ -290,10 +298,10 @@ fn render_building_page(
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
                         next_level: next_level,
-                        cost: cost.resources,
+                        cost: cost,
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
-                        next_upkeep: cost.upkeep,
+                        next_upkeep: next_upkeep,
                         queue_full: queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
@@ -323,10 +331,10 @@ fn render_building_page(
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
                         next_level: next_level,
-                        cost: cost.resources,
+                        cost: cost,
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
-                        next_upkeep: cost.upkeep,
+                        next_upkeep: next_upkeep,
                         queue_full: queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
@@ -356,10 +364,10 @@ fn render_building_page(
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
                         next_level: next_level,
-                        cost: cost.resources,
+                        cost: cost,
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
-                        next_upkeep: cost.upkeep,
+                        next_upkeep: next_upkeep,
                         queue_full: queue_full,
                         training_units: training_units,
                         training_queue: training_queue,
@@ -369,9 +377,76 @@ fn render_building_page(
                 }
             })
         }
+        BuildingName::Academy => {
+            // Research units
+            let (ready_units, locked_units, researched_units) =
+                academy_options_for_village(&user.village, state.server_speed, &queues.academy);
+            let academy_queue = academy_queue_for_slot(&queues.academy);
+            let academy_queue_full = queues.academy.len() >= 2;
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    AcademyPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: queue_full,
+                        ready_units: ready_units,
+                        locked_units: locked_units,
+                        researched_units: researched_units,
+                        academy_queue: academy_queue,
+                        academy_queue_full: academy_queue_full,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
+        BuildingName::Smithy => {
+            // Upgrade units
+            let smithy_queue_full = queues.smithy.len() >= 2;
+            let smithy_units = smithy_options_for_village(
+                &user.village,
+                &slot_building,
+                state.server_speed,
+                &queues.smithy,
+                smithy_queue_full,
+            );
+            let smithy_queue = smithy_queue_for_slot(&queues.smithy);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    SmithyPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: queue_full,
+                        smithy_units: smithy_units,
+                        smithy_queue: smithy_queue,
+                        smithy_queue_full: smithy_queue_full,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                    }
+                }
+            })
+        }
         _ => {
             // Generic buildings - just upgrade block
-            // TODO: Add specific pages for Academy, Smithy, RallyPoint
+            // TODO: Add specific page for RallyPoint
             dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
@@ -381,10 +456,10 @@ fn render_building_page(
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
                         next_level: next_level,
-                        cost: cost.resources,
+                        cost: cost,
                         time_secs: time_secs,
                         current_upkeep: slot_building.building.cost().upkeep,
-                        next_upkeep: cost.upkeep,
+                        next_upkeep: next_upkeep,
                         queue_full: queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
@@ -469,7 +544,7 @@ fn building_options_for_slot(
 
         let option = BuildingOption {
             name,
-            cost: cost.resources,
+            cost: cost.resources.clone(),
             time_secs,
             missing_requirements,
         };
@@ -602,6 +677,212 @@ fn training_queue_for_slot(
             unit_name: item.unit_name,
             time_per_unit: item.time_per_unit as u32,
             time_remaining_secs: item.time_seconds,
+        })
+        .collect()
+}
+
+/// Calculate academy research options for village
+fn academy_options_for_village(
+    village: &parabellum_game::models::village::Village,
+    server_speed: i8,
+    queued_jobs: &[parabellum_app::cqrs::queries::AcademyQueueItem],
+) -> (
+    Vec<AcademyResearchOption>,
+    Vec<AcademyResearchOption>,
+    Vec<String>,
+) {
+    let mut ready = Vec::new();
+    let mut locked = Vec::new();
+    let mut researched = Vec::new();
+    let research = village.academy_research();
+    let units = village.tribe.units();
+    let queued_units: HashSet<UnitName> = queued_jobs.iter().map(|job| job.unit.clone()).collect();
+
+    for (idx, unit) in units.iter().enumerate() {
+        let is_researched = research.get(idx);
+        let is_queued = queued_units.contains(&unit.name);
+        let missing_requirements = missing_unit_requirements(village, unit.get_requirements());
+        let can_research = !is_researched && missing_requirements.is_empty();
+        let time_secs = if unit.research_cost.time == 0 {
+            0
+        } else {
+            ((unit.research_cost.time as f64 / server_speed as f64)
+                .floor()
+                .max(1.0)) as u32
+        };
+
+        if is_researched {
+            researched.push(unit_display_name(&unit.name));
+        } else {
+            let option = AcademyResearchOption {
+                unit_name: unit_display_name(&unit.name),
+                unit_value: format!("{:?}", unit.name),
+                cost: unit.research_cost.resources.clone(),
+                time_secs,
+                missing_requirements,
+            };
+
+            if can_research && !is_queued {
+                ready.push(option);
+            } else if !can_research {
+                locked.push(option);
+            }
+        }
+    }
+
+    (ready, locked, researched)
+}
+
+/// Get academy queue items
+fn academy_queue_for_slot(
+    queue: &[parabellum_app::cqrs::queries::AcademyQueueItem],
+) -> Vec<AcademyQueueView> {
+    use parabellum_app::jobs::JobStatus;
+
+    queue
+        .iter()
+        .map(|item| {
+            let now = chrono::Utc::now();
+            let time_remaining_secs = (item.finishes_at - now).num_seconds().max(0) as u32;
+
+            AcademyQueueView {
+                unit_name: unit_display_name(&item.unit),
+                time_remaining_secs,
+                is_processing: item.status == JobStatus::Processing,
+            }
+        })
+        .collect()
+}
+
+/// Helper to convert building requirements to tuple format
+fn missing_unit_requirements(
+    village: &parabellum_game::models::village::Village,
+    requirements: &[BuildingRequirement],
+) -> Vec<(BuildingName, u8)> {
+    requirements
+        .iter()
+        .filter_map(|req| {
+            let level = village
+                .buildings()
+                .iter()
+                .find(|vb| vb.building.name == req.0)
+                .map(|vb| vb.building.level)
+                .unwrap_or(0);
+
+            if level >= req.1 {
+                None
+            } else {
+                Some((req.0.clone(), req.1))
+            }
+        })
+        .collect()
+}
+
+/// Calculate smithy upgrade options for village
+fn smithy_options_for_village(
+    village: &parabellum_game::models::village::Village,
+    smithy_building: &parabellum_game::models::village::VillageBuilding,
+    server_speed: i8,
+    queue: &[parabellum_app::cqrs::queries::SmithyQueueItem],
+    queue_full: bool,
+) -> Vec<SmithyUpgradeOption> {
+    let smithy_level_cap = smithy_building.building.level.min(20);
+    if smithy_level_cap == 0 {
+        return vec![];
+    }
+
+    let queue_counts = smithy_queue_counts(queue);
+    let research = village.academy_research();
+    let smithy_levels = village.smithy();
+    let units = village.tribe.units();
+    let mut options = Vec::new();
+
+    for (idx, unit) in units.iter().enumerate() {
+        if idx >= smithy_levels.len() {
+            break;
+        }
+
+        let is_researched = unit.research_cost.time == 0 || research.get(idx);
+        let current_level = smithy_levels[idx];
+        let queued = queue_counts.get(&unit.name).copied().unwrap_or(0);
+        let effective_level = current_level.saturating_add(queued);
+        let available_for_upgrade =
+            is_researched && effective_level < smithy_level_cap && smithy_level_cap > 0;
+        let can_upgrade = available_for_upgrade && queued == 0 && !queue_full;
+
+        if !is_researched {
+            continue;
+        }
+
+        let (cost, time_secs) = if available_for_upgrade {
+            match smithy_upgrade_cost_for_unit(&unit.name, effective_level) {
+                Ok(research_cost) => {
+                    let time = if research_cost.time == 0 {
+                        0
+                    } else {
+                        ((research_cost.time as f64 / server_speed as f64)
+                            .floor()
+                            .max(1.0)) as u32
+                    };
+                    (research_cost.resources, time)
+                }
+                Err(_) => continue,
+            }
+        } else {
+            continue;
+        };
+
+        options.push(SmithyUpgradeOption {
+            unit_name: unit_display_name(&unit.name),
+            unit_value: format!("{:?}", unit.name),
+            current_level,
+            max_level: smithy_level_cap,
+            cost,
+            time_secs,
+            can_upgrade,
+        });
+    }
+
+    options
+}
+
+/// Count queued smithy upgrades per unit
+fn smithy_queue_counts(
+    queue: &[parabellum_app::cqrs::queries::SmithyQueueItem],
+) -> HashMap<UnitName, u8> {
+    let mut counts = HashMap::new();
+    for job in queue {
+        *counts.entry(job.unit.clone()).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// Get smithy queue items
+fn smithy_queue_for_slot(
+    queue: &[parabellum_app::cqrs::queries::SmithyQueueItem],
+) -> Vec<SmithyQueueView> {
+    use parabellum_app::jobs::JobStatus;
+
+    // Count how many times each unit appears in queue to calculate target level
+    let mut unit_counts: HashMap<UnitName, u8> = HashMap::new();
+
+    queue
+        .iter()
+        .map(|item| {
+            let now = chrono::Utc::now();
+            let time_remaining_secs = (item.finishes_at - now).num_seconds().max(0) as u32;
+
+            // Increment count for this unit to determine target level
+            let count = unit_counts.entry(item.unit.clone()).or_insert(0);
+            *count += 1;
+            let target_level = *count;
+
+            SmithyQueueView {
+                unit_name: unit_display_name(&item.unit),
+                target_level,
+                time_remaining_secs,
+                is_processing: item.status == JobStatus::Processing,
+            }
         })
         .collect()
 }
