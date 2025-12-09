@@ -1,3 +1,10 @@
-pub mod actions;
+pub mod army;
+pub mod auth;
+pub mod building;
+pub mod buildings;
 pub mod helpers;
-pub mod pages;
+pub mod home;
+pub mod map;
+pub mod reports;
+pub mod resources;
+pub mod village;

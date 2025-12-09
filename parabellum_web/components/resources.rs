@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
+
 use parabellum_types::buildings::BuildingName;
 use serde::{Deserialize, Serialize};
-
-use super::common::BuildingQueue;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResourceSlot {
@@ -38,51 +37,8 @@ impl ResourceSlot {
     }
 }
 
-use parabellum_game::models::village::Village;
-
 #[component]
-pub fn ResourcesPage(
-    village: Village,
-    resource_slots: Vec<ResourceSlot>,
-    building_queue: Vec<super::common::BuildingQueueItem>,
-) -> Element {
-    let production = &village.production.effective;
-
-    rsx! {
-        div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
-            div { class: "flex flex-col items-center w-full md:w-auto",
-                h1 { class: "text-xl font-bold mb-4 w-full text-left md:text-left",
-                    "{village.name} ({village.position.x}|{village.position.y})"
-                }
-
-                // Resource fields map
-                ResourceFieldsMap { slots: resource_slots.clone() }
-
-                // Building queue
-                BuildingQueue { queue: building_queue }
-            }
-
-            div { class: "w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none",
-                div { class: "flex flex-row md:flex-col justify-between md:justify-start gap-8 md:gap-0",
-
-                    // Production info
-                    ProductionPanel {
-                        lumber: production.lumber,
-                        clay: production.clay,
-                        iron: production.iron,
-                        crop: production.crop as u32
-                    }
-
-                    // Troops
-                    TroopsPanel { village: village.clone() }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
+pub fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
     // Positions for each slot (matching the original template)
     let positions = [
         (0, 60),
@@ -135,10 +91,8 @@ fn ResourceFieldsMap(slots: Vec<ResourceSlot>) -> Element {
     }
 }
 
-// BuildingQueue component moved to common.rs
-
 #[component]
-fn ProductionPanel(lumber: u32, clay: u32, iron: u32, crop: u32) -> Element {
+pub fn ProductionPanel(lumber: u32, clay: u32, iron: u32, crop: u32) -> Element {
     rsx! {
         div { class: "flex-1",
             h3 { class: "font-bold mb-3 text-sm", "Production:" }
@@ -158,49 +112,6 @@ fn ProductionPanel(lumber: u32, clay: u32, iron: u32, crop: u32) -> Element {
                 div { class: "flex justify-between border-b border-gray-100 pb-2",
                     span { "🌾 Crop" }
                     span { class: "font-bold text-gray-900", "{crop}/hour" }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn TroopsPanel(village: Village) -> Element {
-    use crate::view_helpers::unit_display_name;
-
-    let troops: Vec<(String, u32)> = village
-        .army()
-        .map(|army| {
-            let tribe_units = village.tribe.units();
-            army.units()
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, quantity)| {
-                    if *quantity == 0 {
-                        return None;
-                    }
-                    let name = unit_display_name(&tribe_units[idx].name);
-                    Some((name, *quantity))
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    rsx! {
-        div { class: "flex-1 md:mt-8",
-            h3 { class: "font-bold mb-2 text-sm md:mt-6", "Troops:" }
-            if troops.is_empty() {
-                div { class: "text-xs text-gray-500 italic",
-                    "No units"
-                }
-            } else {
-                div { class: "text-xs space-y-2",
-                    for (name , count) in troops {
-                        div { class: "flex justify-between border-b border-gray-100 pb-1",
-                            span { "{name}" }
-                            span { class: "font-semibold text-gray-900", "{count}" }
-                        }
-                    }
                 }
             }
         }

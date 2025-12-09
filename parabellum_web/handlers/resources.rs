@@ -1,7 +1,8 @@
 use crate::{
-    components::{BuildingQueueItem, PageLayout, ResourceSlot, ResourcesPage, wrap_in_html},
-    handlers::helpers::{CurrentUser, village_queues_or_empty},
+    components::{BuildingQueueItem, PageLayout, ResourceSlot, wrap_in_html},
+    handlers::helpers::{CurrentUser, create_layout_data, village_queues_or_empty},
     http::AppState,
+    pages::ResourcesPage,
     view_helpers::building_queue_to_views,
 };
 use axum::{
@@ -10,11 +11,8 @@ use axum::{
 };
 use dioxus::prelude::*;
 
-use super::helpers::create_layout_data;
-
-/// Render the resources page using Dioxus SSR
-pub async fn resources(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
-    // Get building queue
+/// GET /resources
+pub async fn resources_page(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let queues = village_queues_or_empty(&state, user.village.id).await;
     let building_queue_views = building_queue_to_views(&queues.building);
 

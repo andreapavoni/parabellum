@@ -1,52 +1,8 @@
 use dioxus::prelude::*;
-use parabellum_types::buildings::BuildingName;
+use parabellum_game::models::village::Village;
 use serde::{Deserialize, Serialize};
 
-use super::common::BuildingQueue;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BuildingSlot {
-    pub slot_id: u8,
-    pub building_name: Option<BuildingName>,
-    pub level: u8,
-    pub in_queue: Option<bool>, // None = not in queue, Some(true) = processing, Some(false) = pending
-}
-
-impl BuildingSlot {
-    /// Get CSS classes for rendering including queue state
-    pub fn render_classes(&self, base_class: &str, include_occupied: bool) -> String {
-        let mut classes = base_class.to_string();
-
-        if include_occupied && self.building_name.is_some() {
-            classes.push_str(" occupied");
-        }
-
-        if let Some(is_processing) = self.in_queue {
-            if is_processing {
-                classes.push_str(" construction-active");
-            } else {
-                classes.push_str(" construction-pending");
-            }
-        }
-
-        classes
-    }
-
-    /// Get title/tooltip for the slot
-    pub fn title(&self) -> String {
-        if let Some(ref building) = self.building_name {
-            if self.level > 0 {
-                format!("{} (Level {})", building, self.level)
-            } else {
-                "Empty slot".to_string()
-            }
-        } else {
-            "Empty slot".to_string()
-        }
-    }
-}
-
-use parabellum_game::models::village::Village;
+use crate::components::BuildingSlot;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VillageListItem {
@@ -58,31 +14,7 @@ pub struct VillageListItem {
 }
 
 #[component]
-pub fn VillagePage(
-    village: Village,
-    building_slots: Vec<BuildingSlot>,
-    building_queue: Vec<super::common::BuildingQueueItem>,
-    villages: Vec<VillageListItem>,
-) -> Element {
-    rsx! {
-        div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
-            div { class: "flex flex-col items-center w-full md:w-auto",
-                h1 { class: "text-xl font-bold mb-4 w-full text-left md:text-left",
-                    "{village.name} ({village.position.x}|{village.position.y})"
-                }
-
-                VillageMap { slots: building_slots.clone() }
-
-                BuildingQueue { queue: building_queue }
-            }
-
-            VillagesList { villages: villages }
-        }
-    }
-}
-
-#[component]
-fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
+pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
     // Find specific slots
     let wall_slot = slots.iter().find(|s| s.slot_id == 40);
     let main_building = slots.iter().find(|s| s.slot_id == 19);
@@ -176,7 +108,7 @@ fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
 }
 
 #[component]
-fn VillagesList(villages: Vec<VillageListItem>) -> Element {
+pub fn VillagesList(villages: Vec<VillageListItem>) -> Element {
     rsx! {
         div { class: "w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none",
             h3 { class: "font-bold mb-3 text-sm border-b border-gray-300 pb-2",
@@ -203,6 +135,49 @@ fn VillagesList(villages: Vec<VillageListItem>) -> Element {
                         span {
                             class: if village.is_current { "text-gray-600" } else { "text-gray-500" },
                             "({village.x}|{village.y})"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn TroopsPanel(village: Village) -> Element {
+    use crate::view_helpers::unit_display_name;
+
+    let troops: Vec<(String, u32)> = village
+        .army()
+        .map(|army| {
+            let tribe_units = village.tribe.units();
+            army.units()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, quantity)| {
+                    if *quantity == 0 {
+                        return None;
+                    }
+                    let name = unit_display_name(&tribe_units[idx].name);
+                    Some((name, *quantity))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    rsx! {
+        div { class: "flex-1 md:mt-8",
+            h3 { class: "font-bold mb-2 text-sm md:mt-6", "Troops:" }
+            if troops.is_empty() {
+                div { class: "text-xs text-gray-500 italic",
+                    "No units"
+                }
+            } else {
+                div { class: "text-xs space-y-2",
+                    for (name , count) in troops {
+                        div { class: "flex justify-between border-b border-gray-100 pb-1",
+                            span { "{name}" }
+                            span { class: "font-semibold text-gray-900", "{count}" }
                         }
                     }
                 }

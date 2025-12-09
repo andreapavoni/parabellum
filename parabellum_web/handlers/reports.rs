@@ -15,18 +15,17 @@ use parabellum_app::{
 };
 
 use crate::{
-    components::{
-        BattleReportPage, GenericReportData, GenericReportPage, PageLayout, ReportListEntry,
-        ReportsPage, wrap_in_html,
-    },
-    handlers::{helpers::CurrentUser, pages::create_layout_data},
+    components::{GenericReportData, PageLayout, ReportListEntry, wrap_in_html},
+    handlers::helpers::{CurrentUser, create_layout_data},
     http::AppState,
+    pages::{BattleReportPage, GenericReportPage, ReportsPage},
     view_helpers::format_resource_summary,
 };
 use parabellum_types::reports::ReportPayload;
 use rust_i18n::t;
 
-pub async fn reports(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
+/// GET /reports
+pub async fn reports_page(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let raw_reports = state
         .app_bus
         .query(
@@ -51,7 +50,8 @@ pub async fn reports(State(state): State<AppState>, user: CurrentUser) -> impl I
     Html(wrap_in_html(&body_content))
 }
 
-pub async fn report_detail(
+/// GET /reports/{id}
+pub async fn report_page(
     State(state): State<AppState>,
     user: CurrentUser,
     Path(report_id): Path<Uuid>,

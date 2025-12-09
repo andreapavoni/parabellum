@@ -1,27 +1,21 @@
-pub mod auth;
-pub mod buildings;
-pub mod common;
-pub mod layout;
-pub mod map;
-pub mod reports;
-pub mod resources;
-pub mod village;
+mod army_card;
+mod building_queue;
+mod building_slot;
+mod common;
+mod layout;
+mod reports;
+mod resources;
+mod upgrade_block;
+mod village;
 
-pub use auth::{HomePage, LoginPage, RegisterPage};
-pub use buildings::{
-    AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
-    GenericBuildingPage, MissingRequirements, RallyPointPage, ResourceCost, ResourceFieldPage,
-    SmithyPage, SmithyQueueItem, SmithyUpgradeOption, TrainingBuildingPage, TrainingQueueItem,
-    UnitTrainingOption, UpgradeBlock,
+pub use army_card::{
+    ArmyAction, ArmyCard, ArmyCardData, ArmyCategory, MovementDirection, MovementKind,
 };
-pub use common::{
-    ArmyAction, ArmyCard, ArmyCardData, ArmyCategory, BuildingQueueItem, MovementDirection,
-    MovementKind, RallyPointUnit, TroopCount, TroopMovement, VillageInfo,
-};
+pub use building_queue::{BuildingQueue, BuildingQueueItem};
+pub use building_slot::BuildingSlot;
+pub use common::*;
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
-pub use map::MapPage;
-pub use reports::{
-    BattleReportPage, GenericReportData, GenericReportPage, ReportListEntry, ReportsPage,
-};
-pub use resources::{ResourceSlot, ResourcesPage};
-pub use village::{BuildingSlot, VillageListItem, VillagePage};
+pub use reports::{ArmyDisplay, GenericReportData, ReportListEntry};
+pub use resources::{ProductionPanel, ResourceFieldsMap, ResourceSlot};
+pub use upgrade_block::UpgradeBlock;
+pub use village::{TroopsPanel, VillageListItem, VillageMap, VillagesList};

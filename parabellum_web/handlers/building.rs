@@ -25,17 +25,17 @@ use parabellum_types::{
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    components::{
-        AcademyPage, AcademyQueueItem as AcademyQueueView, AcademyResearchOption, BuildingOption,
-        EmptySlotPage, GenericBuildingPage, PageLayout, RallyPointPage, ResourceFieldPage,
-        SmithyPage, SmithyQueueItem as SmithyQueueView, SmithyUpgradeOption, TrainingBuildingPage,
-        TrainingQueueItem, UnitTrainingOption, wrap_in_html,
-    },
+    components::{PageLayout, wrap_in_html},
     handlers::helpers::{
         CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, village_movements_or_empty,
         village_queues_or_empty,
     },
     http::AppState,
+    pages::buildings::{
+        AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
+        GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage, SmithyQueueItem,
+        SmithyUpgradeOption, TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
+    },
     view_helpers::{
         BuildingQueueItemView, building_queue_to_views, training_queue_to_views, unit_display_name,
     },
@@ -67,7 +67,7 @@ impl HasCsrfToken for BuildActionForm {
 }
 
 /// GET /dioxus/build/{slot_id} - View building page
-pub async fn building(
+pub async fn building_page(
     State(state): State<AppState>,
     Path(slot_id): Path<u8>,
     user: CurrentUser,
@@ -98,7 +98,7 @@ pub async fn building(
 }
 
 /// POST /dioxus/build/{slot_id} - Execute build/upgrade action
-pub async fn build_action(
+pub async fn build(
     State(state): State<AppState>,
     Path(slot_id): Path<u8>,
     user: CurrentUser,
@@ -771,7 +771,7 @@ fn academy_options_for_village(
 /// Get academy queue items
 fn academy_queue_for_slot(
     queue: &[parabellum_app::cqrs::queries::AcademyQueueItem],
-) -> Vec<AcademyQueueView> {
+) -> Vec<AcademyQueueItem> {
     use parabellum_app::jobs::JobStatus;
 
     queue
@@ -780,7 +780,7 @@ fn academy_queue_for_slot(
             let now = chrono::Utc::now();
             let time_remaining_secs = (item.finishes_at - now).num_seconds().max(0) as u32;
 
-            AcademyQueueView {
+            AcademyQueueItem {
                 unit_name: unit_display_name(&item.unit),
                 time_remaining_secs,
                 is_processing: item.status == JobStatus::Processing,
@@ -895,7 +895,7 @@ fn smithy_queue_counts(
 /// Get smithy queue items
 fn smithy_queue_for_slot(
     queue: &[parabellum_app::cqrs::queries::SmithyQueueItem],
-) -> Vec<SmithyQueueView> {
+) -> Vec<SmithyQueueItem> {
     use parabellum_app::jobs::JobStatus;
 
     // Count how many times each unit appears in queue to calculate target level
@@ -912,7 +912,7 @@ fn smithy_queue_for_slot(
             *count += 1;
             let target_level = *count;
 
-            SmithyQueueView {
+            SmithyQueueItem {
                 unit_name: unit_display_name(&item.unit),
                 target_level,
                 time_remaining_secs,

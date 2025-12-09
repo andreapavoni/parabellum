@@ -20,8 +20,8 @@ use parabellum_types::{buildings::BuildingName, map::Position};
 
 use crate::{
     handlers::{
+        building::{MAX_SLOT_ID, render_with_error},
         helpers::{CsrfForm, CurrentUser, HasCsrfToken},
-        pages::{MAX_SLOT_ID, render_with_error},
     },
     http::AppState,
 };

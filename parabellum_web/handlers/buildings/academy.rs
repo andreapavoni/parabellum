@@ -2,38 +2,39 @@ use axum::{
     extract::State,
     response::{IntoResponse, Redirect, Response},
 };
-use parabellum_app::{
-    command_handlers::ResearchSmithyCommandHandler, cqrs::commands::ResearchSmithy,
-};
-use parabellum_types::{army::UnitName, buildings::BuildingName};
 use rust_i18n::t;
 use serde::Deserialize;
 
+use parabellum_app::{
+    command_handlers::ResearchAcademyCommandHandler, cqrs::commands::ResearchAcademy,
+};
+use parabellum_types::{army::UnitName, buildings::BuildingName};
+
 use crate::{
     handlers::{
+        building::{MAX_SLOT_ID, render_with_error},
         helpers::{CsrfForm, CurrentUser, HasCsrfToken},
-        pages::{MAX_SLOT_ID, render_with_error},
     },
     http::AppState,
 };
 
 #[derive(Debug, Deserialize)]
-pub struct SmithyResearchForm {
+pub struct ResearchUnitForm {
     pub slot_id: u8,
     pub unit_name: UnitName,
     pub csrf_token: String,
 }
 
-impl HasCsrfToken for SmithyResearchForm {
+impl HasCsrfToken for ResearchUnitForm {
     fn csrf_token(&self) -> &str {
         &self.csrf_token
     }
 }
 
-pub async fn research_smithy(
+pub async fn research_unit(
     State(state): State<AppState>,
     user: CurrentUser,
-    CsrfForm { jar, form }: CsrfForm<SmithyResearchForm>,
+    CsrfForm { jar, form }: CsrfForm<ResearchUnitForm>,
 ) -> Response {
     if !(1..=MAX_SLOT_ID).contains(&form.slot_id) {
         return render_with_error(
@@ -41,7 +42,7 @@ pub async fn research_smithy(
             jar,
             user,
             form.slot_id,
-            t!("game.building.invalid_smithy_building").to_string(),
+            t!("game.building.invalid_academy_building").to_string(),
         )
         .await;
     }
@@ -52,18 +53,18 @@ pub async fn research_smithy(
             jar,
             user,
             form.slot_id,
-            t!("game.building.invalid_smithy_building").to_string(),
+            t!("game.building.invalid_academy_building").to_string(),
         )
         .await;
     };
 
-    if slot_building.building.name != BuildingName::Smithy {
+    if slot_building.building.name != BuildingName::Academy {
         return render_with_error(
             &state,
             jar,
             user,
             form.slot_id,
-            t!("game.building.invalid_smithy_building").to_string(),
+            t!("game.building.invalid_academy_building").to_string(),
         )
         .await;
     }
@@ -71,11 +72,11 @@ pub async fn research_smithy(
     let result = state
         .app_bus
         .execute(
-            ResearchSmithy {
+            ResearchAcademy {
                 unit: form.unit_name.clone(),
                 village_id: user.village.id,
             },
-            ResearchSmithyCommandHandler::new(),
+            ResearchAcademyCommandHandler::new(),
         )
         .await;
 

@@ -1,9 +1,8 @@
 use crate::{
-    components::{
-        BuildingQueueItem, BuildingSlot, PageLayout, VillageListItem, VillagePage, wrap_in_html,
-    },
+    components::{BuildingQueueItem, BuildingSlot, PageLayout, VillageListItem, wrap_in_html},
     handlers::helpers::{CurrentUser, village_queues_or_empty},
     http::AppState,
+    pages::VillagePage,
     view_helpers::building_queue_to_views,
 };
 use axum::{
@@ -15,7 +14,7 @@ use dioxus::prelude::*;
 use super::helpers::create_layout_data;
 
 /// Render the village center page using Dioxus SSR
-pub async fn village(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
+pub async fn village_page(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let queues = village_queues_or_empty(&state, user.village.id).await;
     let building_queue_views = building_queue_to_views(&queues.building);
 

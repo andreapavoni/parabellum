@@ -1,7 +1,8 @@
 use crate::{
-    components::{MapPage, PageLayout, wrap_in_html},
+    components::{PageLayout, wrap_in_html},
     handlers::helpers::CurrentUser,
     http::AppState,
+    pages::MapPage,
 };
 use axum::{
     Json,
@@ -128,8 +129,8 @@ impl From<MapRegionTile> for MapTileResponse {
     }
 }
 
-/// Render the map page using Dioxus SSR
-pub async fn map(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
+/// GET /map - Render the map page using Dioxus SSR.
+pub async fn map_page(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
     let layout_data = create_layout_data(&user, "map");
 
     let body_content = dioxus_ssr::render_element(rsx! {
@@ -145,6 +146,7 @@ pub async fn map(State(state): State<AppState>, user: CurrentUser) -> impl IntoR
     Html(wrap_in_html(&body_content))
 }
 
+/// GET /map?x={x}&y={y}
 pub async fn map_region(
     State(state): State<AppState>,
     current_user: CurrentUser,
