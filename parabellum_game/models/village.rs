@@ -620,6 +620,10 @@ impl Village {
         Ok(())
     }
 
+    pub fn deployed_armies(&self) -> &Vec<Army> {
+        &self.deployed_armies
+    }
+
     /// Applies losses and damages from the battle report to the village.
     pub fn apply_battle_report(
         &mut self,

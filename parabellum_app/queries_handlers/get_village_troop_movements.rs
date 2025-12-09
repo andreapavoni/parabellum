@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
-use parabellum_game::battle::AttackType;
-use parabellum_types::{Result, errors::ApplicationError, map::Position};
+use parabellum_game::{battle::AttackType, models::army::Army};
+use parabellum_types::{Result, errors::ApplicationError, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
         Job,
         tasks::{ArmyReturnTask, AttackTask, ReinforcementTask},
     },
-    repository::VillageRepository,
+    repository::{ArmyRepository, VillageRepository},
     uow::UnitOfWork,
 };
 
@@ -47,7 +47,9 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
             .await?;
 
         let village_repo = uow.villages();
-        let mut cache = HashMap::new();
+        let army_repo = uow.armies();
+        let mut village_cache = HashMap::new();
+        let mut army_cache = HashMap::new();
 
         let mut outgoing = Vec::new();
         let mut incoming = Vec::new();
@@ -59,7 +61,9 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         job,
                         TroopMovementDirection::Outgoing,
                         &village_repo,
-                        &mut cache,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
                     )
                     .await?
                     {
@@ -71,7 +75,9 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         job,
                         TroopMovementDirection::Outgoing,
                         &village_repo,
-                        &mut cache,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
                     )
                     .await?
                     {
@@ -79,7 +85,15 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                     }
                 }
                 "ArmyReturn" => {
-                    if let Some(movement) = return_movement(job, &village_repo, &mut cache).await? {
+                    if let Some(movement) = return_movement(
+                        job,
+                        &village_repo,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
+                    )
+                    .await?
+                    {
                         incoming.push(movement);
                     }
                 }
@@ -94,7 +108,9 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         job,
                         TroopMovementDirection::Incoming,
                         &village_repo,
-                        &mut cache,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
                     )
                     .await?
                     {
@@ -106,7 +122,9 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         job,
                         TroopMovementDirection::Incoming,
                         &village_repo,
-                        &mut cache,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
                     )
                     .await?
                     {
@@ -152,11 +170,27 @@ async fn snapshot_for(
     Ok(snapshot)
 }
 
+async fn army_for(
+    repo: &Arc<dyn ArmyRepository + '_>,
+    cache: &mut HashMap<Uuid, Army>,
+    army_id: Uuid,
+) -> Result<Army, ApplicationError> {
+    if let Some(army) = cache.get(&army_id) {
+        return Ok(army.clone());
+    }
+
+    let army = repo.get_by_id(army_id).await?;
+    cache.insert(army_id, army.clone());
+    Ok(army)
+}
+
 async fn attack_movement(
     job: &Job,
     direction: TroopMovementDirection,
-    repo: &Arc<dyn VillageRepository + '_>,
-    cache: &mut HashMap<u32, VillageSnapshot>,
+    village_repo: &Arc<dyn VillageRepository + '_>,
+    army_repo: &Arc<dyn ArmyRepository + '_>,
+    village_cache: &mut HashMap<u32, VillageSnapshot>,
+    army_cache: &mut HashMap<Uuid, Army>,
 ) -> Result<Option<TroopMovement>, ApplicationError> {
     let payload: AttackTask = match serde_json::from_value(job.task.data.clone()) {
         Ok(task) => task,
@@ -166,8 +200,9 @@ async fn attack_movement(
     let origin_id = payload.attacker_village_id as u32;
     let target_id = payload.target_village_id as u32;
 
-    let origin = snapshot_for(repo, cache, origin_id).await?;
-    let target = snapshot_for(repo, cache, target_id).await?;
+    let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
+    let target = snapshot_for(village_repo, village_cache, target_id).await?;
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     let movement_type = match payload.attack_type {
         AttackType::Raid => TroopMovementType::Raid,
@@ -180,14 +215,18 @@ async fn attack_movement(
         direction,
         origin,
         target,
+        *army.units(),
+        army.tribe.clone(),
     )))
 }
 
 async fn reinforcement_movement(
     job: &Job,
     direction: TroopMovementDirection,
-    repo: &Arc<dyn VillageRepository + '_>,
-    cache: &mut HashMap<u32, VillageSnapshot>,
+    village_repo: &Arc<dyn VillageRepository + '_>,
+    army_repo: &Arc<dyn ArmyRepository + '_>,
+    village_cache: &mut HashMap<u32, VillageSnapshot>,
+    army_cache: &mut HashMap<Uuid, Army>,
 ) -> Result<Option<TroopMovement>, ApplicationError> {
     let payload: ReinforcementTask = match serde_json::from_value(job.task.data.clone()) {
         Ok(task) => task,
@@ -196,8 +235,9 @@ async fn reinforcement_movement(
 
     let origin_id = job.village_id as u32;
     let target_id = payload.village_id as u32;
-    let origin = snapshot_for(repo, cache, origin_id).await?;
-    let target = snapshot_for(repo, cache, target_id).await?;
+    let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
+    let target = snapshot_for(village_repo, village_cache, target_id).await?;
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     Ok(Some(build_movement(
         job,
@@ -205,21 +245,31 @@ async fn reinforcement_movement(
         direction,
         origin,
         target,
+        *army.units(),
+        army.tribe.clone(),
     )))
 }
 
 async fn return_movement(
     job: &Job,
-    repo: &Arc<dyn VillageRepository + '_>,
-    cache: &mut HashMap<u32, VillageSnapshot>,
+    village_repo: &Arc<dyn VillageRepository + '_>,
+    army_repo: &Arc<dyn ArmyRepository + '_>,
+    village_cache: &mut HashMap<u32, VillageSnapshot>,
+    army_cache: &mut HashMap<Uuid, Army>,
 ) -> Result<Option<TroopMovement>, ApplicationError> {
     let payload: ArmyReturnTask = match serde_json::from_value(job.task.data.clone()) {
         Ok(task) => task,
         Err(_) => return Ok(None),
     };
 
-    let origin = snapshot_for(repo, cache, payload.from_village_id as u32).await?;
-    let target = snapshot_for(repo, cache, payload.destination_village_id as u32).await?;
+    let origin = snapshot_for(village_repo, village_cache, payload.from_village_id as u32).await?;
+    let target = snapshot_for(
+        village_repo,
+        village_cache,
+        payload.destination_village_id as u32,
+    )
+    .await?;
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     Ok(Some(build_movement(
         job,
@@ -227,6 +277,8 @@ async fn return_movement(
         TroopMovementDirection::Incoming,
         origin,
         target,
+        *army.units(),
+        army.tribe.clone(),
     )))
 }
 
@@ -236,6 +288,8 @@ fn build_movement(
     direction: TroopMovementDirection,
     origin: VillageSnapshot,
     target: VillageSnapshot,
+    units: [u32; 10],
+    tribe: Tribe,
 ) -> TroopMovement {
     let now = Utc::now();
     let remaining = (job.completed_at - now).num_seconds().max(0) as u32;
@@ -254,5 +308,7 @@ fn build_movement(
         target_position: target.position,
         arrives_at: job.completed_at,
         time_seconds: remaining,
+        units,
+        tribe,
     }
 }

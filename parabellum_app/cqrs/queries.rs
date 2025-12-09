@@ -183,6 +183,8 @@ pub struct TroopMovement {
     pub target_position: Position,
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: u32,
+    pub units: [u32; 10],
+    pub tribe: parabellum_types::tribe::Tribe,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

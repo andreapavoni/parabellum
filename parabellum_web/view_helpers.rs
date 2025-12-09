@@ -1,11 +1,14 @@
 use chrono::Utc;
-use parabellum_app::{
-    cqrs::queries::{BuildingQueueItem, TrainingQueueItem},
-    jobs::JobStatus,
+use parabellum_app::cqrs::queries::{
+    BuildingQueueItem, TrainingQueueItem, TroopMovementType, VillageTroopMovements,
 };
+use parabellum_app::jobs::JobStatus;
+use parabellum_game::models::village::Village;
 use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 use uuid::Uuid;
+
+use crate::components::{ArmyAction, ArmyCardData, ArmyCategory, MovementKind};
 
 #[derive(Debug, Clone)]
 pub struct BuildingQueueItemView {
@@ -144,4 +147,135 @@ pub fn format_resource_summary(resources: &ResourceGroup) -> String {
         resources.iron(),
         resources.crop()
     )
+}
+
+/// Prepares all army cards for the Rally Point page from domain data.
+/// This function transforms:
+/// - Village's stationed army
+/// - Village's deployed armies (own troops elsewhere)
+/// - Village's reinforcements (foreign troops helping)
+/// - Outgoing troop movements
+/// - Incoming troop movements
+pub fn prepare_rally_point_cards(
+    village: &Village,
+    movements: &VillageTroopMovements,
+) -> Vec<ArmyCardData> {
+    let mut cards = Vec::new();
+
+    // 1. Stationed troops (home army)
+    if let Some(army) = village.army() {
+        cards.push(ArmyCardData {
+            village_id: village.id,
+            village_name: Some(village.name.clone()),
+            position: Some(village.position.clone()),
+            units: *army.units(),
+            tribe: village.tribe.clone(),
+            category: ArmyCategory::Stationed,
+            movement_kind: None,
+            arrival_time: None,
+            action_button: None,
+        });
+    }
+
+    // 2. Deployed armies (own troops in other villages/oases)
+    for army in village.deployed_armies() {
+        // TODO: Need village names for destination - will be enriched in Step 8
+        let destination_name = army
+            .current_map_field_id
+            .map(|id| format!("Village #{}", id));
+
+        cards.push(ArmyCardData {
+            village_id: army.current_map_field_id.unwrap_or(village.id),
+            village_name: destination_name,
+            position: None, // TODO: Position lookup in Step 8
+            units: *army.units(),
+            tribe: army.tribe.clone(),
+            category: ArmyCategory::Deployed,
+            movement_kind: None,
+            arrival_time: None,
+            action_button: Some(ArmyAction::Recall {
+                movement_id: army.id.to_string(),
+            }),
+        });
+    }
+
+    // 3. Reinforcements (troops from other players helping us)
+    for reinforcement in village.reinforcements() {
+        // TODO: Need village names for origin - will be enriched in Step 8
+        let origin_name = Some(format!("Village #{}", reinforcement.village_id));
+
+        cards.push(ArmyCardData {
+            village_id: reinforcement.village_id,
+            village_name: origin_name,
+            position: None, // TODO: Position lookup in Step 8
+            units: *reinforcement.units(),
+            tribe: reinforcement.tribe.clone(),
+            category: ArmyCategory::Reinforcement,
+            movement_kind: None,
+            arrival_time: None,
+            action_button: Some(ArmyAction::Release {
+                source_village_id: reinforcement.village_id,
+            }),
+        });
+    }
+
+    // 4. Outgoing movements
+    for movement in &movements.outgoing {
+        let now = chrono::Utc::now();
+        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+
+        let movement_kind = match movement.movement_type {
+            TroopMovementType::Attack => MovementKind::Attack,
+            TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
+            TroopMovementType::Return => MovementKind::Return,
+        };
+
+        let action_button = if matches!(movement_kind, MovementKind::Reinforcement) {
+            Some(ArmyAction::Recall {
+                movement_id: movement.job_id.to_string(),
+            })
+        } else {
+            None
+        };
+
+        cards.push(ArmyCardData {
+            village_id: movement.target_village_id,
+            village_name: movement.target_village_name.clone(),
+            position: Some(movement.target_position.clone()),
+            units: movement.units,
+            tribe: movement.tribe.clone(),
+            category: ArmyCategory::Outgoing,
+            movement_kind: Some(movement_kind),
+            arrival_time: Some(time_remaining_secs),
+            action_button,
+        });
+    }
+
+    // 5. Incoming movements
+    for movement in &movements.incoming {
+        let now = chrono::Utc::now();
+        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+
+        let movement_kind = match movement.movement_type {
+            TroopMovementType::Attack => MovementKind::Attack,
+            TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
+            TroopMovementType::Return => MovementKind::Return,
+        };
+
+        cards.push(ArmyCardData {
+            village_id: movement.origin_village_id,
+            village_name: movement.origin_village_name.clone(),
+            position: Some(movement.origin_position.clone()),
+            units: movement.units,
+            tribe: movement.tribe.clone(),
+            category: ArmyCategory::Incoming,
+            movement_kind: Some(movement_kind),
+            arrival_time: Some(time_remaining_secs),
+            action_button: None,
+        });
+    }
+
+    cards
 }

@@ -62,7 +62,7 @@ pub struct ArmyCardData {
 /// Army card component for rally point display
 #[component]
 pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
-    use crate::view_helpers::{format_duration, unit_display_name};
+    use crate::view_helpers::format_duration;
 
     let movement_kind_class = card.movement_kind.map(|kind| match kind {
         MovementKind::Attack => "text-xs px-2 py-0.5 rounded bg-red-100 text-red-800",
@@ -71,7 +71,6 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
         MovementKind::Return => "text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800",
     });
 
-    let tribe_units = card.tribe.units();
     let title = card.village_name.as_deref().unwrap_or("Unknown Village");
     let subtitle = card
         .position
@@ -109,28 +108,35 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
                 }
             }
 
-            // Units display - grid showing all units
-            div { class: "grid grid-cols-5 gap-2",
-                for (idx, &count) in card.units.iter().enumerate() {
-                    {
-                        let unit_name = if idx < tribe_units.len() {
-                            unit_display_name(&tribe_units[idx].name)
-                        } else {
-                            "?".to_string()
-                        };
-                        let is_zero = count == 0;
-                        rsx! {
-                            div {
-                                class: "text-center p-2 rounded",
-                                class: if is_zero { "bg-gray-50 opacity-40" } else { "bg-gray-100" },
-                                div {
-                                    class: "text-xs text-gray-600 truncate",
-                                    title: "{unit_name}",
-                                    "{unit_name}"
+            // Units display - horizontal table showing all units (1x10)
+            div { class: "overflow-x-auto",
+                table { class: "w-full border-collapse",
+                    thead {
+                        tr {
+                            for _ in card.units.iter() {
+                                th {
+                                    class: "text-center p-1 text-xs text-gray-500 border-b",
+                                    // Empty header for now - space for unit icons later
+                                    "\u{00A0}" // Non-breaking space
                                 }
-                                div {
-                                    class: if is_zero { "text-gray-400 text-sm" } else { "text-gray-900 font-semibold" },
-                                    "{count}"
+                            }
+                        }
+                    }
+                    tbody {
+                        tr {
+                            for &count in card.units.iter() {
+                                {
+                                    let is_zero = count == 0;
+                                    rsx! {
+                                        td {
+                                            class: "text-center p-2 border-r last:border-r-0",
+                                            class: if is_zero { "bg-gray-50 opacity-40" } else { "bg-gray-100" },
+                                            div {
+                                                class: if is_zero { "text-gray-400 text-sm" } else { "text-gray-900 font-semibold" },
+                                                "{count}"
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
