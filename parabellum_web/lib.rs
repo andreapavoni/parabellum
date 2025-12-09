@@ -1,8 +1,8 @@
 pub mod components;
 pub mod handlers;
-mod http;
-mod templates;
 pub mod view_helpers;
+
+mod http;
 
 pub use http::*;
 

@@ -1,6 +1,0 @@
-{% extends "village/building.html" %}
-{% block building_content %}
-{% if let Some(slot) = ctx.slot_building.as_ref() %}
-    {% include "village/buildings/_workshop.html" %}
-{% endif %}
-{% endblock %}

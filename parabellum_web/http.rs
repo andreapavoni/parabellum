@@ -11,11 +11,11 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    dioxus::{
+    actions::{login, logout, register, research_smithy, research_unit, send_troops, train_units},
+    pages::{
         build_action, building, home, login_page, map, map_region, register_page, report_detail,
         reports, resources, village,
     },
-    login, logout, register, research_smithy, research_unit, send_troops, train_units,
 };
 
 #[derive(Clone)]

@@ -3,6 +3,8 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
+use crate::view_helpers::format_duration;
+
 /// Resource cost display component
 #[component]
 pub fn ResourceCost(cost: ResourceGroup) -> Element {
@@ -1051,15 +1053,12 @@ pub fn RallyPointPage(
     current_upkeep: u32,
     next_upkeep: u32,
     queue_full: bool,
-    home_troops: Vec<super::common::TroopCount>,
-    reinforcements: Vec<super::common::TroopCount>,
+    army_cards: Vec<super::common::ArmyCardData>,
     sendable_units: Vec<super::common::RallyPointUnit>,
-    incoming_movements: Vec<super::common::TroopMovement>,
-    outgoing_movements: Vec<super::common::TroopMovement>,
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
-    use super::common::{MovementDirection, MovementKind};
+    use super::common::{ArmyCard, ArmyCategory};
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
@@ -1092,153 +1091,81 @@ pub fn RallyPointPage(
                     csrf_token: csrf_token.clone(),
                 }
 
-                // Troops overview - full army table
-                div { class: "border rounded-md p-4 bg-white space-y-3",
-                    div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.troops_overview\")}" }
-
-                    // Table showing all units with icons
-                    div { class: "overflow-x-auto",
-                        table { class: "w-full text-sm",
-                            thead {
-                                tr { class: "border-b",
-                                    th { class: "text-left p-2 text-xs font-semibold text-gray-600", "Unit" }
-                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Home" }
-                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Support" }
-                                    th { class: "text-right p-2 text-xs font-semibold text-gray-600", "Total" }
-                                }
-                            }
-                            tbody {
-                                for unit in sendable_units.iter() {
-                                    {
-                                        // Find reinforcement count for this unit
-                                        let support_count = reinforcements.iter()
-                                            .find(|r| r.name == unit.name)
-                                            .map(|r| r.count)
-                                            .unwrap_or(0);
-                                        let total = unit.available + support_count;
-
-                                        // Only show row if there are any troops
-                                        if total > 0 {
-                                            rsx! {
-                                                tr { class: "border-b hover:bg-gray-50",
-                                                    td { class: "p-2 font-medium text-gray-800", "{unit.name}" }
-                                                    td { class: "p-2 text-right tabular-nums",
-                                                        if unit.available > 0 {
-                                                            span { class: "text-gray-900", "{unit.available}" }
-                                                        } else {
-                                                            span { class: "text-gray-400", "—" }
-                                                        }
-                                                    }
-                                                    td { class: "p-2 text-right tabular-nums",
-                                                        if support_count > 0 {
-                                                            span { class: "text-blue-600", "{support_count}" }
-                                                        } else {
-                                                            span { class: "text-gray-400", "—" }
-                                                        }
-                                                    }
-                                                    td { class: "p-2 text-right tabular-nums font-semibold", "{total}" }
-                                                }
-                                            }
-                                        } else {
-                                            rsx! { }
+                // Army overview - grouped by category
+                div { class: "space-y-4",
+                    // Stationed troops
+                    {
+                        let stationed = army_cards.iter().filter(|c| c.category == ArmyCategory::Stationed).collect::<Vec<_>>();
+                        if !stationed.is_empty() {
+                            rsx! {
+                                div { class: "space-y-2",
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Stationed Troops" }
+                                    div { class: "space-y-2",
+                                        for card in stationed {
+                                            ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
                                         }
                                     }
                                 }
                             }
+                        } else {
+                            rsx! { }
                         }
                     }
 
-                    // Summary
-                    div { class: "pt-2 border-t text-xs text-gray-500",
-                        p { "🏠 Home troops  •  🛡️ Support troops (reinforcements from other villages)" }
-                    }
-                }
-
-                // Incoming and outgoing movements
-                div { class: "grid gap-4 md:grid-cols-2",
-                    // Incoming movements
-                    div { class: "border rounded-md p-4 bg-white space-y-3",
-                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.incoming_movements\")}" }
-                        if incoming_movements.is_empty() {
-                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_movements\")}" }
-                        } else {
-                            div { class: "space-y-3",
-                                for movement in incoming_movements.iter() {
-                                    {
-                                        let direction_text = match movement.direction {
-                                            MovementDirection::Incoming => t!("game.rally_point.direction.incoming"),
-                                            MovementDirection::Outgoing => t!("game.rally_point.direction.outgoing"),
-                                        };
-                                        let kind_text = match movement.kind {
-                                            MovementKind::Attack => t!("game.rally_point.movement.attack"),
-                                            MovementKind::Raid => t!("game.rally_point.movement.raid"),
-                                            MovementKind::Reinforcement => t!("game.rally_point.movement.reinforcement"),
-                                            MovementKind::Return => t!("game.rally_point.movement.return"),
-                                        };
-                                        rsx! {
-                                            div { class: "border rounded-md p-3 bg-gray-50 space-y-1 text-sm",
-                                                div { class: "font-semibold text-gray-800",
-                                                    "{direction_text} — {kind_text}"
-                                                }
-                                                div { class: "text-xs text-gray-600",
-                                                    "{movement.origin_name} ({movement.origin_x}|{movement.origin_y}) → {movement.destination_name} ({movement.destination_x}|{movement.destination_y})"
-                                                }
-                                                div { class: "text-xs text-gray-500 flex items-center justify-between",
-                                                    span { "{t!(\"game.rally_point.arrives_in\")}" }
-                                                    span {
-                                                        class: "font-mono countdown-timer",
-                                                        "data-seconds": "{movement.time_seconds}",
-                                                        "{movement.time_remaining}"
-                                                    }
-                                                }
-                                            }
+                    // Reinforcements
+                    {
+                        let reinforcements = army_cards.iter().filter(|c| c.category == ArmyCategory::Reinforcement).collect::<Vec<_>>();
+                        if !reinforcements.is_empty() {
+                            rsx! {
+                                div { class: "space-y-2",
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Reinforcements" }
+                                    div { class: "space-y-2",
+                                        for card in reinforcements {
+                                            ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
                                         }
                                     }
                                 }
                             }
+                        } else {
+                            rsx! { }
+                        }
+                    }
+
+                    // Incoming movements
+                    {
+                        let incoming = army_cards.iter().filter(|c| c.category == ArmyCategory::Incoming).collect::<Vec<_>>();
+                        if !incoming.is_empty() {
+                            rsx! {
+                                div { class: "space-y-2",
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Incoming Movements" }
+                                    div { class: "space-y-2",
+                                        for card in incoming {
+                                            ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            rsx! { }
                         }
                     }
 
                     // Outgoing movements
-                    div { class: "border rounded-md p-4 bg-white space-y-3",
-                        div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.outgoing_movements\")}" }
-                        if outgoing_movements.is_empty() {
-                            p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.no_movements\")}" }
-                        } else {
-                            div { class: "space-y-3",
-                                for movement in outgoing_movements.iter() {
-                                    {
-                                        let direction_text = match movement.direction {
-                                            MovementDirection::Incoming => t!("game.rally_point.direction.incoming"),
-                                            MovementDirection::Outgoing => t!("game.rally_point.direction.outgoing"),
-                                        };
-                                        let kind_text = match movement.kind {
-                                            MovementKind::Attack => t!("game.rally_point.movement.attack"),
-                                            MovementKind::Raid => t!("game.rally_point.movement.raid"),
-                                            MovementKind::Reinforcement => t!("game.rally_point.movement.reinforcement"),
-                                            MovementKind::Return => t!("game.rally_point.movement.return"),
-                                        };
-                                        rsx! {
-                                            div { class: "border rounded-md p-3 bg-gray-50 space-y-1 text-sm",
-                                                div { class: "font-semibold text-gray-800",
-                                                    "{direction_text} — {kind_text}"
-                                                }
-                                                div { class: "text-xs text-gray-600",
-                                                    "{movement.origin_name} ({movement.origin_x}|{movement.origin_y}) → {movement.destination_name} ({movement.destination_x}|{movement.destination_y})"
-                                                }
-                                                div { class: "text-xs text-gray-500 flex items-center justify-between",
-                                                    span { "{t!(\"game.rally_point.arrives_in\")}" }
-                                                    span {
-                                                        class: "font-mono countdown-timer",
-                                                        "data-seconds": "{movement.time_seconds}",
-                                                        "{movement.time_remaining}"
-                                                    }
-                                                }
-                                            }
+                    {
+                        let outgoing = army_cards.iter().filter(|c| c.category == ArmyCategory::Outgoing).collect::<Vec<_>>();
+                        if !outgoing.is_empty() {
+                            rsx! {
+                                div { class: "space-y-2",
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Outgoing Movements" }
+                                    div { class: "space-y-2",
+                                        for card in outgoing {
+                                            ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
                                         }
                                     }
                                 }
                             }
+                        } else {
+                            rsx! { }
                         }
                     }
                 }
@@ -1315,18 +1242,5 @@ pub fn RallyPointPage(
                 }
             }
         }
-    }
-}
-
-/// Helper function to format duration (copied from view_helpers for now)
-fn format_duration(seconds: u32) -> String {
-    let hours = seconds / 3600;
-    let minutes = (seconds % 3600) / 60;
-    let secs = seconds % 60;
-
-    if hours > 0 {
-        format!("{:02}:{:02}:{:02}", hours, minutes, secs)
-    } else {
-        format!("{:02}:{:02}", minutes, secs)
     }
 }

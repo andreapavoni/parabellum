@@ -15,8 +15,8 @@ pub use buildings::{
     UnitTrainingOption, UpgradeBlock,
 };
 pub use common::{
-    BuildingQueueItem, MovementDirection, MovementKind, RallyPointUnit, TroopCount, TroopMovement,
-    VillageInfo,
+    ArmyAction, ArmyCard, ArmyCardData, ArmyCategory, BuildingQueueItem, MovementDirection,
+    MovementKind, RallyPointUnit, TroopCount, TroopMovement, VillageInfo,
 };
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
 pub use map::MapPage;

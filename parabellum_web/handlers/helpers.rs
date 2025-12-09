@@ -254,7 +254,7 @@ pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> Villa
         Ok(queues) => queues,
         Err(err) => {
             tracing::error!(
-                error = ?err.to_string(),
+                error = ?err,
                 village_id,
                 "Unable to load village queues"
             );
@@ -284,7 +284,7 @@ pub async fn village_movements_or_empty(
         Ok(movements) => movements,
         Err(err) => {
             tracing::error!(
-                error = ?err.to_string(),
+                error = ?err,
                 village_id,
                 "Unable to load village troop movements"
             );
