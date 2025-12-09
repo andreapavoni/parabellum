@@ -137,7 +137,7 @@ pub async fn login(
         password: form.password.clone(),
     };
 
-    let (_status, err_msg) = match state
+    let (status, err_msg) = match state
         .app_bus
         .query(query, AuthenticateUserHandler::new())
         .await
@@ -154,19 +154,23 @@ pub async fn login(
         },
         Err(ApplicationError::App(AppError::WrongAuthCredentials))
         | Err(ApplicationError::Db(DbError::UserByEmailNotFound(_))) => (
-            Some(StatusCode::UNAUTHORIZED),
+            StatusCode::UNAUTHORIZED,
             Some("Invalid email or password.".to_string()),
         ),
         Err(e) => {
             tracing::error!("Login error: {}", e);
             (
-                Some(StatusCode::INTERNAL_SERVER_ERROR),
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Some("Internal server error.".to_string()),
             )
         }
     };
 
-    render_login_with_error(jar, form.email.clone(), err_msg).into_response()
+    (
+        status,
+        render_login_with_error(jar, form.email.clone(), err_msg),
+    )
+        .into_response()
 }
 
 /// POST /register – Handle signup form submission.
