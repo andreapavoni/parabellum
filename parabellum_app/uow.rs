@@ -13,6 +13,7 @@ pub trait UnitOfWork<'a>: Send + Sync {
     fn villages(&self) -> Arc<dyn VillageRepository + 'a>;
     fn armies(&self) -> Arc<dyn ArmyRepository + 'a>;
     fn jobs(&self) -> Arc<dyn JobRepository + 'a>;
+    fn reports(&self) -> Arc<dyn ReportRepository + 'a>;
     fn map(&self) -> Arc<dyn MapRepository + 'a>;
     fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a>;
     fn heroes(&self) -> Arc<dyn HeroRepository + 'a>;

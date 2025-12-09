@@ -55,7 +55,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -74,7 +74,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(user_id)))?;
+        .map_err(|_| ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))?;
 
         Ok(player.into())
     }

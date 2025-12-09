@@ -1,8 +1,7 @@
-use askama::Template;
 use axum::{
     extract::{Form, FromRef, FromRequest, FromRequestParts, Request, State},
     http::{StatusCode, request::Parts},
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::{
     SignedCookieJar,
@@ -27,21 +26,8 @@ use parabellum_types::{
     errors::ApplicationError,
 };
 
-use crate::http::AppState;
-
-/// Helper: render a Template to HTML or return 500 on error
-pub fn render_template<T: Template>(template: T, status: Option<StatusCode>) -> impl IntoResponse {
-    match template.render() {
-        Ok(html) => {
-            let status = status.unwrap_or(StatusCode::OK);
-            (status, Html(html)).into_response()
-        }
-        Err(err) => {
-            tracing::error!("Template render error: {}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error.").into_response()
-        }
-    }
-}
+use crate::{components::LayoutData, http::AppState};
+use chrono::Utc;
 
 /// Generates a new CSRF token, puts it into a signed cookie,
 /// and returns updated cookie jar.
@@ -336,5 +322,15 @@ where
 
             current_user(&app_state, &jar).await
         }
+    }
+}
+
+/// Helper to create layout data from current user
+pub fn create_layout_data(user: &CurrentUser, nav_active: &str) -> LayoutData {
+    LayoutData {
+        player: Some(user.player.clone()),
+        village: Some(user.village.clone()),
+        server_time: Utc::now().timestamp(),
+        nav_active: nav_active.to_string(),
     }
 }

@@ -126,3 +126,24 @@ pub struct MarketplaceOffer {
     pub merchants_required: i16,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
+pub struct Report {
+    pub id: Uuid,
+    pub report_type: String,
+    pub payload: serde_json::Value,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<i32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<i32>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
+pub struct ReportRead {
+    pub report_id: Uuid,
+    pub player_id: Uuid,
+    pub read_at: Option<DateTime<Utc>>,
+}

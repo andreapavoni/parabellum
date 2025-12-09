@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE report_reads\n            SET read_at = NOW()\n            WHERE report_id = $1 AND player_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05017b619295c62f84c65ed334675730adfc598d6c899a0ee4537be5767d8d21"
+}

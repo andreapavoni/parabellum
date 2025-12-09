@@ -70,7 +70,24 @@ game:
     invalid_units: Select at least one unit to send.
     invalid_building: You can only send troops from the Rally Point.
     army_missing: There are no troops stationed in this village.
-
+  reports:
+    title: Reports
+    total: "%{count} reports"
+    empty: No reports yet.
+    unread: Unread
+    back: Back to reports
+    detail_id: "Report %{id}"
+    battle_success: Victory
+    battle_failure: Defeat
+    battle_summary: "%{attacker} engaged %{defender}. Result: %{result}. Bounty: %{bounty}"
+    battle_detail:
+      title: Battle
+      attacker: Attacker
+      defender: Defender
+      result: Outcome
+      bounty: Bounty
+    generic_title: Report
+    generic_message: This report type is not supported yet, but it has been marked as read.
   units:
     romans:
       legionnaire: Legionnaire
@@ -128,7 +145,6 @@ game:
       ballista: Ballista
       natarian_emperor: Natarian Emperor
       natarian_settler: Natarian Settler
-
   buildings:
     woodcutter:
       name: Woodcutter
@@ -382,6 +398,7 @@ game:
     stability_level: "Stability bonus at level"
     current_bonus: "Current bonus:"
     bonus_level: "Bonus at level"
+    max_level_reached: "Max level reached"
 
     current_traps: "Currect maximum traps to train:"
     traps_level: "Maximum traps to train at level"
@@ -518,6 +535,7 @@ nav:
   logout: Logout
   login: Login
   register: Register
+  reports: Reports
 
 footer:
   not_affiliated: Not affiliated to %{name}

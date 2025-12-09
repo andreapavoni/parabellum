@@ -1,15 +1,20 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use tracing::{info, instrument};
 
 use parabellum_game::{battle::Battle, models::buildings::Building};
-use parabellum_types::common::ResourceGroup;
-use parabellum_types::errors::ApplicationError;
+use parabellum_types::{
+    common::ResourceGroup,
+    errors::ApplicationError,
+    reports::{BattlePartyPayload, BattleReportPayload, ReportPayload},
+};
 
 use crate::jobs::{
     Job, JobPayload,
     handler::{JobHandler, JobHandlerContext},
     tasks::{ArmyReturnTask, AttackTask},
 };
+use crate::repository::{NewReport, ReportAudience};
 
 pub struct AttackJobHandler {
     payload: AttackTask,
@@ -39,6 +44,8 @@ impl JobHandler for AttackJobHandler {
         let army_repo = ctx.uow.armies();
         let village_repo = ctx.uow.villages();
         let hero_repo = ctx.uow.heroes();
+        let player_repo = ctx.uow.players();
+        let report_repo = ctx.uow.reports();
 
         let mut atk_army = army_repo.get_by_id(self.payload.army_id).await?;
         let atk_village = village_repo.get_by_id(atk_army.village_id).await?;
@@ -46,6 +53,9 @@ impl JobHandler for AttackJobHandler {
         let mut def_village = village_repo
             .get_by_id(self.payload.target_village_id as u32)
             .await?;
+
+        let attacker_player = player_repo.get_by_id(atk_village.player_id).await?;
+        let defender_player = player_repo.get_by_id(def_village.player_id).await?;
 
         let mut catapult_targets: Vec<Building> = Vec::new();
         for ct in &self.payload.catapult_targets {
@@ -68,6 +78,10 @@ impl JobHandler for AttackJobHandler {
             Some(catapult_targets),
         );
         let report = battle.calculate_battle();
+        let bounty = report
+            .bounty
+            .clone()
+            .unwrap_or(ResourceGroup::new(0, 0, 0, 0));
 
         atk_army.apply_battle_report(&report.attacker);
         def_village.apply_battle_report(&report, ctx.config.speed)?;
@@ -107,8 +121,8 @@ impl JobHandler for AttackJobHandler {
         let defender_village_id = def_village.id as i32;
 
         let return_payload = ArmyReturnTask {
-            army_id: atk_army.id, // Attacking army ID
-            resources: report.bounty.unwrap_or(ResourceGroup::new(0, 0, 0, 0)), // Resources to bring back
+            army_id: atk_army.id,
+            resources: bounty.clone(),
             destination_player_id: player_id,
             destination_village_id: village_id,
             from_village_id: defender_village_id,
@@ -125,6 +139,188 @@ impl JobHandler for AttackJobHandler {
             "Army return job planned."
         );
 
+        let success = report
+            .defender
+            .as_ref()
+            .map(|def| def.survivors.iter().copied().sum::<u32>() == 0)
+            .unwrap_or(true);
+
+        let attacker_payload = BattlePartyPayload {
+            army_before: *report.attacker.army_before.units(),
+            survivors: report.attacker.survivors,
+            losses: report.attacker.losses,
+        };
+
+        let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
+            army_before: *def.army_before.units(),
+            survivors: def.survivors,
+            losses: def.losses,
+        });
+
+        let reinforcements_payload: Vec<BattlePartyPayload> = report
+            .reinforcements
+            .iter()
+            .map(|reinf| BattlePartyPayload {
+                army_before: *reinf.army_before.units(),
+                survivors: reinf.survivors,
+                losses: reinf.losses,
+            })
+            .collect();
+
+        let battle_payload = BattleReportPayload {
+            attacker_player: attacker_player.username.clone(),
+            attacker_village: atk_village.name.clone(),
+            defender_player: defender_player.username.clone(),
+            defender_village: def_village.name.clone(),
+            success,
+            bounty,
+            attacker: Some(attacker_payload),
+            defender: defender_payload,
+            reinforcements: reinforcements_payload,
+        };
+
+        let new_report = NewReport {
+            report_type: "battle".to_string(),
+            payload: ReportPayload::Battle(battle_payload),
+            actor_player_id: atk_village.player_id,
+            actor_village_id: Some(atk_village.id),
+            target_player_id: Some(def_village.player_id),
+            target_village_id: Some(def_village.id),
+        };
+
+        let audiences = vec![
+            ReportAudience {
+                player_id: atk_village.player_id,
+                read_at: Some(Utc::now()),
+            },
+            ReportAudience {
+                player_id: def_village.player_id,
+                read_at: None,
+            },
+        ];
+
+        report_repo.add(&new_report, &audiences).await?;
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::Config,
+        jobs::handler::JobHandlerContext,
+        repository::ReportRepository,
+        test_utils::tests::{MockReportRepository, MockUnitOfWork},
+        uow::UnitOfWork,
+    };
+    use parabellum_game::{
+        battle::AttackType,
+        models::map::Valley,
+        test_utils::{
+            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
+            army_factory, player_factory, valley_factory, village_factory,
+        },
+    };
+    use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_attack_job_persists_reports_with_audience_state() {
+        let uow = MockUnitOfWork::new();
+        let report_repo: Arc<MockReportRepository> = uow.report_repo();
+        let config = Arc::new(Config {
+            world_size: 100,
+            speed: 1,
+            auth_cookie_secret: "test-secret".to_string(),
+        });
+
+        let attacker_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let defender_player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+
+        let attacker_valley: Valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 0, y: 0 }),
+            ..Default::default()
+        });
+        let defender_valley: Valley = valley_factory(ValleyFactoryOptions {
+            position: Some(Position { x: 5, y: 5 }),
+            ..Default::default()
+        });
+
+        let attacker_village = village_factory(VillageFactoryOptions {
+            player: Some(attacker_player.clone()),
+            valley: Some(attacker_valley),
+            ..Default::default()
+        });
+        let defender_village = village_factory(VillageFactoryOptions {
+            player: Some(defender_player.clone()),
+            valley: Some(defender_valley),
+            ..Default::default()
+        });
+
+        let attacker_army = army_factory(ArmyFactoryOptions {
+            player_id: Some(attacker_player.id),
+            village_id: Some(attacker_village.id),
+            units: Some([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ..Default::default()
+        });
+
+        uow.players().save(&attacker_player).await.unwrap();
+        uow.players().save(&defender_player).await.unwrap();
+        uow.villages().save(&attacker_village).await.unwrap();
+        uow.villages().save(&defender_village).await.unwrap();
+        uow.armies().save(&attacker_army).await.unwrap();
+
+        let payload = AttackTask {
+            army_id: attacker_army.id,
+            attacker_village_id: attacker_village.id as i32,
+            attacker_player_id: attacker_player.id,
+            target_village_id: defender_village.id as i32,
+            target_player_id: defender_player.id,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            attack_type: AttackType::Normal,
+        };
+
+        let handler = AttackJobHandler::new(payload);
+        let dummy_job = Job::new(
+            attacker_player.id,
+            attacker_village.id as i32,
+            0,
+            JobPayload::new("Attack", json!({})),
+        );
+        let ctx = JobHandlerContext {
+            uow: Box::new(uow),
+            config,
+        };
+
+        handler.handle(&ctx, &dummy_job).await.unwrap();
+
+        let attacker_reports = report_repo
+            .list_for_player(attacker_player.id, 10)
+            .await
+            .unwrap();
+        assert_eq!(attacker_reports.len(), 1);
+        assert!(
+            attacker_reports[0].read_at.is_some(),
+            "attacker report should be marked read"
+        );
+
+        let defender_reports = report_repo
+            .list_for_player(defender_player.id, 10)
+            .await
+            .unwrap();
+        assert_eq!(defender_reports.len(), 1);
+        assert!(
+            defender_reports[0].read_at.is_none(),
+            "defender report should be unread"
+        );
     }
 }

@@ -5,6 +5,7 @@ use parabellum_types::{
     buildings::BuildingName,
     common::{Player, User},
     map::Position,
+    reports::ReportPayload,
 };
 use uuid::Uuid;
 
@@ -167,7 +168,7 @@ pub enum TroopMovementDirection {
     Outgoing,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TroopMovement {
     pub job_id: Uuid,
     pub movement_type: TroopMovementType,
@@ -184,7 +185,7 @@ pub struct TroopMovement {
     pub time_seconds: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct VillageTroopMovements {
     pub outgoing: Vec<TroopMovement>,
     pub incoming: Vec<TroopMovement>,
@@ -196,6 +197,39 @@ pub struct GetVillageTroopMovements {
 
 impl Query for GetVillageTroopMovements {
     type Output = VillageTroopMovements;
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportView {
+    pub id: Uuid,
+    pub report_type: String,
+    pub payload: ReportPayload,
+    pub created_at: DateTime<Utc>,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReportAudience {
+    pub player_id: Uuid,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+pub struct GetReportsForPlayer {
+    pub player_id: Uuid,
+    pub limit: i64,
+}
+
+impl Query for GetReportsForPlayer {
+    type Output = Vec<ReportView>;
+}
+
+pub struct GetReportForPlayer {
+    pub report_id: Uuid,
+    pub player_id: Uuid,
+}
+
+impl Query for GetReportForPlayer {
+    type Output = Option<ReportView>;
 }
 
 /// Fetch a square region of the world map.

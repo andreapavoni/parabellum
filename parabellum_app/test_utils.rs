@@ -2,6 +2,7 @@
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
+    use chrono::Utc;
     use serde_json;
     use std::{
         collections::HashMap,
@@ -29,7 +30,8 @@ pub mod tests {
         },
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
-            MarketplaceRepository, PlayerRepository, UserRepository, VillageRepository,
+            MarketplaceRepository, NewReport, PlayerRepository, ReportAudience, ReportRecord,
+            ReportRepository, UserRepository, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -182,6 +184,92 @@ pub mod tests {
             _job_id: Uuid,
             _error_message: &str,
         ) -> Result<(), ApplicationError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Default, Clone)]
+    pub struct MockReportRepository {
+        reports: Arc<Mutex<Vec<(ReportRecord, Vec<ReportAudience>)>>>,
+    }
+
+    #[async_trait]
+    impl ReportRepository for MockReportRepository {
+        async fn add(
+            &self,
+            report: &NewReport,
+            audiences: &[ReportAudience],
+        ) -> Result<(), ApplicationError> {
+            let mut store = self.reports.lock().unwrap();
+            let record = ReportRecord {
+                id: Uuid::new_v4(),
+                report_type: report.report_type.clone(),
+                payload: report.payload.clone(),
+                actor_player_id: report.actor_player_id,
+                actor_village_id: report.actor_village_id,
+                target_player_id: report.target_player_id,
+                target_village_id: report.target_village_id,
+                created_at: Utc::now(),
+                read_at: None,
+            };
+            store.push((record, audiences.to_vec()));
+            Ok(())
+        }
+
+        async fn list_for_player(
+            &self,
+            player_id: Uuid,
+            limit: i64,
+        ) -> Result<Vec<ReportRecord>, ApplicationError> {
+            let store = self.reports.lock().unwrap();
+            let mut results = Vec::new();
+            for (record, audiences) in store.iter() {
+                if let Some(audience) = audiences.iter().find(|a| a.player_id == player_id) {
+                    let mut cloned = record.clone();
+                    cloned.read_at = audience.read_at;
+                    results.push(cloned);
+                }
+            }
+            results.sort_by_key(|r| r.created_at);
+            results.reverse();
+            results.truncate(limit as usize);
+            Ok(results)
+        }
+
+        async fn get_for_player(
+            &self,
+            report_id: Uuid,
+            player_id: Uuid,
+        ) -> Result<Option<ReportRecord>, ApplicationError> {
+            let store = self.reports.lock().unwrap();
+            for (record, audiences) in store.iter() {
+                if record.id == report_id {
+                    if let Some(audience) = audiences.iter().find(|a| a.player_id == player_id) {
+                        let mut cloned = record.clone();
+                        cloned.read_at = audience.read_at;
+                        return Ok(Some(cloned));
+                    }
+                }
+            }
+            Ok(None)
+        }
+
+        async fn mark_as_read(
+            &self,
+            report_id: Uuid,
+            player_id: Uuid,
+        ) -> Result<(), ApplicationError> {
+            let mut store = self.reports.lock().unwrap();
+            for (record, audiences) in store.iter_mut() {
+                if record.id == report_id {
+                    if let Some(audience) = audiences.iter_mut().find(|a| a.player_id == player_id)
+                    {
+                        if audience.read_at.is_none() {
+                            audience.read_at = Some(Utc::now());
+                        }
+                    }
+                }
+            }
             Ok(())
         }
     }
@@ -556,12 +644,12 @@ pub mod tests {
         }
     }
 
-    #[derive(Default)]
     pub struct MockUnitOfWork {
         players: Arc<MockPlayerRepository>,
         villages: Arc<MockVillageRepository>,
         armies: Arc<MockArmyRepository>,
         jobs: Arc<MockJobRepository>,
+        reports: Arc<MockReportRepository>,
         map: Arc<MockMapRepository>,
         marketplace: Arc<MockMarketplaceRepository>,
         heroes: Arc<MockHeroRepository>,
@@ -575,6 +663,28 @@ pub mod tests {
     impl MockUnitOfWork {
         pub fn new() -> Self {
             Default::default()
+        }
+
+        pub fn report_repo(&self) -> Arc<MockReportRepository> {
+            self.reports.clone()
+        }
+    }
+
+    impl Default for MockUnitOfWork {
+        fn default() -> Self {
+            Self {
+                players: Arc::new(MockPlayerRepository::default()),
+                villages: Arc::new(MockVillageRepository::default()),
+                armies: Arc::new(MockArmyRepository::default()),
+                jobs: Arc::new(MockJobRepository::default()),
+                reports: Arc::new(MockReportRepository::default()),
+                map: Arc::new(MockMapRepository::default()),
+                marketplace: Arc::new(MockMarketplaceRepository::default()),
+                heroes: Arc::new(MockHeroRepository::default()),
+                users: Arc::new(MockUserRepository::default()),
+                committed: Arc::new(Mutex::new(false)),
+                rolled_back: Arc::new(Mutex::new(false)),
+            }
         }
     }
 
@@ -591,6 +701,9 @@ pub mod tests {
         }
         fn jobs(&self) -> Arc<dyn JobRepository + 'a> {
             self.jobs.clone()
+        }
+        fn reports(&self) -> Arc<dyn ReportRepository + 'a> {
+            self.reports.clone()
         }
         fn map(&self) -> Arc<dyn MapRepository + 'a> {
             self.map.clone()

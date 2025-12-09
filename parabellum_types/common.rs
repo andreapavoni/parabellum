@@ -61,7 +61,7 @@ impl core::ops::Mul<f64> for ResourceGroup {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Player {
     pub id: Uuid,
     pub username: String,

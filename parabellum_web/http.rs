@@ -11,8 +11,14 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    build_action, building, home, login, login_page, logout, map, map_region, register,
-    register_page, research_smithy, research_unit, resources, send_troops, train_units, village,
+    auth::{login, login_page, logout, register, register_page},
+    building::{build, building_page},
+    buildings::{research_smithy, research_unit, send_troops, train_units},
+    home::home_page,
+    map::{map_page, map_region},
+    reports::{report_page, reports_page},
+    resources::resources_page,
+    village::village_page,
 };
 
 #[derive(Clone)]
@@ -52,21 +58,24 @@ impl WebRouter {
 
         // Public routes (no authentication required)
         let public_routes = Router::new()
-            .route("/", get(home))
+            .route("/", get(home_page))
             .route("/login", get(login_page).post(login))
             .route("/register", get(register_page).post(register));
 
         // Protected routes (require authenticated user)
         let protected_routes = Router::new()
-            .route("/village", get(village))
-            .route("/resources", get(resources))
-            .route("/build", get(building).post(build_action))
+            // Dioxus routes (primary)
+            .route("/village", get(village_page))
+            .route("/resources", get(resources_page))
+            .route("/map", get(map_page))
+            .route("/map/data", get(map_region))
+            .route("/reports", get(reports_page))
+            .route("/reports/{id}", get(report_page))
+            .route("/build/{slot_id}", get(building_page).post(build))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
             .route("/academy/research", post(research_unit))
             .route("/smithy/research", post(research_smithy))
-            .route("/map", get(map))
-            .route("/map/data", get(map_region))
             .route("/logout", get(logout));
 
         let router = Router::new()

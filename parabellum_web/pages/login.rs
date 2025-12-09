@@ -1,0 +1,65 @@
+use dioxus::prelude::*;
+use rust_i18n::t;
+
+/// Login page component
+#[component]
+pub fn LoginPage(csrf_token: String, email_value: String, error: Option<String>) -> Element {
+    rsx! {
+        div { class: "flex flex-col items-center w-full px-4",
+            div { class: "login-box",
+                h2 { class: "text-xl font-bold text-gray-700 mb-6 text-center",
+                    "{t!(\"login.form.title\")}"
+                }
+                if let Some(err) = error {
+                    p { class: "mb-3 text-center text-red-600 error",
+                        "{err}"
+                    }
+                }
+                form {
+                    action: "/login",
+                    method: "post",
+                    input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
+
+                    label { class: "block text-xs font-bold text-gray-500 mb-1 uppercase",
+                        "{t!(\"user.email\")}"
+                    }
+                    input {
+                        r#type: "email",
+                        class: "input-field",
+                        name: "email",
+                        value: "{email_value}",
+                        required: true
+                    }
+
+                    div { class: "flex justify-between items-center mb-1",
+                        label { class: "block text-xs font-bold text-gray-500 uppercase",
+                            "{t!(\"user.password\")}"
+                        }
+                    }
+                    input {
+                        r#type: "password",
+                        class: "input-field",
+                        name: "password",
+                        required: true
+                    }
+
+                    button {
+                        r#type: "submit",
+                        class: "btn-green mt-2",
+                        "{t!(\"login.form.submit\")}"
+                    }
+                }
+                div { class: "mt-6 text-center border-t border-gray-100 pt-4",
+                    p { class: "text-sm text-gray-600",
+                        "{t!(\"login.register_question\")}"
+                    }
+                    a {
+                        href: "/register",
+                        class: "text-green-700 font-bold hover:underline text-sm",
+                        "{t!(\"login.register_button\")}"
+                    }
+                }
+            }
+        }
+    }
+}
