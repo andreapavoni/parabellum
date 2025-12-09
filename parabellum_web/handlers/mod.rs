@@ -1,4 +1,3 @@
-pub mod army;
 pub mod auth;
 pub mod building;
 pub mod buildings;

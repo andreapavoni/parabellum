@@ -31,6 +31,7 @@ impl HasCsrfToken for SmithyResearchForm {
     }
 }
 
+/// POST /smithy/research
 pub async fn research_smithy(
     State(state): State<AppState>,
     user: CurrentUser,

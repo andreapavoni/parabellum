@@ -31,6 +31,7 @@ impl HasCsrfToken for ResearchUnitForm {
     }
 }
 
+/// POST /academy/research
 pub async fn research_unit(
     State(state): State<AppState>,
     user: CurrentUser,

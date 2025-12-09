@@ -11,10 +11,9 @@ use parabellum_app::{app::AppBus, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::handlers::{
-    army::{send_troops, train_units},
     auth::{login, login_page, logout, register, register_page},
     building::{build, building_page},
-    buildings::{research_smithy, research_unit},
+    buildings::{research_smithy, research_unit, send_troops, train_units},
     home::home_page,
     map::{map_page, map_region},
     reports::{report_page, reports_page},
