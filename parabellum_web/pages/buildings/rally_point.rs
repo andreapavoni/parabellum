@@ -170,7 +170,7 @@ pub fn RallyPointPage(
                         p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.send_hint\")}" }
                     }
                     form {
-                        action: "/army/send?s={slot_id}",
+                        action: "/army/send",
                         method: "post",
                         class: "space-y-4",
                         input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }

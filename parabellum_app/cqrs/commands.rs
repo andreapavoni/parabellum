@@ -211,3 +211,21 @@ pub struct ReviveHero {
 }
 
 impl Command for ReviveHero {}
+
+#[derive(Debug, Clone)]
+pub struct RecallTroops {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+}
+
+impl Command for RecallTroops {}
+
+#[derive(Debug, Clone)]
+pub struct ReleaseReinforcements {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub source_village_id: u32,
+}
+
+impl Command for ReleaseReinforcements {}

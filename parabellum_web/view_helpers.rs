@@ -240,13 +240,8 @@ pub fn prepare_rally_point_cards(
             TroopMovementType::Return => MovementKind::Return,
         };
 
-        let action_button = if matches!(movement_kind, MovementKind::Reinforcement) {
-            Some(ArmyAction::Recall {
-                movement_id: movement.job_id.to_string(),
-            })
-        } else {
-            None
-        };
+        // No action buttons for traveling armies - can only recall once deployed
+        let action_button = None;
 
         cards.push(ArmyCardData {
             village_id: movement.target_village_id,
