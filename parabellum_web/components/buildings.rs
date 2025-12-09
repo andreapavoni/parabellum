@@ -1053,12 +1053,110 @@ pub fn RallyPointPage(
     current_upkeep: u32,
     next_upkeep: u32,
     queue_full: bool,
-    army_cards: Vec<super::common::ArmyCardData>,
-    sendable_units: Vec<super::common::RallyPointUnit>,
+    movements: parabellum_app::cqrs::queries::VillageTroopMovements,
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
-    use super::common::{ArmyCard, ArmyCategory};
+    use super::common::{ArmyAction, ArmyCard, ArmyCardData, ArmyCategory, MovementKind};
+    use crate::view_helpers::unit_display_name;
+    use parabellum_app::cqrs::queries::TroopMovementType;
+
+    // Prepare army cards from domain data
+    let mut army_cards = Vec::new();
+
+    // 1. Stationed troops (home army)
+    if let Some(army) = village.army() {
+        army_cards.push(ArmyCardData {
+            village_id: village.id,
+            village_name: Some(village.name.clone()),
+            position: Some(village.position.clone()),
+            units: *army.units(),
+            tribe: village.tribe.clone(),
+            category: ArmyCategory::Stationed,
+            movement_kind: None,
+            arrival_time: None,
+            action_button: None,
+        });
+    }
+
+    // 2. Reinforcements (troops from other villages helping us)
+    for reinforcement in village.reinforcements() {
+        army_cards.push(ArmyCardData {
+            village_id: reinforcement.village_id,
+            village_name: None,
+            position: None,
+            units: *reinforcement.units(),
+            tribe: reinforcement.tribe.clone(),
+            category: ArmyCategory::Reinforcement,
+            movement_kind: None,
+            arrival_time: None,
+            action_button: Some(ArmyAction::Release {
+                source_village_id: reinforcement.village_id,
+            }),
+        });
+    }
+
+    // 3. Incoming movements
+    for movement in &movements.incoming {
+        let now = chrono::Utc::now();
+        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+
+        let movement_kind = match movement.movement_type {
+            TroopMovementType::Attack => MovementKind::Attack,
+            TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
+            TroopMovementType::Return => MovementKind::Return,
+        };
+
+        army_cards.push(ArmyCardData {
+            village_id: movement.origin_village_id,
+            village_name: movement.origin_village_name.clone(),
+            position: Some(movement.origin_position.clone()),
+            units: [0; 10],
+            tribe: village.tribe.clone(),
+            category: ArmyCategory::Incoming,
+            movement_kind: Some(movement_kind),
+            arrival_time: Some(time_remaining_secs),
+            action_button: None,
+        });
+    }
+
+    // 4. Outgoing movements
+    for movement in &movements.outgoing {
+        let now = chrono::Utc::now();
+        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+
+        let movement_kind = match movement.movement_type {
+            TroopMovementType::Attack => MovementKind::Attack,
+            TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
+            TroopMovementType::Return => MovementKind::Return,
+        };
+
+        let action_button = if matches!(movement_kind, MovementKind::Reinforcement) {
+            Some(ArmyAction::Recall {
+                movement_id: movement.job_id.to_string(),
+            })
+        } else {
+            None
+        };
+
+        army_cards.push(ArmyCardData {
+            village_id: movement.target_village_id,
+            village_name: movement.target_village_name.clone(),
+            position: Some(movement.target_position.clone()),
+            units: [0; 10],
+            tribe: village.tribe.clone(),
+            category: ArmyCategory::Outgoing,
+            movement_kind: Some(movement_kind),
+            arrival_time: Some(time_remaining_secs),
+            action_button,
+        });
+    }
+
+    // Prepare sendable units from village army
+    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
+    let tribe_units = village.tribe.units();
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
@@ -1216,18 +1314,24 @@ pub fn RallyPointPage(
 
                         div { class: "space-y-2",
                             div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.select_units\")}" }
-                            for unit in sendable_units.iter() {
-                                label {
-                                    class: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2",
-                                    span { class: "font-semibold", "{unit.name}" }
-                                    span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.available\")}: {unit.available}" }
-                                    input {
-                                        r#type: "number",
-                                        min: "0",
-                                        max: "{unit.available}",
-                                        name: "units[]",
-                                        value: "0",
-                                        class: "w-full sm:w-32 border rounded px-2 py-1 text-gray-700"
+                            for (idx, unit) in tribe_units.iter().enumerate() {
+                                {
+                                    let available = available_units[idx];
+                                    let name = unit_display_name(&unit.name);
+                                    rsx! {
+                                        label {
+                                            class: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2",
+                                            span { class: "font-semibold", "{name}" }
+                                            span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.available\")}: {available}" }
+                                            input {
+                                                r#type: "number",
+                                                min: "0",
+                                                max: "{available}",
+                                                name: "units[]",
+                                                value: "0",
+                                                class: "w-full sm:w-32 border rounded px-2 py-1 text-gray-700"
+                                            }
+                                        }
                                     }
                                 }
                             }

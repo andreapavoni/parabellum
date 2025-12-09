@@ -26,10 +26,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     components::{
-        AcademyPage, AcademyQueueItem as AcademyQueueView, AcademyResearchOption, ArmyAction,
-        ArmyCardData, ArmyCategory, BuildingOption, EmptySlotPage, GenericBuildingPage,
-        MovementKind, PageLayout, RallyPointPage, RallyPointUnit, ResourceFieldPage, SmithyPage,
-        SmithyQueueItem as SmithyQueueView, SmithyUpgradeOption, TrainingBuildingPage,
+        AcademyPage, AcademyQueueItem as AcademyQueueView, AcademyResearchOption, BuildingOption,
+        EmptySlotPage, GenericBuildingPage, PageLayout, RallyPointPage, ResourceFieldPage,
+        SmithyPage, SmithyQueueItem as SmithyQueueView, SmithyUpgradeOption, TrainingBuildingPage,
         TrainingQueueItem, UnitTrainingOption, wrap_in_html,
     },
     handlers::helpers::{
@@ -463,9 +462,6 @@ fn render_building_page(
         }
         BuildingName::RallyPoint => {
             // Rally point - troop movements and sending
-            let army_cards = prepare_army_cards(&user.village, &movements);
-            let sendable_units = rally_point_unit_views(&user.village);
-
             dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
@@ -480,8 +476,7 @@ fn render_building_page(
                         current_upkeep: slot_building.building.cost().upkeep,
                         next_upkeep: next_upkeep,
                         queue_full: effective_queue_full,
-                        army_cards: army_cards,
-                        sendable_units: sendable_units,
+                        movements: movements,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                     }
@@ -925,124 +920,4 @@ fn smithy_queue_for_slot(
             }
         })
         .collect()
-}
-
-/// Get units available for sending from rally point
-fn rally_point_unit_views(
-    village: &parabellum_game::models::village::Village,
-) -> Vec<RallyPointUnit> {
-    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
-    let tribe_units = village.tribe.units();
-
-    tribe_units
-        .iter()
-        .enumerate()
-        .map(|(idx, unit)| RallyPointUnit {
-            name: unit_display_name(&unit.name),
-            unit_idx: idx,
-            available: available_units[idx],
-        })
-        .collect()
-}
-
-/// Prepare army cards for rally point display
-fn prepare_army_cards(
-    village: &parabellum_game::models::village::Village,
-    movements: &VillageTroopMovements,
-) -> Vec<ArmyCardData> {
-    use parabellum_app::cqrs::queries::TroopMovementType;
-
-    let mut cards = Vec::new();
-
-    // 1. Stationed troops (home army)
-    if let Some(army) = village.army() {
-        cards.push(ArmyCardData {
-            village_id: village.id,
-            village_name: Some(village.name.clone()),
-            position: Some(village.position.clone()),
-            units: *army.units(),
-            tribe: village.tribe.clone(),
-            category: ArmyCategory::Stationed,
-            movement_kind: None,
-            arrival_time: None,
-            action_button: None,
-        });
-    }
-
-    // 2. Reinforcements (troops from other villages helping us)
-    for reinforcement in village.reinforcements() {
-        cards.push(ArmyCardData {
-            village_id: reinforcement.village_id,
-            village_name: None,
-            position: None,
-            units: *reinforcement.units(),
-            tribe: reinforcement.tribe.clone(),
-            category: ArmyCategory::Reinforcement,
-            movement_kind: None,
-            arrival_time: None,
-            action_button: Some(ArmyAction::Release {
-                source_village_id: reinforcement.village_id,
-            }),
-        });
-    }
-
-    // 3. Incoming movements
-    for movement in &movements.incoming {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
-        let movement_kind = match movement.movement_type {
-            TroopMovementType::Attack => MovementKind::Attack,
-            TroopMovementType::Raid => MovementKind::Raid,
-            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-            TroopMovementType::Return => MovementKind::Return,
-        };
-
-        cards.push(ArmyCardData {
-            village_id: movement.origin_village_id,
-            village_name: movement.origin_village_name.clone(),
-            position: Some(movement.origin_position.clone()),
-            units: [0; 10],
-            tribe: village.tribe.clone(), // Use current village tribe as fallback
-            category: ArmyCategory::Incoming,
-            movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
-            action_button: None,
-        });
-    }
-
-    // 4. Outgoing movements
-    for movement in &movements.outgoing {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
-        let movement_kind = match movement.movement_type {
-            TroopMovementType::Attack => MovementKind::Attack,
-            TroopMovementType::Raid => MovementKind::Raid,
-            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-            TroopMovementType::Return => MovementKind::Return,
-        };
-
-        let action_button = if matches!(movement_kind, MovementKind::Reinforcement) {
-            Some(ArmyAction::Recall {
-                movement_id: movement.job_id.to_string(),
-            })
-        } else {
-            None
-        };
-
-        cards.push(ArmyCardData {
-            village_id: movement.target_village_id,
-            village_name: movement.target_village_name.clone(),
-            position: Some(movement.target_position.clone()),
-            units: [0; 10],
-            tribe: village.tribe.clone(),
-            category: ArmyCategory::Outgoing,
-            movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
-            action_button,
-        });
-    }
-
-    cards
 }

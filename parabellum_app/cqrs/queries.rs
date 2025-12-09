@@ -168,7 +168,7 @@ pub enum TroopMovementDirection {
     Outgoing,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TroopMovement {
     pub job_id: Uuid,
     pub movement_type: TroopMovementType,
@@ -185,7 +185,7 @@ pub struct TroopMovement {
     pub time_seconds: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct VillageTroopMovements {
     pub outgoing: Vec<TroopMovement>,
     pub incoming: Vec<TroopMovement>,
