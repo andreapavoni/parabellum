@@ -49,7 +49,7 @@ pub fn validate_csrf(jar: &SignedCookieJar, form_token: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn pick_active_village<'a>(villages: &'a [Village]) -> Option<&'a Village> {
+fn pick_active_village(villages: &[Village]) -> Option<&Village> {
     villages
         .iter()
         .find(|v| v.is_capital)

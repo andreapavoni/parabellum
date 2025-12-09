@@ -203,7 +203,7 @@ pub mod tests {
         }
 
         let header_value = cookie_pairs.join("; ");
-        return HeaderValue::from_str(&header_value).unwrap();
+        HeaderValue::from_str(&header_value).unwrap()
     }
 
     #[allow(dead_code)]

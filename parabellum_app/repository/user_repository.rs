@@ -9,7 +9,7 @@ pub trait UserRepository: Send + Sync {
     async fn save(&self, email: String, password_hash: String) -> Result<(), ApplicationError>;
 
     /// Find user by email.
-    async fn get_by_email(&self, email: &String) -> Result<User, ApplicationError>;
+    async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError>;
 
     /// Find user by id.
     async fn get_by_id(&self, user_id: Uuid) -> Result<User, ApplicationError>;

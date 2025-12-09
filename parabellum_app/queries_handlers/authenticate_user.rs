@@ -28,7 +28,7 @@ impl QueryHandler<AuthenticateUser> for AuthenticateUserHandler {
     ) -> Result<<AuthenticateUser as Query>::Output, ApplicationError> {
         let user_repo = uow.users();
         if let Ok(user) = user_repo.get_by_email(&query.email).await {
-            if verify_password(&user.password_hash(), &query.password).is_ok() {
+            if verify_password(user.password_hash(), &query.password).is_ok() {
                 return Ok(user);
             }
             return Err(ApplicationError::App(AppError::WrongAuthCredentials));

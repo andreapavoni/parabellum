@@ -28,7 +28,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
     form.insert("quadrant", "SouthWest");
     form.insert("csrf_token", csrf_token.as_str());
 
-    assert!(uow.users().get_by_email(&email.to_string()).await.is_err());
+    assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
         .post("http://localhost:8088/register")
@@ -39,9 +39,8 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
 
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
-    let email = email;
     let username = username.to_string();
-    let user = uow.users().get_by_email(&email.to_string()).await?;
+    let user = uow.users().get_by_email(email).await?;
     assert_eq!(user.email, email, "User should have inserted email");
 
     let player = uow.players().get_by_user_id(user.id).await?;
@@ -88,7 +87,7 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
     form.insert("quadrant", "SouthWest");
     form.insert("csrf_token", csrf_token.as_str());
 
-    assert!(uow.users().get_by_email(&email.to_string()).await.is_err());
+    assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
         .post("http://localhost:8088/register")

@@ -9,19 +9,14 @@ use parabellum_types::{
 };
 
 /// Resource bonus: Balanced (+3 for each) or focus on a single one (+10)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HeroResourceFocus {
+    #[default]
     Balanced,
     Wood,
     Clay,
     Iron,
     Crop,
-}
-
-impl Default for HeroResourceFocus {
-    fn default() -> Self {
-        Self::Balanced
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -269,6 +264,7 @@ fn unit_strength(unit: &Unit) -> u32 {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_min_or_max)]
 mod tests {
     use super::*;
     use parabellum_types::errors::Result;

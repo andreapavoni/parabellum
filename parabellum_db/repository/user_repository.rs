@@ -44,7 +44,7 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
         Ok(())
     }
 
-    async fn get_by_email(&self, email: &String) -> Result<User, ApplicationError> {
+    async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let rec = sqlx::query_as!(
             db_models::User,
@@ -57,7 +57,7 @@ impl<'a> UserRepository for PostgresUserRepository<'a> {
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
-        .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.clone())))?;
+        .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string())))?;
 
         Ok(rec.into())
     }

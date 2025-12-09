@@ -619,20 +619,20 @@ pub mod tests {
             Ok(())
         }
 
-        async fn get_by_email(&self, email: &String) -> Result<User, ApplicationError> {
+        async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError> {
             if let Some(user) = self
                 .users
                 .lock()
                 .unwrap()
                 .values()
                 .into_iter()
-                .find(|&u| u.email == email.clone())
+                .find(|&u| u.email == email)
             {
                 return Ok(user.clone());
             }
 
             Err(ApplicationError::Db(DbError::UserByEmailNotFound(
-                email.clone(),
+                email.to_string(),
             )))
         }
 

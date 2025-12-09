@@ -1705,13 +1705,13 @@ mod tests {
         // Test 3: Con Main Building L5 (fattore 0.864)
         let mb_level_5 = 5;
         let time_l5 = barracks.calculate_build_time_secs(&server_speed, &mb_level_5);
-        let expected_l5 = (2000.0 as f64 * 0.864 as f64).floor() as u32; // 1728
+        let expected_l5 = (2000.0_f64 * 0.864_f64).floor() as u32; // 1728
         assert_eq!(time_l5, expected_l5, "MB L5 (86.4%) deve ridurre il tempo");
 
         // Test 4: Con Main Building L20 (fattore 0.498)
         let mb_level_20 = 20;
         let time_l20 = barracks.calculate_build_time_secs(&server_speed, &mb_level_20);
-        let expected_l20 = (2000.0 as f64 * 0.498 as f64).floor() as u32; // 996
+        let expected_l20 = (2000.0_f64 * 0.498_f64).floor() as u32; // 996
         assert_eq!(
             time_l20, expected_l20,
             "MB L20 (49.8%) deve ridurre il tempo"
