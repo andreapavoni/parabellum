@@ -57,14 +57,6 @@ need_stdout = false
 command = ["cargo", "test"]
 need_stdout = true
 
-[jobs.nextest]
-command = [
-    "cargo", "nextest", "run",
-    "--hide-progress-bar", "--failure-output", "final"
-]
-need_stdout = true
-analyzer = "nextest"
-
 # Run your long-running application (eg server) and have the result displayed in bacon.
 # For programs that never stop (eg a server), `background` is set to false
 # to have the cargo run output immediately displayed instead of waiting for
@@ -88,16 +80,16 @@ kill = ["pkill", "-TERM", "-P"]
 watch = [
     "frontend/src/**/*.{js,ts,css,scss}",
     "parabellum_game/**/*.rs",
-    "parabellum_game/cargo.toml",
+    "parabellum_game/Cargo.toml",
     "parabellum_app/**/*.rs",
     "parabellum_db/**/*.rs",
-    "parabellum_db/cargo.toml",
+    "parabellum_db/Cargo.toml",
     "parabellum_server/*.rs",
-    "parabellum_server/cargo.toml",
+    "parabellum_server/Cargo.toml",
     "parabellum_types/**/*.rs",
-    "parabellum_types/cargo.toml",
+    "parabellum_types/Cargo.toml",
     "parabellum_web/**/*.{rs,html,yml}",
-    "parabellum_web/cargo.toml",
+    "parabellum_web/Cargo.toml",
     "Cargo.toml",
     "package.json",
     "tsconfig.json",
