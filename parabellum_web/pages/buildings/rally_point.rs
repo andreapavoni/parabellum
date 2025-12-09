@@ -3,9 +3,11 @@ use crate::{
     view_helpers::{prepare_rally_point_cards, unit_display_name},
 };
 use dioxus::prelude::*;
+use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
+use std::collections::HashMap;
 
 /// Rally Point page - send troops and view movements
 #[component]
@@ -21,11 +23,12 @@ pub fn RallyPointPage(
     next_upkeep: u32,
     queue_full: bool,
     movements: parabellum_app::cqrs::queries::VillageTroopMovements,
+    village_info: HashMap<u32, VillageInfo>,
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
     // Prepare all army cards using the view helper
-    let army_cards = prepare_rally_point_cards(&village, &movements);
+    let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
 
     // Prepare sendable units from village army
     let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);

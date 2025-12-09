@@ -16,4 +16,4 @@ pub use marketplace_repository::MarketplaceRepository;
 pub use player_repository::PlayerRepository;
 pub use report_repository::{NewReport, ReportAudience, ReportRecord, ReportRepository};
 pub use user_repository::UserRepository;
-pub use village_repository::VillageRepository;
+pub use village_repository::{VillageInfo, VillageRepository};

@@ -3,9 +3,11 @@ use parabellum_app::cqrs::queries::{
     BuildingQueueItem, TrainingQueueItem, TroopMovementType, VillageTroopMovements,
 };
 use parabellum_app::jobs::JobStatus;
+use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
 use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::components::{ArmyAction, ArmyCardData, ArmyCategory, MovementKind};
@@ -156,9 +158,12 @@ pub fn format_resource_summary(resources: &ResourceGroup) -> String {
 /// - Village's reinforcements (foreign troops helping)
 /// - Outgoing troop movements
 /// - Incoming troop movements
+///
+/// The `village_info` map provides names and positions for villages referenced by armies.
 pub fn prepare_rally_point_cards(
     village: &Village,
     movements: &VillageTroopMovements,
+    village_info: &HashMap<u32, VillageInfo>,
 ) -> Vec<ArmyCardData> {
     let mut cards = Vec::new();
 
@@ -179,15 +184,16 @@ pub fn prepare_rally_point_cards(
 
     // 2. Deployed armies (own troops in other villages/oases)
     for army in village.deployed_armies() {
-        // TODO: Need village names for destination - will be enriched in Step 8
-        let destination_name = army
-            .current_map_field_id
-            .map(|id| format!("Village #{}", id));
+        let destination_id = army.current_map_field_id.unwrap_or(village.id);
+        let (destination_name, destination_position) = village_info
+            .get(&destination_id)
+            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
+            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
 
         cards.push(ArmyCardData {
-            village_id: army.current_map_field_id.unwrap_or(village.id),
+            village_id: destination_id,
             village_name: destination_name,
-            position: None, // TODO: Position lookup in Step 8
+            position: destination_position,
             units: *army.units(),
             tribe: army.tribe.clone(),
             category: ArmyCategory::Deployed,
@@ -201,20 +207,23 @@ pub fn prepare_rally_point_cards(
 
     // 3. Reinforcements (troops from other players helping us)
     for reinforcement in village.reinforcements() {
-        // TODO: Need village names for origin - will be enriched in Step 8
-        let origin_name = Some(format!("Village #{}", reinforcement.village_id));
+        let origin_id = reinforcement.village_id;
+        let (origin_name, origin_position) = village_info
+            .get(&origin_id)
+            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
+            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
 
         cards.push(ArmyCardData {
-            village_id: reinforcement.village_id,
+            village_id: origin_id,
             village_name: origin_name,
-            position: None, // TODO: Position lookup in Step 8
+            position: origin_position,
             units: *reinforcement.units(),
             tribe: reinforcement.tribe.clone(),
             category: ArmyCategory::Reinforcement,
             movement_kind: None,
             arrival_time: None,
             action_button: Some(ArmyAction::Release {
-                source_village_id: reinforcement.village_id,
+                source_village_id: origin_id,
             }),
         });
     }

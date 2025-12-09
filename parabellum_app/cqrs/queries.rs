@@ -244,3 +244,12 @@ pub struct GetMapRegion {
 impl Query for GetMapRegion {
     type Output = Vec<MapRegionTile>;
 }
+
+/// Fetch basic village info (name, position) for multiple villages by IDs
+pub struct GetVillageInfoByIds {
+    pub village_ids: Vec<u32>,
+}
+
+impl Query for GetVillageInfoByIds {
+    type Output = std::collections::HashMap<u32, crate::repository::VillageInfo>;
+}
