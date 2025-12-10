@@ -31,7 +31,7 @@ pub mod tests {
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
             MarketplaceRepository, NewReport, PlayerRepository, ReportAudience, ReportRecord,
-            ReportRepository, UserRepository, VillageRepository,
+            ReportRepository, UserRepository, VillageInfo, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -319,6 +319,13 @@ pub mod tests {
                 .unwrap()
                 .insert(village.id, village.clone());
             Ok(())
+        }
+
+        async fn get_info_by_ids(
+            &self,
+            _village_ids: &[u32],
+        ) -> Result<HashMap<u32, VillageInfo>, ApplicationError> {
+            Ok(HashMap::new())
         }
     }
 

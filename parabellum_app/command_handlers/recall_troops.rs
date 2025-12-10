@@ -6,10 +6,7 @@ use parabellum_types::{Result, errors::ApplicationError};
 use crate::{
     config::Config,
     cqrs::{CommandHandler, commands::RecallTroops},
-    jobs::{
-        Job, JobPayload,
-        tasks::{ArmyReturnTask, ReinforcementTask},
-    },
+    jobs::{Job, JobPayload, tasks::ArmyReturnTask},
     uow::UnitOfWork,
 };
 
