@@ -221,6 +221,44 @@ pub mod tests {
                 "Defender report should remain unread"
             );
 
+            // Verify battle report contains attacker and defender payloads
+            let battle_report = attacker_reports
+                .iter()
+                .find(|r| r.report_type == "battle")
+                .unwrap();
+            if let parabellum_types::reports::ReportPayload::Battle(ref payload) =
+                battle_report.payload
+            {
+                assert!(
+                    payload.attacker.is_some(),
+                    "Battle report should include attacker"
+                );
+                assert!(
+                    payload.defender.is_some(),
+                    "Battle report should include defender"
+                );
+
+                let attacker_party = payload.attacker.as_ref().unwrap();
+                assert_eq!(
+                    attacker_party.tribe,
+                    Tribe::Roman,
+                    "Attacker tribe should be Roman"
+                );
+                assert_eq!(
+                    attacker_party.army_before[0], 100,
+                    "Attacker should have started with 100 units"
+                );
+
+                let defender_party = payload.defender.as_ref().unwrap();
+                assert_eq!(
+                    defender_party.tribe,
+                    Tribe::Roman,
+                    "Defender tribe should be Roman"
+                );
+            } else {
+                panic!("Expected Battle report payload");
+            }
+
             uow_assert3.rollback().await?;
         }
 
@@ -346,6 +384,152 @@ pub mod tests {
             );
 
             uow_assert.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_battle_report_includes_defender_and_reinforcements() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+
+        // Setup attacker
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Setup defender with home army
+        let (_defender_player, defender_village, _defender_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [30, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Setup reinforcer (third player)
+        let (reinforcer_player, reinforcer_village, reinforcer_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Teuton,
+                [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Send reinforcements to defender
+        let reinforce_command = parabellum_app::cqrs::commands::ReinforceVillage {
+            player_id: reinforcer_player.id,
+            village_id: reinforcer_village.id,
+            army_id: reinforcer_army.id,
+            units: [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            target_village_id: defender_village.id,
+            hero_id: None,
+        };
+        let reinforce_handler =
+            parabellum_app::command_handlers::ReinforceVillageCommandHandler::new();
+        app.execute(reinforce_command, reinforce_handler).await?;
+
+        // Process reinforcement job
+        let reinforce_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+        worker.process_jobs(&vec![reinforce_job]).await?;
+
+        // Attack the defender (who now has reinforcements)
+        let attack_command = AttackVillage {
+            player_id: attacker_player.id,
+            village_id: attacker_village.id,
+            army_id: attacker_army.id,
+            units: [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            target_village_id: defender_village.id,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            hero_id: None,
+            attack_type: AttackType::Normal,
+        };
+        let attack_handler = AttackVillageCommandHandler::new();
+        app.execute(attack_command, attack_handler).await?;
+
+        // Process attack job
+        let attack_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(attacker_player.id).await?;
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+        worker.process_jobs(&vec![attack_job]).await?;
+
+        // Verify battle report includes defender and reinforcements
+        {
+            let uow = uow_provider.tx().await?;
+            let report_repo = uow.reports();
+            let attacker_reports = report_repo.list_for_player(attacker_player.id, 5).await?;
+
+            let battle_report = attacker_reports
+                .iter()
+                .find(|r| r.report_type == "battle")
+                .expect("Battle report should exist");
+
+            if let parabellum_types::reports::ReportPayload::Battle(ref payload) =
+                battle_report.payload
+            {
+                // Verify attacker
+                assert!(payload.attacker.is_some(), "Should include attacker");
+                let attacker_party = payload.attacker.as_ref().unwrap();
+                assert_eq!(attacker_party.tribe, Tribe::Roman);
+                assert_eq!(attacker_party.army_before[0], 50);
+
+                // Verify defender
+                assert!(payload.defender.is_some(), "Should include defender");
+                let defender_party = payload.defender.as_ref().unwrap();
+                assert_eq!(defender_party.tribe, Tribe::Gaul);
+                assert_eq!(defender_party.army_before[0], 30);
+
+                // Verify reinforcements
+                assert_eq!(
+                    payload.reinforcements.len(),
+                    1,
+                    "Should include 1 reinforcement"
+                );
+                let reinforcement = &payload.reinforcements[0];
+                assert_eq!(reinforcement.tribe, Tribe::Teuton);
+                assert_eq!(reinforcement.army_before[0], 20);
+
+                // All parties should have losses data
+                assert!(
+                    attacker_party.losses.iter().sum::<u32>() > 0,
+                    "Attacker should have losses data"
+                );
+                assert!(
+                    defender_party.losses.iter().sum::<u32>() > 0,
+                    "Defender should have losses data"
+                );
+                assert!(
+                    reinforcement.losses.iter().sum::<u32>() > 0,
+                    "Reinforcement should have losses data"
+                );
+            } else {
+                panic!("Expected Battle report payload");
+            }
+
+            uow.rollback().await?;
         }
 
         Ok(())
