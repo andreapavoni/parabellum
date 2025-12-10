@@ -1,4 +1,5 @@
 pub mod army;
+pub mod battle;
 pub mod buildings;
 pub mod common;
 pub mod errors;

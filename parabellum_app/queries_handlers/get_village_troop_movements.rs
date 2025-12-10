@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
-use parabellum_game::{battle::AttackType, models::army::Army};
+use parabellum_game::models::army::Army;
+use parabellum_types::battle::AttackType;
 use parabellum_types::{Result, errors::ApplicationError, map::Position, tribe::Tribe};
 use uuid::Uuid;
 

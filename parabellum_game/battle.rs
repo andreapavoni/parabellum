@@ -2,19 +2,15 @@
 use serde::{Deserialize, Serialize};
 use std::f64;
 
-use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
+use parabellum_types::{
+    battle::AttackType, buildings::BuildingName, common::ResourceGroup, tribe::Tribe,
+};
 
 use crate::models::{
     army::{Army, TroopSet},
     buildings::Building,
     village::Village,
 };
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
-pub enum AttackType {
-    Raid,   // Raid
-    Normal, // Attack / Siege / Conquer
-}
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum ScoutingTarget {

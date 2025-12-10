@@ -110,7 +110,7 @@ impl JobHandler for AttackJobHandler {
         }
 
         let return_travel_time = atk_village.position.calculate_travel_time_secs(
-            def_village.position,
+            def_village.position.clone(),
             atk_army.speed(),
             ctx.config.world_size as i32,
             ctx.config.speed as u8,
@@ -146,12 +146,14 @@ impl JobHandler for AttackJobHandler {
             .unwrap_or(true);
 
         let attacker_payload = BattlePartyPayload {
+            tribe: report.attacker.army_before.tribe.clone(),
             army_before: *report.attacker.army_before.units(),
             survivors: report.attacker.survivors,
             losses: report.attacker.losses,
         };
 
         let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
+            tribe: def.army_before.tribe.clone(),
             army_before: *def.army_before.units(),
             survivors: def.survivors,
             losses: def.losses,
@@ -161,6 +163,7 @@ impl JobHandler for AttackJobHandler {
             .reinforcements
             .iter()
             .map(|reinf| BattlePartyPayload {
+                tribe: reinf.army_before.tribe.clone(),
                 army_before: *reinf.army_before.units(),
                 survivors: reinf.survivors,
                 losses: reinf.losses,
@@ -168,10 +171,13 @@ impl JobHandler for AttackJobHandler {
             .collect();
 
         let battle_payload = BattleReportPayload {
+            attack_type: report.attack_type.clone(),
             attacker_player: attacker_player.username.clone(),
             attacker_village: atk_village.name.clone(),
+            attacker_position: atk_village.position.clone(),
             defender_player: defender_player.username.clone(),
             defender_village: def_village.name.clone(),
+            defender_position: def_village.position.clone(),
             success,
             bounty,
             attacker: Some(attacker_payload),

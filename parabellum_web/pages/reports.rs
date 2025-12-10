@@ -4,7 +4,7 @@ use parabellum_types::reports::BattleReportPayload;
 use rust_i18n::t;
 use uuid::Uuid;
 
-use crate::components::{ArmyDisplay, GenericReportData, ReportListEntry};
+use crate::components::{BattleArmyTable, GenericReportData, ReportListEntry};
 
 #[component]
 pub fn GenericReportPage(data: GenericReportData) -> Element {
@@ -147,7 +147,13 @@ pub fn BattleReportPage(
                         }
                         h1 {
                             class: "text-2xl font-semibold text-gray-900",
-                            "{payload.attacker_village} → {payload.defender_village}"
+                            {
+                                let verb = match payload.attack_type {
+                                    parabellum_types::battle::AttackType::Raid => "raided",
+                                    parabellum_types::battle::AttackType::Normal => "attacked",
+                                };
+                                format!("{} {} {}", payload.attacker_village, verb, payload.defender_village)
+                            }
                         }
                     }
                     div {
@@ -179,11 +185,11 @@ pub fn BattleReportPage(
                         }
                         p {
                             class: "text-sm text-gray-600 mb-3",
-                            "{payload.attacker_village}"
+                            "{payload.attacker_village} ({payload.attacker_position.x}|{payload.attacker_position.y})"
                         }
-                        ArmyDisplay {
+                        BattleArmyTable {
+                            tribe: attacker.tribe.clone(),
                             army_before: attacker.army_before,
-                            survivors: attacker.survivors,
                             losses: attacker.losses
                         }
                     }
@@ -199,11 +205,11 @@ pub fn BattleReportPage(
                         }
                         p {
                             class: "text-sm text-gray-600 mb-3",
-                            "{payload.defender_village}"
+                            "{payload.defender_village} ({payload.defender_position.x}|{payload.defender_position.y})"
                         }
-                        ArmyDisplay {
+                        BattleArmyTable {
+                            tribe: defender.tribe.clone(),
                             army_before: defender.army_before,
-                            survivors: defender.survivors,
                             losses: defender.losses
                         }
                     }
@@ -225,9 +231,9 @@ pub fn BattleReportPage(
                                     class: "text-sm text-gray-600 mb-2",
                                     "Reinforcement #{idx + 1}"
                                 }
-                                ArmyDisplay {
+                                BattleArmyTable {
+                                    tribe: reinf.tribe.clone(),
                                     army_before: reinf.army_before,
-                                    survivors: reinf.survivors,
                                     losses: reinf.losses
                                 }
                             }

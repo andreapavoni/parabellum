@@ -21,7 +21,7 @@ use crate::{
     pages::{BattleReportPage, GenericReportPage, ReportsPage},
     view_helpers::format_resource_summary,
 };
-use parabellum_types::reports::ReportPayload;
+use parabellum_types::{battle::AttackType, reports::ReportPayload};
 use rust_i18n::t;
 
 /// GET /reports
@@ -90,24 +90,52 @@ pub async fn report_page(
 fn map_report(report: ReportView) -> ReportListEntry {
     let (title, summary) = match report.payload.clone() {
         parabellum_types::reports::ReportPayload::Battle(payload) => {
+            // Verb based on attack type
+            let verb = match payload.attack_type {
+                AttackType::Raid => "raided",
+                AttackType::Normal => "attacked",
+            };
+
+            // Title: "VillageA attacked VillageB"
             let title = format!(
-                "{} → {}",
-                payload.attacker_village, payload.defender_village
+                "{} {} {}",
+                payload.attacker_village, verb, payload.defender_village
             );
+
+            // Result and outcome
             let result = if payload.success {
                 t!("game.reports.battle_success")
             } else {
                 t!("game.reports.battle_failure")
             };
-            let bounty = format_resource_summary(&payload.bounty);
-            let summary = t!(
-                "game.reports.battle_summary",
-                attacker = payload.attacker_player,
-                defender = payload.defender_player,
-                result = result,
-                bounty = bounty
-            )
-            .into_owned();
+
+            let outcome = if payload.bounty.total() > 0 {
+                format!("Bounty: {}", format_resource_summary(&payload.bounty))
+            } else if let Some(ref attacker) = payload.attacker {
+                let total_losses: u32 = attacker.losses.iter().sum();
+                if total_losses > 0 {
+                    format!("Lost {} units", total_losses)
+                } else {
+                    "No losses".to_string()
+                }
+            } else {
+                "".to_string()
+            };
+
+            // Summary with positions: "VillageA (X|Y) attacked VillageB (Z|W) - Victory - Bounty: 500"
+            let summary = format!(
+                "{} ({}|{}) {} {} ({}|{}) - {} - {}",
+                payload.attacker_village,
+                payload.attacker_position.x,
+                payload.attacker_position.y,
+                verb,
+                payload.defender_village,
+                payload.defender_position.x,
+                payload.defender_position.y,
+                result,
+                outcome
+            );
+
             (title, summary)
         }
     };
