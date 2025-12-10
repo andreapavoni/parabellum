@@ -15,10 +15,10 @@ use parabellum_app::{
 };
 
 use crate::{
-    components::{GenericReportData, PageLayout, ReportListEntry, wrap_in_html},
+    components::{PageLayout, ReportListEntry, wrap_in_html},
     handlers::helpers::{CurrentUser, create_layout_data},
     http::AppState,
-    pages::{BattleReportPage, GenericReportPage, ReportsPage},
+    pages::{BattleReportPage, ReinforcementReportPage, ReportsPage},
     view_helpers::format_resource_summary,
 };
 use parabellum_types::{battle::AttackType, reports::ReportPayload};
@@ -138,6 +138,28 @@ fn map_report(report: ReportView) -> ReportListEntry {
 
             (title, summary)
         }
+        parabellum_types::reports::ReportPayload::Reinforcement(payload) => {
+            // Title: "VillageA reinforced VillageB"
+            let title = format!(
+                "{} reinforced {}",
+                payload.sender_village, payload.receiver_village
+            );
+
+            // Summary with positions and troop count
+            let total_troops: u32 = payload.units.iter().sum();
+            let summary = format!(
+                "{} ({}|{}) reinforced {} ({}|{}) - {} troops sent",
+                payload.sender_village,
+                payload.sender_position.x,
+                payload.sender_position.y,
+                payload.receiver_village,
+                payload.receiver_position.x,
+                payload.receiver_position.y,
+                total_troops
+            );
+
+            (title, summary)
+        }
     };
 
     ReportListEntry {
@@ -166,25 +188,15 @@ fn render_report_page(report: ReportView, layout_data: crate::components::Layout
             });
             Html(wrap_in_html(&body_content)).into_response()
         }
-        _ => {
-            // Generic report fallback
-            let created_at_formatted = report.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
-            let report_reference = report.id.to_string();
-            let report_reference_label =
-                t!("game.reports.detail_id", id = report_reference.clone()).into_owned();
-
-            let data = GenericReportData {
-                report_reference,
-                report_reference_label,
-                created_at_formatted,
-                heading: t!("game.reports.generic_title").to_string(),
-                message: t!("game.reports.generic_message").to_string(),
-            };
-
+        ReportPayload::Reinforcement(payload) => {
             let body_content = dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
-                    GenericReportPage { data: data }
+                    ReinforcementReportPage {
+                        report_id: report.id,
+                        created_at: report.created_at,
+                        payload: payload
+                    }
                 }
             });
             Html(wrap_in_html(&body_content)).into_response()

@@ -10,12 +10,10 @@ pub mod tests {
             tasks::{ArmyReturnTask, AttackTask},
         },
     };
-    use parabellum_game::{
-        battle::AttackType,
-        models::{buildings::Building, village::Village},
+    use parabellum_game::models::{buildings::Building, village::Village};
+    use parabellum_types::{
+        Result, battle::AttackType, buildings::BuildingName, common::ResourceGroup, tribe::Tribe,
     };
-    use parabellum_types::Result;
-    use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use crate::test_utils::tests::{setup_app, setup_player_party};
 

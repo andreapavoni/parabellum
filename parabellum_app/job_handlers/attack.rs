@@ -222,13 +222,13 @@ mod tests {
         uow::UnitOfWork,
     };
     use parabellum_game::{
-        battle::AttackType,
         models::map::Valley,
         test_utils::{
             ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
+    use parabellum_types::battle::AttackType;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
     use serde_json::json;
     use std::sync::Arc;

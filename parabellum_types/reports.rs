@@ -2,9 +2,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::{battle::AttackType, common::ResourceGroup, map::Position, tribe::Tribe};
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReinforcementReportPayload {
+    pub sender_player: String,
+    pub sender_village: String,
+    pub sender_position: Position,
+    pub receiver_player: String,
+    pub receiver_village: String,
+    pub receiver_position: Position,
+    pub tribe: Tribe,
+    pub units: [u32; 10],
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ReportPayload {
     Battle(BattleReportPayload),
+    Reinforcement(ReinforcementReportPayload),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

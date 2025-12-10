@@ -15,7 +15,7 @@ pub use building_queue::{BuildingQueue, BuildingQueueItem};
 pub use building_slot::BuildingSlot;
 pub use common::*;
 pub use layout::{LayoutData, PageLayout, wrap_in_html};
-pub use reports::{ArmyDisplay, BattleArmyTable, GenericReportData, ReportListEntry};
+pub use reports::{BattleArmyTable, GenericReportData, ReinforcementArmyTable, ReportListEntry};
 pub use resources::{ProductionPanel, ResourceFieldsMap, ResourceSlot};
 pub use upgrade_block::UpgradeBlock;
 pub use village::{TroopsPanel, VillageListItem, VillageMap, VillagesList};

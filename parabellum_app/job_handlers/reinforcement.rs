@@ -2,13 +2,18 @@ use async_trait::async_trait;
 use tracing::{info, instrument};
 
 use parabellum_game::models::army::Army;
-use parabellum_types::{buildings::BuildingName, errors::ApplicationError};
+use parabellum_types::{
+    buildings::BuildingName,
+    errors::ApplicationError,
+    reports::{ReinforcementReportPayload, ReportPayload},
+};
 
 use crate::jobs::{
     Job,
     handler::{JobHandler, JobHandlerContext},
     tasks::ReinforcementTask,
 };
+use crate::repository::{NewReport, ReportAudience};
 
 pub struct ReinforcementJobHandler {
     payload: ReinforcementTask,
@@ -82,6 +87,49 @@ impl JobHandler for ReinforcementJobHandler {
             new_location_id = %self.payload.village_id,
             "Army reinforcement has arrived and is now stationed at new location."
         );
+
+        // Create reinforcement report
+        let player_repo = ctx.uow.players();
+        let report_repo = ctx.uow.reports();
+
+        let sender_village = village_repo.get_by_id(reinforcement.village_id).await?;
+        let sender_player = player_repo.get_by_id(sender_village.player_id).await?;
+        let receiver_player = player_repo.get_by_id(target_village.player_id).await?;
+
+        let reinforcement_payload = ReinforcementReportPayload {
+            sender_player: sender_player.username.clone(),
+            sender_village: sender_village.name.clone(),
+            sender_position: sender_village.position.clone(),
+            receiver_player: receiver_player.username.clone(),
+            receiver_village: target_village.name.clone(),
+            receiver_position: target_village.position.clone(),
+            tribe: reinforcement.tribe.clone(),
+            units: *reinforcement.units(),
+        };
+
+        let new_report = NewReport {
+            report_type: "reinforcement".to_string(),
+            payload: ReportPayload::Reinforcement(reinforcement_payload),
+            actor_player_id: sender_village.player_id,
+            actor_village_id: Some(sender_village.id),
+            target_player_id: Some(target_village.player_id),
+            target_village_id: Some(target_village.id),
+        };
+
+        let mut audiences = vec![ReportAudience {
+            player_id: sender_village.player_id,
+            read_at: None,
+        }];
+
+        // Only add receiver to audience if different from sender
+        if target_village.player_id != sender_village.player_id {
+            audiences.push(ReportAudience {
+                player_id: target_village.player_id,
+                read_at: None,
+            });
+        }
+
+        report_repo.add(&new_report, &audiences).await?;
 
         Ok(())
     }
