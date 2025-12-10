@@ -1,12 +1,13 @@
 use crate::{
-    components::{ArmyAction, ArmyCard, ArmyCardData, ArmyCategory, MovementKind, UpgradeBlock},
-    view_helpers::unit_display_name,
+    components::{ArmyCard, ArmyCategory, UpgradeBlock},
+    view_helpers::{prepare_rally_point_cards, unit_display_name},
 };
 use dioxus::prelude::*;
-use parabellum_app::cqrs::queries::TroopMovementType;
+use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
+use std::collections::HashMap;
 
 /// Rally Point page - send troops and view movements
 #[component]
@@ -22,101 +23,12 @@ pub fn RallyPointPage(
     next_upkeep: u32,
     queue_full: bool,
     movements: parabellum_app::cqrs::queries::VillageTroopMovements,
+    village_info: HashMap<u32, VillageInfo>,
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
-    // Prepare army cards from domain data
-    let mut army_cards = Vec::new();
-
-    // 1. Stationed troops (home army)
-    if let Some(army) = village.army() {
-        army_cards.push(ArmyCardData {
-            village_id: village.id,
-            village_name: Some(village.name.clone()),
-            position: Some(village.position.clone()),
-            units: *army.units(),
-            tribe: village.tribe.clone(),
-            category: ArmyCategory::Stationed,
-            movement_kind: None,
-            arrival_time: None,
-            action_button: None,
-        });
-    }
-
-    // 2. Reinforcements (troops from other villages helping us)
-    for reinforcement in village.reinforcements() {
-        army_cards.push(ArmyCardData {
-            village_id: reinforcement.village_id,
-            village_name: None,
-            position: None,
-            units: *reinforcement.units(),
-            tribe: reinforcement.tribe.clone(),
-            category: ArmyCategory::Reinforcement,
-            movement_kind: None,
-            arrival_time: None,
-            action_button: Some(ArmyAction::Release {
-                source_village_id: reinforcement.village_id,
-            }),
-        });
-    }
-
-    // 3. Incoming movements
-    for movement in &movements.incoming {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
-        let movement_kind = match movement.movement_type {
-            TroopMovementType::Attack => MovementKind::Attack,
-            TroopMovementType::Raid => MovementKind::Raid,
-            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-            TroopMovementType::Return => MovementKind::Return,
-        };
-
-        army_cards.push(ArmyCardData {
-            village_id: movement.origin_village_id,
-            village_name: movement.origin_village_name.clone(),
-            position: Some(movement.origin_position.clone()),
-            units: [0; 10],
-            tribe: village.tribe.clone(),
-            category: ArmyCategory::Incoming,
-            movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
-            action_button: None,
-        });
-    }
-
-    // 4. Outgoing movements
-    for movement in &movements.outgoing {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
-        let movement_kind = match movement.movement_type {
-            TroopMovementType::Attack => MovementKind::Attack,
-            TroopMovementType::Raid => MovementKind::Raid,
-            TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-            TroopMovementType::Return => MovementKind::Return,
-        };
-
-        let action_button = if matches!(movement_kind, MovementKind::Reinforcement) {
-            Some(ArmyAction::Recall {
-                movement_id: movement.job_id.to_string(),
-            })
-        } else {
-            None
-        };
-
-        army_cards.push(ArmyCardData {
-            village_id: movement.target_village_id,
-            village_name: movement.target_village_name.clone(),
-            position: Some(movement.target_position.clone()),
-            units: [0; 10],
-            tribe: village.tribe.clone(),
-            category: ArmyCategory::Outgoing,
-            movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
-            action_button,
-        });
-    }
+    // Prepare all army cards using the view helper
+    let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
 
     // Prepare sendable units from village army
     let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
@@ -155,13 +67,13 @@ pub fn RallyPointPage(
 
                 // Army overview - grouped by category
                 div { class: "space-y-4",
-                    // Stationed troops
+                    // Stationed troops (own troops in this village)
                     {
                         let stationed = army_cards.iter().filter(|c| c.category == ArmyCategory::Stationed).collect::<Vec<_>>();
                         if !stationed.is_empty() {
                             rsx! {
                                 div { class: "space-y-2",
-                                    h3 { class: "text-sm font-semibold text-gray-700", "Stationed Troops" }
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Own Troops in Village" }
                                     div { class: "space-y-2",
                                         for card in stationed {
                                             ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
@@ -174,13 +86,32 @@ pub fn RallyPointPage(
                         }
                     }
 
-                    // Reinforcements
+                    // Deployed armies (own troops in other villages/oases)
+                    {
+                        let deployed = army_cards.iter().filter(|c| c.category == ArmyCategory::Deployed).collect::<Vec<_>>();
+                        if !deployed.is_empty() {
+                            rsx! {
+                                div { class: "space-y-2",
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Own Troops Deployed" }
+                                    div { class: "space-y-2",
+                                        for card in deployed {
+                                            ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            rsx! { }
+                        }
+                    }
+
+                    // Reinforcements (foreign troops helping us)
                     {
                         let reinforcements = army_cards.iter().filter(|c| c.category == ArmyCategory::Reinforcement).collect::<Vec<_>>();
                         if !reinforcements.is_empty() {
                             rsx! {
                                 div { class: "space-y-2",
-                                    h3 { class: "text-sm font-semibold text-gray-700", "Reinforcements" }
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Reinforcements Here" }
                                     div { class: "space-y-2",
                                         for card in reinforcements {
                                             ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
@@ -193,15 +124,15 @@ pub fn RallyPointPage(
                         }
                     }
 
-                    // Incoming movements
+                    // Outgoing movements (troops going out)
                     {
-                        let incoming = army_cards.iter().filter(|c| c.category == ArmyCategory::Incoming).collect::<Vec<_>>();
-                        if !incoming.is_empty() {
+                        let outgoing = army_cards.iter().filter(|c| c.category == ArmyCategory::Outgoing).collect::<Vec<_>>();
+                        if !outgoing.is_empty() {
                             rsx! {
                                 div { class: "space-y-2",
-                                    h3 { class: "text-sm font-semibold text-gray-700", "Incoming Movements" }
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Troops Going" }
                                     div { class: "space-y-2",
-                                        for card in incoming {
+                                        for card in outgoing {
                                             ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
                                         }
                                     }
@@ -212,15 +143,15 @@ pub fn RallyPointPage(
                         }
                     }
 
-                    // Outgoing movements
+                    // Incoming movements (troops coming in)
                     {
-                        let outgoing = army_cards.iter().filter(|c| c.category == ArmyCategory::Outgoing).collect::<Vec<_>>();
-                        if !outgoing.is_empty() {
+                        let incoming = army_cards.iter().filter(|c| c.category == ArmyCategory::Incoming).collect::<Vec<_>>();
+                        if !incoming.is_empty() {
                             rsx! {
                                 div { class: "space-y-2",
-                                    h3 { class: "text-sm font-semibold text-gray-700", "Outgoing Movements" }
+                                    h3 { class: "text-sm font-semibold text-gray-700", "Troops Coming" }
                                     div { class: "space-y-2",
-                                        for card in outgoing {
+                                        for card in incoming {
                                             ArmyCard { card: card.clone(), csrf_token: csrf_token.clone() }
                                         }
                                     }
@@ -239,7 +170,7 @@ pub fn RallyPointPage(
                         p { class: "text-sm text-gray-500", "{t!(\"game.rally_point.send_hint\")}" }
                     }
                     form {
-                        action: "/army/send?s={slot_id}",
+                        action: "/army/send",
                         method: "post",
                         class: "space-y-4",
                         input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }

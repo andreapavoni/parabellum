@@ -13,7 +13,10 @@ use parabellum_types::{Result, errors::ApplicationError};
 use crate::handlers::{
     auth::{login, login_page, logout, register, register_page},
     building::{build, building_page},
-    buildings::{research_smithy, research_unit, send_troops, train_units},
+    buildings::{
+        recall_troops, release_reinforcements, research_smithy, research_unit, send_troops,
+        train_units,
+    },
     home::home_page,
     map::{map_page, map_region},
     reports::{report_page, reports_page},
@@ -74,6 +77,8 @@ impl WebRouter {
             .route("/build/{slot_id}", get(building_page).post(build))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
+            .route("/army/recall", post(recall_troops))
+            .route("/army/release", post(release_reinforcements))
             .route("/academy/research", post(research_unit))
             .route("/smithy/research", post(research_smithy))
             .route("/logout", get(logout));

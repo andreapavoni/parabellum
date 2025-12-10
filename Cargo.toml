@@ -11,7 +11,7 @@ resolver = "3"
 
 [workspace.package]
 description = "A Travian 3.x clone."
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
 license = "MIT"
 edition = "2024"

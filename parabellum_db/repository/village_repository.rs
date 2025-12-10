@@ -303,6 +303,50 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         Ok(())
     }
+
+    async fn get_info_by_ids(
+        &self,
+        village_ids: &[u32],
+    ) -> Result<
+        std::collections::HashMap<u32, parabellum_app::repository::VillageInfo>,
+        ApplicationError,
+    > {
+        use parabellum_app::repository::VillageInfo;
+        use std::collections::HashMap;
+
+        if village_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut tx_guard = self.tx.lock().await;
+        let village_ids_i32: Vec<i32> = village_ids.iter().map(|&id| id as i32).collect();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, position as "position: Json<parabellum_types::map::Position>"
+            FROM villages
+            WHERE id = ANY($1)
+            "#,
+            &village_ids_i32
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(parabellum_types::errors::DbError::Database(e)))?;
+
+        let mut result = HashMap::new();
+        for row in rows {
+            result.insert(
+                row.id as u32,
+                VillageInfo {
+                    id: row.id as u32,
+                    name: row.name,
+                    position: row.position.0,
+                },
+            );
+        }
+
+        Ok(result)
+    }
 }
 
 // Helper struct

@@ -183,6 +183,8 @@ pub struct TroopMovement {
     pub target_position: Position,
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: u32,
+    pub units: [u32; 10],
+    pub tribe: parabellum_types::tribe::Tribe,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -241,4 +243,13 @@ pub struct GetMapRegion {
 
 impl Query for GetMapRegion {
     type Output = Vec<MapRegionTile>;
+}
+
+/// Fetch basic village info (name, position) for multiple villages by IDs
+pub struct GetVillageInfoByIds {
+    pub village_ids: Vec<u32>,
+}
+
+impl Query for GetVillageInfoByIds {
+    type Output = std::collections::HashMap<u32, crate::repository::VillageInfo>;
 }

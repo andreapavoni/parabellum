@@ -16,6 +16,7 @@ use parabellum_app::{
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
     smithy::smithy_upgrade_cost_for_unit,
+    village::Village,
 };
 use parabellum_types::{
     army::{UnitGroup, UnitName},
@@ -80,6 +81,7 @@ pub async fn building_page(
 
     let queues = village_queues_or_empty(&state, user.village.id).await;
     let movements = rally_point_movements_for_slot(&state, &user, slot_id).await;
+    let village_info = fetch_village_info_for_rally_point(&state, &user.village).await;
 
     let (jar, csrf_token) = generate_csrf(jar);
     let flash_error = None; // TODO: Get from flash messages when needed
@@ -92,6 +94,7 @@ pub async fn building_page(
         flash_error,
         queues,
         movements,
+        village_info,
     );
 
     (jar, response).into_response()
@@ -180,6 +183,7 @@ fn render_building_page(
     flash_error: Option<String>,
     queues: VillageQueues,
     movements: VillageTroopMovements,
+    village_info: std::collections::HashMap<u32, parabellum_app::repository::VillageInfo>,
 ) -> Response {
     let layout_data = create_layout_data(
         user,
@@ -477,6 +481,7 @@ fn render_building_page(
                         next_upkeep: next_upkeep,
                         queue_full: effective_queue_full,
                         movements: movements,
+                        village_info: village_info,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                     }
@@ -528,6 +533,47 @@ async fn rally_point_movements_for_slot(
     }
 }
 
+/// Collect village IDs referenced by armies and fetch their info
+async fn fetch_village_info_for_rally_point(
+    state: &AppState,
+    village: &Village,
+) -> std::collections::HashMap<u32, parabellum_app::repository::VillageInfo> {
+    use std::collections::HashSet;
+
+    let mut village_ids = HashSet::new();
+
+    // Collect IDs from deployed armies
+    for army in village.deployed_armies() {
+        if let Some(dest_id) = army.current_map_field_id {
+            village_ids.insert(dest_id);
+        }
+    }
+
+    // Collect IDs from reinforcements
+    for reinforcement in village.reinforcements() {
+        village_ids.insert(reinforcement.village_id);
+    }
+
+    // Fetch village info if we have IDs to look up
+    if village_ids.is_empty() {
+        return std::collections::HashMap::new();
+    }
+
+    let ids: Vec<u32> = village_ids.into_iter().collect();
+
+    use parabellum_app::cqrs::queries::GetVillageInfoByIds;
+    use parabellum_app::queries_handlers::GetVillageInfoByIdsHandler;
+
+    state
+        .app_bus
+        .query(
+            GetVillageInfoByIds { village_ids: ids },
+            GetVillageInfoByIdsHandler::new(),
+        )
+        .await
+        .unwrap_or_default()
+}
+
 /// Render page with error message
 pub async fn render_with_error(
     state: &AppState,
@@ -538,6 +584,7 @@ pub async fn render_with_error(
 ) -> Response {
     let queues = village_queues_or_empty(state, user.village.id).await;
     let movements = rally_point_movements_for_slot(state, &user, slot_id).await;
+    let village_info = fetch_village_info_for_rally_point(state, &user.village).await;
     let (_jar, csrf_token) = generate_csrf(jar);
 
     let response = render_building_page(
@@ -548,6 +595,7 @@ pub async fn render_with_error(
         Some(error),
         queues,
         movements,
+        village_info,
     );
 
     response

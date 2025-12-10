@@ -1,14 +1,19 @@
 use axum::{
     extract::State,
+    http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
+use uuid::Uuid;
 
 use parabellum_app::{
-    command_handlers::{AttackVillageCommandHandler, ReinforceVillageCommandHandler},
+    command_handlers::{
+        AttackVillageCommandHandler, RecallTroopsCommandHandler, ReinforceVillageCommandHandler,
+        ReleaseReinforcementsCommandHandler,
+    },
     cqrs::{
-        commands::{AttackVillage, ReinforceVillage},
+        commands::{AttackVillage, RecallTroops, ReinforceVillage, ReleaseReinforcements},
         queries::GetVillageById,
     },
     queries_handlers::GetVillageByIdHandler,
@@ -333,4 +338,88 @@ fn parse_troop_set(values: &[i32]) -> Option<[u32; 10]> {
         troops[idx] = amount as u32;
     }
     Some(troops)
+}
+
+const RALLY_POINT_SLOT: u8 = 39;
+
+#[derive(Debug, Deserialize)]
+pub struct RecallForm {
+    pub movement_id: String,
+    pub csrf_token: String,
+}
+
+impl HasCsrfToken for RecallForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReleaseForm {
+    pub source_village_id: u32,
+    pub csrf_token: String,
+}
+
+impl HasCsrfToken for ReleaseForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+/// POST /army/recall - Recall deployed troops back to home village
+pub async fn recall_troops(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    CsrfForm { jar: _jar, form }: CsrfForm<RecallForm>,
+) -> Response {
+    // Parse movement_id as army UUID
+    let army_id = match Uuid::parse_str(&form.movement_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, "Invalid movement ID format").into_response();
+        }
+    };
+
+    let command = RecallTroops {
+        player_id: user.player.id,
+        village_id: user.village.id,
+        army_id,
+    };
+
+    match state
+        .app_bus
+        .execute(command, RecallTroopsCommandHandler::new())
+        .await
+    {
+        Ok(()) => Redirect::to(&format!("/build/{}", RALLY_POINT_SLOT)).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to recall troops: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
+}
+
+/// POST /army/release - Release reinforcements back to their home village
+pub async fn release_reinforcements(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    CsrfForm { jar: _jar, form }: CsrfForm<ReleaseForm>,
+) -> Response {
+    let command = ReleaseReinforcements {
+        player_id: user.player.id,
+        village_id: user.village.id,
+        source_village_id: form.source_village_id,
+    };
+
+    match state
+        .app_bus
+        .execute(command, ReleaseReinforcementsCommandHandler::new())
+        .await
+    {
+        Ok(()) => Redirect::to(&format!("/build/{}", RALLY_POINT_SLOT)).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to release reinforcements: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
 }

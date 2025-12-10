@@ -42,9 +42,11 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             {
                 reinforcements.push(game_army);
 
-            // 3. Travelling army (deployed)?
-            // (village_id = home AND current_map_field_id != home [None or other ID])
+            // 3. Deployed army (arrived at another location)?
+            // (village_id = home AND current_map_field_id = Some(other_village_id))
+            // Note: Armies in transit have current_map_field_id = None and are NOT included
             } else if game_army.village_id == village_id_u32
+                && game_army.current_map_field_id.is_some()
                 && game_army.current_map_field_id != Some(village_id_u32)
             {
                 deployed_armies.push(game_army);
