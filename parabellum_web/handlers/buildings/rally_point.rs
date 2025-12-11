@@ -18,7 +18,7 @@ use parabellum_app::{
     },
     queries_handlers::GetVillageByIdHandler,
 };
-use parabellum_game::battle::AttackType;
+use parabellum_types::battle::AttackType;
 use parabellum_types::{buildings::BuildingName, map::Position};
 
 use crate::{

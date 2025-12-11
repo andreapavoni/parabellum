@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::Utc;
 use tracing::{info, instrument};
 
 use parabellum_game::{battle::Battle, models::buildings::Building};
@@ -90,27 +89,33 @@ impl JobHandler for AttackJobHandler {
             hero_repo.save(&hero).await?;
         }
 
-        army_repo.save(&atk_army).await?;
-        village_repo.save(&def_village).await?;
+        army_repo.save_or_remove(&atk_army).await?;
 
+        // Save or remove defender's home army
         if let Some(army) = def_village.army() {
-            army_repo.save(army).await?;
-
             if let Some(hero) = army.hero() {
                 hero_repo.save(&hero).await?;
             }
-        }
+            army_repo.save_or_remove(army).await?;
 
-        for reinforcement_army in def_village.reinforcements() {
-            army_repo.save(reinforcement_army).await?;
-
-            if let Some(hero) = reinforcement_army.hero() {
-                hero_repo.save(&hero).await?;
+            // Clear village reference if army was destroyed
+            if army.immensity() == 0 {
+                def_village.set_army(None)?;
             }
         }
 
+        // Save or remove reinforcements
+        for reinforcement_army in def_village.reinforcements() {
+            if let Some(hero) = reinforcement_army.hero() {
+                hero_repo.save(&hero).await?;
+            }
+            army_repo.save_or_remove(reinforcement_army).await?;
+        }
+
+        village_repo.save(&def_village).await?;
+
         let return_travel_time = atk_village.position.calculate_travel_time_secs(
-            def_village.position,
+            def_village.position.clone(),
             atk_army.speed(),
             ctx.config.world_size as i32,
             ctx.config.speed as u8,
@@ -146,12 +151,14 @@ impl JobHandler for AttackJobHandler {
             .unwrap_or(true);
 
         let attacker_payload = BattlePartyPayload {
+            tribe: report.attacker.army_before.tribe.clone(),
             army_before: *report.attacker.army_before.units(),
             survivors: report.attacker.survivors,
             losses: report.attacker.losses,
         };
 
         let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
+            tribe: def.army_before.tribe.clone(),
             army_before: *def.army_before.units(),
             survivors: def.survivors,
             losses: def.losses,
@@ -161,6 +168,7 @@ impl JobHandler for AttackJobHandler {
             .reinforcements
             .iter()
             .map(|reinf| BattlePartyPayload {
+                tribe: reinf.army_before.tribe.clone(),
                 army_before: *reinf.army_before.units(),
                 survivors: reinf.survivors,
                 losses: reinf.losses,
@@ -168,10 +176,13 @@ impl JobHandler for AttackJobHandler {
             .collect();
 
         let battle_payload = BattleReportPayload {
+            attack_type: report.attack_type.clone(),
             attacker_player: attacker_player.username.clone(),
             attacker_village: atk_village.name.clone(),
+            attacker_position: atk_village.position.clone(),
             defender_player: defender_player.username.clone(),
             defender_village: def_village.name.clone(),
+            defender_position: def_village.position.clone(),
             success,
             bounty,
             attacker: Some(attacker_payload),
@@ -188,10 +199,11 @@ impl JobHandler for AttackJobHandler {
             target_village_id: Some(def_village.id),
         };
 
+        // TODO: add reinforcements owners in audiences
         let audiences = vec![
             ReportAudience {
                 player_id: atk_village.player_id,
-                read_at: Some(Utc::now()),
+                read_at: None,
             },
             ReportAudience {
                 player_id: def_village.player_id,
@@ -216,13 +228,13 @@ mod tests {
         uow::UnitOfWork,
     };
     use parabellum_game::{
-        battle::AttackType,
         models::map::Valley,
         test_utils::{
             ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
+    use parabellum_types::battle::AttackType;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
     use serde_json::json;
     use std::sync::Arc;
@@ -309,8 +321,8 @@ mod tests {
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);
         assert!(
-            attacker_reports[0].read_at.is_some(),
-            "attacker report should be marked read"
+            attacker_reports[0].read_at.is_none(),
+            "attacker report should not be marked read"
         );
 
         let defender_reports = report_repo

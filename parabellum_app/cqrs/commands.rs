@@ -1,11 +1,12 @@
 use uuid::Uuid;
 
 use parabellum_game::{
-    battle::{AttackType, ScoutingTarget},
+    battle::ScoutingTarget,
     models::{army::TroopSet, map::MapQuadrant},
 };
 use parabellum_types::{
     army::UnitName,
+    battle::AttackType,
     buildings::BuildingName,
     common::{Player, ResourceGroup},
     map::Position,

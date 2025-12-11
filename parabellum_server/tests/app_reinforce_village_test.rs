@@ -143,6 +143,33 @@ pub mod tests {
                 reinforcer_village.army().is_none(),
                 "Reinforcer village shouldn't have army at home"
             );
+
+            // Verify reinforcement report was created
+            let reports = uow_assert2
+                .reports()
+                .list_for_player(reinforcer_player.id, 10)
+                .await?;
+            assert_eq!(
+                reports.len(),
+                1,
+                "Should have created 1 reinforcement report"
+            );
+
+            let report = &reports[0];
+            assert_eq!(report.report_type, "reinforcement");
+
+            // Verify report payload
+            if let parabellum_types::reports::ReportPayload::Reinforcement(ref payload) =
+                report.payload
+            {
+                assert_eq!(payload.sender_village, reinforcer_village.name);
+                assert_eq!(payload.receiver_village, final_target_village.name);
+                assert_eq!(payload.units, units_to_send);
+                assert_eq!(payload.tribe, Tribe::Roman);
+            } else {
+                panic!("Expected Reinforcement report payload");
+            }
+
             uow_assert2.rollback().await?;
         }
         Ok(())

@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use parabellum_types::reports::BattleReportPayload;
+use parabellum_types::reports::{BattleReportPayload, ReinforcementReportPayload};
 use rust_i18n::t;
 use uuid::Uuid;
 
-use crate::components::{ArmyDisplay, GenericReportData, ReportListEntry};
+use crate::components::{
+    BattleArmyTable, GenericReportData, ReinforcementArmyTable, ReportListEntry,
+};
 
 #[component]
 pub fn GenericReportPage(data: GenericReportData) -> Element {
@@ -33,6 +35,87 @@ pub fn GenericReportPage(data: GenericReportData) -> Element {
                 p {
                     class: "text-gray-700",
                     "{data.message}"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ReinforcementReportPage(
+    report_id: Uuid,
+    created_at: DateTime<Utc>,
+    payload: ReinforcementReportPayload,
+) -> Element {
+    let created_at_formatted = created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+    let report_reference_label = t!("game.reports.detail_id", id = report_id.to_string());
+
+    rsx! {
+        div {
+            class: "max-w-4xl mx-auto space-y-4",
+            a {
+                href: "/reports",
+                class: "inline-flex items-center text-sm text-green-700 hover:underline",
+                "← {t!(\"game.reports.back\")}"
+            }
+            div {
+                class: "bg-white border rounded-md shadow-sm p-6 space-y-6",
+                div {
+                    class: "flex items-center justify-between",
+                    div {
+                        p {
+                            class: "text-xs uppercase tracking-wide text-gray-500",
+                            "Reinforcement Report"
+                        }
+                        h1 {
+                            class: "text-2xl font-semibold text-gray-900",
+                            "{payload.sender_village} reinforced {payload.receiver_village}"
+                        }
+                    }
+                    div {
+                        class: "text-sm text-gray-500 text-right",
+                        div { "{created_at_formatted}" }
+                        div { "{report_reference_label}" }
+                    }
+                }
+
+                // Sender info
+                div {
+                    class: "border rounded-md p-4 bg-blue-50",
+                    p {
+                        class: "text-xs uppercase text-gray-500 font-semibold mb-2",
+                        "🤝 From: {payload.sender_player}"
+                    }
+                    p {
+                        class: "text-sm text-gray-600 mb-3",
+                        "{payload.sender_village} ({payload.sender_position.x}|{payload.sender_position.y})"
+                    }
+                }
+
+                // Receiver info
+                div {
+                    class: "border rounded-md p-4 bg-green-50",
+                    p {
+                        class: "text-xs uppercase text-gray-500 font-semibold mb-2",
+                        "🏰 To: {payload.receiver_player}"
+                    }
+                    p {
+                        class: "text-sm text-gray-600 mb-3",
+                        "{payload.receiver_village} ({payload.receiver_position.x}|{payload.receiver_position.y})"
+                    }
+                }
+
+                // Troops sent (no losses row)
+                div {
+                    class: "border rounded-md p-4",
+                    p {
+                        class: "text-xs uppercase text-gray-500 font-semibold mb-3",
+                        "Troops Sent"
+                    }
+                    ReinforcementArmyTable {
+                        tribe: payload.tribe.clone(),
+                        units: payload.units
+                    }
                 }
             }
         }
@@ -147,7 +230,13 @@ pub fn BattleReportPage(
                         }
                         h1 {
                             class: "text-2xl font-semibold text-gray-900",
-                            "{payload.attacker_village} → {payload.defender_village}"
+                            {
+                                let verb = match payload.attack_type {
+                                    parabellum_types::battle::AttackType::Raid => "raided",
+                                    parabellum_types::battle::AttackType::Normal => "attacked",
+                                };
+                                format!("{} {} {}", payload.attacker_village, verb, payload.defender_village)
+                            }
                         }
                     }
                     div {
@@ -179,11 +268,11 @@ pub fn BattleReportPage(
                         }
                         p {
                             class: "text-sm text-gray-600 mb-3",
-                            "{payload.attacker_village}"
+                            "{payload.attacker_village} ({payload.attacker_position.x}|{payload.attacker_position.y})"
                         }
-                        ArmyDisplay {
+                        BattleArmyTable {
+                            tribe: attacker.tribe.clone(),
                             army_before: attacker.army_before,
-                            survivors: attacker.survivors,
                             losses: attacker.losses
                         }
                     }
@@ -199,11 +288,11 @@ pub fn BattleReportPage(
                         }
                         p {
                             class: "text-sm text-gray-600 mb-3",
-                            "{payload.defender_village}"
+                            "{payload.defender_village} ({payload.defender_position.x}|{payload.defender_position.y})"
                         }
-                        ArmyDisplay {
+                        BattleArmyTable {
+                            tribe: defender.tribe.clone(),
                             army_before: defender.army_before,
-                            survivors: defender.survivors,
                             losses: defender.losses
                         }
                     }
@@ -225,9 +314,9 @@ pub fn BattleReportPage(
                                     class: "text-sm text-gray-600 mb-2",
                                     "Reinforcement #{idx + 1}"
                                 }
-                                ArmyDisplay {
+                                BattleArmyTable {
+                                    tribe: reinf.tribe.clone(),
                                     army_before: reinf.army_before,
-                                    survivors: reinf.survivors,
                                     losses: reinf.losses
                                 }
                             }

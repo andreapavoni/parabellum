@@ -633,10 +633,8 @@ impl Village {
         if let Some(defender_report) = &report.defender
             && let Some(mut home_army) = self.army.take()
         {
-            home_army.update_units(&defender_report.survivors);
-            if home_army.immensity() > 0 {
-                self.army = Some(home_army);
-            }
+            home_army.apply_battle_report(&defender_report);
+            self.army = Some(home_army);
         }
 
         for report in &report.reinforcements {
@@ -645,11 +643,9 @@ impl Village {
                 .iter()
                 .position(|r| r.id == report.army_before.id)
             {
-                let mut army = self.reinforcements.remove(index);
-                army.update_units(&report.survivors);
-                if army.immensity() > 0 {
-                    let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
-                }
+                let army = &mut self.reinforcements[index].clone();
+                army.apply_battle_report(&report);
+                let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
             }
         }
         self.update_state();

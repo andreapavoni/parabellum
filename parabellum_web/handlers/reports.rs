@@ -15,13 +15,13 @@ use parabellum_app::{
 };
 
 use crate::{
-    components::{GenericReportData, PageLayout, ReportListEntry, wrap_in_html},
+    components::{PageLayout, ReportListEntry, wrap_in_html},
     handlers::helpers::{CurrentUser, create_layout_data},
     http::AppState,
-    pages::{BattleReportPage, GenericReportPage, ReportsPage},
+    pages::{BattleReportPage, ReinforcementReportPage, ReportsPage},
     view_helpers::format_resource_summary,
 };
-use parabellum_types::reports::ReportPayload;
+use parabellum_types::{battle::AttackType, reports::ReportPayload};
 use rust_i18n::t;
 
 /// GET /reports
@@ -90,24 +90,74 @@ pub async fn report_page(
 fn map_report(report: ReportView) -> ReportListEntry {
     let (title, summary) = match report.payload.clone() {
         parabellum_types::reports::ReportPayload::Battle(payload) => {
+            // Verb based on attack type
+            let verb = match payload.attack_type {
+                AttackType::Raid => "raided",
+                AttackType::Normal => "attacked",
+            };
+
+            // Title: "VillageA attacked VillageB"
             let title = format!(
-                "{} → {}",
-                payload.attacker_village, payload.defender_village
+                "{} {} {}",
+                payload.attacker_village, verb, payload.defender_village
             );
+
+            // Result and outcome
             let result = if payload.success {
                 t!("game.reports.battle_success")
             } else {
                 t!("game.reports.battle_failure")
             };
-            let bounty = format_resource_summary(&payload.bounty);
-            let summary = t!(
-                "game.reports.battle_summary",
-                attacker = payload.attacker_player,
-                defender = payload.defender_player,
-                result = result,
-                bounty = bounty
-            )
-            .into_owned();
+
+            let outcome = if payload.bounty.total() > 0 {
+                format!("Bounty: {}", format_resource_summary(&payload.bounty))
+            } else if let Some(ref attacker) = payload.attacker {
+                let total_losses: u32 = attacker.losses.iter().sum();
+                if total_losses > 0 {
+                    format!("Lost {} units", total_losses)
+                } else {
+                    "No losses".to_string()
+                }
+            } else {
+                "".to_string()
+            };
+
+            // Summary with positions: "VillageA (X|Y) attacked VillageB (Z|W) - Victory - Bounty: 500"
+            let summary = format!(
+                "{} ({}|{}) {} {} ({}|{}) - {} - {}",
+                payload.attacker_village,
+                payload.attacker_position.x,
+                payload.attacker_position.y,
+                verb,
+                payload.defender_village,
+                payload.defender_position.x,
+                payload.defender_position.y,
+                result,
+                outcome
+            );
+
+            (title, summary)
+        }
+        parabellum_types::reports::ReportPayload::Reinforcement(payload) => {
+            // Title: "VillageA reinforced VillageB"
+            let title = format!(
+                "{} reinforced {}",
+                payload.sender_village, payload.receiver_village
+            );
+
+            // Summary with positions and troop count
+            let total_troops: u32 = payload.units.iter().sum();
+            let summary = format!(
+                "{} ({}|{}) reinforced {} ({}|{}) - {} troops sent",
+                payload.sender_village,
+                payload.sender_position.x,
+                payload.sender_position.y,
+                payload.receiver_village,
+                payload.receiver_position.x,
+                payload.receiver_position.y,
+                total_troops
+            );
+
             (title, summary)
         }
     };
@@ -138,25 +188,15 @@ fn render_report_page(report: ReportView, layout_data: crate::components::Layout
             });
             Html(wrap_in_html(&body_content)).into_response()
         }
-        _ => {
-            // Generic report fallback
-            let created_at_formatted = report.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
-            let report_reference = report.id.to_string();
-            let report_reference_label =
-                t!("game.reports.detail_id", id = report_reference.clone()).into_owned();
-
-            let data = GenericReportData {
-                report_reference,
-                report_reference_label,
-                created_at_formatted,
-                heading: t!("game.reports.generic_title").to_string(),
-                message: t!("game.reports.generic_message").to_string(),
-            };
-
+        ReportPayload::Reinforcement(payload) => {
             let body_content = dioxus_ssr::render_element(rsx! {
                 PageLayout {
                     data: layout_data,
-                    GenericReportPage { data: data }
+                    ReinforcementReportPage {
+                        report_id: report.id,
+                        created_at: report.created_at,
+                        payload: payload
+                    }
                 }
             });
             Html(wrap_in_html(&body_content)).into_response()

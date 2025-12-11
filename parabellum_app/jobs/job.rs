@@ -88,7 +88,7 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
-    use parabellum_game::battle::AttackType;
+    use parabellum_types::battle::AttackType;
     use parabellum_types::buildings::BuildingName;
 
     // Helper function to create a dummy AttackTask payload

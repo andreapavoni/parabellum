@@ -1,4 +1,5 @@
-use parabellum_game::battle::{AttackType, ScoutingTarget};
+use parabellum_game::battle::ScoutingTarget;
+use parabellum_types::battle::AttackType;
 use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
