@@ -633,10 +633,8 @@ impl Village {
         if let Some(defender_report) = &report.defender
             && let Some(mut home_army) = self.army.take()
         {
-            home_army.update_units(&defender_report.survivors);
-            if home_army.immensity() > 0 {
-                self.army = Some(home_army);
-            }
+            home_army.apply_battle_report(&defender_report);
+            self.army = Some(home_army);
         }
 
         for report in &report.reinforcements {

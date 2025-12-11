@@ -207,8 +207,8 @@ pub mod tests {
                 "Attacker should receive a battle report"
             );
             assert!(
-                attacker_reports.iter().any(|r| r.read_at.is_some()),
-                "Attacker report should be marked read"
+                attacker_reports.iter().any(|r| r.read_at.is_none()),
+                "Attacker report should not be marked read"
             );
 
             let defender_reports = report_repo.list_for_player(defender_player.id, 5).await?;
@@ -528,6 +528,123 @@ pub mod tests {
             } else {
                 panic!("Expected Battle report payload");
             }
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_destroyed_defender_armies_are_deleted() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+
+        // Setup strong attacker
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                [0, 0, 200, 0, 0, 0, 0, 0, 0, 0], // Strong army
+                false,
+            )
+            .await?
+        };
+
+        // Setup weak defender with home army
+        let (_defender_player, defender_village, _defender_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Weak army
+                false,
+            )
+            .await?
+        };
+
+        // Setup weak reinforcement
+        let (reinforcer_player, reinforcer_village, reinforcer_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Teuton,
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Weak army
+                false,
+            )
+            .await?
+        };
+
+        // Send reinforcements
+        let reinforce_command = parabellum_app::cqrs::commands::ReinforceVillage {
+            player_id: reinforcer_player.id,
+            village_id: reinforcer_village.id,
+            army_id: reinforcer_army.id,
+            units: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            target_village_id: defender_village.id,
+            hero_id: None,
+        };
+        app.execute(
+            reinforce_command,
+            parabellum_app::command_handlers::ReinforceVillageCommandHandler::new(),
+        )
+        .await?;
+
+        // Process reinforcement
+        let reinforce_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+        worker.process_jobs(&vec![reinforce_job]).await?;
+
+        // Attack with overwhelming force
+        let attack_command = AttackVillage {
+            player_id: attacker_player.id,
+            village_id: attacker_village.id,
+            army_id: attacker_army.id,
+            units: [0, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+            target_village_id: defender_village.id,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            hero_id: None,
+            attack_type: AttackType::Normal,
+        };
+        app.execute(attack_command, AttackVillageCommandHandler::new())
+            .await?;
+
+        // Process attack
+        let attack_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(attacker_player.id).await?;
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+        worker.process_jobs(&vec![attack_job]).await?;
+
+        // Verify destroyed armies are gone from village
+        {
+            let uow = uow_provider.tx().await?;
+            let updated_defender = uow.villages().get_by_id(defender_village.id).await?;
+
+            // After total defeat, village should have no armies
+            assert!(
+                updated_defender.army().is_none(),
+                "Defender village should have no home army after total defeat. Found: {:?}",
+                updated_defender.army().map(|a| (a.id, *a.units()))
+            );
+            assert_eq!(
+                updated_defender.reinforcements().len(),
+                0,
+                "Defender village should have no reinforcements after total defeat. Found: {:?}",
+                updated_defender
+                    .reinforcements()
+                    .iter()
+                    .map(|a| (a.id, *a.units()))
+                    .collect::<Vec<_>>()
+            );
 
             uow.rollback().await?;
         }

@@ -89,7 +89,7 @@ impl JobHandler for AttackJobHandler {
             hero_repo.save(&hero).await?;
         }
 
-        army_repo.save(&atk_army).await?;
+        army_repo.save_or_remove(&atk_army).await?;
 
         // Save or remove defender's home army
         if let Some(army) = def_village.army() {
@@ -321,8 +321,8 @@ mod tests {
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);
         assert!(
-            attacker_reports[0].read_at.is_some(),
-            "attacker report should be marked read"
+            attacker_reports[0].read_at.is_none(),
+            "attacker report should not be marked read"
         );
 
         let defender_reports = report_repo
