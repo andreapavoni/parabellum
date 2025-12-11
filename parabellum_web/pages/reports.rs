@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use parabellum_types::reports::{BattleReportPayload, ReinforcementReportPayload};
+use parabellum_types::{
+    battle::AttackType,
+    reports::{BattleReportPayload, ReinforcementReportPayload},
+};
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -231,10 +234,12 @@ pub fn BattleReportPage(
                         h1 {
                             class: "text-2xl font-semibold text-gray-900",
                             {
-                                let verb = match payload.attack_type {
-                                    parabellum_types::battle::AttackType::Raid => "raided",
-                                    parabellum_types::battle::AttackType::Normal => "attacked",
+                                let verb = match (payload.attack_type, payload.scouting.is_some()) {
+                                    (_, true) => "scouted",
+                                    (AttackType::Raid, _) => "raided",
+                                    (AttackType::Normal, _) => "attacked",
                                 };
+
                                 format!("{} {} {}", payload.attacker_village, verb, payload.defender_village)
                             }
                         }
@@ -318,6 +323,64 @@ pub fn BattleReportPage(
                                     tribe: reinf.tribe.clone(),
                                     army_before: reinf.army_before,
                                     losses: reinf.losses
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Scouting Information
+                if let Some(ref scouting) = payload.scouting {
+                    div {
+                        class: "border rounded-md p-4 bg-blue-50",
+                        p {
+                            class: "text-xs uppercase text-gray-500 font-semibold mb-2",
+                            "🔍 Scouting Report"
+                        }
+                        if scouting.was_detected {
+                            p {
+                                class: "text-sm text-orange-600 mb-2",
+                                "⚠️ Scouts were detected"
+                            }
+                        } else {
+                            p {
+                                class: "text-sm text-green-600 mb-2",
+                                "✓ Scouts were not detected"
+                            }
+                        }
+                        {
+                            match &scouting.target_report {
+                                parabellum_types::battle::ScoutingTargetReport::Resources(resources) => {
+                                    rsx! {
+                                        p {
+                                            class: "text-xs text-gray-500 mb-1",
+                                            "Scouted Resources:"
+                                        }
+                                        p {
+                                            class: "font-mono text-gray-800",
+                                            "🌲 {resources.lumber()} | 🧱 {resources.clay()} | ⛏️ {resources.iron()} | 🌾 {resources.crop()}"
+                                        }
+                                    }
+                                }
+                                parabellum_types::battle::ScoutingTargetReport::Defenses { wall, palace, residence } => {
+                                    rsx! {
+                                        p {
+                                            class: "text-xs text-gray-500 mb-1",
+                                            "Scouted Defenses:"
+                                        }
+                                        div {
+                                            class: "space-y-1 text-sm text-gray-700",
+                                            if let Some(wall_level) = wall {
+                                                p { "🏰 Wall: Level {wall_level}" }
+                                            }
+                                            if let Some(palace_level) = palace {
+                                                p { "👑 Palace: Level {palace_level}" }
+                                            }
+                                            if let Some(residence_level) = residence {
+                                                p { "🏛️ Residence: Level {residence_level}" }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

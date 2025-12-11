@@ -11,16 +11,18 @@ use uuid::Uuid;
 use parabellum_app::{
     command_handlers::{
         AttackVillageCommandHandler, RecallTroopsCommandHandler, ReinforceVillageCommandHandler,
-        ReleaseReinforcementsCommandHandler,
+        ReleaseReinforcementsCommandHandler, ScoutVillageCommandHandler,
     },
     cqrs::{
-        commands::{AttackVillage, RecallTroops, ReinforceVillage, ReleaseReinforcements},
+        commands::{
+            AttackVillage, RecallTroops, ReinforceVillage, ReleaseReinforcements, ScoutVillage,
+        },
         queries::GetVillageById,
     },
     queries_handlers::GetVillageByIdHandler,
 };
 use parabellum_game::models::army::Army;
-use parabellum_types::battle::AttackType;
+use parabellum_types::battle::{AttackType, ScoutingTarget};
 use parabellum_types::{buildings::BuildingName, map::Position};
 
 use crate::{
@@ -562,58 +564,84 @@ pub async fn confirm_send_troops(
             [BuildingName::MainBuilding, BuildingName::Warehouse]
         };
 
-    let result = match form.movement {
-        SendMovementKind::Attack => {
-            state
-                .app_bus
-                .execute(
-                    AttackVillage {
-                        player_id: user.player.id,
-                        village_id: user.village.id,
-                        army_id,
-                        units: troop_set,
-                        target_village_id,
-                        catapult_targets,
-                        hero_id: None,
-                        attack_type: AttackType::Normal,
-                    },
-                    AttackVillageCommandHandler::new(),
-                )
-                .await
-        }
-        SendMovementKind::Raid => {
-            state
-                .app_bus
-                .execute(
-                    AttackVillage {
-                        player_id: user.player.id,
-                        village_id: user.village.id,
-                        army_id,
-                        units: troop_set,
-                        target_village_id,
-                        catapult_targets,
-                        hero_id: None,
-                        attack_type: AttackType::Raid,
-                    },
-                    AttackVillageCommandHandler::new(),
-                )
-                .await
-        }
-        SendMovementKind::Reinforcement => {
-            state
-                .app_bus
-                .execute(
-                    ReinforceVillage {
-                        player_id: user.player.id,
-                        village_id: user.village.id,
-                        army_id,
-                        units: troop_set,
-                        target_village_id,
-                        hero_id: None,
-                    },
-                    ReinforceVillageCommandHandler::new(),
-                )
-                .await
+    // Check if this is a scouting mission based on the form
+    let result = if let Some(ref scouting_target_str) = form.scouting_target {
+        // This is a scouting mission - use ScoutVillage command
+        let scouting_target = if scouting_target_str == "defenses" {
+            ScoutingTarget::Defenses
+        } else {
+            ScoutingTarget::Resources
+        };
+
+        state
+            .app_bus
+            .execute(
+                ScoutVillage {
+                    player_id: user.player.id,
+                    village_id: user.village.id,
+                    army_id,
+                    units: troop_set,
+                    target_village_id,
+                    target: scouting_target,
+                },
+                ScoutVillageCommandHandler::new(),
+            )
+            .await
+    } else {
+        // Regular attack or reinforcement
+        match form.movement {
+            SendMovementKind::Attack => {
+                state
+                    .app_bus
+                    .execute(
+                        AttackVillage {
+                            player_id: user.player.id,
+                            village_id: user.village.id,
+                            army_id,
+                            units: troop_set,
+                            target_village_id,
+                            catapult_targets,
+                            hero_id: None,
+                            attack_type: AttackType::Normal,
+                        },
+                        AttackVillageCommandHandler::new(),
+                    )
+                    .await
+            }
+            SendMovementKind::Raid => {
+                state
+                    .app_bus
+                    .execute(
+                        AttackVillage {
+                            player_id: user.player.id,
+                            village_id: user.village.id,
+                            army_id,
+                            units: troop_set,
+                            target_village_id,
+                            catapult_targets,
+                            hero_id: None,
+                            attack_type: AttackType::Raid,
+                        },
+                        AttackVillageCommandHandler::new(),
+                    )
+                    .await
+            }
+            SendMovementKind::Reinforcement => {
+                state
+                    .app_bus
+                    .execute(
+                        ReinforceVillage {
+                            player_id: user.player.id,
+                            village_id: user.village.id,
+                            army_id,
+                            units: troop_set,
+                            target_village_id,
+                            hero_id: None,
+                        },
+                        ReinforceVillageCommandHandler::new(),
+                    )
+                    .await
+            }
         }
     };
 

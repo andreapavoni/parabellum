@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::f64;
 
 use parabellum_types::{
-    battle::AttackType, buildings::BuildingName, common::ResourceGroup, tribe::Tribe,
+    battle::{AttackType, ScoutingBattleReport, ScoutingTarget, ScoutingTargetReport},
+    buildings::BuildingName,
+    common::ResourceGroup,
+    tribe::Tribe,
 };
 
 use crate::models::{
@@ -11,33 +14,6 @@ use crate::models::{
     buildings::Building,
     village::Village,
 };
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
-pub enum ScoutingTarget {
-    Resources,
-    Defenses,
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
-pub enum ScoutingTargetReport {
-    Resources(ResourceGroup),
-    Defenses {
-        wall: Option<u8>,
-        palace: Option<u8>,
-        residence: Option<u8>,
-    }, // wall level, residence level, palace level
-}
-
-// Represents the outcome of a battle
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ScoutingBattleReport {
-    // Indicates if defenders has detected the attack.
-    // If true, defender will see a report as well.
-    pub was_detected: bool,
-    pub target: ScoutingTarget,
-    pub target_report: ScoutingTargetReport,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingDamageReport {
     pub name: BuildingName,

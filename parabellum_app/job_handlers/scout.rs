@@ -3,13 +3,18 @@ use tracing::{info, instrument};
 
 use parabellum_game::battle::Battle;
 use parabellum_types::battle::AttackType;
-use parabellum_types::{common::ResourceGroup, errors::ApplicationError};
+use parabellum_types::{
+    common::ResourceGroup,
+    errors::ApplicationError,
+    reports::{BattlePartyPayload, BattleReportPayload, ReportPayload},
+};
 
 use crate::jobs::{
     Job, JobPayload,
     handler::{JobHandler, JobHandlerContext},
     tasks::{ArmyReturnTask, ScoutTask},
 };
+use crate::repository::{NewReport, ReportAudience};
 
 pub struct ScoutJobHandler {
     payload: ScoutTask,
@@ -60,7 +65,68 @@ impl JobHandler for ScoutJobHandler {
         let battle_report = battle.calculate_scout_battle(self.payload.target.clone());
 
         info!(?battle_report, "Scouting battle report calculated.");
-        // TODO: Store battle report for player(s)
+        info!(?battle_report.scouting, "Scouting info from battle report");
+
+        // Create and save battle report
+        let attacker_player = ctx
+            .uow
+            .players()
+            .get_by_id(attacker_village.player_id)
+            .await?;
+        let defender_player = ctx
+            .uow
+            .players()
+            .get_by_id(defender_village.player_id)
+            .await?;
+
+        let attacker_payload = BattlePartyPayload {
+            tribe: attacker_army.tribe.clone(),
+            army_before: battle_report.attacker.army_before.units().clone(),
+            survivors: battle_report.attacker.survivors,
+            losses: battle_report.attacker.losses,
+        };
+
+        let battle_payload = BattleReportPayload {
+            attack_type: AttackType::Raid,
+            attacker_player: attacker_player.username.clone(),
+            attacker_village: attacker_village.name.clone(),
+            attacker_position: attacker_village.position.clone(),
+            defender_player: defender_player.username.clone(),
+            defender_village: defender_village.name.clone(),
+            defender_position: defender_village.position.clone(),
+            success: battle_report.attacker.survivors.iter().any(|&u| u > 0),
+            bounty: ResourceGroup::new(0, 0, 0, 0),
+            attacker: Some(attacker_payload),
+            defender: None,
+            reinforcements: vec![],
+            scouting: battle_report.scouting.clone(),
+        };
+
+        let new_report = NewReport {
+            report_type: "battle".to_string(),
+            payload: ReportPayload::Battle(battle_payload),
+            actor_player_id: attacker_village.player_id,
+            actor_village_id: Some(attacker_village.id),
+            target_player_id: Some(defender_village.player_id),
+            target_village_id: Some(defender_village.id),
+        };
+
+        let mut audiences = vec![ReportAudience {
+            player_id: attacker_village.player_id,
+            read_at: None,
+        }];
+
+        // If scouts were detected, defender also gets a report
+        if let Some(ref scouting) = battle_report.scouting {
+            if scouting.was_detected {
+                audiences.push(ReportAudience {
+                    player_id: defender_village.player_id,
+                    read_at: None,
+                });
+            }
+        }
+
+        ctx.uow.reports().add(&new_report, &audiences).await?;
 
         attacker_army.update_units(&battle_report.attacker.survivors);
         ctx.uow.armies().save(&attacker_army).await?;

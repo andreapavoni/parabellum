@@ -188,6 +188,7 @@ impl JobHandler for AttackJobHandler {
             attacker: Some(attacker_payload),
             defender: defender_payload,
             reinforcements: reinforcements_payload,
+            scouting: report.scouting,
         };
 
         let new_report = NewReport {

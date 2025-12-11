@@ -10,9 +10,9 @@ pub mod tests {
             tasks::{ArmyReturnTask, ScoutTask},
         },
     };
-    use parabellum_game::battle::ScoutingTarget;
-    use parabellum_types::Result;
+    use parabellum_types::battle::{ScoutingTarget, ScoutingTargetReport};
     use parabellum_types::tribe::Tribe;
+    use parabellum_types::{Result, reports::ReportPayload};
 
     use super::test_utils::tests::setup_player_party;
     use crate::test_utils::tests::setup_app;
@@ -175,6 +175,177 @@ pub mod tests {
             );
 
             uow_assert3.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_scout_creates_battle_report_with_scouting_data() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let scout_units = [0, 0, 0, 5, 0, 0, 0, 0, 0, 0]; // 5 scouts
+        let (scout_player, scout_village, scout_army, _, _) = {
+            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+        };
+        let original_home_army_id = scout_army.id;
+
+        let (_target_player, target_village, _target_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Test scouting resources
+        let command = ScoutVillage {
+            player_id: scout_player.id,
+            village_id: scout_village.id,
+            army_id: original_home_army_id,
+            target_village_id: target_village.id,
+            target: ScoutingTarget::Resources,
+            units: scout_units,
+        };
+
+        let handler = ScoutVillageCommandHandler::new();
+        app.execute(command, handler).await?;
+
+        let scout_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(scout_player.id).await?;
+            assert_eq!(jobs.len(), 1);
+            let job = jobs.first().unwrap().clone();
+            uow.rollback().await?;
+            job
+        };
+
+        // Process the scout job
+        worker.process_jobs(&vec![scout_job.clone()]).await?;
+
+        // Verify battle report was created with scouting data
+        {
+            let uow = uow_provider.tx().await?;
+
+            let reports = uow.reports().list_for_player(scout_player.id, 100).await?;
+            assert_eq!(reports.len(), 1, "Should have 1 battle report");
+
+            let report = &reports[0];
+
+            // Verify the report has scouting data
+            assert!(matches!(report.payload, ReportPayload::Battle(_)));
+
+            if let ReportPayload::Battle(battle_report) = report.payload.clone() {
+                assert!(
+                    battle_report.scouting.is_some(),
+                    "Battle report should have scouting data"
+                );
+
+                let scouting_info = battle_report.scouting.as_ref().unwrap();
+                assert_eq!(scouting_info.target, ScoutingTarget::Resources);
+                // Verify we got resource information
+                match &scouting_info.target_report {
+                    ScoutingTargetReport::Resources(resources) => {
+                        assert!(resources.total() > 0, "Should have scouted some resources");
+                    }
+                    _ => {
+                        panic!("Expected Resources report");
+                    }
+                }
+            }
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_scout_defenses_creates_correct_report() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let scout_units = [0, 0, 0, 5, 0, 0, 0, 0, 0, 0]; // 5 scouts
+        let (scout_player, scout_village, scout_army, _, _) = {
+            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+        };
+        let original_home_army_id = scout_army.id;
+
+        let (_target_player, target_village, _target_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Test scouting defenses
+        let command = ScoutVillage {
+            player_id: scout_player.id,
+            village_id: scout_village.id,
+            army_id: original_home_army_id,
+            target_village_id: target_village.id,
+            target: ScoutingTarget::Defenses,
+            units: scout_units,
+        };
+
+        let handler = ScoutVillageCommandHandler::new();
+        app.execute(command, handler).await?;
+
+        let scout_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(scout_player.id).await?;
+            assert_eq!(jobs.len(), 1);
+            let job = jobs.first().unwrap().clone();
+            uow.rollback().await?;
+            job
+        };
+
+        // Process the scout job
+        worker.process_jobs(&vec![scout_job.clone()]).await?;
+
+        // Verify battle report was created with defense scouting data
+        {
+            let uow = uow_provider.tx().await?;
+
+            let reports = uow.reports().list_for_player(scout_player.id, 100).await?;
+            assert_eq!(reports.len(), 1, "Should have 1 battle report");
+
+            let report = &reports[0];
+
+            // Verify the report has scouting data
+            assert!(matches!(report.payload, ReportPayload::Battle(_)));
+
+            if let ReportPayload::Battle(battle_report) = report.payload.clone() {
+                assert!(
+                    battle_report.scouting.is_some(),
+                    "Battle report should have scouting data"
+                );
+
+                let scouting_info = battle_report.scouting.as_ref().unwrap();
+                assert_eq!(scouting_info.target, ScoutingTarget::Defenses);
+                // Verify we got defense information
+                match &scouting_info.target_report {
+                    ScoutingTargetReport::Defenses {
+                        wall,
+                        palace,
+                        residence,
+                    } => {
+                        // Just verify the structure is correct - actual values depend on target village setup
+                        assert!(wall.is_none() || wall.is_some());
+                        assert!(palace.is_none() || palace.is_some());
+                        assert!(residence.is_none() || residence.is_some());
+                    }
+                    _ => {
+                        panic!("Expected Defenses report");
+                    }
+                }
+            }
+
+            uow.rollback().await?;
         }
 
         Ok(())

@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{battle::AttackType, common::ResourceGroup, map::Position, tribe::Tribe};
+use crate::{
+    battle::{AttackType, ScoutingBattleReport},
+    common::ResourceGroup,
+    map::Position,
+    tribe::Tribe,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReinforcementReportPayload {
@@ -44,4 +49,6 @@ pub struct BattleReportPayload {
     pub defender: Option<BattlePartyPayload>,
     #[serde(default)]
     pub reinforcements: Vec<BattlePartyPayload>,
+    #[serde(default)]
+    pub scouting: Option<ScoutingBattleReport>,
 }

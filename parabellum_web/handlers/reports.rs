@@ -91,9 +91,10 @@ fn map_report(report: ReportView) -> ReportListEntry {
     let (title, summary) = match report.payload.clone() {
         parabellum_types::reports::ReportPayload::Battle(payload) => {
             // Verb based on attack type
-            let verb = match payload.attack_type {
-                AttackType::Raid => "raided",
-                AttackType::Normal => "attacked",
+            let verb = match (payload.attack_type, payload.scouting.is_some()) {
+                (_, true) => "scouted",
+                (AttackType::Raid, _) => "raided",
+                (AttackType::Normal, _) => "attacked",
             };
 
             // Title: "VillageA attacked VillageB"
