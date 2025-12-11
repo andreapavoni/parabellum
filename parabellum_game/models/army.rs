@@ -250,6 +250,21 @@ impl Army {
             .sum()
     }
 
+    /// Checks if the army contains only scouts (index 3) and no other units.
+    pub fn is_only_scouts(&self) -> bool {
+        self.units[3] > 0
+            && self
+                .units
+                .iter()
+                .enumerate()
+                .all(|(idx, &count)| idx == 3 || count == 0)
+    }
+
+    /// Checks if the army contains catapults (index 7).
+    pub fn has_catapults(&self) -> bool {
+        self.units[7] > 0
+    }
+
     /// Updates the units of the army.
     pub fn update_units(&mut self, units: &TroopSet) {
         self.units = *units;
