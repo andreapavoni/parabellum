@@ -15,4 +15,13 @@ pub trait ArmyRepository: Send + Sync {
 
     async fn save(&self, army: &Army) -> Result<(), ApplicationError>;
     async fn remove(&self, army_id: Uuid) -> Result<(), ApplicationError>;
+
+    /// Save army if it has units or hero, otherwise remove it
+    async fn save_or_remove(&self, army: &Army) -> Result<(), ApplicationError> {
+        if army.immensity() == 0 {
+            self.remove(army.id).await
+        } else {
+            self.save(army).await
+        }
+    }
 }

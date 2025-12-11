@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use chrono::Utc;
 use tracing::{info, instrument};
 
 use parabellum_game::{battle::Battle, models::buildings::Building};
@@ -91,23 +90,29 @@ impl JobHandler for AttackJobHandler {
         }
 
         army_repo.save(&atk_army).await?;
-        village_repo.save(&def_village).await?;
 
+        // Save or remove defender's home army
         if let Some(army) = def_village.army() {
-            army_repo.save(army).await?;
-
             if let Some(hero) = army.hero() {
                 hero_repo.save(&hero).await?;
             }
+            army_repo.save_or_remove(army).await?;
+
+            // Clear village reference if army was destroyed
+            if army.immensity() == 0 {
+                def_village.set_army(None)?;
+            }
         }
 
+        // Save or remove reinforcements
         for reinforcement_army in def_village.reinforcements() {
-            army_repo.save(reinforcement_army).await?;
-
             if let Some(hero) = reinforcement_army.hero() {
                 hero_repo.save(&hero).await?;
             }
+            army_repo.save_or_remove(reinforcement_army).await?;
         }
+
+        village_repo.save(&def_village).await?;
 
         let return_travel_time = atk_village.position.calculate_travel_time_secs(
             def_village.position.clone(),
@@ -194,10 +199,11 @@ impl JobHandler for AttackJobHandler {
             target_village_id: Some(def_village.id),
         };
 
+        // TODO: add reinforcements owners in audiences
         let audiences = vec![
             ReportAudience {
                 player_id: atk_village.player_id,
-                read_at: Some(Utc::now()),
+                read_at: None,
             },
             ReportAudience {
                 player_id: def_village.player_id,
