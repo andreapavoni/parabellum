@@ -49,6 +49,15 @@ impl Query for GetPlayerByUserId {
     type Output = Player;
 }
 
+/// Fetch the player entity by player id.
+pub struct GetPlayerById {
+    pub player_id: Uuid,
+}
+
+impl Query for GetPlayerById {
+    type Output = Player;
+}
+
 /// Fetch a village by id.
 pub struct GetVillageById {
     pub id: u32,

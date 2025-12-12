@@ -306,6 +306,7 @@ function startMapHandler() {
       const data = tile || {};
       const ownerLabel = data.player_name || '-';
       const population = data.village_population || '-';
+      const tribe = data.tribe || '-';
 
       const html = `
       <div class="text-center mb-4">
@@ -326,6 +327,12 @@ function startMapHandler() {
           <td class="py-2 text-gray-600">Population</td>
           <td class="py-2 text-right font-bold text-black">
             ${population}
+          </td>
+        </tr>
+        <tr class="border-b border-gray-200">
+          <td class="py-2 text-gray-600">Tribe</td>
+          <td class="py-2 text-right font-bold text-black">
+            ${tribe}
           </td>
         </tr>
       </table>

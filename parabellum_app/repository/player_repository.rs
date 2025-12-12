@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use parabellum_types::common::Player;
 use parabellum_types::errors::ApplicationError;
+use parabellum_types::tribe::Tribe;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerLeaderboardEntry {
@@ -9,6 +10,7 @@ pub struct PlayerLeaderboardEntry {
     pub username: String,
     pub village_count: i64,
     pub population: i64,
+    pub tribe: Tribe,
 }
 
 #[async_trait::async_trait]

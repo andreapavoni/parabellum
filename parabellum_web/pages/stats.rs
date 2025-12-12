@@ -2,8 +2,10 @@ use dioxus::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LeaderboardEntry {
+    pub player_id: String,
     pub rank: i64,
     pub username: String,
+    pub tribe: String,
     pub village_count: i64,
     pub population: i64,
 }
@@ -47,6 +49,7 @@ pub fn StatsPage(entries: Vec<LeaderboardEntry>, pagination: PaginationInfo) -> 
                         tr {
                             th { class: "px-4 py-3 w-16", "#" }
                             th { class: "px-4 py-3", "Player" }
+                            th { class: "px-4 py-3", "Tribe" }
                             th { class: "px-4 py-3 text-right", "Villages" }
                             th { class: "px-4 py-3 text-right", "Population" }
                         }
@@ -64,7 +67,10 @@ pub fn StatsPage(entries: Vec<LeaderboardEntry>, pagination: PaginationInfo) -> 
                             for entry in entries {
                                 tr { class: "hover:bg-gray-50",
                                     td { class: "px-4 py-3 font-mono text-gray-600", "{entry.rank}" }
-                                    td { class: "px-4 py-3 font-semibold text-gray-800", "{entry.username}" }
+                                    td { class: "px-4 py-3 font-semibold text-gray-800",
+                                        a { class: "text-green-700 hover:underline", href: format!("/players/{}", entry.player_id), "{entry.username}" }
+                                    }
+                                    td { class: "px-4 py-3 text-gray-700", "{entry.tribe}" }
                                     td { class: "px-4 py-3 text-right text-gray-700", "{entry.village_count}" }
                                     td { class: "px-4 py-3 text-right text-gray-900 font-semibold", "{entry.population}" }
                                 }

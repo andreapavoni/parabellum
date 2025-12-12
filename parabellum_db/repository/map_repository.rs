@@ -101,7 +101,8 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                 v.player_id AS fallback_player_id,
                 v.name AS village_name,
                 v.population AS village_population,
-                p.username AS player_name
+                p.username AS player_name,
+                p.tribe as tribe
             FROM map_fields AS mf
             LEFT JOIN villages AS v
                 ON v.id = mf.id
@@ -131,6 +132,7 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                     village_name: record.village_name,
                     village_population: record.village_population,
                     player_name: record.player_name,
+                    tribe: record.tribe.map(|t| t.into()),
                 }
             })
             .collect();
@@ -151,6 +153,7 @@ struct DbMapFieldWithOwner {
     village_name: Option<String>,
     village_population: Option<i32>,
     player_name: Option<String>,
+    tribe: Option<db_models::Tribe>,
 }
 
 fn build_region_ids(center_x: i32, center_y: i32, radius: i32, world_size: i32) -> Vec<i32> {

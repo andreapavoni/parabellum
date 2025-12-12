@@ -85,8 +85,10 @@ pub async fn stats_page(
         .into_iter()
         .enumerate()
         .map(|(idx, entry)| LeaderboardEntry {
+            player_id: entry.player_id.to_string(),
             rank: (page - 1) * LEADERBOARD_PAGE_SIZE + idx as i64 + 1,
             username: entry.username,
+            tribe: format!("{:?}", entry.tribe),
             village_count: entry.village_count,
             population: entry.population,
         })

@@ -18,7 +18,8 @@ use crate::handlers::{
         send_troops, train_units,
     },
     home::home_page,
-    map::{map_page, map_region},
+    map::{map_page, map_page_with_id, map_region},
+    player::player_profile,
     reports::{report_page, reports_page},
     resources::resources_page,
     stats::stats_page,
@@ -72,9 +73,11 @@ impl WebRouter {
             .route("/village", get(village_page))
             .route("/resources", get(resources_page))
             .route("/map", get(map_page))
+            .route("/map/{field_id}", get(map_page_with_id))
             .route("/map/data", get(map_region))
             .route("/reports", get(reports_page))
             .route("/reports/{id}", get(report_page))
+            .route("/players/{id}", get(player_profile))
             .route("/stats", get(stats_page))
             .route("/build/{slot_id}", get(building_page).post(build))
             .route("/army/train", post(train_units))

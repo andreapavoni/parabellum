@@ -452,6 +452,7 @@ pub mod tests {
                     username: player.username.clone(),
                     village_count: 0,
                     population: 0,
+                    tribe: player.tribe.clone(),
                 })
                 .collect();
 

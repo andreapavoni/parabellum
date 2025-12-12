@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id as player_id,\n                p.username,\n                p.tribe as \"tribe: _\",\n                COUNT(v.id) as \"village_count!: i64\",\n                COALESCE(SUM(v.population), 0) as \"population!: i64\"\n            FROM players p\n            LEFT JOIN villages v ON v.player_id = p.id\n            GROUP BY p.id, p.username\n            ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "tribe: _",
+        "type_info": {
+          "Custom": {
+            "name": "tribe",
+            "kind": {
+              "Enum": [
+                "Roman",
+                "Gaul",
+                "Teuton",
+                "Natar",
+                "Nature"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "village_count!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "population!: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "40c2431aa8614c11f46834378beb89f26b27c0e082f5144a040fe58b5dda9980"
+}

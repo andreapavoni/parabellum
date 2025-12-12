@@ -6,13 +6,15 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 use dioxus::prelude::*;
 use parabellum_app::{
-    cqrs::queries::GetMapRegion, queries_handlers::GetMapRegionHandler, repository::MapRegionTile,
+    cqrs::queries::{GetMapRegion, GetVillageById},
+    queries_handlers::{GetMapRegionHandler, GetVillageByIdHandler},
+    repository::MapRegionTile,
 };
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_types::map::{Position, ValleyTopology};
@@ -63,6 +65,8 @@ pub struct MapTileResponse {
     pub village_population: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tribe: Option<String>,
     pub tile_type: TileType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub valley: Option<ValleyDistribution>,
@@ -122,6 +126,7 @@ impl From<MapRegionTile> for MapTileResponse {
             village_name: tile.village_name,
             village_population: tile.village_population,
             player_name: tile.player_name,
+            tribe: tile.tribe.map(|t| format!("{t:?}")),
             tile_type,
             valley,
             oasis,
@@ -138,6 +143,47 @@ pub async fn map_page(State(state): State<AppState>, user: CurrentUser) -> impl 
             data: layout_data.clone(),
             MapPage {
                 village: layout_data.village.unwrap(),
+                world_size: state.world_size
+            }
+        }
+    });
+
+    Html(wrap_in_html(&body_content))
+}
+
+/// GET /map/{field_id} - map centered on a specific village/valley id
+pub async fn map_page_with_id(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(field_id): Path<u32>,
+) -> impl IntoResponse {
+    let layout_data = create_layout_data(&user, "map");
+
+    // Try to load the requested village; fall back to the user's current village on failure
+    let target_village = state
+        .app_bus
+        .query(
+            GetVillageById { id: field_id },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                "Unable to load village {} for map view, using current village. Error: {}",
+                field_id,
+                e
+            );
+            layout_data
+                .village
+                .clone()
+                .expect("layout_data always provides a village")
+        });
+
+    let body_content = dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data.clone(),
+            MapPage {
+                village: target_village,
                 world_size: state.world_size
             }
         }

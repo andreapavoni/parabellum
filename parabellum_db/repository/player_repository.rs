@@ -94,11 +94,22 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             .count
             .unwrap_or(0);
 
-        let rows = sqlx::query!(
+        #[derive(Debug)]
+        struct LeaderboardRow {
+            player_id: Uuid,
+            username: String,
+            tribe: db_models::Tribe,
+            village_count: i64,
+            population: i64,
+        }
+
+        let rows = sqlx::query_as!(
+            LeaderboardRow,
             r#"
             SELECT
                 p.id as player_id,
                 p.username,
+                p.tribe as "tribe: _",
                 COUNT(v.id) as "village_count!: i64",
                 COALESCE(SUM(v.population), 0) as "population!: i64"
             FROM players p
@@ -121,6 +132,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
                 username: row.username,
                 village_count: row.village_count,
                 population: row.population,
+                tribe: row.tribe.into(),
             })
             .collect();
 
