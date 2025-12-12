@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id as player_id,\n                p.username,\n                COUNT(v.id) as \"village_count!: i64\",\n                COALESCE(SUM(v.population), 0) as \"population!: i64\"\n            FROM players p\n            LEFT JOIN villages v ON v.player_id = p.id\n            GROUP BY p.id, p.username\n            ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC\n            LIMIT $1 OFFSET $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "player_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "village_count!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "population!: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f3a07c5f394112a59e6545f68268ab32b5b97f60c04e055f9dc4bc06ebf3a962"
+}

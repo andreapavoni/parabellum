@@ -6,4 +6,5 @@ pub mod home;
 pub mod map;
 pub mod reports;
 pub mod resources;
+pub mod stats;
 pub mod village;

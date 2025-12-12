@@ -13,7 +13,7 @@ pub use hero_repository::HeroRepository;
 pub use job_repository::JobRepository;
 pub use map_repository::{MapRegionTile, MapRepository};
 pub use marketplace_repository::MarketplaceRepository;
-pub use player_repository::PlayerRepository;
+pub use player_repository::{PlayerLeaderboardEntry, PlayerRepository};
 pub use report_repository::{NewReport, ReportAudience, ReportRecord, ReportRepository};
 pub use user_repository::UserRepository;
 pub use village_repository::{VillageInfo, VillageRepository};

@@ -21,6 +21,7 @@ use crate::handlers::{
     map::{map_page, map_region},
     reports::{report_page, reports_page},
     resources::resources_page,
+    stats::stats_page,
     village::village_page,
 };
 
@@ -74,6 +75,7 @@ impl WebRouter {
             .route("/map/data", get(map_region))
             .route("/reports", get(reports_page))
             .route("/reports/{id}", get(report_page))
+            .route("/stats", get(stats_page))
             .route("/build/{slot_id}", get(building_page).post(build))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))

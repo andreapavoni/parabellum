@@ -30,8 +30,9 @@ pub mod tests {
         },
         repository::{
             ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
-            MarketplaceRepository, NewReport, PlayerRepository, ReportAudience, ReportRecord,
-            ReportRepository, UserRepository, VillageInfo, VillageRepository,
+            MarketplaceRepository, NewReport, PlayerLeaderboardEntry, PlayerRepository,
+            ReportAudience, ReportRecord, ReportRepository, UserRepository, VillageInfo,
+            VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -433,6 +434,44 @@ pub mod tests {
             } else {
                 Err(ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))
             }
+        }
+
+        async fn leaderboard_page(
+            &self,
+            offset: i64,
+            limit: i64,
+        ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
+            // Build a predictable, deterministic ordering for mock data.
+            let mut entries: Vec<PlayerLeaderboardEntry> = self
+                .players
+                .lock()
+                .unwrap()
+                .values()
+                .map(|player| PlayerLeaderboardEntry {
+                    player_id: player.id,
+                    username: player.username.clone(),
+                    village_count: 0,
+                    population: 0,
+                })
+                .collect();
+
+            entries.sort_by(|a, b| {
+                b.population
+                    .cmp(&a.population)
+                    .then_with(|| b.village_count.cmp(&a.village_count))
+                    .then_with(|| a.username.cmp(&b.username))
+            });
+
+            let total = entries.len() as i64;
+            let start = offset.max(0) as usize;
+            let end = (start + limit as usize).min(entries.len());
+            let page_entries = if start >= entries.len() {
+                Vec::new()
+            } else {
+                entries[start..end].to_vec()
+            };
+
+            Ok((page_entries, total))
         }
     }
 

@@ -9,7 +9,7 @@ use parabellum_types::{
 };
 use uuid::Uuid;
 
-use crate::repository::MapRegionTile;
+use crate::repository::{MapRegionTile, PlayerLeaderboardEntry};
 use crate::{cqrs::Query, jobs::JobStatus};
 
 /// Checks if a user is authenticates with email and password.
@@ -252,4 +252,22 @@ pub struct GetVillageInfoByIds {
 
 impl Query for GetVillageInfoByIds {
     type Output = std::collections::HashMap<u32, crate::repository::VillageInfo>;
+}
+
+#[derive(Debug, Clone)]
+pub struct Leaderboard {
+    pub entries: Vec<PlayerLeaderboardEntry>,
+    pub total_players: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
+/// Fetch a paginated leaderboard ordered by total population.
+pub struct GetLeaderboard {
+    pub page: i64,
+    pub per_page: i64,
+}
+
+impl Query for GetLeaderboard {
+    type Output = Leaderboard;
 }
