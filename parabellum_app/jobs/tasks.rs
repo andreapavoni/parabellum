@@ -1,5 +1,5 @@
-use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::battle::AttackType;
+use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -24,6 +24,10 @@ pub struct AttackTask {
     pub attack_type: AttackType,
 }
 
+fn default_scout_attack_type() -> AttackType {
+    AttackType::Raid
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoutTask {
     pub army_id: Uuid,
@@ -32,6 +36,8 @@ pub struct ScoutTask {
     pub target_village_id: i32,
     pub target_player_id: Uuid,
     pub target: ScoutingTarget,
+    #[serde(default = "default_scout_attack_type")]
+    pub attack_type: AttackType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

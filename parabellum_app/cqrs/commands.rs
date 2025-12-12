@@ -63,6 +63,7 @@ pub struct ScoutVillage {
     pub units: TroopSet,
     pub target_village_id: u32,
     pub target: ScoutingTarget,
+    pub attack_type: AttackType,
 }
 impl Command for ScoutVillage {}
 

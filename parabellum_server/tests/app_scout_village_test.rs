@@ -10,7 +10,7 @@ pub mod tests {
             tasks::{ArmyReturnTask, ScoutTask},
         },
     };
-    use parabellum_types::battle::{ScoutingTarget, ScoutingTargetReport};
+    use parabellum_types::battle::{AttackType, ScoutingTarget, ScoutingTargetReport};
     use parabellum_types::tribe::Tribe;
     use parabellum_types::{Result, reports::ReportPayload};
 
@@ -43,6 +43,7 @@ pub mod tests {
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
             units: scout_units,
+            attack_type: AttackType::Raid,
         };
 
         let handler = ScoutVillageCommandHandler::new();
@@ -67,6 +68,7 @@ pub mod tests {
                 "Deployed army ID should be new"
             );
             assert_eq!(payload.target, ScoutingTarget::Resources);
+            assert_eq!(payload.attack_type, AttackType::Raid);
 
             let scout_village = uow_assert1.villages().get_by_id(scout_village.id).await?;
 
@@ -208,6 +210,7 @@ pub mod tests {
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
             units: scout_units,
+            attack_type: AttackType::Raid,
         };
 
         let handler = ScoutVillageCommandHandler::new();
@@ -290,6 +293,7 @@ pub mod tests {
             target_village_id: target_village.id,
             target: ScoutingTarget::Defenses,
             units: scout_units,
+            attack_type: AttackType::Normal,
         };
 
         let handler = ScoutVillageCommandHandler::new();

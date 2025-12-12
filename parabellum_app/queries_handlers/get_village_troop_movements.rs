@@ -3,7 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::Utc;
 use parabellum_game::models::army::Army;
 use parabellum_types::battle::AttackType;
-use parabellum_types::{Result, errors::ApplicationError, map::Position, tribe::Tribe};
+use parabellum_types::{
+    Result,
+    errors::{ApplicationError, DbError},
+    map::Position,
+    tribe::Tribe,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -17,7 +22,7 @@ use crate::{
     },
     jobs::{
         Job,
-        tasks::{ArmyReturnTask, AttackTask, ReinforcementTask},
+        tasks::{ArmyReturnTask, AttackTask, ReinforcementTask, ScoutTask},
     },
     repository::{ArmyRepository, VillageRepository},
     uow::UnitOfWork,
@@ -85,6 +90,20 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         outgoing.push(movement);
                     }
                 }
+                "Scout" => {
+                    if let Some(movement) = scout_movement(
+                        job,
+                        TroopMovementDirection::Outgoing,
+                        &village_repo,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
+                    )
+                    .await?
+                    {
+                        outgoing.push(movement);
+                    }
+                }
                 "ArmyReturn" => {
                     if let Some(movement) = return_movement(
                         job,
@@ -120,6 +139,20 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                 }
                 "Reinforcement" => {
                     if let Some(movement) = reinforcement_movement(
+                        job,
+                        TroopMovementDirection::Incoming,
+                        &village_repo,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
+                    )
+                    .await?
+                    {
+                        incoming.push(movement);
+                    }
+                }
+                "Scout" => {
+                    if let Some(movement) = scout_movement(
                         job,
                         TroopMovementDirection::Incoming,
                         &village_repo,
@@ -175,14 +208,19 @@ async fn army_for(
     repo: &Arc<dyn ArmyRepository + '_>,
     cache: &mut HashMap<Uuid, Army>,
     army_id: Uuid,
-) -> Result<Army, ApplicationError> {
+) -> Result<Option<Army>, ApplicationError> {
     if let Some(army) = cache.get(&army_id) {
-        return Ok(army.clone());
+        return Ok(Some(army.clone()));
     }
 
-    let army = repo.get_by_id(army_id).await?;
-    cache.insert(army_id, army.clone());
-    Ok(army)
+    match repo.get_by_id(army_id).await {
+        Ok(army) => {
+            cache.insert(army_id, army.clone());
+            Ok(Some(army))
+        }
+        Err(ApplicationError::Db(DbError::ArmyNotFound(_))) => Ok(None),
+        Err(err) => Err(err),
+    }
 }
 
 async fn attack_movement(
@@ -203,7 +241,57 @@ async fn attack_movement(
 
     let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
     let target = snapshot_for(village_repo, village_cache, target_id).await?;
-    let army = army_for(army_repo, army_cache, payload.army_id).await?;
+    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
+        tracing::warn!(
+            job_id = %job.id,
+            army_id = %payload.army_id,
+            "Skipping attack movement because deployed army record is missing"
+        );
+        return Ok(None);
+    };
+
+    let movement_type = match payload.attack_type {
+        AttackType::Raid => TroopMovementType::Raid,
+        AttackType::Normal => TroopMovementType::Attack,
+    };
+
+    Ok(Some(build_movement(
+        job,
+        movement_type,
+        direction,
+        origin,
+        target,
+        *army.units(),
+        army.tribe.clone(),
+    )))
+}
+
+async fn scout_movement(
+    job: &Job,
+    direction: TroopMovementDirection,
+    village_repo: &Arc<dyn VillageRepository + '_>,
+    army_repo: &Arc<dyn ArmyRepository + '_>,
+    village_cache: &mut HashMap<u32, VillageSnapshot>,
+    army_cache: &mut HashMap<Uuid, Army>,
+) -> Result<Option<TroopMovement>, ApplicationError> {
+    let payload: ScoutTask = match serde_json::from_value(job.task.data.clone()) {
+        Ok(task) => task,
+        Err(_) => return Ok(None),
+    };
+
+    let origin_id = payload.attacker_village_id as u32;
+    let target_id = payload.target_village_id as u32;
+
+    let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
+    let target = snapshot_for(village_repo, village_cache, target_id).await?;
+    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
+        tracing::warn!(
+            job_id = %job.id,
+            army_id = %payload.army_id,
+            "Skipping scout movement because deployed army record is missing"
+        );
+        return Ok(None);
+    };
 
     let movement_type = match payload.attack_type {
         AttackType::Raid => TroopMovementType::Raid,
@@ -238,7 +326,14 @@ async fn reinforcement_movement(
     let target_id = payload.village_id as u32;
     let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
     let target = snapshot_for(village_repo, village_cache, target_id).await?;
-    let army = army_for(army_repo, army_cache, payload.army_id).await?;
+    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
+        tracing::warn!(
+            job_id = %job.id,
+            army_id = %payload.army_id,
+            "Skipping reinforcement movement because deployed army record is missing"
+        );
+        return Ok(None);
+    };
 
     Ok(Some(build_movement(
         job,
@@ -270,7 +365,14 @@ async fn return_movement(
         payload.destination_village_id as u32,
     )
     .await?;
-    let army = army_for(army_repo, army_cache, payload.army_id).await?;
+    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
+        tracing::warn!(
+            job_id = %job.id,
+            army_id = %payload.army_id,
+            "Skipping return movement because deployed army record is missing"
+        );
+        return Ok(None);
+    };
 
     Ok(Some(build_movement(
         job,

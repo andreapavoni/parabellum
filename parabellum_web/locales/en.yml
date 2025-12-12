@@ -70,6 +70,7 @@ game:
     invalid_units: Select at least one unit to send.
     invalid_building: You can only send troops from the Rally Point.
     army_missing: There are no troops stationed in this village.
+    scout_requires_attack: Scouting can only be used with attacks or raids.
   reports:
     title: Reports
     total: "%{count} reports"

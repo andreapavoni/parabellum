@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use tracing::{info, instrument};
 
 use parabellum_game::battle::Battle;
-use parabellum_types::battle::AttackType;
 use parabellum_types::{
     common::ResourceGroup,
     errors::ApplicationError,
@@ -56,7 +55,7 @@ impl JobHandler for ScoutJobHandler {
             .await?;
 
         let battle = Battle::new(
-            AttackType::Raid,
+            self.payload.attack_type.clone(),
             attacker_army.clone(),
             attacker_village.clone(),
             defender_village.clone(),
@@ -87,7 +86,7 @@ impl JobHandler for ScoutJobHandler {
         };
 
         let battle_payload = BattleReportPayload {
-            attack_type: AttackType::Raid,
+            attack_type: self.payload.attack_type.clone(),
             attacker_player: attacker_player.username.clone(),
             attacker_village: attacker_village.name.clone(),
             attacker_position: attacker_village.position.clone(),

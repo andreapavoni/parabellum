@@ -735,17 +735,6 @@ pub mod tests {
                 // Catapult damage should be a vector (possibly empty if no damage dealt)
                 let catapult_damage_count = payload.catapult_damage.len();
 
-                // If catapults survive and win, there should be some damage
-                // But we can't guarantee this without knowing exact battle outcome
-                // So we just verify the field exists and is accessible
-                assert!(
-                    catapult_damage_count >= 0,
-                    "Catapult damage field should be accessible"
-                );
-
-                println!("Wall damage: {:?}", payload.wall_damage);
-                println!("Catapult damage count: {}", catapult_damage_count);
-
                 // Verify damage report structure is correct if damage exists
                 if let Some(ref wall_dmg) = payload.wall_damage {
                     assert!(

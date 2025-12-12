@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, player_id, village_id, task, status as \"status: _\", completed_at, created_at, updated_at\n            FROM jobs\n            WHERE status IN ('Pending', 'Processing')\n              AND (\n                (task ->> 'task_type' = 'Attack' AND (task -> 'data' ->> 'target_village_id')::integer = $1)\n                OR (task ->> 'task_type' = 'Reinforcement' AND (task -> 'data' ->> 'village_id')::integer = $1)\n              )\n            ORDER BY completed_at ASC\n            ",
+  "query": "\n            SELECT id, player_id, village_id, task, status as \"status: _\", completed_at, created_at, updated_at\n            FROM jobs\n            WHERE status IN ('Pending', 'Processing')\n              AND (\n                (task ->> 'task_type' = 'Attack' AND (task -> 'data' ->> 'target_village_id')::integer = $1)\n                OR (task ->> 'task_type' = 'Scout' AND (task -> 'data' ->> 'target_village_id')::integer = $1)\n                OR (task ->> 'task_type' = 'Reinforcement' AND (task -> 'data' ->> 'village_id')::integer = $1)\n              )\n            ORDER BY completed_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -72,5 +72,5 @@
       false
     ]
   },
-  "hash": "271d0d9748d7d689747ada8bfc513359d48e80946b0f15af9c0aaf7cce3c61d0"
+  "hash": "642d5d4193b2127b370d0dcc6edea52ca31c30d69cefd755905d4eaf5bb94b05"
 }

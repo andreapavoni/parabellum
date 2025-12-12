@@ -565,12 +565,32 @@ pub async fn confirm_send_troops(
         };
 
     // Check if this is a scouting mission based on the form
-    let result = if let Some(ref scouting_target_str) = form.scouting_target {
+    // Only route to ScoutVillage if scouting_target is present AND non-empty
+    let is_scouting = form
+        .scouting_target
+        .as_ref()
+        .map_or(false, |s| !s.is_empty());
+
+    let result = if is_scouting {
         // This is a scouting mission - use ScoutVillage command
-        let scouting_target = if scouting_target_str == "defenses" {
+        let scouting_target = if form.scouting_target.as_ref().unwrap() == "defenses" {
             ScoutingTarget::Defenses
         } else {
             ScoutingTarget::Resources
+        };
+        let attack_type = match form.movement {
+            SendMovementKind::Attack => AttackType::Normal,
+            SendMovementKind::Raid => AttackType::Raid,
+            SendMovementKind::Reinforcement => {
+                return render_with_error(
+                    &state,
+                    jar,
+                    user,
+                    form.slot_id,
+                    t!("game.rally_point.scout_requires_attack").to_string(),
+                )
+                .await;
+            }
         };
 
         state
@@ -583,6 +603,7 @@ pub async fn confirm_send_troops(
                     units: troop_set,
                     target_village_id,
                     target: scouting_target,
+                    attack_type,
                 },
                 ScoutVillageCommandHandler::new(),
             )

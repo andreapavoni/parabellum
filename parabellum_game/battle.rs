@@ -156,8 +156,12 @@ impl Battle {
                 .sum::<u32>();
 
         if total_attacker_population > total_defender_population {
-            let ratio = total_defender_population as f64 / total_attacker_population as f64;
-            morale_bonus = ratio.powf(0.3); // TODO: simplified, original formula is more complex
+            if total_defender_population == 0 {
+                morale_bonus = 1.0;
+            } else {
+                let ratio = total_defender_population as f64 / total_attacker_population as f64;
+                morale_bonus = ratio.powf(0.3).max(0.1); // TODO: simplified, original formula is more complex
+            }
         }
 
         let effective_attack_power_f64 = total_attack_power_f64 * morale_bonus;
@@ -646,10 +650,72 @@ mod tests {
     use parabellum_types::{common::Player, tribe::Tribe};
 
     use super::*;
+    use crate::models::{
+        army::{Army, TroopSet},
+        village::Village,
+    };
     use crate::test_utils::{
         ArmyFactoryOptions, PlayerFactoryOptions, VillageFactoryOptions, army_factory,
         player_factory, village_factory,
     };
+
+    #[test]
+    fn test_battle_calculation_debug() {
+        let mut attacker_village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+
+        // Attacker: 50 Roman Legionnaires (strong infantry)
+        let attacker_army = Army::new(
+            None,
+            1,
+            Some(1),
+            attacker_village.player_id,
+            attacker_village.tribe.clone(),
+            &[50, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 50 legionnaires at index 0
+            &[0; 8],
+            None,
+        );
+
+        attacker_village.set_army(Some(&attacker_army)).unwrap();
+
+        // Defender: Empty village
+        let defender_village = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+
+        let battle = Battle::new(
+            AttackType::Normal,
+            attacker_army.clone(),
+            attacker_village,
+            defender_village,
+            None,
+        );
+
+        let report = battle.calculate_battle();
+
+        println!("=== BATTLE REPORT ===");
+        println!("Attacker losses: {:?}", report.attacker.losses);
+        println!("Attacker survivors: {:?}", report.attacker.survivors);
+        println!(
+            "Attacker loss percentage: {}",
+            report.attacker.loss_percentage
+        );
+
+        if let Some(ref defender) = report.defender {
+            println!("Defender losses: {:?}", defender.losses);
+            println!("Defender survivors: {:?}", defender.survivors);
+            println!("Defender loss percentage: {}", defender.loss_percentage);
+        } else {
+            println!("No defender army");
+        }
+
+        // Attacker should win against empty village
+        assert!(
+            report.attacker.survivors.iter().sum::<u32>() > 0,
+            "Attacker should have survivors"
+        );
+    }
 
     #[test]
     fn test_losses_attacker_wins_normal() {

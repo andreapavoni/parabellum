@@ -74,6 +74,7 @@ impl CommandHandler<ScoutVillage> for ScoutVillageCommandHandler {
             target_village_id: command.target_village_id as i32,
             target_player_id: defender_village.player_id,
             target: command.target,
+            attack_type: command.attack_type.clone(),
         };
 
         let job_payload = JobPayload::new("Scout", serde_json::to_value(&scout_payload)?);
