@@ -33,9 +33,9 @@ pub fn StatsPage(entries: Vec<LeaderboardEntry>, pagination: PaginationInfo) -> 
     };
 
     rsx! {
-        div { class: "max-w-4xl mx-auto space-y-4",
+        div { class: "max-w-2xl mx-auto space-y-4",
             div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-semibold text-gray-800", "Leaderboard" }
+                h1 { class: "text-2xl mt-3 font-semibold text-gray-800", "Leaderboard" }
                 div { class: "text-sm text-gray-600",
                     "Total players: {pagination.total_players}"
                 }
