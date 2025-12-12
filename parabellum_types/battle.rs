@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::common::ResourceGroup;
+use crate::{buildings::BuildingName, common::ResourceGroup};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 pub enum AttackType {
@@ -29,4 +29,11 @@ pub struct ScoutingBattleReport {
     pub was_detected: bool,
     pub target: ScoutingTarget,
     pub target_report: ScoutingTargetReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BuildingDamageReport {
+    pub name: BuildingName,
+    pub level_before: u8,
+    pub level_after: u8,
 }

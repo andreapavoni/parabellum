@@ -100,6 +100,8 @@ impl JobHandler for ScoutJobHandler {
             defender: None,
             reinforcements: vec![],
             scouting: battle_report.scouting.clone(),
+            wall_damage: None,
+            catapult_damage: vec![],
         };
 
         let new_report = NewReport {

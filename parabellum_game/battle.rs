@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::f64;
 
 use parabellum_types::{
-    battle::{AttackType, ScoutingBattleReport, ScoutingTarget, ScoutingTargetReport},
+    battle::{
+        AttackType, BuildingDamageReport, ScoutingBattleReport, ScoutingTarget,
+        ScoutingTargetReport,
+    },
     buildings::BuildingName,
     common::ResourceGroup,
     tribe::Tribe,
@@ -14,12 +17,6 @@ use crate::models::{
     buildings::Building,
     village::Village,
 };
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildingDamageReport {
-    pub name: BuildingName,
-    pub level_before: u8,
-    pub level_after: u8,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BattlePartyReport {

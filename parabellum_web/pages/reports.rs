@@ -387,6 +387,41 @@ pub fn BattleReportPage(
                     }
                 }
 
+                // Wall Damage (Rams)
+                if let Some(ref wall_dmg) = payload.wall_damage {
+                    div {
+                        class: "border rounded-md p-4 bg-orange-50",
+                        p {
+                            class: "text-xs uppercase text-gray-500 font-semibold mb-2",
+                            "🐏 Ram Damage"
+                        }
+                        p {
+                            class: "text-sm text-gray-700",
+                            "{wall_dmg.name} destroyed: Level {wall_dmg.level_before} → Level {wall_dmg.level_after}"
+                        }
+                    }
+                }
+
+                // Catapult Damage
+                if !payload.catapult_damage.is_empty() {
+                    div {
+                        class: "border rounded-md p-4 bg-red-50",
+                        p {
+                            class: "text-xs uppercase text-gray-500 font-semibold mb-2",
+                            "🎯 Catapult Damage"
+                        }
+                        div {
+                            class: "space-y-1",
+                            for dmg in &payload.catapult_damage {
+                                p {
+                                    class: "text-sm text-gray-700",
+                                    "{dmg.name} destroyed: Level {dmg.level_before} → Level {dmg.level_after}"
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Bounty
                 div {
                     class: "border rounded-md p-4",

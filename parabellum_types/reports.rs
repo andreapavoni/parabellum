@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    battle::{AttackType, ScoutingBattleReport},
+    battle::{AttackType, BuildingDamageReport, ScoutingBattleReport},
     common::ResourceGroup,
     map::Position,
     tribe::Tribe,
@@ -51,4 +51,8 @@ pub struct BattleReportPayload {
     pub reinforcements: Vec<BattlePartyPayload>,
     #[serde(default)]
     pub scouting: Option<ScoutingBattleReport>,
+    #[serde(default)]
+    pub wall_damage: Option<BuildingDamageReport>,
+    #[serde(default)]
+    pub catapult_damage: Vec<BuildingDamageReport>,
 }
