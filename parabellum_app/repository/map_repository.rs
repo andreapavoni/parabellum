@@ -7,6 +7,7 @@ pub struct MapRegionTile {
     pub village_name: Option<String>,
     pub village_population: Option<i32>,
     pub player_name: Option<String>,
+    pub tribe: Option<parabellum_types::tribe::Tribe>,
 }
 
 #[async_trait::async_trait]

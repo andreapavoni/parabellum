@@ -1,5 +1,7 @@
 mod authenticate_user;
+mod get_leaderboard;
 mod get_map_region;
+mod get_player_by_id;
 mod get_player_by_user_id;
 mod get_report_for_player;
 mod get_reports_for_player;
@@ -17,7 +19,9 @@ mod list_villages_by_player_id;
 pub(crate) mod queue_converters;
 
 pub use authenticate_user::AuthenticateUserHandler;
+pub use get_leaderboard::GetLeaderboardHandler;
 pub use get_map_region::GetMapRegionHandler;
+pub use get_player_by_id::GetPlayerByIdHandler;
 pub use get_player_by_user_id::GetPlayerByUserIdHandler;
 pub use get_report_for_player::GetReportForPlayerHandler;
 pub use get_reports_for_player::GetReportsForPlayerHandler;

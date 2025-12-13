@@ -2,6 +2,16 @@ use uuid::Uuid;
 
 use parabellum_types::common::Player;
 use parabellum_types::errors::ApplicationError;
+use parabellum_types::tribe::Tribe;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerLeaderboardEntry {
+    pub player_id: Uuid,
+    pub username: String,
+    pub village_count: i64,
+    pub population: i64,
+    pub tribe: Tribe,
+}
 
 #[async_trait::async_trait]
 pub trait PlayerRepository: Send + Sync {
@@ -13,4 +23,12 @@ pub trait PlayerRepository: Send + Sync {
 
     /// Returns a player by user id.
     async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError>;
+
+    /// Returns a paginated leaderboard ordered by total population (sum of all player villages).
+    /// Also returns total player count for pagination purposes.
+    async fn leaderboard_page(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError>;
 }

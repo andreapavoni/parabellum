@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use parabellum_app::repository::PlayerRepository;
+use parabellum_app::repository::{PlayerLeaderboardEntry, PlayerRepository};
 use parabellum_types::{
     Result,
     errors::{ApplicationError, DbError},
@@ -77,5 +77,65 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         .map_err(|_| ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))?;
 
         Ok(player.into())
+    }
+
+    async fn leaderboard_page(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        // Total player count for pagination
+        let total_players = sqlx::query!("SELECT COUNT(*) as count FROM players")
+            .fetch_one(&mut *tx_guard.as_mut())
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+            .count
+            .unwrap_or(0);
+
+        #[derive(Debug)]
+        struct LeaderboardRow {
+            player_id: Uuid,
+            username: String,
+            tribe: db_models::Tribe,
+            village_count: i64,
+            population: i64,
+        }
+
+        let rows = sqlx::query_as!(
+            LeaderboardRow,
+            r#"
+            SELECT
+                p.id as player_id,
+                p.username,
+                p.tribe as "tribe: _",
+                COUNT(v.id) as "village_count!: i64",
+                COALESCE(SUM(v.population), 0) as "population!: i64"
+            FROM players p
+            LEFT JOIN villages v ON v.player_id = p.id
+            GROUP BY p.id, p.username
+            ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC
+            LIMIT $1 OFFSET $2
+            "#,
+            limit,
+            offset
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let entries = rows
+            .into_iter()
+            .map(|row| PlayerLeaderboardEntry {
+                player_id: row.player_id,
+                username: row.username,
+                village_count: row.village_count,
+                population: row.population,
+                tribe: row.tribe.into(),
+            })
+            .collect();
+
+        Ok((entries, total_players))
     }
 }

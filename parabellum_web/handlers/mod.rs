@@ -4,6 +4,8 @@ pub mod buildings;
 pub mod helpers;
 pub mod home;
 pub mod map;
+pub mod player;
 pub mod reports;
 pub mod resources;
+pub mod stats;
 pub mod village;

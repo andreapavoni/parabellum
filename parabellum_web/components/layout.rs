@@ -98,7 +98,9 @@ pub fn NavBar(active: String) -> Element {
             div { class: "{nav_class(\"map\")}", title: "Map",
                 a { href: "/map", "🗺️" }
             }
-            div { class: "nav-icon", title: "Stats", "📊" }
+            div { class: "{nav_class(\"stats\")}", title: "Stats",
+                a { href: "/stats", "📊" }
+            }
             div { class: "{nav_class(\"reports\")}", title: "Reports",
                 a { href: "/reports", "📜" }
             }
