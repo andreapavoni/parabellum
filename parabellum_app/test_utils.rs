@@ -544,6 +544,7 @@ pub mod tests {
                             village_name: None,
                             village_population: None,
                             player_name: None,
+                            tribe: None,
                         });
                     }
                 }
