@@ -22,25 +22,25 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
 
     // Regular building slots (20-38)
     let building_positions = [
-        (20, "28%", "47%", "1"),
-        (21, "35%", "63%", "2"),
-        (22, "37%", "32%", "3"),
-        (23, "72%", "53%", "4"),
-        (24, "63%", "38%", "5"),
-        (25, "52%", "27%", "6"),
-        (26, "22%", "24%", "7"),
-        (27, "36%", "15%", "8"),
-        (28, "52%", "12%", "9"),
-        (29, "67%", "18%", "10"),
-        (30, "77%", "28%", "11"),
-        (31, "13%", "40%", "12"),
-        (32, "86%", "43%", "13"),
-        (33, "85%", "60%", "14"),
-        (34, "76%", "75%", "15"),
-        (35, "63%", "85%", "16"),
-        (36, "45%", "88%", "17"),
-        (37, "30%", "80%", "18"),
-        (38, "15%", "62%", "19"),
+        (20, "28%", "47%"),
+        (21, "35%", "63%"),
+        (22, "37%", "32%"),
+        (23, "72%", "53%"),
+        (24, "63%", "38%"),
+        (25, "52%", "27%"),
+        (26, "22%", "24%"),
+        (27, "36%", "15%"),
+        (28, "52%", "12%"),
+        (29, "67%", "18%"),
+        (30, "77%", "28%"),
+        (31, "13%", "40%"),
+        (32, "86%", "43%"),
+        (33, "85%", "60%"),
+        (34, "76%", "75%"),
+        (35, "63%", "85%"),
+        (36, "45%", "88%"),
+        (37, "30%", "80%"),
+        (38, "15%", "62%"),
     ];
 
     rsx! {
@@ -85,7 +85,7 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
             }
 
             // Regular building slots (20-38)
-            for (slot_id, top, left, label) in building_positions {
+            for (slot_id, top, left) in building_positions {
                 {
                     let slot = slots.iter().find(|s| s.slot_id == slot_id);
                     if let Some(slot) = slot {
@@ -95,7 +95,7 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                                 href: "/build/{slot_id}",
                                 style: "top: {top}; left: {left};",
                                 title: "{slot.title()}",
-                                span { class: "slot-label", "{label}" }
+                                span { class: "slot-label", "{slot.level}" }
                             }
                         }
                     } else {
