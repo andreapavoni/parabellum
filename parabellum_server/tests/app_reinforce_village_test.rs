@@ -174,4 +174,172 @@ pub mod tests {
         }
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_multiple_reinforcements_from_same_village_are_merged() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+
+        // Setup reinforcer with plenty of troops
+        let (reinforcer_player, reinforcer_village, reinforcing_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                [200, 100, 50, 30, 0, 0, 0, 0, 0, 0], // Multiple unit types
+                false,
+            )
+            .await?
+        };
+
+        // Setup target village
+        let (_target_player, target_village, _target_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // First reinforcement: send 50 legionnaires
+        let first_units = [50, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let command1 = ReinforceVillage {
+            player_id: reinforcer_player.id,
+            village_id: reinforcer_village.id,
+            army_id: reinforcing_army.id,
+            units: first_units,
+            target_village_id: target_village.id,
+            hero_id: None,
+        };
+
+        app.execute(command1, ReinforceVillageCommandHandler::new())
+            .await?;
+
+        let first_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            assert_eq!(jobs.len(), 1);
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+
+        // Process first reinforcement
+        worker.process_jobs(&vec![first_job]).await?;
+
+        // Verify first reinforcement arrived
+        let first_reinforcement_id = {
+            let uow = uow_provider.tx().await?;
+            let village = uow.villages().get_by_id(target_village.id).await?;
+            assert_eq!(
+                village.reinforcements().len(),
+                1,
+                "Should have 1 reinforcement army"
+            );
+            assert_eq!(
+                village.reinforcements()[0].units()[0],
+                50,
+                "Should have 50 legionnaires"
+            );
+            let id = village.reinforcements()[0].id;
+            uow.rollback().await?;
+            id
+        };
+
+        // Get updated home army ID after first reinforcement
+        let home_army_id_after_first = {
+            let uow = uow_provider.tx().await?;
+            let home_village = uow.villages().get_by_id(reinforcer_village.id).await?;
+            let army_id = home_village
+                .army()
+                .expect("Home village should have remaining army")
+                .id;
+            uow.rollback().await?;
+            army_id
+        };
+
+        // Second reinforcement: send 30 praetorians and 20 legionnaires
+        let second_units = [20, 30, 0, 0, 0, 0, 0, 0, 0, 0];
+        let command2 = ReinforceVillage {
+            player_id: reinforcer_player.id,
+            village_id: reinforcer_village.id,
+            army_id: home_army_id_after_first,
+            units: second_units,
+            target_village_id: target_village.id,
+            hero_id: None,
+        };
+
+        app.execute(command2, ReinforceVillageCommandHandler::new())
+            .await?;
+
+        let second_job = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            assert_eq!(jobs.len(), 1, "Should have 1 pending job");
+            let job = jobs[0].clone();
+            uow.rollback().await?;
+            job
+        };
+
+        // Process second reinforcement
+        worker.process_jobs(&vec![second_job]).await?;
+
+        // Verify reinforcements were merged
+        {
+            let uow = uow_provider.tx().await?;
+            let village = uow.villages().get_by_id(target_village.id).await?;
+
+            // Should still have only 1 reinforcement army (merged)
+            assert_eq!(
+                village.reinforcements().len(),
+                1,
+                "Should have exactly 1 reinforcement army (merged), found {}",
+                village.reinforcements().len()
+            );
+
+            let merged_reinforcement = &village.reinforcements()[0];
+
+            // Verify the merged army has combined units
+            assert_eq!(
+                merged_reinforcement.units()[0],
+                70, // 50 + 20 legionnaires
+                "Should have 70 legionnaires (50 + 20)"
+            );
+            assert_eq!(
+                merged_reinforcement.units()[1],
+                30, // 30 praetorians
+                "Should have 30 praetorians"
+            );
+
+            // Verify the ID is the same as the first reinforcement
+            assert_eq!(
+                merged_reinforcement.id, first_reinforcement_id,
+                "Reinforcement ID should remain the same after merge"
+            );
+
+            // Verify home village still has remaining troops
+            let home_village = uow.villages().get_by_id(reinforcer_village.id).await?;
+            assert!(
+                home_village.army().is_some(),
+                "Home village should still have remaining army"
+            );
+            let home_army = home_village.army().unwrap();
+            assert_eq!(
+                home_army.units()[0],
+                130, // 200 - 50 - 20
+                "Home should have 130 legionnaires remaining"
+            );
+            assert_eq!(
+                home_army.units()[1],
+                70, // 100 - 30
+                "Home should have 70 praetorians remaining"
+            );
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
 }

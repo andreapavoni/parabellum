@@ -587,20 +587,24 @@ impl Village {
         }
     }
 
+    /// Returns village loyalty.
     pub fn loyalty(&self) -> u8 {
         self.loyalty
     }
 
+    /// Returns home army, if any.
     pub fn army(&self) -> Option<&Army> {
         self.army.as_ref()
     }
 
+    /// Set home army.
     pub fn set_army(&mut self, army: Option<&Army>) -> Result<(), GameError> {
         self.army = army.cloned();
         self.update_state();
         Ok(())
     }
 
+    /// Merges a given army to the current home army.
     pub fn merge_army(&mut self, army: &Army) -> Result<(), GameError> {
         let mut home_army = self
             .army()
@@ -611,15 +615,35 @@ impl Village {
         Ok(())
     }
 
+    /// Returns reinforcements in village.
     pub fn reinforcements(&self) -> &Vec<Army> {
         &self.reinforcements
     }
 
+    /// Adds an army to the reinforcements in the village, merging with an existing
+    /// reinforcement from the same sender (player + origin village) if present.
     pub fn add_reinforcements(&mut self, army: &Army) -> Result<(), GameError> {
-        self.reinforcements.append(&mut vec![army.clone()]);
-        Ok(())
+        if let Some(idx) = self
+            .reinforcements
+            .iter()
+            .position(|r| r.player_id == army.player_id && r.village_id == army.village_id)
+        {
+            let mut existing = self.reinforcements[idx].clone();
+            existing.merge(army)?;
+            existing.current_map_field_id = Some(self.id as u32);
+            self.reinforcements[idx] = existing;
+            self.update_state();
+            Ok(())
+        } else {
+            let mut incoming = army.clone();
+            incoming.current_map_field_id = Some(self.id as u32);
+            self.reinforcements.push(incoming);
+            self.update_state();
+            Ok(())
+        }
     }
 
+    /// Returns the list of armies sent elsewhere.
     pub fn deployed_armies(&self) -> &Vec<Army> {
         &self.deployed_armies
     }

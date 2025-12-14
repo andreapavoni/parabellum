@@ -85,6 +85,11 @@ impl JobHandler for ScoutJobHandler {
             losses: battle_report.attacker.losses,
         };
 
+        let scouting_success = battle_report
+            .scouting
+            .as_ref()
+            .is_some_and(|_| battle_report.attacker.survivors.iter().any(|&u| u > 0));
+
         let battle_payload = BattleReportPayload {
             attack_type: self.payload.attack_type.clone(),
             attacker_player: attacker_player.username.clone(),
@@ -96,8 +101,36 @@ impl JobHandler for ScoutJobHandler {
             success: battle_report.attacker.survivors.iter().any(|&u| u > 0),
             bounty: ResourceGroup::new(0, 0, 0, 0),
             attacker: Some(attacker_payload),
-            defender: None,
-            reinforcements: vec![],
+            defender: if scouting_success {
+                Some(BattlePartyPayload {
+                    tribe: defender_village.tribe.clone(),
+                    army_before: defender_village
+                        .army()
+                        .map(|a| *a.units())
+                        .unwrap_or_default(),
+                    survivors: defender_village
+                        .army()
+                        .map(|a| *a.units())
+                        .unwrap_or_default(),
+                    losses: [0; 10],
+                })
+            } else {
+                None
+            },
+            reinforcements: if scouting_success {
+                defender_village
+                    .reinforcements()
+                    .iter()
+                    .map(|r| BattlePartyPayload {
+                        tribe: r.tribe.clone(),
+                        army_before: *r.units(),
+                        survivors: *r.units(),
+                        losses: [0; 10],
+                    })
+                    .collect()
+            } else {
+                vec![]
+            },
             scouting: battle_report.scouting.clone(),
             wall_damage: None,
             catapult_damage: vec![],

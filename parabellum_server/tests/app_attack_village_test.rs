@@ -723,17 +723,8 @@ pub mod tests {
             if let parabellum_types::reports::ReportPayload::Battle(ref payload) =
                 battle_report.payload
             {
-                // Check that damage fields are present (even if empty in some cases)
-                // The actual damage depends on battle calculations, but fields should exist
-
-                // Wall damage should be Some if rams dealt damage
-                // (In reality this depends on if there was a wall and if rams survived)
                 // We're just checking the field is accessible
-                let _wall_damage_exists =
-                    payload.wall_damage.is_some() || payload.wall_damage.is_none();
-
-                // Catapult damage should be a vector (possibly empty if no damage dealt)
-                let catapult_damage_count = payload.catapult_damage.len();
+                assert!(payload.wall_damage.is_some() || payload.wall_damage.is_none());
 
                 // Verify damage report structure is correct if damage exists
                 if let Some(ref wall_dmg) = payload.wall_damage {

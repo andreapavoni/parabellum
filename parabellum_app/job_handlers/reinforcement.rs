@@ -75,9 +75,25 @@ impl JobHandler for ReinforcementJobHandler {
                 }
             }
         } else {
-            // Or everything goes into target village reinforcements
+            // Or everything goes into target village reinforcements (merge if same sender)
+            let existing_idx = target_village.reinforcements().iter().position(|r| {
+                r.player_id == reinforcement.player_id && r.village_id == reinforcement.village_id
+            });
+
             reinforcement.current_map_field_id = Some(target_village.id);
-            army_repo.save(&reinforcement).await?;
+            target_village.add_reinforcements(&reinforcement)?;
+
+            // Persist merged or new reinforcement
+            if let Some(idx) = existing_idx {
+                let merged = target_village.reinforcements()[idx].clone();
+                army_repo.save(&merged).await?;
+                // Remove the incoming record to avoid duplicates
+                if merged.id != reinforcement.id {
+                    army_repo.remove(reinforcement.id).await?;
+                }
+            } else {
+                army_repo.save(&reinforcement).await?;
+            }
         }
 
         village_repo.save(&target_village).await?;
