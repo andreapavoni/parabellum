@@ -3,7 +3,7 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
-use crate::components::UpgradeBlock;
+use crate::{components::UpgradeBlock, view_helpers::building_description};
 
 /// Resource field page - shows production stats and upgrade block
 #[component]
@@ -23,14 +23,8 @@ pub fn ResourceFieldPage(
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
-    // Get description based on building type
-    let description = match building_name {
-        BuildingName::Woodcutter => t!("game.buildings.woodcutter.description"),
-        BuildingName::ClayPit => t!("game.buildings.clay_pit.description"),
-        BuildingName::IronMine => t!("game.buildings.iron_mine.description"),
-        BuildingName::Cropland => t!("game.buildings.cropland.description"),
-        _ => t!(""),
-    };
+    // Get description using the centralized helper
+    let description = building_description(&building_name);
 
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",

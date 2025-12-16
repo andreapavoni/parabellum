@@ -21,6 +21,7 @@ use parabellum_game::models::{
 use parabellum_types::{
     army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
+    common::ResourceGroup,
     tribe::Tribe,
 };
 use std::collections::{HashMap, HashSet};
@@ -33,9 +34,10 @@ use crate::{
     },
     http::AppState,
     pages::buildings::{
-        AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
-        GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage, SmithyQueueItem,
-        SmithyUpgradeOption, TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
+        AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, BuildingValueType,
+        EmptySlotPage, GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage,
+        SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage, TrainingBuildingPage,
+        TrainingQueueItem, UnitTrainingOption,
     },
     view_helpers::{
         BuildingQueueItemView, building_queue_to_views, training_queue_to_views, unit_display_name,
@@ -317,6 +319,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -350,6 +354,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -383,6 +389,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -412,6 +420,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -449,6 +458,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -474,6 +484,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -487,6 +498,152 @@ fn render_building_page(
                     }
                 }
             })
+        }
+        // Static buildings with value display
+        BuildingName::Warehouse | BuildingName::GreatWarehouse => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::Capacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Granary | BuildingName::GreatGranary => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::Capacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Sawmill => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Lumber",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Brickyard => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Clay",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::IronFoundry => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Iron",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::GrainMill | BuildingName::Bakery => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Crop",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::MainBuilding => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ConstructionSpeedBonus,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Cranny => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::HiddenCapacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::CityWall | BuildingName::EarthWall | BuildingName::Palisade => {
+            render_static_building(
+                layout_data,
+                user,
+                slot_id,
+                &slot_building,
+                next_level,
+                cost,
+                time_secs,
+                next_upkeep,
+                effective_queue_full,
+                &upgrade_info,
+                BuildingValueType::DefenseBonus,
+                csrf_token,
+                flash_error,
+            )
         }
         _ => {
             // Generic buildings - just upgrade block
@@ -513,6 +670,49 @@ fn render_building_page(
     };
 
     Html(wrap_in_html(&body_content)).into_response()
+}
+
+/// Helper to render a static building page (buildings with meaningful value display)
+fn render_static_building(
+    layout_data: crate::components::LayoutData,
+    user: &CurrentUser,
+    slot_id: u8,
+    slot_building: &parabellum_game::models::village::VillageBuilding,
+    next_level: u8,
+    cost: ResourceGroup,
+    time_secs: u32,
+    next_upkeep: u32,
+    effective_queue_full: bool,
+    upgrade_info: &Option<parabellum_game::models::buildings::Building>,
+    value_type: BuildingValueType,
+    csrf_token: String,
+    flash_error: Option<String>,
+) -> String {
+    let next_value = upgrade_info.as_ref().map(|b| b.value);
+
+    dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data,
+            StaticBuildingPage {
+                village: user.village.clone(),
+                slot_id: slot_id,
+                building_name: slot_building.building.name.clone(),
+                current_level: slot_building.building.level,
+                current_value: slot_building.building.value,
+                next_value: next_value,
+                value_type: value_type,
+                population: slot_building.building.population,
+                next_level: next_level,
+                cost: cost,
+                time_secs: time_secs,
+                current_upkeep: slot_building.building.cost().upkeep,
+                next_upkeep: next_upkeep,
+                queue_full: effective_queue_full,
+                csrf_token: csrf_token,
+                flash_error: flash_error,
+            }
+        }
+    })
 }
 
 /// Helper to fetch rally point movements for a slot

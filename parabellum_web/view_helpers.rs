@@ -283,3 +283,53 @@ pub fn prepare_rally_point_cards(
 
     cards
 }
+
+/// Returns the localized description for a building.
+pub fn building_description(building: &BuildingName) -> String {
+    let description = match building {
+        BuildingName::Woodcutter => t!("game.buildings.woodcutter.description"),
+        BuildingName::ClayPit => t!("game.buildings.clay_pit.description"),
+        BuildingName::IronMine => t!("game.buildings.iron_mine.description"),
+        BuildingName::Cropland => t!("game.buildings.cropland.description"),
+        BuildingName::Sawmill => t!("game.buildings.sawmill.description"),
+        BuildingName::Brickyard => t!("game.buildings.brickyard.description"),
+        BuildingName::IronFoundry => t!("game.buildings.iron_foundry.description"),
+        BuildingName::GrainMill => t!("game.buildings.grain_mill.description"),
+        BuildingName::Bakery => t!("game.buildings.bakery.description"),
+        BuildingName::Warehouse => t!("game.buildings.warehouse.description"),
+        BuildingName::Granary => t!("game.buildings.granary.description"),
+        BuildingName::Smithy => t!("game.buildings.smithy.description"),
+        BuildingName::TournamentSquare => t!("game.buildings.tournament_square.description"),
+        BuildingName::MainBuilding => t!("game.buildings.main_building.description"),
+        BuildingName::RallyPoint => t!("game.buildings.rally_point.description"),
+        BuildingName::Marketplace => t!("game.buildings.marketplace.description"),
+        BuildingName::Embassy => t!("game.buildings.embassy.description"),
+        BuildingName::Barracks => t!("game.buildings.barracks.description"),
+        BuildingName::Stable => t!("game.buildings.stable.description"),
+        BuildingName::Workshop => t!("game.buildings.workshop.description"),
+        BuildingName::Academy => t!("game.buildings.academy.description"),
+        BuildingName::Cranny => t!("game.buildings.cranny.description"),
+        BuildingName::TownHall => t!("game.buildings.town_hall.description"),
+        BuildingName::Residence => t!("game.buildings.residence.description"),
+        BuildingName::Palace => t!("game.buildings.palace.description"),
+        BuildingName::Treasury => t!("game.buildings.treasury.description"),
+        BuildingName::TradeOffice => t!("game.buildings.trade_office.description"),
+        BuildingName::GreatBarracks => t!("game.buildings.great_barracks.description"),
+        BuildingName::GreatStable => t!("game.buildings.great_stable.description"),
+        BuildingName::CityWall => t!("game.buildings.city_wall.description"),
+        BuildingName::EarthWall => t!("game.buildings.earth_wall.description"),
+        BuildingName::Palisade => t!("game.buildings.palisade.description"),
+        BuildingName::StonemansionLodge => t!("game.buildings.stonemason.description"),
+        BuildingName::Brewery => t!("game.buildings.brewery.description"),
+        BuildingName::Trapper => t!("game.buildings.trapper.description"),
+        BuildingName::HeroMansion => t!("game.buildings.heros_mansion.description"),
+        BuildingName::GreatWarehouse => t!("game.buildings.great_warehouse.description"),
+        BuildingName::GreatGranary => t!("game.buildings.great_granary.description"),
+        BuildingName::WonderOfTheWorld => t!("game.buildings.wonder.description"),
+        BuildingName::HorseDrinkingTrough => t!("game.buildings.horse_drinking.description"),
+        BuildingName::GreatWorkshop => t!("game.buildings.great_workshop.description"),
+        BuildingName::AncientConstructionPlan => t!(""), // No description in i18n
+    };
+
+    description.to_string()
+}

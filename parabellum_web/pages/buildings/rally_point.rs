@@ -1,6 +1,6 @@
 use crate::{
     components::{ArmyCard, ArmyCategory, UpgradeBlock},
-    view_helpers::{prepare_rally_point_cards, unit_display_name},
+    view_helpers::{building_description, prepare_rally_point_cards, unit_display_name},
 };
 use dioxus::prelude::*;
 use parabellum_app::repository::VillageInfo;
@@ -16,6 +16,7 @@ pub fn RallyPointPage(
     slot_id: u8,
     building_name: BuildingName,
     current_level: u8,
+    population: u32,
     next_level: u8,
     cost: ResourceGroup,
     time_secs: u32,
@@ -33,11 +34,12 @@ pub fn RallyPointPage(
     // Prepare sendable units from village army
     let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
     let tribe_units = village.tribe.units();
+    let description = building_description(&building_name);
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
             h1 { class: "text-3xl font-bold text-gray-900 mb-2",
-                "{building_name:?} (Level {current_level})"
+                "{building_name} (Level {current_level})"
             }
             p { class: "text-gray-600 mb-6",
                 "{village.name} ({village.position.x}|{village.position.y})"
@@ -50,6 +52,27 @@ pub fn RallyPointPage(
             }
 
             div { class: "space-y-6",
+                // Building description and stats
+                div {
+                    div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
+                    div { class: "text-2xl font-semibold", "{building_name}" }
+                    if !description.is_empty() {
+                        p { class: "mt-2 text-gray-700 text-sm", "{description}" }
+                    }
+                }
+
+                // Stats grid
+                div { class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4",
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.level\")}" }
+                        div { class: "text-lg font-bold", "{current_level}" }
+                    }
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.population\")}" }
+                        div { class: "text-lg font-bold", "{population}" }
+                    }
+                }
+
                 // Upgrade block
                 UpgradeBlock {
                     village: village.clone(),
