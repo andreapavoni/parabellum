@@ -15,7 +15,7 @@ pub fn HomePage() -> Element {
                   div { class: "mt-6 text-center",
                       a {
                           class: "btn-green px-8 py-3 rounded text-lg inline-block shadow-md transform hover:-translate-y-1 transition",
-                          href: "travian_register.html",
+                          href: "/register",
                           "{t!(\"home.play_for_free\")}"
                       }
                       p { class: "text-xs text-gray-400 mt-2", "{t!(\"home.no_downloads\")}" }
@@ -36,7 +36,7 @@ pub fn HomePage() -> Element {
           div { class: "hidden md:block relative h-80 rounded-lg overflow-hidden border border-gray-300 shadow-md group",
               div {
                   class: "absolute inset-0 bg-cover bg-center transition duration-1000 group-hover:scale-105",
-                  style: "background-image: url('https://wallpaperaccess.com/full/1736218.jpg');",
+                  style: "background-image: url('/static/1736218.jpg');",
               }
               div { class: "absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-6",
                   div { class: "text-white",
