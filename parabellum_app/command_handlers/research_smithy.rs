@@ -48,7 +48,7 @@ impl CommandHandler<ResearchSmithy> for ResearchSmithyCommandHandler {
 
         if smithy_jobs
             .iter()
-            .filter_map(|job| smithy_queue_item_from_job(job))
+            .filter_map(smithy_queue_item_from_job)
             .any(|item| item.unit == command.unit)
         {
             return Err(AppError::QueueItemAlreadyQueued {

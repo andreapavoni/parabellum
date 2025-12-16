@@ -95,20 +95,16 @@ pub mod tests {
                     "Attack" => {
                         if let Ok(payload) =
                             serde_json::from_value::<AttackTask>(job.task.data.clone())
-                        {
-                            if payload.target_village_id == village_id {
+                            && payload.target_village_id == village_id {
                                 matches.push(job.clone());
                             }
-                        }
                     }
                     "Reinforcement" => {
                         if let Ok(payload) =
                             serde_json::from_value::<ReinforcementTask>(job.task.data.clone())
-                        {
-                            if payload.village_id == village_id {
+                            && payload.village_id == village_id {
                                 matches.push(job.clone());
                             }
-                        }
                     }
                     _ => {}
                 }
@@ -244,13 +240,12 @@ pub mod tests {
         ) -> Result<Option<ReportRecord>, ApplicationError> {
             let store = self.reports.lock().unwrap();
             for (record, audiences) in store.iter() {
-                if record.id == report_id {
-                    if let Some(audience) = audiences.iter().find(|a| a.player_id == player_id) {
+                if record.id == report_id
+                    && let Some(audience) = audiences.iter().find(|a| a.player_id == player_id) {
                         let mut cloned = record.clone();
                         cloned.read_at = audience.read_at;
                         return Ok(Some(cloned));
                     }
-                }
             }
             Ok(None)
         }
@@ -262,14 +257,11 @@ pub mod tests {
         ) -> Result<(), ApplicationError> {
             let mut store = self.reports.lock().unwrap();
             for (record, audiences) in store.iter_mut() {
-                if record.id == report_id {
-                    if let Some(audience) = audiences.iter_mut().find(|a| a.player_id == player_id)
-                    {
-                        if audience.read_at.is_none() {
+                if record.id == report_id
+                    && let Some(audience) = audiences.iter_mut().find(|a| a.player_id == player_id)
+                        && audience.read_at.is_none() {
                             audience.read_at = Some(Utc::now());
                         }
-                    }
-                }
             }
             Ok(())
         }

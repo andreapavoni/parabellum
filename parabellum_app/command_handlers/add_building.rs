@@ -113,8 +113,8 @@ fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Resul
             return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
         }
 
-        if let Ok(queued_data) = get_building_data(&queued_name) {
-            if queued_data
+        if let Ok(queued_data) = get_building_data(&queued_name)
+            && queued_data
                 .rules
                 .conflicts
                 .iter()
@@ -122,7 +122,6 @@ fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Resul
             {
                 return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
             }
-        }
     }
 
     Ok(())

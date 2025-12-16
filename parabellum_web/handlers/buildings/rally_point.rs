@@ -569,7 +569,7 @@ pub async fn confirm_send_troops(
     let is_scouting = form
         .scouting_target
         .as_ref()
-        .map_or(false, |s| !s.is_empty());
+        .is_some_and(|s| !s.is_empty());
 
     let result = if is_scouting {
         // This is a scouting mission - use ScoutVillage command

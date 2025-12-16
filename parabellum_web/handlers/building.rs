@@ -842,7 +842,9 @@ pub async fn render_with_error(
     let village_info = fetch_village_info_for_rally_point(state, &user.village).await;
     let (_jar, csrf_token) = generate_csrf(jar);
 
-    let response = render_building_page(
+    
+
+    render_building_page(
         state,
         &user,
         slot_id,
@@ -851,9 +853,7 @@ pub async fn render_with_error(
         queues,
         movements,
         village_info,
-    );
-
-    response
+    )
 }
 
 /// Calculate building options for an empty slot

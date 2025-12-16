@@ -341,7 +341,7 @@ impl Village {
             }
         }
 
-        if unit.research_cost.time > 0 && !self.academy_research().get(unit_idx as usize) {
+        if unit.research_cost.time > 0 && !self.academy_research().get(unit_idx) {
             return Err(GameError::UnitNotResearched(unit_name.clone()));
         }
 
@@ -630,13 +630,13 @@ impl Village {
         {
             let mut existing = self.reinforcements[idx].clone();
             existing.merge(army)?;
-            existing.current_map_field_id = Some(self.id as u32);
+            existing.current_map_field_id = Some(self.id);
             self.reinforcements[idx] = existing;
             self.update_state();
             Ok(())
         } else {
             let mut incoming = army.clone();
-            incoming.current_map_field_id = Some(self.id as u32);
+            incoming.current_map_field_id = Some(self.id);
             self.reinforcements.push(incoming);
             self.update_state();
             Ok(())
@@ -657,7 +657,7 @@ impl Village {
         if let Some(defender_report) = &report.defender
             && let Some(mut home_army) = self.army.take()
         {
-            home_army.apply_battle_report(&defender_report);
+            home_army.apply_battle_report(defender_report);
             self.army = Some(home_army);
         }
 
@@ -668,7 +668,7 @@ impl Village {
                 .position(|r| r.id == report.army_before.id)
             {
                 let army = &mut self.reinforcements[index].clone();
-                army.apply_battle_report(&report);
+                army.apply_battle_report(report);
                 let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
             }
         }

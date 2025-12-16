@@ -80,7 +80,7 @@ impl JobHandler for ScoutJobHandler {
 
         let attacker_payload = BattlePartyPayload {
             tribe: attacker_army.tribe.clone(),
-            army_before: battle_report.attacker.army_before.units().clone(),
+            army_before: *battle_report.attacker.army_before.units(),
             survivors: battle_report.attacker.survivors,
             losses: battle_report.attacker.losses,
         };
@@ -151,14 +151,13 @@ impl JobHandler for ScoutJobHandler {
         }];
 
         // If scouts were detected, defender also gets a report
-        if let Some(ref scouting) = battle_report.scouting {
-            if scouting.was_detected {
+        if let Some(ref scouting) = battle_report.scouting
+            && scouting.was_detected {
                 audiences.push(ReportAudience {
                     player_id: defender_village.player_id,
                     read_at: None,
                 });
             }
-        }
 
         ctx.uow.reports().add(&new_report, &audiences).await?;
 
