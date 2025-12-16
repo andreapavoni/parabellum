@@ -114,11 +114,12 @@ pub mod tests {
             uow_assert2.rollback().await?;
         }
 
-        // Step 2: Recall the deployed troops
+        // Step 2: Recall the deployed troops (full recall)
         let recall_command = RecallTroops {
             player_id: deployer_player.id,
             village_id: deployer_village.id,
             army_id: deployed_army_id,
+            units: units_to_deploy, // Recall all units
         };
 
         let recall_handler = RecallTroopsCommandHandler::new();
@@ -303,11 +304,12 @@ pub mod tests {
             uow_assert2.rollback().await?;
         }
 
-        // Step 2: Host player releases the reinforcements
+        // Step 2: Host player releases the reinforcements (full release)
         let release_command = ReleaseReinforcements {
             player_id: host_player.id,
             village_id: host_village.id,
             source_village_id: reinforcer_village.id,
+            units: units_to_send, // Release all units
         };
 
         let release_handler = ReleaseReinforcementsCommandHandler::new();
@@ -462,6 +464,7 @@ pub mod tests {
             player_id: unauthorized_player.id,
             village_id: unauthorized_village.id,
             army_id: deployed_army_id,
+            units: [100, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         };
 
         let result = app
@@ -544,6 +547,7 @@ pub mod tests {
             player_id: unauthorized_player.id,
             village_id: unauthorized_village.id,
             source_village_id: reinforcer_village.id,
+            units: [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         };
 
         let result = app
@@ -553,6 +557,429 @@ pub mod tests {
         assert!(
             result.is_err(),
             "Should not allow unauthorized player to release reinforcements"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_partial_recall_deployed_troops() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let units_to_deploy = [100, 50, 0, 0, 0, 0, 0, 0, 0, 0]; // 100 legionnaires, 50 praetorians
+
+        // Setup deployer with troops
+        let (deployer_player, deployer_village, deploying_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                units_to_deploy,
+                false,
+            )
+            .await?
+        };
+
+        // Setup target village
+        let (_target_player, target_village, _, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Send reinforcements
+        let reinforce_command = ReinforceVillage {
+            player_id: deployer_player.id,
+            village_id: deployer_village.id,
+            army_id: deploying_army.id,
+            units: units_to_deploy,
+            target_village_id: target_village.id,
+            hero_id: None,
+        };
+
+        app.execute(reinforce_command, ReinforceVillageCommandHandler::new())
+            .await?;
+
+        let (reinforce_job, deployed_army_id) = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(deployer_player.id).await?;
+            let job = jobs.first().unwrap().clone();
+            let payload: parabellum_app::jobs::tasks::ReinforcementTask =
+                serde_json::from_value(job.task.data.clone())?;
+            uow.rollback().await?;
+            (job, payload.army_id)
+        };
+
+        worker.process_jobs(&vec![reinforce_job]).await?;
+
+        // Verify troops are deployed
+        {
+            let uow = uow_provider.tx().await?;
+            let deployed_army = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(deployed_army.units()[0], 100);
+            assert_eq!(deployed_army.units()[1], 50);
+            uow.rollback().await?;
+        }
+
+        // Partial recall: recall only 60 legionnaires and 20 praetorians
+        let units_to_recall = [60, 20, 0, 0, 0, 0, 0, 0, 0, 0];
+        let recall_command = RecallTroops {
+            player_id: deployer_player.id,
+            village_id: deployer_village.id,
+            army_id: deployed_army_id,
+            units: units_to_recall,
+        };
+
+        app.execute(recall_command, RecallTroopsCommandHandler::new())
+            .await?;
+
+        // Verify partial recall behavior
+        let (recall_job, returning_army_id) = {
+            let uow = uow_provider.tx().await?;
+
+            // Original army should still be deployed with remaining troops
+            let remaining_army = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(
+                remaining_army.current_map_field_id,
+                Some(target_village.id),
+                "Remaining army should still be at target village"
+            );
+            assert_eq!(
+                remaining_army.units()[0],
+                40,
+                "Should have 40 legionnaires remaining (100 - 60)"
+            );
+            assert_eq!(
+                remaining_army.units()[1],
+                30,
+                "Should have 30 praetorians remaining (50 - 20)"
+            );
+
+            // Should have created a new army for returning troops
+            let jobs = uow.jobs().list_by_player_id(deployer_player.id).await?;
+            assert_eq!(jobs.len(), 1, "Should have 1 return job");
+            let job = jobs.first().unwrap().clone();
+
+            let payload: ArmyReturnTask = serde_json::from_value(job.task.data.clone())?;
+            let returning_id = payload.army_id;
+
+            // Verify the returning army exists and has correct units
+            let returning_army = uow.armies().get_by_id(returning_id).await?;
+            assert_eq!(
+                returning_army.units()[0],
+                60,
+                "Returning army should have 60 legionnaires"
+            );
+            assert_eq!(
+                returning_army.units()[1],
+                20,
+                "Returning army should have 20 praetorians"
+            );
+            assert_eq!(
+                returning_army.current_map_field_id, None,
+                "Returning army should be in transit"
+            );
+
+            // Target village should still show the remaining reinforcement
+            let target = uow.villages().get_by_id(target_village.id).await?;
+            assert_eq!(
+                target.reinforcements().len(),
+                1,
+                "Target should still have 1 reinforcement (the remainder)"
+            );
+
+            uow.rollback().await?;
+            (job, returning_id)
+        };
+
+        // Process the return job
+        worker.process_jobs(&vec![recall_job]).await?;
+
+        // Verify troops returned home and were merged
+        {
+            let uow = uow_provider.tx().await?;
+
+            // Returning army should be deleted (merged)
+            assert!(
+                uow.armies().get_by_id(returning_army_id).await.is_err(),
+                "Returning army should be deleted after merging"
+            );
+
+            // Home village should have troops back
+            let home_village = uow.villages().get_by_id(deployer_village.id).await?;
+            let home_army = home_village.army().unwrap();
+            assert_eq!(
+                home_army.units()[0],
+                60,
+                "Home should have 60 legionnaires back"
+            );
+            assert_eq!(
+                home_army.units()[1],
+                20,
+                "Home should have 20 praetorians back"
+            );
+
+            // Remaining army should still be deployed
+            let remaining_army = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(
+                remaining_army.current_map_field_id,
+                Some(target_village.id),
+                "Remaining 40+30 troops should still be deployed"
+            );
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_partial_release_reinforcements() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let units_to_send = [80, 40, 0, 0, 0, 0, 0, 0, 0, 0]; // 80 legionnaires, 40 praetorians
+
+        // Setup reinforcer with troops
+        let (reinforcer_player, reinforcer_village, reinforcing_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                units_to_send,
+                false,
+            )
+            .await?
+        };
+
+        // Setup host village
+        let (host_player, host_village, _, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        // Send reinforcements
+        let reinforce_command = ReinforceVillage {
+            player_id: reinforcer_player.id,
+            village_id: reinforcer_village.id,
+            army_id: reinforcing_army.id,
+            units: units_to_send,
+            target_village_id: host_village.id,
+            hero_id: None,
+        };
+
+        app.execute(reinforce_command, ReinforceVillageCommandHandler::new())
+            .await?;
+
+        let (reinforce_job, deployed_army_id) = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            let job = jobs.first().unwrap().clone();
+            let payload: parabellum_app::jobs::tasks::ReinforcementTask =
+                serde_json::from_value(job.task.data.clone())?;
+            uow.rollback().await?;
+            (job, payload.army_id)
+        };
+
+        worker.process_jobs(&vec![reinforce_job]).await?;
+
+        // Verify reinforcements arrived
+        {
+            let uow = uow_provider.tx().await?;
+            let reinforcement = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(reinforcement.units()[0], 80);
+            assert_eq!(reinforcement.units()[1], 40);
+            uow.rollback().await?;
+        }
+
+        // Partial release: release only 30 legionnaires and 15 praetorians
+        let units_to_release = [30, 15, 0, 0, 0, 0, 0, 0, 0, 0];
+        let release_command = ReleaseReinforcements {
+            player_id: host_player.id,
+            village_id: host_village.id,
+            source_village_id: reinforcer_village.id,
+            units: units_to_release,
+        };
+
+        app.execute(release_command, ReleaseReinforcementsCommandHandler::new())
+            .await?;
+
+        // Verify partial release behavior
+        let (release_job, returning_army_id) = {
+            let uow = uow_provider.tx().await?;
+
+            // Original reinforcement should still be at host with remaining troops
+            let remaining_army = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(
+                remaining_army.current_map_field_id,
+                Some(host_village.id),
+                "Remaining reinforcement should still be at host village"
+            );
+            assert_eq!(
+                remaining_army.units()[0],
+                50,
+                "Should have 50 legionnaires remaining (80 - 30)"
+            );
+            assert_eq!(
+                remaining_army.units()[1],
+                25,
+                "Should have 25 praetorians remaining (40 - 15)"
+            );
+
+            // Should have created a new army for returning troops
+            let jobs = uow.jobs().list_by_player_id(reinforcer_player.id).await?;
+            assert_eq!(jobs.len(), 1, "Should have 1 return job");
+            let job = jobs.first().unwrap().clone();
+
+            let payload: ArmyReturnTask = serde_json::from_value(job.task.data.clone())?;
+            let returning_id = payload.army_id;
+
+            // Verify the returning army exists and has correct units
+            let returning_army = uow.armies().get_by_id(returning_id).await?;
+            assert_eq!(
+                returning_army.units()[0],
+                30,
+                "Returning army should have 30 legionnaires"
+            );
+            assert_eq!(
+                returning_army.units()[1],
+                15,
+                "Returning army should have 15 praetorians"
+            );
+            assert_eq!(
+                returning_army.current_map_field_id, None,
+                "Returning army should be in transit"
+            );
+
+            // Host village should still show the remaining reinforcement
+            let host = uow.villages().get_by_id(host_village.id).await?;
+            assert_eq!(
+                host.reinforcements().len(),
+                1,
+                "Host should still have 1 reinforcement (the remainder)"
+            );
+
+            uow.rollback().await?;
+            (job, returning_id)
+        };
+
+        // Process the return job
+        worker.process_jobs(&vec![release_job]).await?;
+
+        // Verify troops returned to source and were merged
+        {
+            let uow = uow_provider.tx().await?;
+
+            // Returning army should be deleted (merged)
+            assert!(
+                uow.armies().get_by_id(returning_army_id).await.is_err(),
+                "Returning army should be deleted after merging"
+            );
+
+            // Source village should have troops back
+            let source_village = uow.villages().get_by_id(reinforcer_village.id).await?;
+            let home_army = source_village.army().unwrap();
+            assert_eq!(
+                home_army.units()[0],
+                30,
+                "Source should have 30 legionnaires back"
+            );
+            assert_eq!(
+                home_army.units()[1],
+                15,
+                "Source should have 15 praetorians back"
+            );
+
+            // Remaining reinforcement should still be at host
+            let remaining_army = uow.armies().get_by_id(deployed_army_id).await?;
+            assert_eq!(
+                remaining_army.current_map_field_id,
+                Some(host_village.id),
+                "Remaining 50+25 troops should still be reinforcing host"
+            );
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_recall_with_invalid_quantities() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let units_to_deploy = [50, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        // Setup and deploy troops
+        let (deployer_player, deployer_village, deploying_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                units_to_deploy,
+                false,
+            )
+            .await?
+        };
+
+        let (_target_player, target_village, _, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Gaul,
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                false,
+            )
+            .await?
+        };
+
+        app.execute(
+            ReinforceVillage {
+                player_id: deployer_player.id,
+                village_id: deployer_village.id,
+                army_id: deploying_army.id,
+                units: units_to_deploy,
+                target_village_id: target_village.id,
+                hero_id: None,
+            },
+            ReinforceVillageCommandHandler::new(),
+        )
+        .await?;
+
+        let (reinforce_job, deployed_army_id) = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(deployer_player.id).await?;
+            let job = jobs.first().unwrap().clone();
+            let payload: parabellum_app::jobs::tasks::ReinforcementTask =
+                serde_json::from_value(job.task.data.clone())?;
+            uow.rollback().await?;
+            (job, payload.army_id)
+        };
+
+        worker.process_jobs(&vec![reinforce_job]).await?;
+
+        // Try to recall MORE troops than deployed - should fail
+        let invalid_recall = RecallTroops {
+            player_id: deployer_player.id,
+            village_id: deployer_village.id,
+            army_id: deployed_army_id,
+            units: [100, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Trying to recall 100 but only 50 deployed
+        };
+
+        let result = app
+            .execute(invalid_recall, RecallTroopsCommandHandler::new())
+            .await;
+
+        assert!(
+            result.is_err(),
+            "Should not allow recalling more troops than deployed"
         );
 
         Ok(())

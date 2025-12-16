@@ -14,8 +14,8 @@ use crate::handlers::{
     auth::{login, login_page, logout, register, register_page},
     building::{build, building_page},
     buildings::{
-        confirm_send_troops, recall_troops, release_reinforcements, research_smithy, research_unit,
-        send_troops, train_units,
+        confirm_send_troops, recall_confirmation_page, recall_troops, release_confirmation_page,
+        release_reinforcements, research_smithy, research_unit, send_troops, train_units,
     },
     home::home_page,
     map::{map_page, map_page_with_id, map_region},
@@ -83,7 +83,15 @@ impl WebRouter {
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
             .route("/army/send/confirm", post(confirm_send_troops))
+            .route(
+                "/army/recall/confirm/{army_id}",
+                get(recall_confirmation_page),
+            )
             .route("/army/recall", post(recall_troops))
+            .route(
+                "/army/release/confirm/{army_id}",
+                get(release_confirmation_page),
+            )
             .route("/army/release", post(release_reinforcements))
             .route("/academy/research", post(research_unit))
             .route("/smithy/research", post(research_smithy))

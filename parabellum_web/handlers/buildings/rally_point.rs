@@ -721,10 +721,244 @@ fn parse_building_name(s: &str) -> Option<BuildingName> {
 
 const RALLY_POINT_SLOT: u8 = 39;
 
-#[derive(Debug, Deserialize)]
+/// GET /army/recall/confirm/{army_id} - Show recall confirmation page
+pub async fn recall_confirmation_page(
+    State(state): State<AppState>,
+    axum::extract::Path(army_id): axum::extract::Path<Uuid>,
+    user: CurrentUser,
+    jar: axum_extra::extract::SignedCookieJar,
+) -> Response {
+    // Get the village to access its armies
+    let village = match state
+        .app_bus
+        .query(
+            GetVillageById {
+                id: user.village.id,
+            },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+    {
+        Ok(village) => village,
+        Err(e) => {
+            tracing::error!("Failed to get village: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response();
+        }
+    };
+
+    // Find the deployed army by ID
+    let army = match village.deployed_armies().iter().find(|a| a.id == army_id) {
+        Some(army) => army,
+        None => {
+            return (StatusCode::NOT_FOUND, "Army not found or not deployed").into_response();
+        }
+    };
+
+    // Get the deployment location
+    let current_location_id = match army.current_map_field_id {
+        Some(id) => id,
+        None => {
+            return (StatusCode::BAD_REQUEST, "Army is not deployed").into_response();
+        }
+    };
+
+    // Get destination village info (must exist if army is there)
+    let destination_village = match state
+        .app_bus
+        .query(
+            GetVillageById {
+                id: current_location_id,
+            },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Failed to get destination village: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response();
+        }
+    };
+
+    let destination_name = Some(destination_village.name.clone());
+    let destination_position = destination_village.position.clone();
+
+    // Generate CSRF token
+    let (jar, csrf_token) = generate_csrf(jar);
+    let layout_data = create_layout_data(&user, "village");
+
+    // Render confirmation page
+    let html = dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data,
+            crate::pages::buildings::RecallConfirmationPage {
+                village_id: user.village.id,
+                village_name: user.village.name.clone(),
+                army_id: army.id,
+                destination_village_name: destination_name,
+                destination_position: destination_position,
+                units: *army.units(),
+                tribe: army.tribe.clone(),
+                csrf_token: csrf_token,
+            }
+        }
+    });
+
+    (jar, Html(wrap_in_html(&html))).into_response()
+}
+
+/// GET /army/release/confirm/{army_id} - Show release confirmation page
+pub async fn release_confirmation_page(
+    State(state): State<AppState>,
+    axum::extract::Path(army_id): axum::extract::Path<Uuid>,
+    user: CurrentUser,
+    jar: axum_extra::extract::SignedCookieJar,
+) -> Response {
+    // Get the village to access its reinforcements
+    let village = match state
+        .app_bus
+        .query(
+            GetVillageById {
+                id: user.village.id,
+            },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+    {
+        Ok(village) => village,
+        Err(e) => {
+            tracing::error!("Failed to get village: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response();
+        }
+    };
+
+    // Find the reinforcement army by ID
+    let army = match village.reinforcements().iter().find(|a| a.id == army_id) {
+        Some(army) => army,
+        None => {
+            return (StatusCode::NOT_FOUND, "Reinforcement not found").into_response();
+        }
+    };
+
+    // Get source village info (where the army will return)
+    let source_village = match state
+        .app_bus
+        .query(
+            GetVillageById {
+                id: army.village_id,
+            },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Failed to get source village: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response();
+        }
+    };
+
+    // Generate CSRF token
+    let (jar, csrf_token) = generate_csrf(jar);
+    let layout_data = create_layout_data(&user, "village");
+
+    // Render confirmation page
+    let html = dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data,
+            crate::pages::buildings::ReleaseConfirmationPage {
+                village_id: user.village.id,
+                village_name: user.village.name.clone(),
+                army_id: army.id,
+                source_village_id: source_village.id,
+                source_village_name: source_village.name.clone(),
+                source_position: source_village.position.clone(),
+                units: *army.units(),
+                tribe: army.tribe.clone(),
+                csrf_token: csrf_token,
+            }
+        }
+    });
+
+    (jar, Html(wrap_in_html(&html))).into_response()
+}
+
+#[derive(Debug)]
 pub struct RecallForm {
     pub movement_id: String,
+    pub units: Vec<i32>,
     pub csrf_token: String,
+}
+
+impl<'de> Deserialize<'de> for RecallForm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier)]
+        enum Field {
+            #[serde(rename = "movement_id")]
+            MovementId,
+            #[serde(rename = "units[]")]
+            Units,
+            #[serde(rename = "csrf_token")]
+            CsrfToken,
+        }
+
+        struct FormVisitor;
+
+        impl<'de> Visitor<'de> for FormVisitor {
+            type Value = RecallForm;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("recall form data")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut movement_id = None;
+                let mut units = Vec::new();
+                let mut csrf_token = None;
+
+                while let Some(key) = map.next_key::<Field>()? {
+                    match key {
+                        Field::MovementId => {
+                            if movement_id.is_some() {
+                                return Err(de::Error::duplicate_field("movement_id"));
+                            }
+                            movement_id = Some(map.next_value()?);
+                        }
+                        Field::Units => {
+                            let value: i32 = map.next_value()?;
+                            units.push(value);
+                        }
+                        Field::CsrfToken => {
+                            if csrf_token.is_some() {
+                                return Err(de::Error::duplicate_field("csrf_token"));
+                            }
+                            csrf_token = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let movement_id =
+                    movement_id.ok_or_else(|| de::Error::missing_field("movement_id"))?;
+                let csrf_token =
+                    csrf_token.ok_or_else(|| de::Error::missing_field("csrf_token"))?;
+
+                Ok(RecallForm {
+                    movement_id,
+                    units,
+                    csrf_token,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(FormVisitor)
+    }
 }
 
 impl HasCsrfToken for RecallForm {
@@ -733,10 +967,82 @@ impl HasCsrfToken for RecallForm {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct ReleaseForm {
     pub source_village_id: u32,
+    pub units: Vec<i32>,
     pub csrf_token: String,
+}
+
+impl<'de> Deserialize<'de> for ReleaseForm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier)]
+        enum Field {
+            #[serde(rename = "source_village_id")]
+            SourceVillageId,
+            #[serde(rename = "units[]")]
+            Units,
+            #[serde(rename = "csrf_token")]
+            CsrfToken,
+        }
+
+        struct FormVisitor;
+
+        impl<'de> Visitor<'de> for FormVisitor {
+            type Value = ReleaseForm;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("release form data")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut source_village_id = None;
+                let mut units = Vec::new();
+                let mut csrf_token = None;
+
+                while let Some(key) = map.next_key::<Field>()? {
+                    match key {
+                        Field::SourceVillageId => {
+                            if source_village_id.is_some() {
+                                return Err(de::Error::duplicate_field("source_village_id"));
+                            }
+                            source_village_id = Some(map.next_value()?);
+                        }
+                        Field::Units => {
+                            let value: i32 = map.next_value()?;
+                            units.push(value);
+                        }
+                        Field::CsrfToken => {
+                            if csrf_token.is_some() {
+                                return Err(de::Error::duplicate_field("csrf_token"));
+                            }
+                            csrf_token = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let source_village_id = source_village_id
+                    .ok_or_else(|| de::Error::missing_field("source_village_id"))?;
+                let csrf_token =
+                    csrf_token.ok_or_else(|| de::Error::missing_field("csrf_token"))?;
+
+                Ok(ReleaseForm {
+                    source_village_id,
+                    units,
+                    csrf_token,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(FormVisitor)
+    }
 }
 
 impl HasCsrfToken for ReleaseForm {
@@ -759,10 +1065,19 @@ pub async fn recall_troops(
         }
     };
 
+    // Parse units from form
+    let units = match parse_troop_set(&form.units) {
+        Some(set) => set,
+        None => {
+            return (StatusCode::BAD_REQUEST, "Invalid unit quantities").into_response();
+        }
+    };
+
     let command = RecallTroops {
         player_id: user.player.id,
         village_id: user.village.id,
         army_id,
+        units,
     };
 
     match state
@@ -784,10 +1099,19 @@ pub async fn release_reinforcements(
     user: CurrentUser,
     CsrfForm { jar: _jar, form }: CsrfForm<ReleaseForm>,
 ) -> Response {
+    // Parse units from form
+    let units = match parse_troop_set(&form.units) {
+        Some(set) => set,
+        None => {
+            return (StatusCode::BAD_REQUEST, "Invalid unit quantities").into_response();
+        }
+    };
+
     let command = ReleaseReinforcements {
         player_id: user.player.id,
         village_id: user.village.id,
         source_village_id: form.source_village_id,
+        units,
     };
 
     match state

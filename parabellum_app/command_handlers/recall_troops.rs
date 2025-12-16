@@ -32,6 +32,8 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
     ) -> Result<(), ApplicationError> {
+        use parabellum_game::models::army::Army;
+
         let army_repo = uow.armies();
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
@@ -51,26 +53,98 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
             .current_map_field_id
             .ok_or_else(|| ApplicationError::Unknown("Army is not deployed".to_string()))?;
 
+        // Validate requested units don't exceed available
+        for (idx, &requested) in command.units.iter().enumerate() {
+            if requested > army.units()[idx] {
+                return Err(ApplicationError::Unknown(format!(
+                    "Cannot recall {} units of type {} - only {} available",
+                    requested,
+                    idx,
+                    army.units()[idx]
+                )));
+            }
+        }
+
+        // Check if at least one unit is being recalled
+        if command.units.iter().sum::<u32>() == 0 {
+            return Err(ApplicationError::Unknown(
+                "Must recall at least one unit".to_string(),
+            ));
+        }
+
         // Get source and destination villages
         let home_village = village_repo.get_by_id(command.village_id).await?;
         let current_village = village_repo.get_by_id(current_location_id).await?;
 
-        // Army leaves the current location immediately - set current_map_field_id to None
-        // This removes it from the current village's deployed_armies when the village is next loaded
-        army.current_map_field_id = None;
-        army_repo.save(&army).await?;
+        // Determine if this is a full or partial recall
+        let is_full_recall = command
+            .units
+            .iter()
+            .enumerate()
+            .all(|(idx, &qty)| qty == army.units()[idx]);
+
+        let returning_army_id = if is_full_recall {
+            // Full recall: move the entire army
+            army.current_map_field_id = None;
+            army_repo.save(&army).await?;
+            army.id
+        } else {
+            // Partial recall: create new army for returning troops, update original
+            let mut remaining_units = *army.units();
+            for (idx, &recalled) in command.units.iter().enumerate() {
+                remaining_units[idx] -= recalled;
+            }
+
+            // Create new army for the returning troops
+            let returning_army = Army::new(
+                None, // New ID
+                army.village_id,
+                None, // In transit
+                army.player_id,
+                army.tribe.clone(),
+                &command.units,
+                army.smithy(),
+                None, // Heroes stay with remaining troops for now
+            );
+            army_repo.save(&returning_army).await?;
+
+            // Update original army with remaining troops
+            army.update_units(&remaining_units);
+            army_repo.save(&army).await?;
+
+            info!(
+                "Partial recall: {} units staying, {} units returning",
+                remaining_units.iter().sum::<u32>(),
+                command.units.iter().sum::<u32>()
+            );
+
+            returning_army.id
+        };
 
         // Calculate travel time back home
+        // For partial recall, calculate speed based on returning troops
+        let speed = Army::new(
+            None,
+            army.village_id,
+            None,
+            army.player_id,
+            army.tribe.clone(),
+            &command.units,
+            army.smithy(),
+            None,
+        )
+        .speed();
+
         let travel_time_secs = current_village.position.calculate_travel_time_secs(
             home_village.position,
-            army.speed(),
+            speed,
             config.world_size as i32,
             config.speed as u8,
         ) as i64;
 
         // Create return job
         let return_payload = ArmyReturnTask {
-            army_id: army.id,
+            army_id: returning_army_id,
             resources: Default::default(), // No resources looted when recalling
             destination_village_id: home_village.id as i32,
             destination_player_id: command.player_id,
@@ -89,9 +163,10 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
 
         info!(
             recall_job_id = %new_job.id,
-            army_id = %army.id,
+            army_id = %returning_army_id,
             from_location = current_location_id,
             arrival_at = %new_job.completed_at,
+            is_full_recall = is_full_recall,
             "Recall job created - army leaving current location immediately."
         );
 

@@ -217,6 +217,7 @@ pub struct RecallTroops {
     pub player_id: Uuid,
     pub village_id: u32,
     pub army_id: Uuid,
+    pub units: TroopSet, // Units to recall (supports partial recall)
 }
 
 impl Command for RecallTroops {}
@@ -226,6 +227,7 @@ pub struct ReleaseReinforcements {
     pub player_id: Uuid,
     pub village_id: u32,
     pub source_village_id: u32,
+    pub units: TroopSet, // Units to release (supports partial release)
 }
 
 impl Command for ReleaseReinforcements {}

@@ -41,8 +41,8 @@ impl ArmyCategory {
 /// Army action button for rally point
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ArmyAction {
-    Recall { movement_id: String }, // Recall troops from outgoing reinforcement
-    Release { source_village_id: u32 }, // Release reinforcements back to their village
+    Recall { army_id: String },  // Recall deployed troops (was movement_id)
+    Release { army_id: String }, // Release reinforcements back to their village
 }
 
 /// Detailed army card data with full unit roster
@@ -148,32 +148,18 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
             if let Some(action) = &card.action_button {
                 div { class: "pt-2 border-t",
                     match action {
-                        ArmyAction::Recall { movement_id } => rsx! {
-                            form {
-                                method: "post",
-                                action: "/army/recall",
-                                class: "flex gap-2",
-                                input { r#type: "hidden", name: "movement_id", value: "{movement_id}" }
-                                input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
-                                button {
-                                    r#type: "submit",
-                                    class: "px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded",
-                                    "↩️ Recall Troops"
-                                }
+                        ArmyAction::Recall { army_id } => rsx! {
+                            a {
+                                href: "/army/recall/confirm/{army_id}",
+                                class: "inline-block px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded",
+                                "↩️ Recall Troops"
                             }
                         },
-                        ArmyAction::Release { source_village_id } => rsx! {
-                            form {
-                                method: "post",
-                                action: "/army/release",
-                                class: "flex gap-2",
-                                input { r#type: "hidden", name: "source_village_id", value: "{source_village_id}" }
-                                input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
-                                button {
-                                    r#type: "submit",
-                                    class: "px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded",
-                                    "🏠 Release Reinforcements"
-                                }
+                        ArmyAction::Release { army_id } => rsx! {
+                            a {
+                                href: "/army/release/confirm/{army_id}",
+                                class: "inline-block px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded",
+                                "🏠 Release Reinforcements"
                             }
                         }
                     }

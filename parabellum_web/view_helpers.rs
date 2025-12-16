@@ -200,7 +200,7 @@ pub fn prepare_rally_point_cards(
             movement_kind: None,
             arrival_time: None,
             action_button: Some(ArmyAction::Recall {
-                movement_id: army.id.to_string(),
+                army_id: army.id.to_string(),
             }),
         });
     }
@@ -223,7 +223,7 @@ pub fn prepare_rally_point_cards(
             movement_kind: None,
             arrival_time: None,
             action_button: Some(ArmyAction::Release {
-                source_village_id: origin_id,
+                army_id: reinforcement.id.to_string(),
             }),
         });
     }
