@@ -116,13 +116,18 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] Village Overview (Resources + Buildings)
   - [x] Building queue
 - [x] Generic building (info + add/upgrade)
+- [x] Basic leaderboard
+- [x] Basic player profile page
 - [ ] Special buildings (info + specific actions)
-  - [x] Barracks, Stable, Workshop, etc...
-  - [ ] Rally Point:
+  - [x] Unit training: Barracks, Stable, Workshop, etc...
+  - [x] Rally Point:
     - [x] send troops
     - [x] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
-    - [ ] view reinforcements in own and other villages
-  - [ ] Reports (marketplace, troop movements)
+    - [x] view reinforcements in own and other villages
+    - [x] release/recall reinforcements from/in other villages
+  - [ ] Reports
+    - [x] troop movements (attack, raid, scout, reinforce)
+    - [ ] marketplace
   - [x] Academy (research units)
   - [x] Smithy (upgrade units)
   - [ ] Merchant, Marketplace

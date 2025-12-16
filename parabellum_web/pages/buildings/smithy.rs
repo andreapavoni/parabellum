@@ -5,7 +5,7 @@ use rust_i18n::t;
 
 use crate::{
     components::{ResourceCost, UpgradeBlock},
-    view_helpers::{building_description, format_duration},
+    view_helpers::{building_description_paragraphs, format_duration},
 };
 
 /// Smithy upgrade option
@@ -48,9 +48,10 @@ pub fn SmithyPage(
     smithy_queue_full: bool,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
     let stored = village.stored_resources();
-    let description = building_description(&building_name);
+    let description_paragraphs = building_description_paragraphs(&building_name);
 
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",
@@ -65,8 +66,12 @@ pub fn SmithyPage(
                 div {
                     div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
                     div { class: "text-2xl font-semibold", "{building_name}" }
-                    if !description.is_empty() {
-                        p { class: "mt-2 text-gray-700 text-sm", "{description}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
                     }
                 }
 
@@ -94,7 +99,8 @@ pub fn SmithyPage(
                     next_upkeep: next_upkeep,
                     queue_full: queue_full,
                     slot_id: slot_id,
-                    csrf_token: csrf_token.clone()
+                    csrf_token: csrf_token.clone(),
+                    next_value: next_value.clone(),
                 }
 
                 // Smithy queue

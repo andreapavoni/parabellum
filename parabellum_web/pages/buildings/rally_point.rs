@@ -1,6 +1,6 @@
 use crate::{
     components::{ArmyCard, ArmyCategory, UpgradeBlock},
-    view_helpers::{building_description, prepare_rally_point_cards, unit_display_name},
+    view_helpers::{building_description_paragraphs, prepare_rally_point_cards, unit_display_name},
 };
 use dioxus::prelude::*;
 use parabellum_app::repository::VillageInfo;
@@ -27,6 +27,7 @@ pub fn RallyPointPage(
     village_info: HashMap<u32, VillageInfo>,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
     // Prepare all army cards using the view helper
     let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
@@ -34,7 +35,7 @@ pub fn RallyPointPage(
     // Prepare sendable units from village army
     let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
     let tribe_units = village.tribe.units();
-    let description = building_description(&building_name);
+    let description_paragraphs = building_description_paragraphs(&building_name);
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
@@ -56,8 +57,12 @@ pub fn RallyPointPage(
                 div {
                     div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
                     div { class: "text-2xl font-semibold", "{building_name}" }
-                    if !description.is_empty() {
-                        p { class: "mt-2 text-gray-700 text-sm", "{description}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
                     }
                 }
 
@@ -86,6 +91,7 @@ pub fn RallyPointPage(
                     queue_full: queue_full,
                     slot_id: slot_id,
                     csrf_token: csrf_token.clone(),
+                    next_value: next_value.clone(),
                 }
 
                 // Army overview - grouped by category

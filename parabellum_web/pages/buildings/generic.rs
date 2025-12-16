@@ -19,6 +19,7 @@ pub fn GenericBuildingPage(
     queue_full: bool,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",
@@ -43,7 +44,8 @@ pub fn GenericBuildingPage(
                 next_upkeep: next_upkeep,
                 queue_full: queue_full,
                 slot_id: slot_id,
-                csrf_token: csrf_token
+                csrf_token: csrf_token,
+                next_value: next_value,
             }
         }
     }

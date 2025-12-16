@@ -3,7 +3,7 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
-use crate::{components::UpgradeBlock, view_helpers::building_description};
+use crate::{components::UpgradeBlock, view_helpers::building_description_paragraphs};
 
 /// Value display type for static buildings
 #[derive(Clone, PartialEq)]
@@ -40,8 +40,8 @@ pub fn StaticBuildingPage(
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
-    // Get description from i18n using the helper
-    let description = building_description(&building_name);
+    // Get description paragraphs from i18n using the helper
+    let description_paragraphs = building_description_paragraphs(&building_name);
 
     // Format value display based on type
     let (value_label, current_value_display) = match value_type {
@@ -93,8 +93,12 @@ pub fn StaticBuildingPage(
                 div {
                     div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
                     div { class: "text-2xl font-semibold", "{building_name}" }
-                    if !description.is_empty() {
-                        p { class: "mt-2 text-gray-700 text-sm", "{description}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
                     }
                 }
 
@@ -111,11 +115,6 @@ pub fn StaticBuildingPage(
                     div { class: "p-3 border rounded-md bg-emerald-50 border-emerald-200",
                         div { class: "text-gray-500", "{value_label}" }
                         div { class: "text-lg font-bold text-emerald-700", "{current_value_display}" }
-                        if let Some(next_display) = next_value_display {
-                            div { class: "text-xs text-gray-500 mt-1",
-                                "Next: {next_display}"
-                            }
-                        }
                     }
                 }
 
@@ -131,7 +130,8 @@ pub fn StaticBuildingPage(
                     next_upkeep: next_upkeep,
                     queue_full: queue_full,
                     slot_id: slot_id,
-                    csrf_token: csrf_token
+                    csrf_token: csrf_token,
+                    next_value: next_value_display
                 }
             }
         }

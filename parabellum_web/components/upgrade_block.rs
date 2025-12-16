@@ -20,6 +20,7 @@ pub fn UpgradeBlock(
     queue_full: bool,
     slot_id: u8,
     csrf_token: String,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
     // Check if at max level - time_secs will be 0 when we can't upgrade
     // (handler sets it to 0 when upgrade_info is None)
@@ -69,6 +70,13 @@ pub fn UpgradeBlock(
                 div {
                     span { class: "text-gray-600", "Upkeep: " }
                     span { class: "font-semibold", "{current_upkeep} → {next_upkeep}" }
+                }
+            }
+
+            if let Some(value) = next_value {
+                div { class: "text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded",
+                    span { class: "text-gray-600", "Next value: " }
+                    span { class: "font-semibold text-blue-700", "{value}" }
                 }
             }
 

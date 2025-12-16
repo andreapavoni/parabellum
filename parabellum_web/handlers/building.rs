@@ -271,6 +271,53 @@ fn render_building_page(
         (current_cost.resources, 0, current_cost.upkeep)
     };
 
+    // Calculate formatted next value for display in UpgradeBlock (if upgrade available)
+    let next_value_display: Option<String> = upgrade_info.as_ref().map(|upgraded| {
+        let value = upgraded.value;
+        // Format based on building type
+        match slot_building.building.name {
+            // Training buildings: divide by 10 and show as percentage
+            BuildingName::Barracks
+            | BuildingName::GreatBarracks
+            | BuildingName::Stable
+            | BuildingName::GreatStable
+            | BuildingName::Workshop
+            | BuildingName::GreatWorkshop => {
+                format!("{}%", (value as f32 / 10.0) as u32)
+            }
+            // Main Building: divide by 10 and show as decimal percentage
+            BuildingName::MainBuilding => {
+                format!("{:.1}%", value as f32 / 10.0)
+            }
+            // Production bonus buildings: show as percentage
+            BuildingName::Sawmill
+            | BuildingName::Brickyard
+            | BuildingName::IronFoundry
+            | BuildingName::GrainMill
+            | BuildingName::Bakery => {
+                format!("{}%", value)
+            }
+            // Defense buildings: show as percentage
+            BuildingName::CityWall | BuildingName::EarthWall | BuildingName::Palisade => {
+                format!("{}%", value)
+            }
+            // Resource fields and storage: show as integer
+            BuildingName::Woodcutter
+            | BuildingName::ClayPit
+            | BuildingName::IronMine
+            | BuildingName::Cropland
+            | BuildingName::Warehouse
+            | BuildingName::Granary
+            | BuildingName::GreatWarehouse
+            | BuildingName::GreatGranary
+            | BuildingName::Cranny => {
+                format!("{}", value)
+            }
+            // Other buildings: no specific value display needed
+            _ => format!("{}", value),
+        }
+    });
+
     // Route to appropriate page component based on building type
     let body_content = match slot_building.building.name {
         BuildingName::Woodcutter
@@ -296,6 +343,7 @@ fn render_building_page(
                         queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -331,6 +379,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -366,6 +415,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -401,6 +451,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -434,6 +485,7 @@ fn render_building_page(
                         academy_queue_full: academy_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -470,6 +522,7 @@ fn render_building_page(
                         smithy_queue_full: smithy_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -495,6 +548,7 @@ fn render_building_page(
                         village_info: village_info,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -654,7 +708,7 @@ fn render_building_page(
                         village: user.village.clone(),
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
-                        current_level: slot_building.building.level,
+                        current_level: current_level,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -663,6 +717,7 @@ fn render_building_page(
                         queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })

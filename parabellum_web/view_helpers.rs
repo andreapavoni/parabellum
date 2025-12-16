@@ -333,3 +333,15 @@ pub fn building_description(building: &BuildingName) -> String {
 
     description.to_string()
 }
+
+/// Returns building description paragraphs split by <br> tags
+pub fn building_description_paragraphs(building: &BuildingName) -> Vec<String> {
+    let raw_description = building_description(building);
+
+    // Split by <br> tag and clean up whitespace
+    raw_description
+        .split("<br>")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
