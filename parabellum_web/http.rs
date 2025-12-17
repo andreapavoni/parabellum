@@ -99,6 +99,7 @@ impl WebRouter {
 
         let router = Router::new()
             .nest_service("/assets", ServeDir::new("frontend/assets"))
+            .nest_service("/static", ServeDir::new("frontend/static"))
             .merge(public_routes)
             .merge(protected_routes)
             .with_state(state)
