@@ -26,37 +26,80 @@ pub fn MapPage(village: Village, world_size: i32) -> Element {
                     }
                 }
 
-                div { class: "large-map-wrapper",
-                    div { class: "map-grid-container",
+                div { class: "map-layout",
+                    // Y Axis (left side)
+                    div {
+                        id: "axis-y-container",
+                        class: "axis-y"
+                    }
+
+                    // Map center (SVG grid) with navigation arrows
+                    div {
+                        class: "map-center",
+
+                        // Navigation arrows (absolute positioned inside map-center)
                         div {
-                            class: "nav-arrow arrow-n",
+                            class: "nav-overlay nav-n",
                             "onclick": "moveMap(0, 1)",
                             title: "Nord (Y+)"
                         }
                         div {
-                            class: "nav-arrow arrow-s",
+                            class: "nav-overlay nav-s",
                             "onclick": "moveMap(0, -1)",
                             title: "Sud (Y-)"
                         }
                         div {
-                            class: "nav-arrow arrow-w",
+                            class: "nav-overlay nav-w",
                             "onclick": "moveMap(-1, 0)",
                             title: "Ovest (X-)"
                         }
                         div {
-                            class: "nav-arrow arrow-e",
+                            class: "nav-overlay nav-e",
                             "onclick": "moveMap(1, 0)",
                             title: "Est (X+)"
                         }
 
-                        // Y Axis
-                        div { id: "y-axis-container", class: "y-axis" }
+                        // SVG map
+                        svg {
+                            id: "map-svg",
+                            class: "map-svg",
+                            view_box: "0 0 1500 1500",
+                            preserve_aspect_ratio: "none",
 
-                        // 15x15 Grid (populated by JavaScript)
-                        div { id: "map-grid", class: "map-grid" }
+                            defs {
+                                // Grid pattern
+                                pattern {
+                                    id: "gridPattern",
+                                    width: "100",
+                                    height: "100",
+                                    pattern_units: "userSpaceOnUse",
+                                    rect {
+                                        width: "100",
+                                        height: "100",
+                                        fill: "none",
+                                        stroke: "#9ACD32",
+                                        stroke_width: "2",
+                                        opacity: "0.3"
+                                    }
+                                }
+                            }
 
-                        // X Axis
-                        div { id: "x-axis-container", class: "x-axis" }
+                            // Background grid
+                            rect {
+                                width: "1500",
+                                height: "1500",
+                                fill: "url(#gridPattern)"
+                            }
+
+                            // Map tiles container (populated by JavaScript)
+                            g { id: "map-tiles-container" }
+                        }
+                    }
+
+                    // X Axis (bottom)
+                    div {
+                        id: "axis-x-container",
+                        class: "axis-x"
                     }
                 }
 
