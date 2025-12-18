@@ -277,8 +277,8 @@ pub fn BattleReportPage(
                         }
                         BattleArmyTable {
                             tribe: attacker.tribe.clone(),
-                            army_before: attacker.army_before,
-                            losses: attacker.losses
+                            army_before: attacker.army_before.clone(),
+                            losses: attacker.losses.clone()
                         }
                     }
                 }
@@ -297,8 +297,8 @@ pub fn BattleReportPage(
                         }
                         BattleArmyTable {
                             tribe: defender.tribe.clone(),
-                            army_before: defender.army_before,
-                            losses: defender.losses
+                            army_before: defender.army_before.clone(),
+                            losses: defender.losses.clone()
                         }
                     }
                 }
@@ -321,8 +321,8 @@ pub fn BattleReportPage(
                                 }
                                 BattleArmyTable {
                                     tribe: reinf.tribe.clone(),
-                                    army_before: reinf.army_before,
-                                    losses: reinf.losses
+                                    army_before: reinf.army_before.clone(),
+                                    losses: reinf.losses.clone()
                                 }
                             }
                         }

@@ -1,3 +1,4 @@
+use parabellum_types::army::TroopSet;
 use rand::Rng;
 use uuid::Uuid;
 
@@ -11,11 +12,7 @@ use parabellum_types::{
 use crate::models::map::{MapField, MapFieldTopology};
 
 use super::models::{
-    army::{Army, TroopSet},
-    hero::Hero,
-    map::Valley,
-    smithy::SmithyUpgrades,
-    village::Village,
+    army::Army, hero::Hero, map::Valley, smithy::SmithyUpgrades, village::Village,
 };
 
 #[derive(Default, Clone)]
@@ -163,7 +160,7 @@ pub fn army_factory(options: ArmyFactoryOptions) -> Army {
         Some(village_id),
         options.player_id.unwrap_or(Uuid::new_v4()),
         options.tribe.unwrap_or(Tribe::Roman),
-        &options.units.unwrap_or([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        &options.units.unwrap_or(TroopSet::default()),
         &options.smithy.unwrap_or_default(),
         options.hero,
     )

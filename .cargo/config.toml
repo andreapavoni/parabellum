@@ -5,6 +5,8 @@ t = "test"
 
 tt = "test -q -- --test-threads=1"
 
+nt = "nextest run --workspace -j1 --cargo-quiet --show-progress only"
+
 # coverage tests
 tc = "tarpaulin -p parabellum_server --release -- --test-threads=1"
 

@@ -19,6 +19,7 @@ pub mod tests {
     };
     use parabellum_types::{
         Result,
+        army::TroopSet,
         errors::{ApplicationError, GameError},
     };
 
@@ -49,12 +50,18 @@ pub mod tests {
             uow_provider.clone(),
             None,
             Tribe::Teuton,
-            [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             false,
         )
         .await?;
-        let (_, mut village_b, _, _, _) =
-            setup_player_party(uow_provider.clone(), None, Tribe::Gaul, [0; 10], false).await?;
+        let (_, mut village_b, _, _, _) = setup_player_party(
+            uow_provider.clone(),
+            None,
+            Tribe::Gaul,
+            TroopSet::default(),
+            false,
+        )
+        .await?;
 
         let uow = uow_provider.tx().await?;
 

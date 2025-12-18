@@ -8,7 +8,7 @@ pub mod tests {
         cqrs::commands::{ReinforceVillage, ReviveHero},
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_types::Result;
+    use parabellum_types::{Result, army::TroopSet};
 
     use parabellum_game::models::buildings::Building;
     use parabellum_game::test_utils::{VillageFactoryOptions, village_factory};
@@ -19,8 +19,14 @@ pub mod tests {
     async fn test_transfer_hero_other_village() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, village1, army1, some_hero, _) =
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
+        let (player, village1, army1, some_hero, _) = setup_player_party(
+            uow_provider.clone(),
+            None,
+            Tribe::Roman,
+            TroopSet::default(),
+            true,
+        )
+        .await?;
         let hero = some_hero.unwrap();
 
         let village2 = {
@@ -46,7 +52,7 @@ pub mod tests {
             player_id: player.id,
             village_id: village1.id,
             army_id: army1.id,
-            units: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::default(),
             target_village_id: (village2.id),
             hero_id: Some(hero.id),
         };
@@ -132,7 +138,7 @@ pub mod tests {
             uow_provider.clone(),
             None,
             Tribe::Teuton,
-            [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             true,
         )
         .await?;
@@ -140,7 +146,7 @@ pub mod tests {
             uow_provider.clone(),
             None,
             Tribe::Gaul,
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TroopSet::default(),
             false,
         )
         .await?;
@@ -149,7 +155,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: target_village.id,
             hero_id: hero.clone().map(|h| h.id),
         };
@@ -238,8 +244,14 @@ pub mod tests {
     async fn test_resurrect_existing_hero() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let (player, mut village, _, some_hero, _) =
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
+        let (player, mut village, _, some_hero, _) = setup_player_party(
+            uow_provider.clone(),
+            None,
+            Tribe::Roman,
+            TroopSet::default(),
+            true,
+        )
+        .await?;
         let mut hero = some_hero.unwrap();
 
         let (player_id, village_id, hero_id) = {
@@ -346,8 +358,14 @@ pub mod tests {
         let hero_repo = uow.heroes();
 
         let (player_id, village_id, hero_id) = {
-            let (player, mut village, _, some_hero, _) =
-                setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
+            let (player, mut village, _, some_hero, _) = setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                TroopSet::default(),
+                true,
+            )
+            .await?;
             let mut hero = some_hero.unwrap();
 
             let granary =
@@ -436,8 +454,14 @@ pub mod tests {
         let hero_repo = uow.heroes();
 
         let (player_id, village_id, hero_id) = {
-            let (player, mut village, _, some_hero, _) =
-                setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], true).await?;
+            let (player, mut village, _, some_hero, _) = setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                TroopSet::default(),
+                true,
+            )
+            .await?;
             let mut hero = some_hero.unwrap();
 
             let granary =

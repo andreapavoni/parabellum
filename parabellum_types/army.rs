@@ -5,6 +5,49 @@ use crate::{
     common::{Cost, ResearchCost},
 };
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct TroopSet {
+    units: [u32; 10],
+}
+
+impl TroopSet {
+    /// Inits a new TroopSet.
+    pub fn new(units: [u32; 10]) -> Self {
+        Self { units }
+    }
+
+    /// Returns the quantity of units at given index.
+    pub fn get(&self, idx: usize) -> u32 {
+        self.units[idx]
+    }
+
+    /// Sets the quantity of units at given index.
+    pub fn set(&mut self, idx: usize, quantity: u32) {
+        self.units[idx] = quantity;
+    }
+
+    /// Add the quantity of units at given index.
+    pub fn add(&mut self, idx: usize, quantity: u32) {
+        self.units[idx] += quantity;
+    }
+
+    /// Removes the quantity of units at given index.
+    pub fn remove(&mut self, idx: usize, quantity: u32) {
+        self.units[idx] -= quantity;
+    }
+
+    /// Returns the units in the TroopSet.
+    pub fn units(&self) -> &[u32; 10] {
+        &self.units
+    }
+
+    /// Returns immensity of the TroopSet, but doesn't include hero.
+    pub fn immensity(&self) -> u32 {
+        self.units.iter().sum::<u32>()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Unit {
     pub name: UnitName,

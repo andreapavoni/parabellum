@@ -151,7 +151,7 @@ pub fn TroopsPanel(village: Village) -> Element {
         .army()
         .map(|army| {
             let tribe_units = village.tribe.units();
-            army.units()
+            army.units().units()
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, quantity)| {

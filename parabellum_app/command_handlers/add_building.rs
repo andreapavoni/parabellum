@@ -119,9 +119,9 @@ fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Resul
                 .conflicts
                 .iter()
                 .any(|conflict| conflict.0 == *candidate)
-            {
-                return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
-            }
+        {
+            return Err(GameError::BuildingConflict(candidate.clone(), queued_name));
+        }
     }
 
     Ok(())
@@ -152,7 +152,7 @@ mod tests {
 
     fn setup_village(config: &Config) -> Result<(Player, Village, Arc<Config>)> {
         let (player, mut village, _, _) =
-            setup_player_party(None, Tribe::Roman, [0; 10], false).unwrap();
+            setup_player_party(None, Tribe::Roman, Default::default(), false).unwrap();
 
         // main building is level 1 in slot 19 by default
         village.set_building_level_at_slot(19, 3, config.speed)?;

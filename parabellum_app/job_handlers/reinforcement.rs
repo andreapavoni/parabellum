@@ -50,7 +50,7 @@ impl JobHandler for ReinforcementJobHandler {
 
         // To switch village, hero should be alone and target village should have HeroMansion
         if target_village.player_id == self.payload.player_id
-            && reinforcement.units().iter().sum::<u32>() == 0
+            && reinforcement.units().immensity() == 0
             && target_village
                 .get_building_by_name(&BuildingName::HeroMansion)
                 .is_some()
@@ -120,7 +120,7 @@ impl JobHandler for ReinforcementJobHandler {
             receiver_village: target_village.name.clone(),
             receiver_position: target_village.position.clone(),
             tribe: reinforcement.tribe.clone(),
-            units: *reinforcement.units(),
+            units: reinforcement.units().clone(),
         };
 
         let new_report = NewReport {

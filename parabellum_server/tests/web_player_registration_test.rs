@@ -3,8 +3,8 @@ mod test_utils;
 use axum::http::StatusCode;
 use std::collections::HashMap;
 
-use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
+use parabellum_types::{army::TroopSet, errors::ApplicationError};
 
 use crate::test_utils::tests::{
     fetch_csrf_token, setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
@@ -112,8 +112,14 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
 async fn test_register_authenticated_player() -> Result<(), ApplicationError> {
     let uow_provider = setup_web_app().await?;
 
-    let (_, _, _, _, user) =
-        setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
+    let (_, _, _, _, user) = setup_player_party(
+        uow_provider.clone(),
+        None,
+        Tribe::Roman,
+        TroopSet::default(),
+        false,
+    )
+    .await?;
 
     let cookie = setup_user_cookie(user).await;
     let client = setup_http_client(Some(cookie), None).await;

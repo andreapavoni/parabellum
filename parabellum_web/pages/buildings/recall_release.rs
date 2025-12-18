@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use parabellum_types::{map::Position, tribe::Tribe};
+use parabellum_types::{army::TroopSet, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::{components::BattleArmyTable, view_helpers::unit_display_name};
@@ -12,7 +12,7 @@ pub fn RecallConfirmationPage(
     army_id: Uuid,
     destination_village_name: Option<String>,
     destination_position: Position,
-    units: [u32; 10],
+    units: TroopSet,
     tribe: Tribe,
     csrf_token: String,
 ) -> Element {
@@ -48,8 +48,8 @@ pub fn RecallConfirmationPage(
                     }
                     BattleArmyTable {
                         tribe: tribe.clone(),
-                        army_before: units,
-                        losses: [0; 10],
+                        army_before: units.clone(),
+                        losses: TroopSet::default(),
                     }
                 }
             }
@@ -73,7 +73,7 @@ pub fn RecallConfirmationPage(
 
                 // Editable unit quantities
                 div { class: "space-y-3",
-                    for (idx, &quantity) in units.iter().enumerate() {
+                    for (idx, &quantity) in units.units().clone().iter().enumerate() {
                         if quantity > 0 {
                             {
                                 let unit = &tribe.units()[idx];
@@ -137,7 +137,7 @@ pub fn ReleaseConfirmationPage(
     source_village_id: u32,
     source_village_name: String,
     source_position: Position,
-    units: [u32; 10],
+    units: TroopSet,
     tribe: Tribe,
     csrf_token: String,
 ) -> Element {
@@ -173,8 +173,8 @@ pub fn ReleaseConfirmationPage(
                     }
                     BattleArmyTable {
                         tribe: tribe.clone(),
-                        army_before: units,
-                        losses: [0; 10],
+                        army_before: units.clone(),
+                        losses: TroopSet::default(),
                     }
                 }
             }
@@ -198,7 +198,7 @@ pub fn ReleaseConfirmationPage(
 
                 // Editable unit quantities
                 div { class: "space-y-3",
-                    for (idx, &quantity) in units.iter().enumerate() {
+                    for (idx, &quantity) in units.units().clone().iter().enumerate() {
                         if quantity > 0 {
                             {
                                 let unit = &tribe.units()[idx];

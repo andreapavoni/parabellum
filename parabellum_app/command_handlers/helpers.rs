@@ -10,12 +10,10 @@ use crate::{
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
 };
-use parabellum_game::models::{
-    army::{Army, TroopSet},
-    village::Village,
-};
+use parabellum_game::models::{army::Army, village::Village};
 use parabellum_types::{
     Result,
+    army::TroopSet,
     errors::{AppError, ApplicationError, GameError},
 };
 
@@ -113,7 +111,7 @@ pub async fn deploy_army_from_village(
     units_to_deploy: TroopSet,
     hero_id: Option<Uuid>,
 ) -> Result<(Village, Army), ApplicationError> {
-    if units_to_deploy.iter().sum::<u32>() == 0 && hero_id.is_none() {
+    if units_to_deploy.immensity() == 0 && hero_id.is_none() {
         return Err(ApplicationError::Game(GameError::NoUnitsSelected));
     }
     let army_repo: Arc<dyn ArmyRepository + '_> = uow.armies();

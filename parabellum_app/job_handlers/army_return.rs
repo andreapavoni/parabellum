@@ -53,6 +53,7 @@ impl JobHandler for ArmyReturnJobHandler {
 
 #[cfg(test)]
 mod tests {
+    use parabellum_types::army::TroopSet;
     use serde_json::json;
     use std::sync::Arc;
     use uuid::Uuid;
@@ -101,7 +102,7 @@ mod tests {
             village_id: Some(village.id),
             player_id: Some(player.id),
             tribe: Some(player.tribe.clone()),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
         village.set_army(Some(&home_army))?;
@@ -111,7 +112,7 @@ mod tests {
             village_id: Some(village.id), // Original village
             player_id: Some(player.id),
             tribe: Some(player.tribe.clone()),
-            units: Some([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([5, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
 
@@ -139,7 +140,7 @@ mod tests {
         let final_village = context.uow.villages().get_by_id(village.id).await?;
         let final_home_army = final_village.army().expect("Village should have an army");
         assert_eq!(
-            final_home_army.units()[0],
+            final_home_army.units().get(0),
             15,
             "Home army should have 15 units"
         );

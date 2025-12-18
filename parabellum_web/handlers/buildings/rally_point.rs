@@ -22,7 +22,10 @@ use parabellum_app::{
     queries_handlers::GetVillageByIdHandler,
 };
 use parabellum_game::models::army::Army;
-use parabellum_types::battle::{AttackType, ScoutingTarget};
+use parabellum_types::{
+    army::TroopSet,
+    battle::{AttackType, ScoutingTarget},
+};
 use parabellum_types::{buildings::BuildingName, map::Position};
 
 use crate::{
@@ -220,7 +223,7 @@ pub async fn send_troops(
         }
     };
 
-    if troop_set.iter().all(|amount| *amount == 0) {
+    if troop_set.units().iter().all(|amount| *amount == 0) {
         return render_with_error(
             &state,
             jar,
@@ -566,10 +569,7 @@ pub async fn confirm_send_troops(
 
     // Check if this is a scouting mission based on the form
     // Only route to ScoutVillage if scouting_target is present AND non-empty
-    let is_scouting = form
-        .scouting_target
-        .as_ref()
-        .is_some_and(|s| !s.is_empty());
+    let is_scouting = form.scouting_target.as_ref().is_some_and(|s| !s.is_empty());
 
     let result = if is_scouting {
         // This is a scouting mission - use ScoutVillage command
@@ -672,14 +672,14 @@ pub async fn confirm_send_troops(
     }
 }
 
-fn parse_troop_set(values: &[i32]) -> Option<[u32; 10]> {
-    let mut troops = [0u32; 10];
-    for idx in 0..troops.len() {
+fn parse_troop_set(values: &[i32]) -> Option<TroopSet> {
+    let mut troops = TroopSet::default();
+    for idx in 0..troops.units().len() {
         let amount = *values.get(idx).unwrap_or(&0);
         if amount < 0 {
             return None;
         }
-        troops[idx] = amount as u32;
+        troops.set(idx, amount as u32);
     }
     Some(troops)
 }
@@ -797,7 +797,7 @@ pub async fn recall_confirmation_page(
                 army_id: army.id,
                 destination_village_name: destination_name,
                 destination_position: destination_position,
-                units: *army.units(),
+                units: army.units().clone(),
                 tribe: army.tribe.clone(),
                 csrf_token: csrf_token,
             }
@@ -873,7 +873,7 @@ pub async fn release_confirmation_page(
                 source_village_id: source_village.id,
                 source_village_name: source_village.name.clone(),
                 source_position: source_village.position.clone(),
-                units: *army.units(),
+                units: army.units().clone(),
                 tribe: army.tribe.clone(),
                 csrf_token: csrf_token,
             }

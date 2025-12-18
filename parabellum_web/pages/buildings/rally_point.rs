@@ -5,7 +5,7 @@ use crate::{
 use dioxus::prelude::*;
 use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
-use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{army::TroopSet, buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 use std::collections::HashMap;
 
@@ -33,7 +33,10 @@ pub fn RallyPointPage(
     let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
 
     // Prepare sendable units from village army
-    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
+    let available_units = village
+        .army()
+        .map(|army| army.units().clone())
+        .unwrap_or(TroopSet::default());
     let tribe_units = village.tribe.units();
     let description_paragraphs = building_description_paragraphs(&building_name);
 
@@ -240,7 +243,7 @@ pub fn RallyPointPage(
                             div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.select_units\")}" }
                             for (idx, unit) in tribe_units.iter().enumerate() {
                                 {
-                                    let available = available_units[idx];
+                                    let available = available_units.get(idx);
                                     let name = unit_display_name(&unit.name);
                                     rsx! {
                                         label {

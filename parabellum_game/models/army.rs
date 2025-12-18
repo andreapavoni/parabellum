@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use parabellum_types::{
-    army::{Unit, UnitName, UnitRole},
+    army::{TroopSet, Unit, UnitName, UnitRole},
     errors::GameError,
     tribe::Tribe,
 };
@@ -13,8 +13,6 @@ use crate::{
 };
 
 use super::smithy::SmithyUpgrades;
-
-pub type TroopSet = [u32; 10];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Army {
@@ -45,7 +43,7 @@ impl Army {
             village_id,
             player_id,
             tribe,
-            units: *units,
+            units: units.clone(),
             smithy: *smithy,
             hero,
             current_map_field_id,
@@ -60,7 +58,7 @@ impl Army {
             Some(village.id),
             village.player_id,
             village.tribe.clone(),
-            &[0; 10],
+            &TroopSet::default(),
             village.smithy(),
             None,
         )
@@ -84,13 +82,13 @@ impl Army {
 
     /// Returns the amount of a given unit.
     pub fn unit_amount(&self, idx: u8) -> u32 {
-        self.units[idx as usize]
+        self.units.get(idx as usize)
     }
 
     /// Returns the total raw number of troops in the army.
     pub fn immensity(&self) -> u32 {
         let hero_count: u32 = self.hero.as_ref().map(|_| 1).unwrap_or(0);
-        self.units.iter().sum::<u32>() + hero_count
+        self.units.immensity() + hero_count
     }
 
     /// Update units and hero in the army.
@@ -108,7 +106,7 @@ impl Army {
         let units = self.tribe.units();
         let mut total: u32 = 0;
 
-        for (idx, quantity) in self.units.iter().enumerate() {
+        for (idx, quantity) in self.units.units().iter().enumerate() {
             total += units[idx].cost.upkeep * quantity;
         }
 
@@ -125,7 +123,7 @@ impl Army {
         let mut capacity: u32 = 0;
         let units_data = self.tribe.units();
 
-        for (idx, &quantity) in troops.iter().enumerate() {
+        for (idx, &quantity) in troops.units().iter().enumerate() {
             if quantity > 0 {
                 capacity += units_data[idx].capacity * quantity;
             }
@@ -139,7 +137,7 @@ impl Army {
         let mut infantry_points: u32 = 0;
         let mut cavalry_points: u32 = 0;
 
-        for (idx, quantity) in self.units.iter().enumerate() {
+        for (idx, quantity) in self.units.units().iter().enumerate() {
             let u = self.get_unit_by_idx(idx as u8).unwrap();
             match u.role {
                 UnitRole::Settler | UnitRole::Chief => continue,
@@ -161,7 +159,7 @@ impl Army {
         let mut infantry_points: u32 = 0;
         let mut cavalry_points: u32 = 0;
 
-        for (idx, quantity) in self.units.into_iter().enumerate() {
+        for (idx, quantity) in self.units.units().iter().enumerate() {
             let u = self.get_unit_by_idx(idx as u8).unwrap();
 
             match u.role {
@@ -190,13 +188,13 @@ impl Army {
 
     /// Updates the current army and returns new deployed army.
     pub fn deploy(&mut self, set: TroopSet, hero: Option<Hero>) -> Result<Self, GameError> {
-        for (idx, quantity) in set.iter().enumerate() {
+        for (idx, quantity) in set.units().iter().enumerate() {
             if *quantity == 0 {
                 continue;
             }
 
-            if self.units[idx] >= *quantity {
-                self.units[idx] -= *quantity;
+            if self.units.get(idx) >= *quantity {
+                self.units.remove(idx, *quantity);
             } else {
                 return Err(GameError::NotEnoughUnits);
             }
@@ -223,8 +221,8 @@ impl Army {
     /// Returns the actual speed of the Army by taking the speed of slowest unit.
     pub fn speed(&self) -> u8 {
         let mut speed: u8 = 0;
-        for (idx, quantity) in self.units.into_iter().enumerate() {
-            if quantity > 0 {
+        for (idx, quantity) in self.units.units().iter().enumerate() {
+            if *quantity > 0 {
                 let u = self.get_unit_by_idx(idx as u8).unwrap();
                 if speed == 0 || u.speed < speed {
                     speed = u.speed;
@@ -237,6 +235,7 @@ impl Army {
     /// Returns the total troop count by role.
     pub fn get_troop_count_by_role(&self, role: UnitRole) -> u32 {
         self.units
+            .units()
             .iter()
             .enumerate()
             .filter(move |(idx, quantity)| {
@@ -252,9 +251,10 @@ impl Army {
 
     /// Checks if the army contains only scouts (index 3) and no other units.
     pub fn is_only_scouts(&self) -> bool {
-        self.units[3] > 0
+        self.units.get(3) > 0
             && self
                 .units
+                .units()
                 .iter()
                 .enumerate()
                 .all(|(idx, &count)| idx == 3 || count == 0)
@@ -262,17 +262,17 @@ impl Army {
 
     /// Checks if the army contains catapults (index 7).
     pub fn has_catapults(&self) -> bool {
-        self.units[7] > 0
+        self.units.get(7) > 0
     }
 
     /// Updates the units of the army.
     pub fn update_units(&mut self, units: &TroopSet) {
-        self.units = *units;
+        self.units = units.clone();
     }
 
     pub fn add_unit(&mut self, name: UnitName, quantity: u32) -> Result<(), GameError> {
         if let Some(idx) = self.tribe.get_unit_idx_by_name(&name) {
-            self.units[idx] += quantity;
+            self.units.add(idx, quantity);
             return Ok(());
         }
 
@@ -285,8 +285,8 @@ impl Army {
             return Err(GameError::TribeMismatch);
         }
 
-        for (idx, quantity) in other.units.iter().enumerate() {
-            self.units[idx] += quantity;
+        for (idx, quantity) in other.units.units().iter().enumerate() {
+            self.units.add(idx, *quantity);
         }
 
         Ok(())
@@ -304,7 +304,7 @@ impl Army {
     /// Returns the scouting points based on a given base points.
     fn scouting_points(&self, base_points: u8) -> u32 {
         let idx: usize = 3;
-        let quantity = self.units[idx];
+        let quantity = self.units.get(idx);
         let unit = self.get_unit_by_idx(idx as u8).unwrap();
         let smithy_improvement = self.apply_smithy_upgrade(&unit, idx, base_points as u32);
         smithy_improvement * quantity
@@ -323,14 +323,17 @@ impl Army {
 mod tests {
     use parabellum_types::tribe::Tribe;
 
-    use crate::test_utils::{ArmyFactoryOptions, army_factory};
+    use crate::{
+        models::army::TroopSet,
+        test_utils::{ArmyFactoryOptions, army_factory},
+    };
 
     #[test]
     fn test_army_upkeep() {
         // 10 Maceman (1 upkeep) + 5 Spearman (1 upkeep) = 15 upkeep
         let army = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
-            units: Some([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 5, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
 
@@ -339,7 +342,7 @@ mod tests {
         // 10 Legionnaire (1 upkeep) + 5 Equites Imperatoris (3 upkeep) = 10 + 15 = 25 upkeep
         let army_roman = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Roman),
-            units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 5, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
 
@@ -352,7 +355,7 @@ mod tests {
         // 5 Teutonic Knight (150 attack) = 750 infantry
         let (infantry, cavalry) = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
-            units: Some([10, 0, 0, 0, 0, 5, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 0, 5, 0, 0, 0, 0])),
             smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
         })
@@ -365,7 +368,7 @@ mod tests {
         // 5 Equites Imperatoris (120 attack) = 600 cavalry
         let (infantry, cavalry) = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Roman),
-            units: Some([10, 0, 0, 0, 5, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 5, 0, 0, 0, 0, 0])),
             smithy: Some([0; 8]), // No smithy upgrades
             ..Default::default()
         })
@@ -380,7 +383,7 @@ mod tests {
         // Maceman (speed 14), Spearman (speed 14)
         let army_fast = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
-            units: Some([10, 5, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 5, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
         assert_eq!(army_fast.speed(), 14);
@@ -388,7 +391,7 @@ mod tests {
         // Maceman (speed 14), Ram (speed 8)
         let army_slow = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
-            units: Some([10, 0, 0, 0, 0, 0, 5, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 0, 0, 5, 0, 0, 0])),
             ..Default::default()
         });
         assert_eq!(army_slow.speed(), 8); // Speed is limited by the slowest unit (Ram)
@@ -396,7 +399,7 @@ mod tests {
         // No units
         let army_empty = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
-            units: Some([0; 10]),
+            units: Some(TroopSet::default()),
             ..Default::default()
         });
         assert_eq!(army_empty.speed(), 0); // No units, speed is 0

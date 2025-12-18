@@ -6,7 +6,7 @@ use parabellum_app::{
     jobs::{JobStatus, tasks::AddBuildingTask},
 };
 use parabellum_game::models::buildings::Building;
-use parabellum_types::Result;
+use parabellum_types::{Result, army::TroopSet};
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
 use crate::test_utils::tests::{setup_app, setup_player_party};
@@ -14,8 +14,14 @@ use crate::test_utils::tests::{setup_app, setup_player_party};
 #[tokio::test]
 async fn test_build() -> Result<()> {
     let (app, worker, uow_provider, config) = setup_app(false).await?;
-    let (player, mut village, _, _, _) =
-        setup_player_party(uow_provider.clone(), None, Tribe::Roman, [0; 10], false).await?;
+    let (player, mut village, _, _, _) = setup_player_party(
+        uow_provider.clone(),
+        None,
+        Tribe::Roman,
+        TroopSet::default(),
+        false,
+    )
+    .await?;
 
     {
         let uow = uow_provider.tx().await?;

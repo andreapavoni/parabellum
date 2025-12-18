@@ -12,7 +12,8 @@ pub mod tests {
     };
     use parabellum_game::models::{buildings::Building, village::Village};
     use parabellum_types::{
-        Result, battle::AttackType, buildings::BuildingName, common::ResourceGroup, tribe::Tribe,
+        Result, army::TroopSet, battle::AttackType, buildings::BuildingName, common::ResourceGroup,
+        tribe::Tribe,
     };
 
     use crate::test_utils::tests::{setup_app, setup_player_party};
@@ -20,14 +21,14 @@ pub mod tests {
     #[tokio::test]
     async fn test_simple_attack() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
-        let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let units_to_send = TroopSet::new([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
         let (attacker_player, attacker_village, attacker_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                units_to_send,
+                units_to_send.clone(),
                 false,
             )
             .await?
@@ -39,7 +40,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::default(),
                 false,
             )
             .await?
@@ -186,7 +187,7 @@ pub mod tests {
             );
             let home_army = home_village.army().unwrap();
             assert_eq!(
-                home_army.units()[0],
+                home_army.units().get(0),
                 100,
                 "Home army should have 100 troops (assuming 0 losses for simplicity)"
             );
@@ -245,7 +246,8 @@ pub mod tests {
                     "Attacker tribe should be Roman"
                 );
                 assert_eq!(
-                    attacker_party.army_before[0], 100,
+                    attacker_party.army_before.get(0),
+                    100,
                     "Attacker should have started with 100 units"
                 );
 
@@ -274,7 +276,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
+                TroopSet::new([100, 0, 0, 0, 0, 0, 0, 100, 0, 0]),
                 false,
             )
             .await?
@@ -285,7 +287,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::default(),
                 false,
             )
             .await?
@@ -319,7 +321,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [100, 0, 0, 0, 0, 0, 0, 100, 0, 0],
+            units: TroopSet::new([100, 0, 0, 0, 0, 0, 0, 100, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::Warehouse, BuildingName::Granary],
             hero_id: None,
@@ -399,7 +401,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -411,7 +413,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [30, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([30, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -423,7 +425,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
-                [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -434,7 +436,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [20, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             hero_id: None,
         };
@@ -457,7 +459,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [50, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
@@ -494,13 +496,13 @@ pub mod tests {
                 assert!(payload.attacker.is_some(), "Should include attacker");
                 let attacker_party = payload.attacker.as_ref().unwrap();
                 assert_eq!(attacker_party.tribe, Tribe::Roman);
-                assert_eq!(attacker_party.army_before[0], 50);
+                assert_eq!(attacker_party.army_before.get(0), 50);
 
                 // Verify defender
                 assert!(payload.defender.is_some(), "Should include defender");
                 let defender_party = payload.defender.as_ref().unwrap();
                 assert_eq!(defender_party.tribe, Tribe::Gaul);
-                assert_eq!(defender_party.army_before[0], 30);
+                assert_eq!(defender_party.army_before.get(0), 30);
 
                 // Verify reinforcements
                 assert_eq!(
@@ -510,19 +512,19 @@ pub mod tests {
                 );
                 let reinforcement = &payload.reinforcements[0];
                 assert_eq!(reinforcement.tribe, Tribe::Teuton);
-                assert_eq!(reinforcement.army_before[0], 20);
+                assert_eq!(reinforcement.army_before.get(0), 20);
 
                 // All parties should have losses data
                 assert!(
-                    attacker_party.losses.iter().sum::<u32>() > 0,
+                    attacker_party.losses.immensity() > 0,
                     "Attacker should have losses data"
                 );
                 assert!(
-                    defender_party.losses.iter().sum::<u32>() > 0,
+                    defender_party.losses.immensity() > 0,
                     "Defender should have losses data"
                 );
                 assert!(
-                    reinforcement.losses.iter().sum::<u32>() > 0,
+                    reinforcement.losses.immensity() > 0,
                     "Reinforcement should have losses data"
                 );
             } else {
@@ -545,7 +547,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                [0, 0, 200, 0, 0, 0, 0, 0, 0, 0], // Strong army
+                TroopSet::new([0, 0, 200, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -557,7 +559,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Weak army
+                TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -569,7 +571,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
-                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Weak army
+                TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -580,7 +582,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             hero_id: None,
         };
@@ -605,7 +607,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [0, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([0, 0, 200, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
@@ -633,7 +635,7 @@ pub mod tests {
             assert!(
                 updated_defender.army().is_none(),
                 "Defender village should have no home army after total defeat. Found: {:?}",
-                updated_defender.army().map(|a| (a.id, *a.units()))
+                updated_defender.army().map(|a| (a.id, a.units().clone()))
             );
             assert_eq!(
                 updated_defender.reinforcements().len(),
@@ -642,7 +644,7 @@ pub mod tests {
                 updated_defender
                     .reinforcements()
                     .iter()
-                    .map(|a| (a.id, *a.units()))
+                    .map(|a| (a.id, a.units().clone()))
                     .collect::<Vec<_>>()
             );
 
@@ -663,7 +665,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                units_with_siege,
+                TroopSet::new(units_with_siege),
                 false,
             )
             .await?
@@ -675,7 +677,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [5, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 5 phalanxes
+                TroopSet::new([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -685,7 +687,7 @@ pub mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: units_with_siege,
+            units: TroopSet::new(units_with_siege),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,

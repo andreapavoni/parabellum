@@ -102,6 +102,7 @@ impl CommandHandler<ReviveHero> for ReviveHeroCommandHandler {
 mod tests {
     use parabellum_game::{models::buildings::Building, test_utils::setup_player_party};
     use parabellum_types::Result;
+    use parabellum_types::army::TroopSet;
     use parabellum_types::{buildings::BuildingName, common::ResourceGroup, tribe::Tribe};
 
     use super::*;
@@ -114,7 +115,8 @@ mod tests {
         let village_repo = uow.villages();
 
         let config = Arc::new(Config::from_env());
-        let (player, village, _, hero) = setup_player_party(None, Tribe::Roman, [0; 10], true)?;
+        let (player, village, _, hero) =
+            setup_player_party(None, Tribe::Roman, TroopSet::default(), true)?;
         let hero = hero.unwrap();
 
         hero_repo.save(&hero).await.unwrap();
@@ -142,7 +144,8 @@ mod tests {
         let job_repo = uow.jobs();
 
         let config = Arc::new(Config::from_env());
-        let (player, mut village, _, hero) = setup_player_party(None, Tribe::Roman, [0; 10], true)?;
+        let (player, mut village, _, hero) =
+            setup_player_party(None, Tribe::Roman, TroopSet::default(), true)?;
 
         let granary = Building::new(BuildingName::Granary, 1).at_level(10, 1)?;
         let warehouse = Building::new(BuildingName::Warehouse, 1).at_level(10, 1)?;

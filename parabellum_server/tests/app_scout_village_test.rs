@@ -10,9 +10,12 @@ pub mod tests {
             tasks::{ArmyReturnTask, ScoutTask},
         },
     };
-    use parabellum_types::battle::{AttackType, ScoutingTarget, ScoutingTargetReport};
     use parabellum_types::tribe::Tribe;
     use parabellum_types::{Result, reports::ReportPayload};
+    use parabellum_types::{
+        army::TroopSet,
+        battle::{AttackType, ScoutingTarget, ScoutingTargetReport},
+    };
 
     use super::test_utils::tests::setup_player_party;
     use crate::test_utils::tests::setup_app;
@@ -20,9 +23,16 @@ pub mod tests {
     #[tokio::test]
     async fn test_scout_village() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
-        let scout_units = [0, 0, 0, 10, 0, 0, 0, 0, 0, 0]; // 10 Equites Legati (index 3)
+        let scout_units = TroopSet::new([0, 0, 0, 10, 0, 0, 0, 0, 0, 0]);
         let (scout_player, scout_village, scout_army, _, _) = {
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                scout_units.clone(),
+                false,
+            )
+            .await?
         };
         let original_home_army_id = scout_army.id;
         let (_target_player, target_village, _target_army, _, _) = {
@@ -30,7 +40,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -42,7 +52,7 @@ pub mod tests {
             army_id: original_home_army_id,
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
-            units: scout_units,
+            units: scout_units.clone(),
             attack_type: AttackType::Raid,
         };
 
@@ -121,7 +131,11 @@ pub mod tests {
             assert_eq!(payload.resources.total(), 0, "Scouts don't carry a bounty");
 
             let army_status = uow_assert2.armies().get_by_id(deployed_army_id).await?;
-            assert_eq!(army_status.units()[3], 10, "Scouts should have survived");
+            assert_eq!(
+                army_status.units().get(3),
+                10,
+                "Scouts should have survived"
+            );
             assert!(
                 uow_assert2
                     .armies()
@@ -164,10 +178,10 @@ pub mod tests {
             );
             let home_army = home_village.army().unwrap();
             assert_eq!(
-                home_army.units()[3],
+                home_army.units().get(3),
                 10,
                 "Expected 10 scouts at home, got {}",
-                home_army.units()[3]
+                home_army.units().get(3)
             );
 
             assert_ne!(home_army.id, deployed_army_id);
@@ -185,9 +199,16 @@ pub mod tests {
     #[tokio::test]
     async fn test_scout_creates_battle_report_with_scouting_data() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
-        let scout_units = [0, 0, 0, 5, 0, 0, 0, 0, 0, 0]; // 5 scouts
+        let scout_units = TroopSet::new([0, 0, 0, 5, 0, 0, 0, 0, 0, 0]);
         let (scout_player, scout_village, scout_army, _, _) = {
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                scout_units.clone(),
+                false,
+            )
+            .await?
         };
         let original_home_army_id = scout_army.id;
 
@@ -196,7 +217,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -209,7 +230,7 @@ pub mod tests {
             army_id: original_home_army_id,
             target_village_id: target_village.id,
             target: ScoutingTarget::Resources,
-            units: scout_units,
+            units: scout_units.clone(),
             attack_type: AttackType::Raid,
         };
 
@@ -268,9 +289,16 @@ pub mod tests {
     #[tokio::test]
     async fn test_scout_defenses_creates_correct_report() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
-        let scout_units = [0, 0, 0, 5, 0, 0, 0, 0, 0, 0]; // 5 scouts
+        let scout_units = TroopSet::new([0, 0, 0, 5, 0, 0, 0, 0, 0, 0]);
         let (scout_player, scout_village, scout_army, _, _) = {
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                scout_units.clone(),
+                false,
+            )
+            .await?
         };
         let original_home_army_id = scout_army.id;
 
@@ -279,7 +307,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -360,19 +388,26 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
 
         // Setup weak scout force (will be defeated)
-        let scout_units = [0, 0, 0, 2, 0, 0, 0, 0, 0, 0]; // Only 2 scouts
+        let scout_units = TroopSet::new([0, 0, 0, 2, 0, 0, 0, 0, 0, 0]);
         let (scout_player, scout_village, scout_army, _, _) = {
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                scout_units.clone(),
+                false,
+            )
+            .await?
         };
 
         // Setup strong defender (will defeat scouts)
-        let defender_units = [0, 0, 0, 50, 0, 0, 0, 0, 0, 0]; // 50 Phalanxes
+        let defender_units = TroopSet::new([0, 0, 0, 50, 0, 0, 0, 0, 0, 0]);
         let (_defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                defender_units,
+                defender_units.clone(),
                 false,
             )
             .await?
@@ -384,7 +419,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
-                [30, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 30 Clubswingers
+                TroopSet::new([30, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -395,7 +430,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [30, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([30, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             hero_id: None,
         };
@@ -422,7 +457,7 @@ pub mod tests {
             army_id: scout_army.id,
             target_village_id: defender_village.id,
             target: ScoutingTarget::Resources,
-            units: scout_units,
+            units: scout_units.clone(),
             attack_type: AttackType::Raid,
         };
 
@@ -463,6 +498,7 @@ pub mod tests {
                         .as_ref()
                         .unwrap()
                         .survivors
+                        .units()
                         .iter()
                         .sum::<u32>(),
                     0,
@@ -494,19 +530,26 @@ pub mod tests {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
 
         // Setup strong scout force (will survive)
-        let scout_units = [0, 0, 0, 20, 0, 0, 0, 0, 0, 0]; // 20 scouts
+        let scout_units = TroopSet::new([0, 0, 0, 20, 0, 0, 0, 0, 0, 0]);
         let (scout_player, scout_village, scout_army, _, _) = {
-            setup_player_party(uow_provider.clone(), None, Tribe::Roman, scout_units, false).await?
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                scout_units.clone(),
+                false,
+            )
+            .await?
         };
 
         // Setup weak defender (scouts will survive)
-        let defender_units = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // Only 2 Phalanxes
+        let defender_units = TroopSet::new([2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let (_defender_player, defender_village, _defender_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                defender_units,
+                defender_units.clone(),
                 false,
             )
             .await?
@@ -518,7 +561,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Teuton,
-                [3, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Only 3 Clubswingers
+                TroopSet::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -529,7 +572,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([3, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             hero_id: None,
         };
@@ -556,7 +599,7 @@ pub mod tests {
             army_id: scout_army.id,
             target_village_id: defender_village.id,
             target: ScoutingTarget::Resources,
-            units: scout_units,
+            units: scout_units.clone(),
             attack_type: AttackType::Raid,
         };
 
@@ -597,6 +640,7 @@ pub mod tests {
                         .as_ref()
                         .unwrap()
                         .survivors
+                        .units()
                         .iter()
                         .sum::<u32>()
                         > 0,

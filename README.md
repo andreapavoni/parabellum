@@ -10,7 +10,7 @@ This project is for those who love the deep strategy and community of the origin
 
 The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
-**HEADS UP!** Parabellum is under heavy development and is **not yet playable**. Many core mechanics are being built, but it's not a complete game (yet).
+**HEADS UP!** Parabellum is under heavy development and is **barely playable**. Many core mechanics are being built. You can signup, develop your village, research/training troops, military ops like attack/raid/scout/reinforce, and few other things, but it's not a complete game yet, we're getting there.
 
 ---
 
@@ -30,7 +30,8 @@ Want to get the server running locally? Here’s how.
 
 **Prerequisites:**
 * Rust (>= 1.85)
-* Docker & Docker Compose
+* Postgres 16.x
+* (optional, but much easier for deploy) Docker & Docker Compose
 * `sqlx-cli` (run `cargo install sqlx-cli --no-default-features --features postgres`)
 
 **Steps:**

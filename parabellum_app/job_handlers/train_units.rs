@@ -140,10 +140,10 @@ mod tests {
 
         let final_village = context.uow.villages().get_by_id(village_id).await?;
         let army = final_village.army().expect("Village should have an army");
-        assert_eq!(army.units()[0], 1, "Should have trained exactly 1 unit");
+        assert_eq!(army.units().get(0), 1, "Should have trained exactly 1 unit");
 
         let saved_army = context.uow.armies().get_by_id(army.id).await?;
-        assert_eq!(saved_army.units()[0], 1);
+        assert_eq!(saved_army.units().get(0), 1);
 
         Ok(())
     }
@@ -189,7 +189,7 @@ mod tests {
         // Check that the unit was still trained
         let final_village = context.uow.villages().get_by_id(village_id).await?;
         let army = final_village.army().expect("Village should have an army");
-        assert_eq!(army.units()[0], 1, "Should have trained the last unit");
+        assert_eq!(army.units().get(0), 1, "Should have trained the last unit");
         Ok(())
     }
 }
