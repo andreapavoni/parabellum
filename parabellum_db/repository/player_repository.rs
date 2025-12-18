@@ -32,17 +32,19 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         sqlx::query!(
             r#"
-              INSERT INTO players (id, username, tribe, user_id)
-              VALUES ($1, $2, $3, $4)
+              INSERT INTO players (id, username, tribe, user_id, culture_points)
+              VALUES ($1, $2, $3, $4, $5)
               ON CONFLICT (id) DO UPDATE
               SET
                   username = $2,
-                  tribe = $3
+                  tribe = $3,
+                  culture_points = $5
               "#,
             player.id,
             player.username,
             tribe as _,
             player.user_id,
+            player.culture_points as i32,
         )
         .execute(&mut *tx_guard.as_mut())
         .await
@@ -55,7 +57,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -69,7 +71,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE user_id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE user_id = $1"#,
             user_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -137,5 +139,62 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             .collect();
 
         Ok((entries, total_players))
+    }
+
+    async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        // Sum culture_points from all villages owned by this player
+        let total_cp = sqlx::query!(
+            r#"
+            SELECT COALESCE(SUM(culture_points), 0) as "total!: i64"
+            FROM villages
+            WHERE player_id = $1
+            "#,
+            player_id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+        .total;
+
+        // Update player's culture_points
+        sqlx::query!(
+            r#"
+            UPDATE players
+            SET culture_points = $1
+            WHERE id = $2
+            "#,
+            total_cp as i32,
+            player_id
+        )
+        .execute(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(())
+    }
+
+    async fn get_total_culture_points_production(
+        &self,
+        player_id: Uuid,
+    ) -> Result<u32, ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+
+        // Sum culture_points_production from all villages owned by this player
+        let total_cpp = sqlx::query!(
+            r#"
+            SELECT COALESCE(SUM(culture_points_production), 0) as "total!: i64"
+            FROM villages
+            WHERE player_id = $1
+            "#,
+            player_id
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+        .total;
+
+        Ok(total_cpp as u32)
     }
 }

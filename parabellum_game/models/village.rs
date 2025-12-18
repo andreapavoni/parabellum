@@ -122,6 +122,8 @@ pub struct Village {
     pub is_capital: bool,
     pub total_merchants: u8,
     pub busy_merchants: u8,
+    pub culture_points: u32,
+    pub culture_points_production: u32,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -161,6 +163,8 @@ impl Village {
             academy_research,
             total_merchants: 0,
             busy_merchants: 0,
+            culture_points: 0,
+            culture_points_production: 0,
             stocks: Default::default(),
             updated_at: Utc::now(),
         };
@@ -194,6 +198,8 @@ impl Village {
         smithy: SmithyUpgrades,
         stocks: VillageStocks,
         academy_research: AcademyResearch,
+        culture_points: u32,
+        culture_points_production: u32,
         updated_at: DateTime<Utc>,
     ) -> Self {
         let mut village = Self {
@@ -216,6 +222,8 @@ impl Village {
             academy_research,
             total_merchants: 0,
             busy_merchants: 0,
+            culture_points,
+            culture_points_production,
             updated_at,
         };
 
@@ -592,6 +600,14 @@ impl Village {
         self.loyalty
     }
 
+    /// Calculates the total culture points production per day from all buildings.
+    pub fn calculate_culture_points_production(&self) -> u32 {
+        self.buildings
+            .iter()
+            .map(|vb| vb.building.culture_points as u32)
+            .sum()
+    }
+
     /// Returns home army, if any.
     pub fn army(&self) -> Option<&Army> {
         self.army.as_ref()
@@ -918,7 +934,13 @@ impl Village {
         // update internal data
         self.production.calculate_effective_production();
         self.update_merchants_count();
+        self.update_culture_points_production();
         self.update_resources();
+    }
+
+    /// Updates culture points production based on all buildings.
+    fn update_culture_points_production(&mut self) {
+        self.culture_points_production = self.calculate_culture_points_production();
     }
 
     /// Sets total merchants count based on Marketplace level.
@@ -967,6 +989,14 @@ impl Village {
             self.stocks.crop = 0;
         } else {
             self.stocks.crop = new_crop.floor() as i64;
+        }
+
+        // Calculate culture points accumulation
+        // CPP is per 24 hours, so we need to calculate how many CP were generated in time_elapsed
+        if self.culture_points_production > 0 {
+            let cpp_per_second = self.culture_points_production as f64 / 86400.0; // 86400 seconds in 24 hours
+            let culture_points_delta = (cpp_per_second * time_elapsed).floor() as u32;
+            self.culture_points = self.culture_points.saturating_add(culture_points_delta);
         }
 
         self.updated_at = now;

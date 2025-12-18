@@ -72,6 +72,16 @@
         "ordinal": 13,
         "name": "academy_research",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "culture_points",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "culture_points_production",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -80,6 +90,8 @@
       ]
     },
     "nullable": [
+      false,
+      false,
       false,
       false,
       false,

@@ -280,3 +280,18 @@ pub struct GetLeaderboard {
 impl Query for GetLeaderboard {
     type Output = Leaderboard;
 }
+
+/// Fetch culture points information for a player.
+pub struct GetCulturePointsInfo {
+    pub player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct CulturePointsInfo {
+    pub account_culture_points: u32,
+    pub account_culture_points_production: u32,
+}
+
+impl Query for GetCulturePointsInfo {
+    type Output = CulturePointsInfo;
+}

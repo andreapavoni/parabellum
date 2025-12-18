@@ -4,10 +4,13 @@ use tracing::{info, instrument};
 use parabellum_types::buildings::BuildingGroup;
 use parabellum_types::errors::{ApplicationError, GameError};
 
-use crate::jobs::{
-    Job,
-    handler::{JobHandler, JobHandlerContext},
-    tasks::BuildingDowngradeTask,
+use crate::{
+    job_handlers::helpers::update_player_culture_points,
+    jobs::{
+        Job,
+        handler::{JobHandler, JobHandlerContext},
+        tasks::BuildingDowngradeTask,
+    },
 };
 
 pub struct DowngradeBuildingJobHandler {
@@ -64,6 +67,10 @@ impl JobHandler for DowngradeBuildingJobHandler {
         }
 
         village_repo.save(&village).await?;
+
+        // Update player's total culture points
+        update_player_culture_points(&ctx.uow, village.player_id).await?;
+
         Ok(())
     }
 }

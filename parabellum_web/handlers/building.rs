@@ -35,9 +35,9 @@ use crate::{
     http::AppState,
     pages::buildings::{
         AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, BuildingValueType,
-        EmptySlotPage, GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage,
-        SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage, TrainingBuildingPage,
-        TrainingQueueItem, UnitTrainingOption,
+        EmptySlotPage, ExpansionBuildingPage, GenericBuildingPage, RallyPointPage,
+        ResourceFieldPage, SmithyPage, SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage,
+        TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
     },
     view_helpers::{
         BuildingQueueItemView, building_queue_to_views, training_queue_to_views, unit_display_name,
@@ -97,7 +97,8 @@ pub async fn building_page(
         queues,
         movements,
         village_info,
-    );
+    )
+    .await;
 
     (jar, response).into_response()
 }
@@ -177,7 +178,7 @@ pub async fn build(
 }
 
 /// Render building page based on slot contents
-fn render_building_page(
+async fn render_building_page(
     state: &AppState,
     user: &CurrentUser,
     slot_id: u8,
@@ -699,6 +700,53 @@ fn render_building_page(
                 flash_error,
             )
         }
+        BuildingName::Residence | BuildingName::Palace => {
+            // Expansion buildings - show culture points info
+            use parabellum_app::cqrs::queries::GetCulturePointsInfo;
+            use parabellum_app::queries_handlers::GetCulturePointsInfoQueryHandler;
+
+            let village_cpp = user.village.culture_points_production;
+            let (account_cpp, account_cp) = state
+                .app_bus
+                .query(
+                    GetCulturePointsInfo {
+                        player_id: user.player.id,
+                    },
+                    GetCulturePointsInfoQueryHandler::new(),
+                )
+                .await
+                .map(|info| {
+                    (
+                        info.account_culture_points_production,
+                        info.account_culture_points,
+                    )
+                })
+                .unwrap_or((0, 0));
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    ExpansionBuildingPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: current_level,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: effective_queue_full,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                        village_culture_points_production: village_cpp,
+                        account_culture_points_production: account_cpp,
+                        account_culture_points: account_cp,
+                        next_value: next_value_display.clone(),
+                    }
+                }
+            })
+        }
         _ => {
             // Generic buildings - just upgrade block
             dioxus_ssr::render_element(rsx! {
@@ -852,6 +900,7 @@ pub async fn render_with_error(
         movements,
         village_info,
     )
+    .await
 }
 
 /// Calculate building options for an empty slot

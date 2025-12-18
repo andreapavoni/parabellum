@@ -11,3 +11,5 @@ pub mod research_academy;
 pub mod research_smithy;
 pub mod scout;
 pub mod train_units;
+
+mod helpers;

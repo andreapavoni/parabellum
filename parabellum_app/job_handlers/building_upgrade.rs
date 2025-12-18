@@ -3,10 +3,13 @@ use tracing::{info, instrument};
 
 use parabellum_types::errors::ApplicationError;
 
-use crate::jobs::{
-    Job,
-    handler::{JobHandler, JobHandlerContext},
-    tasks::BuildingUpgradeTask,
+use crate::{
+    job_handlers::helpers::update_player_culture_points,
+    jobs::{
+        Job,
+        handler::{JobHandler, JobHandlerContext},
+        tasks::BuildingUpgradeTask,
+    },
 };
 
 pub struct UpgradeBuildingJobHandler {
@@ -44,6 +47,9 @@ impl JobHandler for UpgradeBuildingJobHandler {
             ctx.config.speed,
         )?;
         village_repo.save(&village).await?;
+
+        // Update player's total culture points
+        update_player_culture_points(&ctx.uow, village.player_id).await?;
 
         Ok(())
     }

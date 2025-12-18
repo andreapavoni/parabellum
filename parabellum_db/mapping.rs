@@ -86,6 +86,8 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             smithy,
             stocks,
             academy_research,
+            db_village.culture_points as u32,
+            db_village.culture_points_production as u32,
             db_village.updated_at,
         );
         Ok(village)
@@ -123,6 +125,7 @@ impl From<db_models::Player> for Player {
             username: player.username,
             tribe: player.tribe.into(),
             user_id: player.user_id,
+            culture_points: player.culture_points as u32,
         }
     }
 }

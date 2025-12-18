@@ -3,6 +3,7 @@ mod attack_village;
 mod create_hero;
 mod downgrade_building;
 mod found_village;
+mod helpers;
 mod mark_report_read;
 mod recall_troops;
 mod register_player;
@@ -15,8 +16,6 @@ mod scout_village;
 mod send_resources;
 mod train_units;
 mod upgrade_building;
-
-mod helpers;
 
 pub use add_building::AddBuildingCommandHandler;
 pub use attack_village::AttackVillageCommandHandler;

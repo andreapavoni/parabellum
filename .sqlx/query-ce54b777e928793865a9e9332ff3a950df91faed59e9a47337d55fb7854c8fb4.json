@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE players\n            SET culture_points = $1\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce54b777e928793865a9e9332ff3a950df91faed59e9a47337d55fb7854c8fb4"
+}
