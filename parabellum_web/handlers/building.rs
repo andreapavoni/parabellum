@@ -842,8 +842,6 @@ pub async fn render_with_error(
     let village_info = fetch_village_info_for_rally_point(state, &user.village).await;
     let (_jar, csrf_token) = generate_csrf(jar);
 
-    
-
     render_building_page(
         state,
         &user,
