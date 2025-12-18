@@ -7,8 +7,8 @@ pub mod tests {
         cqrs::commands::ReinforceVillage,
         jobs::{JobStatus, tasks::ReinforcementTask},
     };
-    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
+    use parabellum_types::{Result, army::TroopSet};
 
     use super::test_utils::tests::setup_player_party;
     use crate::test_utils::tests::setup_app;
@@ -16,14 +16,14 @@ pub mod tests {
     #[tokio::test]
     async fn test_reinforce_village() -> Result<()> {
         let (app, worker, uow_provider, _) = setup_app(false).await?;
-        let units_to_send = [100, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let units_to_send = TroopSet::new([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
         let (reinforcer_player, reinforcer_village, reinforcing_army, _, _) = {
             setup_player_party(
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                units_to_send,
+                units_to_send.clone(),
                 false,
             )
             .await?
@@ -35,7 +35,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::default(),
                 false,
             )
             .await?
@@ -45,7 +45,7 @@ pub mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: original_home_army_id,
-            units: units_to_send,
+            units: units_to_send.clone(),
             target_village_id: target_village.id,
             hero_id: None,
         };
@@ -164,7 +164,7 @@ pub mod tests {
             {
                 assert_eq!(payload.sender_village, reinforcer_village.name);
                 assert_eq!(payload.receiver_village, final_target_village.name);
-                assert_eq!(payload.units, units_to_send);
+                assert_eq!(payload.units, units_to_send.clone());
                 assert_eq!(payload.tribe, Tribe::Roman);
             } else {
                 panic!("Expected Reinforcement report payload");
@@ -185,7 +185,7 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Roman,
-                [200, 100, 50, 30, 0, 0, 0, 0, 0, 0], // Multiple unit types
+                TroopSet::new([200, 100, 50, 30, 0, 0, 0, 0, 0, 0]),
                 false,
             )
             .await?
@@ -197,14 +197,14 @@ pub mod tests {
                 uow_provider.clone(),
                 None,
                 Tribe::Gaul,
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                TroopSet::default(),
                 false,
             )
             .await?
         };
 
         // First reinforcement: send 50 legionnaires
-        let first_units = [50, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let first_units = TroopSet::new([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let command1 = ReinforceVillage {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
@@ -239,7 +239,7 @@ pub mod tests {
                 "Should have 1 reinforcement army"
             );
             assert_eq!(
-                village.reinforcements()[0].units()[0],
+                village.reinforcements()[0].units().get(0),
                 50,
                 "Should have 50 legionnaires"
             );
@@ -261,7 +261,7 @@ pub mod tests {
         };
 
         // Second reinforcement: send 30 praetorians and 20 legionnaires
-        let second_units = [20, 30, 0, 0, 0, 0, 0, 0, 0, 0];
+        let second_units = TroopSet::new([20, 30, 0, 0, 0, 0, 0, 0, 0, 0]);
         let command2 = ReinforceVillage {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
@@ -303,12 +303,12 @@ pub mod tests {
 
             // Verify the merged army has combined units
             assert_eq!(
-                merged_reinforcement.units()[0],
+                merged_reinforcement.units().get(0),
                 70, // 50 + 20 legionnaires
                 "Should have 70 legionnaires (50 + 20)"
             );
             assert_eq!(
-                merged_reinforcement.units()[1],
+                merged_reinforcement.units().get(1),
                 30, // 30 praetorians
                 "Should have 30 praetorians"
             );
@@ -327,12 +327,12 @@ pub mod tests {
             );
             let home_army = home_village.army().unwrap();
             assert_eq!(
-                home_army.units()[0],
+                home_army.units().get(0),
                 130, // 200 - 50 - 20
                 "Home should have 130 legionnaires remaining"
             );
             assert_eq!(
-                home_army.units()[1],
+                home_army.units().get(1),
                 70, // 100 - 30
                 "Home should have 70 praetorians remaining"
             );

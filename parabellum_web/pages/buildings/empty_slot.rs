@@ -3,7 +3,7 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
-use crate::view_helpers::format_duration;
+use crate::view_helpers::{building_description_paragraphs, format_duration};
 
 /// Building option card component
 #[component]
@@ -18,10 +18,20 @@ pub fn BuildingOptionCard(
     time_formatted: String,
 ) -> Element {
     let opacity_class = if locked { "opacity-70" } else { "" };
+    let description_paragraphs = building_description_paragraphs(&option.name);
 
     rsx! {
         div { class: "p-3 border rounded-md bg-gray-50 text-left text-sm text-gray-700 space-y-3 {opacity_class}",
             div { class: "text-base font-semibold text-gray-800", "{option.name:?}" }
+
+            // Building description
+            if !description_paragraphs.is_empty() {
+                div { class: "text-xs text-gray-600 leading-relaxed space-y-1",
+                    for paragraph in description_paragraphs.iter() {
+                        p { "{paragraph}" }
+                    }
+                }
+            }
 
             // Requirements
             if !option.missing_requirements.is_empty() {

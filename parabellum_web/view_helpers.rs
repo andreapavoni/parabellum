@@ -173,7 +173,7 @@ pub fn prepare_rally_point_cards(
             village_id: village.id,
             village_name: Some(village.name.clone()),
             position: Some(village.position.clone()),
-            units: *army.units(),
+            units: army.units().clone(),
             tribe: village.tribe.clone(),
             category: ArmyCategory::Stationed,
             movement_kind: None,
@@ -194,7 +194,7 @@ pub fn prepare_rally_point_cards(
             village_id: destination_id,
             village_name: destination_name,
             position: destination_position,
-            units: *army.units(),
+            units: army.units().clone(),
             tribe: army.tribe.clone(),
             category: ArmyCategory::Deployed,
             movement_kind: None,
@@ -217,7 +217,7 @@ pub fn prepare_rally_point_cards(
             village_id: origin_id,
             village_name: origin_name,
             position: origin_position,
-            units: *reinforcement.units(),
+            units: reinforcement.units().clone(),
             tribe: reinforcement.tribe.clone(),
             category: ArmyCategory::Reinforcement,
             movement_kind: None,
@@ -247,7 +247,7 @@ pub fn prepare_rally_point_cards(
             village_id: movement.target_village_id,
             village_name: movement.target_village_name.clone(),
             position: Some(movement.target_position.clone()),
-            units: movement.units,
+            units: movement.units.clone(),
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Outgoing,
             movement_kind: Some(movement_kind),
@@ -272,7 +272,7 @@ pub fn prepare_rally_point_cards(
             village_id: movement.origin_village_id,
             village_name: movement.origin_village_name.clone(),
             position: Some(movement.origin_position.clone()),
-            units: movement.units,
+            units: movement.units.clone(),
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Incoming,
             movement_kind: Some(movement_kind),
@@ -282,4 +282,66 @@ pub fn prepare_rally_point_cards(
     }
 
     cards
+}
+
+/// Returns the localized description for a building.
+pub fn building_description(building: &BuildingName) -> String {
+    let description = match building {
+        BuildingName::Woodcutter => t!("game.buildings.woodcutter.description"),
+        BuildingName::ClayPit => t!("game.buildings.clay_pit.description"),
+        BuildingName::IronMine => t!("game.buildings.iron_mine.description"),
+        BuildingName::Cropland => t!("game.buildings.cropland.description"),
+        BuildingName::Sawmill => t!("game.buildings.sawmill.description"),
+        BuildingName::Brickyard => t!("game.buildings.brickyard.description"),
+        BuildingName::IronFoundry => t!("game.buildings.iron_foundry.description"),
+        BuildingName::GrainMill => t!("game.buildings.grain_mill.description"),
+        BuildingName::Bakery => t!("game.buildings.bakery.description"),
+        BuildingName::Warehouse => t!("game.buildings.warehouse.description"),
+        BuildingName::Granary => t!("game.buildings.granary.description"),
+        BuildingName::Smithy => t!("game.buildings.smithy.description"),
+        BuildingName::TournamentSquare => t!("game.buildings.tournament_square.description"),
+        BuildingName::MainBuilding => t!("game.buildings.main_building.description"),
+        BuildingName::RallyPoint => t!("game.buildings.rally_point.description"),
+        BuildingName::Marketplace => t!("game.buildings.marketplace.description"),
+        BuildingName::Embassy => t!("game.buildings.embassy.description"),
+        BuildingName::Barracks => t!("game.buildings.barracks.description"),
+        BuildingName::Stable => t!("game.buildings.stable.description"),
+        BuildingName::Workshop => t!("game.buildings.workshop.description"),
+        BuildingName::Academy => t!("game.buildings.academy.description"),
+        BuildingName::Cranny => t!("game.buildings.cranny.description"),
+        BuildingName::TownHall => t!("game.buildings.town_hall.description"),
+        BuildingName::Residence => t!("game.buildings.residence.description"),
+        BuildingName::Palace => t!("game.buildings.palace.description"),
+        BuildingName::Treasury => t!("game.buildings.treasury.description"),
+        BuildingName::TradeOffice => t!("game.buildings.trade_office.description"),
+        BuildingName::GreatBarracks => t!("game.buildings.great_barracks.description"),
+        BuildingName::GreatStable => t!("game.buildings.great_stable.description"),
+        BuildingName::CityWall => t!("game.buildings.city_wall.description"),
+        BuildingName::EarthWall => t!("game.buildings.earth_wall.description"),
+        BuildingName::Palisade => t!("game.buildings.palisade.description"),
+        BuildingName::StonemansionLodge => t!("game.buildings.stonemason.description"),
+        BuildingName::Brewery => t!("game.buildings.brewery.description"),
+        BuildingName::Trapper => t!("game.buildings.trapper.description"),
+        BuildingName::HeroMansion => t!("game.buildings.heros_mansion.description"),
+        BuildingName::GreatWarehouse => t!("game.buildings.great_warehouse.description"),
+        BuildingName::GreatGranary => t!("game.buildings.great_granary.description"),
+        BuildingName::WonderOfTheWorld => t!("game.buildings.wonder.description"),
+        BuildingName::HorseDrinkingTrough => t!("game.buildings.horse_drinking.description"),
+        BuildingName::GreatWorkshop => t!("game.buildings.great_workshop.description"),
+        BuildingName::AncientConstructionPlan => t!(""), // No description in i18n
+    };
+
+    description.to_string()
+}
+
+/// Returns building description paragraphs split by <br> tags
+pub fn building_description_paragraphs(building: &BuildingName) -> Vec<String> {
+    let raw_description = building_description(building);
+
+    // Split by <br> tag and clean up whitespace
+    raw_description
+        .split("<br>")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }

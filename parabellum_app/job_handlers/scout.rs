@@ -3,6 +3,7 @@ use tracing::{info, instrument};
 
 use parabellum_game::battle::Battle;
 use parabellum_types::{
+    army::TroopSet,
     common::ResourceGroup,
     errors::ApplicationError,
     reports::{BattlePartyPayload, BattleReportPayload, ReportPayload},
@@ -81,14 +82,18 @@ impl JobHandler for ScoutJobHandler {
         let attacker_payload = BattlePartyPayload {
             tribe: attacker_army.tribe.clone(),
             army_before: battle_report.attacker.army_before.units().clone(),
-            survivors: battle_report.attacker.survivors,
+            survivors: battle_report.attacker.survivors.clone(),
             losses: battle_report.attacker.losses,
         };
 
-        let scouting_success = battle_report
-            .scouting
-            .as_ref()
-            .is_some_and(|_| battle_report.attacker.survivors.iter().any(|&u| u > 0));
+        let scouting_success = battle_report.scouting.as_ref().is_some_and(|_| {
+            battle_report
+                .attacker
+                .survivors
+                .units()
+                .iter()
+                .any(|&u| u > 0)
+        });
 
         let battle_payload = BattleReportPayload {
             attack_type: self.payload.attack_type.clone(),
@@ -98,7 +103,12 @@ impl JobHandler for ScoutJobHandler {
             defender_player: defender_player.username.clone(),
             defender_village: defender_village.name.clone(),
             defender_position: defender_village.position.clone(),
-            success: battle_report.attacker.survivors.iter().any(|&u| u > 0),
+            success: battle_report
+                .attacker
+                .survivors
+                .units()
+                .iter()
+                .any(|&u| u > 0),
             bounty: ResourceGroup::new(0, 0, 0, 0),
             attacker: Some(attacker_payload),
             defender: if scouting_success {
@@ -106,13 +116,13 @@ impl JobHandler for ScoutJobHandler {
                     tribe: defender_village.tribe.clone(),
                     army_before: defender_village
                         .army()
-                        .map(|a| *a.units())
+                        .map(|a| a.units().clone())
                         .unwrap_or_default(),
                     survivors: defender_village
                         .army()
-                        .map(|a| *a.units())
+                        .map(|a| a.units().clone())
                         .unwrap_or_default(),
-                    losses: [0; 10],
+                    losses: TroopSet::default(),
                 })
             } else {
                 None
@@ -123,9 +133,9 @@ impl JobHandler for ScoutJobHandler {
                     .iter()
                     .map(|r| BattlePartyPayload {
                         tribe: r.tribe.clone(),
-                        army_before: *r.units(),
-                        survivors: *r.units(),
-                        losses: [0; 10],
+                        army_before: r.units().clone(),
+                        survivors: r.units().clone(),
+                        losses: TroopSet::default(),
                     })
                     .collect()
             } else {
@@ -151,13 +161,13 @@ impl JobHandler for ScoutJobHandler {
         }];
 
         // If scouts were detected, defender also gets a report
-        if let Some(ref scouting) = battle_report.scouting {
-            if scouting.was_detected {
-                audiences.push(ReportAudience {
-                    player_id: defender_village.player_id,
-                    read_at: None,
-                });
-            }
+        if let Some(ref scouting) = battle_report.scouting
+            && scouting.was_detected
+        {
+            audiences.push(ReportAudience {
+                player_id: defender_village.player_id,
+                read_at: None,
+            });
         }
 
         ctx.uow.reports().add(&new_report, &audiences).await?;

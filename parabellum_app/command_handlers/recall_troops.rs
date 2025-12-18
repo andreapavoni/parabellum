@@ -54,19 +54,19 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
             .ok_or_else(|| ApplicationError::Unknown("Army is not deployed".to_string()))?;
 
         // Validate requested units don't exceed available
-        for (idx, &requested) in command.units.iter().enumerate() {
-            if requested > army.units()[idx] {
+        for (idx, &requested) in command.units.units().iter().enumerate() {
+            if requested > army.units().get(idx) {
                 return Err(ApplicationError::Unknown(format!(
                     "Cannot recall {} units of type {} - only {} available",
                     requested,
                     idx,
-                    army.units()[idx]
+                    army.units().get(idx)
                 )));
             }
         }
 
         // Check if at least one unit is being recalled
-        if command.units.iter().sum::<u32>() == 0 {
+        if command.units.immensity() == 0 {
             return Err(ApplicationError::Unknown(
                 "Must recall at least one unit".to_string(),
             ));
@@ -79,9 +79,10 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
         // Determine if this is a full or partial recall
         let is_full_recall = command
             .units
+            .units()
             .iter()
             .enumerate()
-            .all(|(idx, &qty)| qty == army.units()[idx]);
+            .all(|(idx, &qty)| qty == army.units().get(idx));
 
         let returning_army_id = if is_full_recall {
             // Full recall: move the entire army
@@ -90,9 +91,9 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
             army.id
         } else {
             // Partial recall: create new army for returning troops, update original
-            let mut remaining_units = *army.units();
-            for (idx, &recalled) in command.units.iter().enumerate() {
-                remaining_units[idx] -= recalled;
+            let mut remaining_units = army.units().clone();
+            for (idx, &recalled) in command.units.units().iter().enumerate() {
+                remaining_units.remove(idx, recalled);
             }
 
             // Create new army for the returning troops
@@ -114,8 +115,8 @@ impl CommandHandler<RecallTroops> for RecallTroopsCommandHandler {
 
             info!(
                 "Partial recall: {} units staying, {} units returning",
-                remaining_units.iter().sum::<u32>(),
-                command.units.iter().sum::<u32>()
+                remaining_units.immensity(),
+                command.units.immensity()
             );
 
             returning_army.id

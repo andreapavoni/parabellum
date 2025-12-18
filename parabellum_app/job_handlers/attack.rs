@@ -147,21 +147,21 @@ impl JobHandler for AttackJobHandler {
         let success = report
             .defender
             .as_ref()
-            .map(|def| def.survivors.iter().copied().sum::<u32>() == 0)
+            .map(|def| def.survivors.immensity() == 0)
             .unwrap_or(true);
 
         let attacker_payload = BattlePartyPayload {
             tribe: report.attacker.army_before.tribe.clone(),
-            army_before: *report.attacker.army_before.units(),
+            army_before: report.attacker.army_before.units().clone(),
             survivors: report.attacker.survivors,
             losses: report.attacker.losses,
         };
 
         let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
             tribe: def.army_before.tribe.clone(),
-            army_before: *def.army_before.units(),
-            survivors: def.survivors,
-            losses: def.losses,
+            army_before: def.army_before.units().clone(),
+            survivors: def.survivors.clone(),
+            losses: def.losses.clone(),
         });
 
         let reinforcements_payload: Vec<BattlePartyPayload> = report
@@ -169,9 +169,9 @@ impl JobHandler for AttackJobHandler {
             .iter()
             .map(|reinf| BattlePartyPayload {
                 tribe: reinf.army_before.tribe.clone(),
-                army_before: *reinf.army_before.units(),
-                survivors: reinf.survivors,
-                losses: reinf.losses,
+                army_before: reinf.army_before.units().clone(),
+                survivors: reinf.survivors.clone(),
+                losses: reinf.losses.clone(),
             })
             .collect();
 
@@ -237,7 +237,7 @@ mod tests {
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
-    use parabellum_types::battle::AttackType;
+    use parabellum_types::{army::TroopSet, battle::AttackType};
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
     use serde_json::json;
     use std::sync::Arc;
@@ -284,7 +284,7 @@ mod tests {
         let attacker_army = army_factory(ArmyFactoryOptions {
             player_id: Some(attacker_player.id),
             village_id: Some(attacker_village.id),
-            units: Some([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([50, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
 

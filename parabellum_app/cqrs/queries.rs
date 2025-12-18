@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
-    army::UnitName,
+    army::{TroopSet, UnitName},
     buildings::BuildingName,
     common::{Player, User},
     map::Position,
@@ -192,7 +192,7 @@ pub struct TroopMovement {
     pub target_position: Position,
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: u32,
-    pub units: [u32; 10],
+    pub units: TroopSet,
     pub tribe: parabellum_types::tribe::Tribe,
 }
 

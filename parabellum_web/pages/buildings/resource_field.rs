@@ -3,7 +3,7 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
-use crate::components::UpgradeBlock;
+use crate::{components::UpgradeBlock, view_helpers::building_description_paragraphs};
 
 /// Resource field page - shows production stats and upgrade block
 #[component]
@@ -22,15 +22,10 @@ pub fn ResourceFieldPage(
     queue_full: bool,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
-    // Get description based on building type
-    let description = match building_name {
-        BuildingName::Woodcutter => t!("game.buildings.woodcutter.description"),
-        BuildingName::ClayPit => t!("game.buildings.clay_pit.description"),
-        BuildingName::IronMine => t!("game.buildings.iron_mine.description"),
-        BuildingName::Cropland => t!("game.buildings.cropland.description"),
-        _ => t!(""),
-    };
+    // Get description using the centralized helper
+    let description_paragraphs = building_description_paragraphs(&building_name);
 
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",
@@ -49,7 +44,13 @@ pub fn ResourceFieldPage(
                 div {
                     div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
                     div { class: "text-2xl font-semibold", "{building_name:?}" }
-                    p { class: "mt-2 text-gray-700 text-sm", "{description}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
+                    }
                 }
 
                 // Stats grid
@@ -84,7 +85,8 @@ pub fn ResourceFieldPage(
                     next_upkeep: next_upkeep,
                     queue_full: queue_full,
                     slot_id: slot_id,
-                    csrf_token: csrf_token
+                    csrf_token: csrf_token,
+                    next_value: next_value,
                 }
             }
         }

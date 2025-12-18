@@ -1,11 +1,11 @@
 use crate::{
     components::{ArmyCard, ArmyCategory, UpgradeBlock},
-    view_helpers::{prepare_rally_point_cards, unit_display_name},
+    view_helpers::{building_description_paragraphs, prepare_rally_point_cards, unit_display_name},
 };
 use dioxus::prelude::*;
 use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
-use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{army::TroopSet, buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 use std::collections::HashMap;
 
@@ -16,6 +16,7 @@ pub fn RallyPointPage(
     slot_id: u8,
     building_name: BuildingName,
     current_level: u8,
+    population: u32,
     next_level: u8,
     cost: ResourceGroup,
     time_secs: u32,
@@ -26,18 +27,23 @@ pub fn RallyPointPage(
     village_info: HashMap<u32, VillageInfo>,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
     // Prepare all army cards using the view helper
     let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
 
     // Prepare sendable units from village army
-    let available_units = village.army().map(|army| *army.units()).unwrap_or([0; 10]);
+    let available_units = village
+        .army()
+        .map(|army| army.units().clone())
+        .unwrap_or(TroopSet::default());
     let tribe_units = village.tribe.units();
+    let description_paragraphs = building_description_paragraphs(&building_name);
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
             h1 { class: "text-3xl font-bold text-gray-900 mb-2",
-                "{building_name:?} (Level {current_level})"
+                "{building_name} (Level {current_level})"
             }
             p { class: "text-gray-600 mb-6",
                 "{village.name} ({village.position.x}|{village.position.y})"
@@ -50,6 +56,31 @@ pub fn RallyPointPage(
             }
 
             div { class: "space-y-6",
+                // Building description and stats
+                div {
+                    div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
+                    div { class: "text-2xl font-semibold", "{building_name}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
+                    }
+                }
+
+                // Stats grid
+                div { class: "grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4",
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.level\")}" }
+                        div { class: "text-lg font-bold", "{current_level}" }
+                    }
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.population\")}" }
+                        div { class: "text-lg font-bold", "{population}" }
+                    }
+                }
+
                 // Upgrade block
                 UpgradeBlock {
                     village: village.clone(),
@@ -63,6 +94,7 @@ pub fn RallyPointPage(
                     queue_full: queue_full,
                     slot_id: slot_id,
                     csrf_token: csrf_token.clone(),
+                    next_value: next_value.clone(),
                 }
 
                 // Army overview - grouped by category
@@ -211,7 +243,7 @@ pub fn RallyPointPage(
                             div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.rally_point.select_units\")}" }
                             for (idx, unit) in tribe_units.iter().enumerate() {
                                 {
-                                    let available = available_units[idx];
+                                    let available = available_units.get(idx);
                                     let name = unit_display_name(&unit.name);
                                     rsx! {
                                         label {

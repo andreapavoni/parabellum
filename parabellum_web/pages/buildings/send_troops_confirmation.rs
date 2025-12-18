@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
+use parabellum_types::{army::TroopSet, buildings::BuildingName, map::Position, tribe::Tribe};
 use rust_i18n::t;
 
 use crate::components::BattleArmyTable;
@@ -26,7 +26,7 @@ pub fn SendTroopsConfirmationPage(
     movement_type: String,
     movement_type_value: String,
     tribe: Tribe,
-    troops: [u32; 10],
+    troops: TroopSet,
     confirmation_type: ConfirmationType,
     csrf_token: String,
     slot_id: u8,
@@ -65,8 +65,8 @@ pub fn SendTroopsConfirmationPage(
                     }
                     BattleArmyTable {
                         tribe: tribe.clone(),
-                        army_before: troops,
-                        losses: [0; 10],
+                        army_before: troops.clone(),
+                        losses: TroopSet::default(),
                     }
                 }
             }
@@ -86,7 +86,7 @@ pub fn SendTroopsConfirmationPage(
                 input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
 
                 // Send troops as hidden fields (all 10 unit slots)
-                for quantity in troops.iter() {
+                for quantity in troops.units().iter() {
                     input { r#type: "hidden", name: "units[]", value: "{quantity}" }
                 }
 

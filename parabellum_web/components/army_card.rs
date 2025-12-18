@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use parabellum_types::{map::Position, tribe::Tribe};
+use parabellum_types::{army::TroopSet, map::Position, tribe::Tribe};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -51,7 +51,7 @@ pub struct ArmyCardData {
     pub village_id: u32,
     pub village_name: Option<String>,
     pub position: Option<Position>,
-    pub units: [u32; 10],
+    pub units: TroopSet,
     pub tribe: Tribe,
     pub category: ArmyCategory,
     pub movement_kind: Option<MovementKind>,
@@ -113,7 +113,7 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
                 table { class: "w-full border-collapse",
                     thead {
                         tr {
-                            for _ in card.units.iter() {
+                            for _ in card.units.units().iter() {
                                 th {
                                     class: "text-center p-1 text-xs text-gray-500 border-b",
                                     // Empty header for now - space for unit icons later
@@ -124,7 +124,7 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
                     }
                     tbody {
                         tr {
-                            for &count in card.units.iter() {
+                            for &count in card.units.units().iter() {
                                 {
                                     let is_zero = count == 0;
                                     rsx! {

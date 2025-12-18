@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
-use parabellum_types::tribe::Tribe;
+use parabellum_types::{army::TroopSet, tribe::Tribe};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[component]
-pub fn ReinforcementArmyTable(tribe: Tribe, units: [u32; 10]) -> Element {
+pub fn ReinforcementArmyTable(tribe: Tribe, units: TroopSet) -> Element {
     let tribe_units = tribe.units();
 
     rsx! {
@@ -26,7 +26,7 @@ pub fn ReinforcementArmyTable(tribe: Tribe, units: [u32; 10]) -> Element {
                 tbody {
                     // Single row - just the troop counts (no losses)
                     tr {
-                        for (idx, &count) in units.iter().enumerate() {
+                        for (idx, &count) in units.units().iter().enumerate() {
                             {
                                 let is_zero = count == 0;
                                 rsx! {
@@ -50,7 +50,7 @@ pub fn ReinforcementArmyTable(tribe: Tribe, units: [u32; 10]) -> Element {
 }
 
 #[component]
-pub fn BattleArmyTable(tribe: Tribe, army_before: [u32; 10], losses: [u32; 10]) -> Element {
+pub fn BattleArmyTable(tribe: Tribe, army_before: TroopSet, losses: TroopSet) -> Element {
     let tribe_units = tribe.units();
 
     rsx! {
@@ -71,7 +71,7 @@ pub fn BattleArmyTable(tribe: Tribe, army_before: [u32; 10], losses: [u32; 10]) 
                 tbody {
                     // Initial army row
                     tr {
-                        for (idx, &count) in army_before.iter().enumerate() {
+                        for (idx, &count) in army_before.units().iter().enumerate() {
                             {
                                 let is_zero = count == 0;
                                 rsx! {
@@ -90,7 +90,7 @@ pub fn BattleArmyTable(tribe: Tribe, army_before: [u32; 10], losses: [u32; 10]) 
                     }
                     // Losses row (always shown for battles)
                     tr {
-                        for (idx, &loss) in losses.iter().enumerate() {
+                        for (idx, &loss) in losses.units().iter().enumerate() {
                             {
                                 let has_loss = loss > 0;
                                 rsx! {

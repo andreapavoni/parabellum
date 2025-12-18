@@ -61,19 +61,19 @@ impl CommandHandler<ReleaseReinforcements> for ReleaseReinforcementsCommandHandl
         let reinforcement_player_id = reinforcement.player_id;
 
         // Validate requested units don't exceed available
-        for (idx, &requested) in command.units.iter().enumerate() {
-            if requested > reinforcement.units()[idx] {
+        for (idx, &requested) in command.units.units().iter().enumerate() {
+            if requested > reinforcement.units().get(idx) {
                 return Err(ApplicationError::Unknown(format!(
                     "Cannot release {} units of type {} - only {} available",
                     requested,
                     idx,
-                    reinforcement.units()[idx]
+                    reinforcement.units().get(idx)
                 )));
             }
         }
 
         // Check if at least one unit is being released
-        if command.units.iter().sum::<u32>() == 0 {
+        if command.units.immensity() == 0 {
             return Err(ApplicationError::Unknown(
                 "Must release at least one unit".to_string(),
             ));
@@ -85,9 +85,10 @@ impl CommandHandler<ReleaseReinforcements> for ReleaseReinforcementsCommandHandl
         // Determine if this is a full or partial release
         let is_full_release = command
             .units
+            .units()
             .iter()
             .enumerate()
-            .all(|(idx, &qty)| qty == reinforcement.units()[idx]);
+            .all(|(idx, &qty)| qty == reinforcement.units().get(idx));
 
         let mut departing_army = army_repo.get_by_id(army_id).await?;
 
@@ -98,9 +99,9 @@ impl CommandHandler<ReleaseReinforcements> for ReleaseReinforcementsCommandHandl
             army_id
         } else {
             // Partial release: create new army for returning troops, update original
-            let mut remaining_units = *departing_army.units();
-            for (idx, &released) in command.units.iter().enumerate() {
-                remaining_units[idx] -= released;
+            let mut remaining_units = departing_army.units().clone();
+            for (idx, &released) in command.units.units().iter().enumerate() {
+                remaining_units.remove(idx, released);
             }
 
             // Create new army for the returning troops
@@ -122,8 +123,8 @@ impl CommandHandler<ReleaseReinforcements> for ReleaseReinforcementsCommandHandl
 
             info!(
                 "Partial release: {} units staying as reinforcements, {} units returning",
-                remaining_units.iter().sum::<u32>(),
-                command.units.iter().sum::<u32>()
+                remaining_units.immensity(),
+                command.units.immensity()
             );
 
             returning_army.id

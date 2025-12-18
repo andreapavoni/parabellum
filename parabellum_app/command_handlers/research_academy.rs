@@ -48,7 +48,7 @@ impl CommandHandler<ResearchAcademy> for ResearchAcademyCommandHandler {
 
         if academy_jobs
             .iter()
-            .filter_map(|job| academy_queue_item_from_job(job))
+            .filter_map(academy_queue_item_from_job)
             .any(|item| item.unit == command.unit)
         {
             return Err(AppError::QueueItemAlreadyQueued {

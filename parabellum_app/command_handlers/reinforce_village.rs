@@ -82,11 +82,13 @@ impl CommandHandler<ReinforceVillage> for ReinforceVillageCommandHandler {
 mod tests {
     use super::*;
     use crate::test_utils::tests::MockUnitOfWork;
+
     use parabellum_game::models::{buildings::Building, hero::Hero};
     use parabellum_game::test_utils::{
         ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
         army_factory, player_factory, valley_factory, village_factory,
     };
+    use parabellum_types::army::TroopSet;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
     use std::sync::Arc;
 
@@ -135,7 +137,7 @@ mod tests {
             player_id: Some(player.id),
             village_id: Some(village1.id),
             tribe: Some(Tribe::Roman),
-            units: Some([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
             hero: Some(hero.clone()),
             ..Default::default()
         });
@@ -152,7 +154,7 @@ mod tests {
             player_id: player.id,
             village_id: village1.id,
             army_id: source_army.id,
-            units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: village2.id,
             hero_id: Some(hero.id),
         };
@@ -253,7 +255,7 @@ mod tests {
             player_id: Some(reinforcer_player.id),
             village_id: Some(reinforcer_village.id),
             tribe: Some(Tribe::Teuton),
-            units: Some([12, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            units: Some(TroopSet::new([12, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
             hero: Some(hero.clone()),
             ..Default::default()
         });
@@ -269,7 +271,7 @@ mod tests {
             player_id: reinforcer_player.id,
             village_id: reinforcer_village.id,
             army_id: reinforcer_army.id,
-            units: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([12, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: target_village.id,
             hero_id: Some(reinforcer_army.hero().unwrap().id),
         };

@@ -75,8 +75,8 @@ mod tests {
     use std::sync::Arc;
 
     use parabellum_game::test_utils::setup_player_party;
-    use parabellum_types::Result;
     use parabellum_types::tribe::Tribe;
+    use parabellum_types::{Result, army::TroopSet};
     use serde_json::json;
 
     use super::*;
@@ -92,7 +92,7 @@ mod tests {
 
         let config = Arc::new(Config::from_env());
         let (player, village, _, some_hero) =
-            setup_player_party(None, Tribe::Roman, [0; 10], true)?;
+            setup_player_party(None, Tribe::Roman, TroopSet::default(), true)?;
 
         let mut hero = some_hero.unwrap();
         hero.level = 10;
@@ -137,7 +137,7 @@ mod tests {
 
         let config = Arc::new(Config::from_env());
         let (player, village, _, some_hero) =
-            setup_player_party(None, Tribe::Roman, [0; 10], true)?;
+            setup_player_party(None, Tribe::Roman, TroopSet::default(), true)?;
 
         let mut hero = some_hero.unwrap();
         hero.level = 15;

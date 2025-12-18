@@ -28,17 +28,13 @@ pub mod tests {
         bootstrap_world_map, establish_test_connection_pool,
     };
     use parabellum_game::{
-        models::{
-            army::{Army, TroopSet},
-            hero::Hero,
-            village::Village,
-        },
+        models::{army::Army, hero::Hero, village::Village},
         test_utils::{
             ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
             army_factory, player_factory, valley_factory, village_factory,
         },
     };
-    use parabellum_types::{Result, errors::ApplicationError};
+    use parabellum_types::{Result, army::TroopSet, errors::ApplicationError};
     use parabellum_types::{
         common::{Player, User},
         map::Position,

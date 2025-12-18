@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use parabellum_game::models::army::Army;
+use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
 use parabellum_types::{
     Result,
@@ -261,7 +262,7 @@ async fn attack_movement(
         direction,
         origin,
         target,
-        *army.units(),
+        army.units().clone(),
         army.tribe.clone(),
     )))
 }
@@ -304,7 +305,7 @@ async fn scout_movement(
         direction,
         origin,
         target,
-        *army.units(),
+        army.units().clone(),
         army.tribe.clone(),
     )))
 }
@@ -341,7 +342,7 @@ async fn reinforcement_movement(
         direction,
         origin,
         target,
-        *army.units(),
+        army.units().clone(),
         army.tribe.clone(),
     )))
 }
@@ -380,7 +381,7 @@ async fn return_movement(
         TroopMovementDirection::Incoming,
         origin,
         target,
-        *army.units(),
+        army.units().clone(),
         army.tribe.clone(),
     )))
 }
@@ -391,7 +392,7 @@ fn build_movement(
     direction: TroopMovementDirection,
     origin: VillageSnapshot,
     target: VillageSnapshot,
-    units: [u32; 10],
+    units: TroopSet,
     tribe: Tribe,
 ) -> TroopMovement {
     let now = Utc::now();

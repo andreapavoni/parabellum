@@ -113,7 +113,7 @@ fn map_report(report: ReportView) -> ReportListEntry {
             let outcome = if payload.bounty.total() > 0 {
                 format!("Bounty: {}", format_resource_summary(&payload.bounty))
             } else if let Some(ref attacker) = payload.attacker {
-                let total_losses: u32 = attacker.losses.iter().sum();
+                let total_losses: u32 = attacker.losses.units().iter().sum();
                 if total_losses > 0 {
                     format!("Lost {} units", total_losses)
                 } else {
@@ -147,7 +147,7 @@ fn map_report(report: ReportView) -> ReportListEntry {
             );
 
             // Summary with positions and troop count
-            let total_troops: u32 = payload.units.iter().sum();
+            let total_troops: u32 = payload.units.units().iter().sum();
             let summary = format!(
                 "{} ({}|{}) reinforced {} ({}|{}) - {} troops sent",
                 payload.sender_village,

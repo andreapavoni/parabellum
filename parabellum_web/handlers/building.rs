@@ -21,6 +21,7 @@ use parabellum_game::models::{
 use parabellum_types::{
     army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
+    common::ResourceGroup,
     tribe::Tribe,
 };
 use std::collections::{HashMap, HashSet};
@@ -33,9 +34,10 @@ use crate::{
     },
     http::AppState,
     pages::buildings::{
-        AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, EmptySlotPage,
-        GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage, SmithyQueueItem,
-        SmithyUpgradeOption, TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
+        AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, BuildingValueType,
+        EmptySlotPage, GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage,
+        SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage, TrainingBuildingPage,
+        TrainingQueueItem, UnitTrainingOption,
     },
     view_helpers::{
         BuildingQueueItemView, building_queue_to_views, training_queue_to_views, unit_display_name,
@@ -269,6 +271,53 @@ fn render_building_page(
         (current_cost.resources, 0, current_cost.upkeep)
     };
 
+    // Calculate formatted next value for display in UpgradeBlock (if upgrade available)
+    let next_value_display: Option<String> = upgrade_info.as_ref().map(|upgraded| {
+        let value = upgraded.value;
+        // Format based on building type
+        match slot_building.building.name {
+            // Training buildings: divide by 10 and show as percentage
+            BuildingName::Barracks
+            | BuildingName::GreatBarracks
+            | BuildingName::Stable
+            | BuildingName::GreatStable
+            | BuildingName::Workshop
+            | BuildingName::GreatWorkshop => {
+                format!("{}%", (value as f32 / 10.0) as u32)
+            }
+            // Main Building: divide by 10 and show as decimal percentage
+            BuildingName::MainBuilding => {
+                format!("{:.1}%", value as f32 / 10.0)
+            }
+            // Production bonus buildings: show as percentage
+            BuildingName::Sawmill
+            | BuildingName::Brickyard
+            | BuildingName::IronFoundry
+            | BuildingName::GrainMill
+            | BuildingName::Bakery => {
+                format!("{}%", value)
+            }
+            // Defense buildings: show as percentage
+            BuildingName::CityWall | BuildingName::EarthWall | BuildingName::Palisade => {
+                format!("{}%", value)
+            }
+            // Resource fields and storage: show as integer
+            BuildingName::Woodcutter
+            | BuildingName::ClayPit
+            | BuildingName::IronMine
+            | BuildingName::Cropland
+            | BuildingName::Warehouse
+            | BuildingName::Granary
+            | BuildingName::GreatWarehouse
+            | BuildingName::GreatGranary
+            | BuildingName::Cranny => {
+                format!("{}", value)
+            }
+            // Other buildings: no specific value display needed
+            _ => format!("{}", value),
+        }
+    });
+
     // Route to appropriate page component based on building type
     let body_content = match slot_building.building.name {
         BuildingName::Woodcutter
@@ -294,6 +343,7 @@ fn render_building_page(
                         queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -317,6 +367,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -327,6 +379,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -350,6 +403,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -360,6 +415,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -383,6 +439,8 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        current_value: slot_building.building.value,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -393,6 +451,7 @@ fn render_building_page(
                         training_queue: training_queue,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -412,6 +471,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -425,6 +485,7 @@ fn render_building_page(
                         academy_queue_full: academy_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -449,6 +510,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -460,6 +522,7 @@ fn render_building_page(
                         smithy_queue_full: smithy_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -474,6 +537,7 @@ fn render_building_page(
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
                         current_level: slot_building.building.level,
+                        population: slot_building.building.population,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -484,9 +548,156 @@ fn render_building_page(
                         village_info: village_info,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
+        }
+        // Static buildings with value display
+        BuildingName::Warehouse | BuildingName::GreatWarehouse => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::Capacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Granary | BuildingName::GreatGranary => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::Capacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Sawmill => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Lumber",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Brickyard => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Clay",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::IronFoundry => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Iron",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::GrainMill | BuildingName::Bakery => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ProductionBonus {
+                resource_type: "Crop",
+            },
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::MainBuilding => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::ConstructionSpeedBonus,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::Cranny => render_static_building(
+            layout_data,
+            user,
+            slot_id,
+            &slot_building,
+            next_level,
+            cost,
+            time_secs,
+            next_upkeep,
+            effective_queue_full,
+            &upgrade_info,
+            BuildingValueType::HiddenCapacity,
+            csrf_token,
+            flash_error,
+        ),
+        BuildingName::CityWall | BuildingName::EarthWall | BuildingName::Palisade => {
+            render_static_building(
+                layout_data,
+                user,
+                slot_id,
+                &slot_building,
+                next_level,
+                cost,
+                time_secs,
+                next_upkeep,
+                effective_queue_full,
+                &upgrade_info,
+                BuildingValueType::DefenseBonus,
+                csrf_token,
+                flash_error,
+            )
         }
         _ => {
             // Generic buildings - just upgrade block
@@ -497,7 +708,7 @@ fn render_building_page(
                         village: user.village.clone(),
                         slot_id: slot_id,
                         building_name: slot_building.building.name.clone(),
-                        current_level: slot_building.building.level,
+                        current_level: current_level,
                         next_level: next_level,
                         cost: cost,
                         time_secs: time_secs,
@@ -506,6 +717,7 @@ fn render_building_page(
                         queue_full: effective_queue_full,
                         csrf_token: csrf_token,
                         flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })
@@ -513,6 +725,49 @@ fn render_building_page(
     };
 
     Html(wrap_in_html(&body_content)).into_response()
+}
+
+/// Helper to render a static building page (buildings with meaningful value display)
+fn render_static_building(
+    layout_data: crate::components::LayoutData,
+    user: &CurrentUser,
+    slot_id: u8,
+    slot_building: &parabellum_game::models::village::VillageBuilding,
+    next_level: u8,
+    cost: ResourceGroup,
+    time_secs: u32,
+    next_upkeep: u32,
+    effective_queue_full: bool,
+    upgrade_info: &Option<parabellum_game::models::buildings::Building>,
+    value_type: BuildingValueType,
+    csrf_token: String,
+    flash_error: Option<String>,
+) -> String {
+    let next_value = upgrade_info.as_ref().map(|b| b.value);
+
+    dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data,
+            StaticBuildingPage {
+                village: user.village.clone(),
+                slot_id: slot_id,
+                building_name: slot_building.building.name.clone(),
+                current_level: slot_building.building.level,
+                current_value: slot_building.building.value,
+                next_value: next_value,
+                value_type: value_type,
+                population: slot_building.building.population,
+                next_level: next_level,
+                cost: cost,
+                time_secs: time_secs,
+                current_upkeep: slot_building.building.cost().upkeep,
+                next_upkeep: next_upkeep,
+                queue_full: effective_queue_full,
+                csrf_token: csrf_token,
+                flash_error: flash_error,
+            }
+        }
+    })
 }
 
 /// Helper to fetch rally point movements for a slot
@@ -587,7 +842,7 @@ pub async fn render_with_error(
     let village_info = fetch_village_info_for_rally_point(state, &user.village).await;
     let (_jar, csrf_token) = generate_csrf(jar);
 
-    let response = render_building_page(
+    render_building_page(
         state,
         &user,
         slot_id,
@@ -596,9 +851,7 @@ pub async fn render_with_error(
         queues,
         movements,
         village_info,
-    );
-
-    response
+    )
 }
 
 /// Calculate building options for an empty slot

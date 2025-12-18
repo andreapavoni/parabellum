@@ -3,7 +3,10 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
 use rust_i18n::t;
 
-use crate::{components::UpgradeBlock, view_helpers::format_duration};
+use crate::{
+    components::UpgradeBlock,
+    view_helpers::{building_description_paragraphs, format_duration},
+};
 
 /// Unit training option
 #[derive(Clone, PartialEq)]
@@ -31,6 +34,8 @@ pub fn TrainingBuildingPage(
     slot_id: u8,
     building_name: BuildingName,
     current_level: u8,
+    current_value: u32,
+    population: u32,
     next_level: u8,
     cost: ResourceGroup,
     time_secs: u32,
@@ -41,11 +46,15 @@ pub fn TrainingBuildingPage(
     training_queue: Vec<TrainingQueueItem>,
     csrf_token: String,
     flash_error: Option<String>,
+    #[props(default = None)] next_value: Option<String>,
 ) -> Element {
+    let description_paragraphs = building_description_paragraphs(&building_name);
+    let training_speed_percent = (current_value as f32 / 10.0) as u32;
+
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",
             h1 { class: "text-2xl font-bold mb-4",
-                "{building_name:?} (Level {current_level})"
+                "{building_name} (Level {current_level})"
             }
 
             if let Some(error) = flash_error {
@@ -58,7 +67,30 @@ pub fn TrainingBuildingPage(
                 // Building description
                 div {
                     div { class: "text-sm text-gray-500 uppercase", "{t!(\"game.building.existing\")}" }
-                    div { class: "text-2xl font-semibold", "{building_name:?}" }
+                    div { class: "text-2xl font-semibold", "{building_name}" }
+                    if !description_paragraphs.is_empty() {
+                        div { class: "mt-2 text-gray-700 text-sm space-y-2",
+                            for paragraph in description_paragraphs.iter() {
+                                p { "{paragraph}" }
+                            }
+                        }
+                    }
+                }
+
+                // Stats grid
+                div { class: "grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm",
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.level\")}" }
+                        div { class: "text-lg font-bold", "{current_level}" }
+                    }
+                    div { class: "p-3 border rounded-md bg-gray-50",
+                        div { class: "text-gray-500", "{t!(\"game.building.population\")}" }
+                        div { class: "text-lg font-bold", "{population}" }
+                    }
+                    div { class: "p-3 border rounded-md bg-blue-50 border-blue-200",
+                        div { class: "text-gray-500", "{t!(\"game.building.training_multiplier\")}" }
+                        div { class: "text-lg font-bold text-blue-700", "{training_speed_percent}%" }
+                    }
                 }
 
                 // Upgrade block
@@ -73,7 +105,8 @@ pub fn TrainingBuildingPage(
                     next_upkeep: next_upkeep,
                     queue_full: queue_full,
                     slot_id: slot_id,
-                    csrf_token: csrf_token.clone()
+                    csrf_token: csrf_token.clone(),
+                    next_value: next_value.clone(),
                 }
 
                 // Training units

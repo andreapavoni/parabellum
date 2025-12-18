@@ -94,7 +94,7 @@ impl TrainUnitsCommandHandler {
         let mut slot_free_at = Utc::now();
 
         let mut slot_jobs = jobs
-            .into_iter()
+            .iter()
             .filter_map(|job| {
                 if job.task.task_type != "TrainUnits" {
                     return None;

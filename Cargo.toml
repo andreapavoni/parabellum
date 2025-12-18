@@ -9,6 +9,15 @@ members = [
 ]
 resolver = "3"
 
+[profile.release]
+lto = true
+# Optimize for binary size in releases of all crates.
+opt-level = "s"
+
+[workspace.metadata.release]
+allow-branch = ["*"]
+consolidate-commits = true
+
 [workspace.package]
 description = "A Travian 3.x clone."
 version = "0.3.0"
@@ -17,6 +26,7 @@ license = "MIT"
 edition = "2024"
 repository = "https://github.com/andreapavoni/parabellum"
 keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game"]
+rust-version = "1.85"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }

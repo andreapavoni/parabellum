@@ -87,8 +87,10 @@ impl CommandHandler<AttackVillage> for AttackVillageCommandHandler {
 
 #[cfg(test)]
 mod tests {
+
     use parabellum_game::test_utils::setup_player_party;
     use parabellum_types::Result;
+    use parabellum_types::army::TroopSet;
     use parabellum_types::battle::AttackType;
     use parabellum_types::{buildings::BuildingName, map::Position, tribe::Tribe};
 
@@ -106,13 +108,13 @@ mod tests {
         let (attacker_player, attacker_village, attacker_army, _) = setup_player_party(
             Some(Position { x: 0, y: 0 }),
             Tribe::Teuton,
-            [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             false,
         )?;
         let (_, defender_village, _, _) = setup_player_party(
             Some(Position { x: 10, y: 10 }),
             Tribe::Roman,
-            [0; 10],
+            TroopSet::default(),
             false,
         )?;
 
@@ -125,7 +127,7 @@ mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,
@@ -155,7 +157,7 @@ mod tests {
         let (attacker_player, attacker_village, attacker_army, some_hero) = setup_player_party(
             Some(Position { x: 0, y: 0 }),
             Tribe::Teuton,
-            [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             true,
         )?;
         let hero = some_hero.unwrap();
@@ -163,7 +165,7 @@ mod tests {
         let (_, defender_village, _, _) = setup_player_party(
             Some(Position { x: 10, y: 10 }),
             Tribe::Roman,
-            [0; 10],
+            TroopSet::default(),
             false,
         )?;
 
@@ -177,7 +179,7 @@ mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: Some(attacker_army.hero().unwrap().id),
@@ -235,11 +237,19 @@ mod tests {
         let job_repo = mock_uow.jobs();
         let config = Arc::new(Config::from_env());
 
-        let (attacker_player, attacker_village, attacker_army, _) =
-            setup_player_party(None, Tribe::Teuton, [10, 0, 0, 0, 0, 0, 0, 0, 0, 0], false)?;
+        let (attacker_player, attacker_village, attacker_army, _) = setup_player_party(
+            None,
+            Tribe::Teuton,
+            TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            false,
+        )?;
 
-        let (_, defender_village, _, _) =
-            setup_player_party(Some(Position { x: 5, y: 5 }), Tribe::Roman, [0; 10], false)?;
+        let (_, defender_village, _, _) = setup_player_party(
+            Some(Position { x: 5, y: 5 }),
+            Tribe::Roman,
+            TroopSet::default(),
+            false,
+        )?;
 
         village_repo.save(&attacker_village).await?;
         village_repo.save(&defender_village).await?;
@@ -250,7 +260,7 @@ mod tests {
             player_id: attacker_player.id,
             village_id: attacker_village.id,
             army_id: attacker_army.id,
-            units: [10, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            units: TroopSet::new([10, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             target_village_id: defender_village.id,
             catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
             hero_id: None,

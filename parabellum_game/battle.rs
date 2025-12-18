@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::f64;
 
 use parabellum_types::{
+    army::TroopSet,
     battle::{
         AttackType, BuildingDamageReport, ScoutingBattleReport, ScoutingTarget,
         ScoutingTargetReport,
@@ -12,11 +13,7 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::models::{
-    army::{Army, TroopSet},
-    buildings::Building,
-    village::Village,
-};
+use crate::models::{army::Army, buildings::Building, village::Village};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BattlePartyReport {
@@ -184,7 +181,7 @@ impl Battle {
         let (defender_survivors, defender_losses) = self
             .defender_village
             .army()
-            .map_or(([0; 10], [0; 10]), |da| {
+            .map_or((TroopSet::default(), TroopSet::default()), |da| {
                 calculate_army_losses(da, defender_loss_percentage)
             });
 
@@ -220,7 +217,7 @@ impl Battle {
         let buildings_durability = self.defender_village.buildings_durability();
 
         // 3.1: Rams damage
-        let surviving_rams = attacker_survivors[6];
+        let surviving_rams = attacker_survivors.get(6);
         let smithy_level: u8 = self.attacker.smithy()[6];
         if surviving_rams > 0 && wall_level > 0 {
             let ram_damage = calculate_machine_damage(
@@ -234,7 +231,7 @@ impl Battle {
         }
 
         // 3.2: Catapults damage
-        let surviving_catapults = attacker_survivors[7];
+        let surviving_catapults = attacker_survivors.get(7);
         let smithy_level: u8 = self.attacker.smithy()[7];
         let mut buildings_levels: Option<[u8; 2]> = None;
 
@@ -384,8 +381,8 @@ impl Battle {
             .iter()
             .map(|reinforcement| BattlePartyReport {
                 army_before: reinforcement.clone(),
-                survivors: *reinforcement.units(),
-                losses: [0; 10],
+                survivors: reinforcement.units().clone(),
+                losses: TroopSet::default(),
                 hero_exp_gained: calculate_hero_xp(&attacker_losses, &self.attacker.tribe),
                 loss_percentage: 0.0,
             })
@@ -560,7 +557,7 @@ fn calculate_hero_xp(kills: &TroopSet, tribe: &Tribe) -> u32 {
     let units = tribe.units();
     let mut total: u32 = 0;
 
-    for (idx, quantity) in kills.iter().enumerate() {
+    for (idx, quantity) in kills.units().into_iter().enumerate() {
         total += units[idx].cost.upkeep * quantity;
     }
 
@@ -634,26 +631,24 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
 
 /// Calculates the losses of the given army by a percentage,
 pub fn calculate_army_losses(army: &Army, percent: f64) -> (TroopSet, TroopSet) {
-    let mut survivors: TroopSet = [0; 10];
-    let mut losses: TroopSet = [0; 10];
+    let mut survivors = TroopSet::default();
+    let mut losses = TroopSet::default();
 
-    for (idx, quantity) in army.units().iter().enumerate() {
+    for (idx, quantity) in army.units().units().into_iter().enumerate() {
         let lost = ((*quantity) as f64 * percent).floor() as u32;
-        survivors[idx] = quantity - lost;
-        losses[idx] = lost;
+        survivors.set(idx, quantity - lost);
+        losses.set(idx, lost);
     }
     (survivors, losses)
 }
 
 #[cfg(test)]
 mod tests {
+    use parabellum_types::army::TroopSet;
     use parabellum_types::{common::Player, tribe::Tribe};
 
     use super::*;
-    use crate::models::{
-        army::{Army, TroopSet},
-        village::Village,
-    };
+    use crate::models::{army::Army, village::Village};
     use crate::test_utils::{
         ArmyFactoryOptions, PlayerFactoryOptions, VillageFactoryOptions, army_factory,
         player_factory, village_factory,
@@ -672,7 +667,7 @@ mod tests {
             Some(1),
             attacker_village.player_id,
             attacker_village.tribe.clone(),
-            &[50, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 50 legionnaires at index 0
+            &TroopSet::new([50, 0, 0, 0, 0, 0, 0, 0, 0, 0]), // 50 legionnaires at index 0
             &[0; 8],
             None,
         );
@@ -712,7 +707,7 @@ mod tests {
 
         // Attacker should win against empty village
         assert!(
-            report.attacker.survivors.iter().sum::<u32>() > 0,
+            report.attacker.survivors.immensity() > 0,
             "Attacker should have survivors"
         );
     }
@@ -769,11 +764,15 @@ mod tests {
 
     #[test]
     fn test_battle_100_legionaires_vs_10_spearmen() {
-        let (_attacker_player, attacker_village, attacker_army) =
-            setup_party(Tribe::Roman, [100, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let (_attacker_player, attacker_village, attacker_army) = setup_party(
+            Tribe::Roman,
+            TroopSet::new([100, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        );
 
-        let (_defender_player, mut defender_village, defender_home_army) =
-            setup_party(Tribe::Teuton, [0, 10, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let (_defender_player, mut defender_village, defender_home_army) = setup_party(
+            Tribe::Teuton,
+            TroopSet::new([0, 10, 0, 0, 0, 0, 0, 0, 0, 0]),
+        );
 
         defender_village
             .set_army(Some(&defender_home_army))
@@ -789,7 +788,7 @@ mod tests {
         let report = battle.calculate_battle();
         let defender_report = report.defender.expect("Defender report should exist");
 
-        let defender_losses: u32 = defender_report.losses.iter().sum();
+        let defender_losses: u32 = defender_report.losses.immensity();
         let initial_defender_troops: u32 = defender_home_army.immensity();
         assert_eq!(
             defender_losses, initial_defender_troops,
@@ -797,21 +796,21 @@ mod tests {
             initial_defender_troops, defender_losses
         );
 
-        let defender_survivors: u32 = defender_report.survivors.iter().sum();
+        let defender_survivors: u32 = defender_report.survivors.immensity();
         assert_eq!(
             defender_survivors, 0,
             "Defender should not have survivors (survived {})",
             defender_survivors
         );
 
-        let attacker_losses: u32 = report.attacker.losses.iter().sum();
+        let attacker_losses: u32 = report.attacker.losses.immensity();
         assert!(
             attacker_losses < 10 && attacker_losses > 0,
             "Attacker should lose very few troops (lost {})",
             attacker_losses
         );
 
-        let attacker_survivors: u32 = report.attacker.survivors.iter().sum();
+        let attacker_survivors: u32 = report.attacker.survivors.immensity();
         let diff = attacker_army.immensity() - attacker_losses;
         assert_eq!(
             attacker_survivors, diff,

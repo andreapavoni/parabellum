@@ -6,6 +6,7 @@ mod recall_release;
 mod resource_field;
 mod send_troops_confirmation;
 mod smithy;
+mod static_building;
 mod training;
 
 pub use academy::{AcademyPage, AcademyQueueItem, AcademyResearchOption};
@@ -16,6 +17,7 @@ pub use recall_release::{RecallConfirmationPage, ReleaseConfirmationPage};
 pub use resource_field::ResourceFieldPage;
 pub use send_troops_confirmation::{ConfirmationType, SendTroopsConfirmationPage};
 pub use smithy::{SmithyPage, SmithyQueueItem, SmithyUpgradeOption};
+pub use static_building::{BuildingValueType, StaticBuildingPage};
 pub use training::{
     TrainingBuildingPage, TrainingQueue, TrainingQueueItem, TrainingUnitCard, UnitTrainingOption,
 };

@@ -87,9 +87,9 @@ function startMapHandler() {
     let tileLookup = new Map();
     let loadingRegion = false;
 
-    const gridEl = document.getElementById('map-grid');
-    const yAxisEl = document.getElementById('y-axis-container');
-    const xAxisEl = document.getElementById('x-axis-container');
+    const tilesContainer = document.getElementById('map-tiles-container');
+    const yAxisEl = document.getElementById('axis-y-container');
+    const xAxisEl = document.getElementById('axis-x-container');
     const headerCoordsEl = document.getElementById('header-coords');
     const inputX = document.getElementById('input-x');
     const inputY = document.getElementById('input-y');
@@ -100,7 +100,7 @@ function startMapHandler() {
     let detailsTimeout = null;
 
     if (
-      !gridEl ||
+      !tilesContainer ||
       !yAxisEl ||
       !xAxisEl ||
       !headerCoordsEl ||
@@ -124,7 +124,7 @@ function startMapHandler() {
       return normalized - worldSize;
     };
 
-    gridEl.addEventListener('mouseleave', () => {
+    tilesContainer.addEventListener('mouseleave', () => {
       hideDetails();
     });
 
@@ -177,48 +177,123 @@ function startMapHandler() {
       inputX.value = currentX;
       inputY.value = currentY;
 
-      gridEl.innerHTML = '';
+      // Clear SVG tiles container
+      tilesContainer.innerHTML = '';
       yAxisEl.innerHTML = '';
       xAxisEl.innerHTML = '';
       hideDetails();
 
+      // Render Y axis labels (vertical, left side)
       for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
         const wrappedY = wrapCoordinate(y);
         const div = document.createElement('div');
-        div.className = `y-label ${wrappedY === currentY ? 'highlight-axis' : ''
-          }`;
+        div.className = `y-label ${wrappedY === currentY ? 'highlight-axis' : ''}`;
         div.innerText = wrappedY;
         yAxisEl.appendChild(div);
       }
 
+      // Render X axis labels (horizontal, bottom)
       for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
         const wrappedX = wrapCoordinate(x);
         const div = document.createElement('div');
-        div.className = `x-label ${wrappedX === currentX ? 'highlight-axis' : ''
-          }`;
+        div.className = `x-label ${wrappedX === currentX ? 'highlight-axis' : ''}`;
         div.innerText = wrappedX;
         xAxisEl.appendChild(div);
       }
 
-      for (let y = currentY + currentRadius; y >= currentY - currentRadius; y--) {
+      // Render SVG tiles (15x15 grid)
+      const gridSize = currentRadius * 2 + 1; // 15
+      const cellSize = 100; // SVG units per cell (matches viewBox 1500/15)
+
+      for (let row = 0; row < gridSize; row++) {
+        const y = currentY + currentRadius - row;
         const wrappedY = wrapCoordinate(y);
-        for (let x = currentX - currentRadius; x <= currentX + currentRadius; x++) {
+
+        for (let col = 0; col < gridSize; col++) {
+          const x = currentX - currentRadius + col;
           const wrappedX = wrapCoordinate(x);
-          const tile = document.createElement('div');
+
           const tileData = tileLookup.get(coordKey(wrappedX, wrappedY));
           const visual = describeTile(tileData, wrappedX, wrappedY);
 
-          tile.className = `tile ${visual.typeClass}`;
-          tile.innerHTML = `<span class="tile-content">${visual.icon}</span>`;
-          tile.onmouseenter = (event) => {
-            scheduleDetails(tileData, visual, wrappedX, wrappedY, tile);
-          };
-          tile.onmouseleave = () => {
-            cancelDetailsTimeout();
-          };
-          tile.onclick = () => showDetails(tileData, visual, wrappedX, wrappedY, tile);
+          // Calculate position in SVG coordinate space
+          const tx = col * cellSize;
+          const ty = row * cellSize;
 
-          gridEl.appendChild(tile);
+          // Create SVG group element
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.classList.add('map-tile');
+          g.setAttribute('transform', `translate(${tx}, ${ty})`);
+          g.setAttribute('data-x', wrappedX);
+          g.setAttribute('data-y', wrappedY);
+
+          // Hover background
+          const hoverBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          hoverBg.classList.add('hover-bg');
+          hoverBg.setAttribute('width', '100');
+          hoverBg.setAttribute('height', '100');
+          hoverBg.setAttribute('fill', 'transparent');
+          g.appendChild(hoverBg);
+
+          // Background color for oases
+          if (visual.typeClass.includes('oasis')) {
+            const oasisBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            oasisBg.setAttribute('width', '100');
+            oasisBg.setAttribute('height', '100');
+
+            // Set background color based on oasis type
+            let bgColor = '#F1F8E9'; // default
+            if (visual.typeClass.includes('lumber')) {
+              bgColor = '#c5e1a5';
+            } else if (visual.typeClass.includes('clay')) {
+              bgColor = '#ffe0b2';
+            } else if (visual.typeClass.includes('iron')) {
+              bgColor = '#e0e0e0';
+            } else if (visual.typeClass.includes('crop')) {
+              bgColor = '#fff9c4';
+            }
+            oasisBg.setAttribute('fill', bgColor);
+            g.appendChild(oasisBg);
+          }
+
+          // Border for villages
+          if (visual.typeClass.includes('village')) {
+            const border = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            border.setAttribute('x', '5');
+            border.setAttribute('y', '5');
+            border.setAttribute('width', '90');
+            border.setAttribute('height', '90');
+            border.setAttribute('fill', 'none');
+            border.setAttribute('stroke', visual.typeClass.includes('own') ? 'orange' : 'green');
+            border.setAttribute('stroke-width', '10');
+            g.appendChild(border);
+          }
+
+          // Icon/emoji text
+          if (visual.icon) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', '50');
+            text.setAttribute('y', '50');
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'central');
+            text.setAttribute('font-size', '60');
+            text.setAttribute('pointer-events', 'none');
+            text.textContent = visual.icon;
+            g.appendChild(text);
+          }
+
+          // Event handlers
+          g.addEventListener('mouseenter', () => {
+            scheduleDetails(tileData, visual, wrappedX, wrappedY, g);
+          });
+          g.addEventListener('mouseleave', () => {
+            cancelDetailsTimeout();
+          });
+          g.addEventListener('click', () => {
+            showDetails(tileData, visual, wrappedX, wrappedY, g);
+          });
+
+          tilesContainer.appendChild(g);
         }
       }
     }
