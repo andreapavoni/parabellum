@@ -3,13 +3,10 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use axum_extra::extract::SignedCookieJar;
-use chrono::Utc;
 use dioxus::prelude::*;
 
 use crate::{
-    components::{LayoutData, PageLayout, wrap_in_html},
-    handlers::helpers::ensure_not_authenticated,
-    http::AppState,
+    components::wrap_in_html, handlers::helpers::ensure_not_authenticated, http::AppState,
     pages::HomePage,
 };
 
@@ -19,18 +16,9 @@ pub async fn home_page(State(_state): State<AppState>, jar: SignedCookieJar) -> 
         return redirect.into_response();
     }
 
-    let layout_data = LayoutData {
-        player: None,
-        village: None,
-        server_time: Utc::now().timestamp(),
-        nav_active: "".to_string(),
-    };
-
+    // Landing page doesn't use PageLayout - it has its own full-page design
     let body_content = dioxus_ssr::render_element(rsx! {
-        PageLayout {
-            data: layout_data,
-            HomePage {}
-        }
+        HomePage {}
     });
 
     Html(wrap_in_html(&body_content)).into_response()
