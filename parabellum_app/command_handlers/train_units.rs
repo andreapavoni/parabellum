@@ -44,6 +44,111 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             }));
         }
 
+        // Special validation for expansion units (settlers and chiefs)
+        let unit = village
+            .tribe
+            .units()
+            .get(command.unit_idx as usize)
+            .ok_or(GameError::InvalidUnitIndex(command.unit_idx))?;
+
+        // Validate expansion units (chiefs and settlers share foundation slots)
+        if unit.role == parabellum_types::army::UnitRole::Chief
+            || unit.role == parabellum_types::army::UnitRole::Settler
+        {
+            // Get all player villages to count children
+            let player_villages = village_repo.list_by_player_id(command.player_id).await?;
+
+            // Count child villages for this parent
+            let child_count = player_villages
+                .iter()
+                .filter(|v| v.parent_village_id == Some(command.village_id))
+                .count() as u32;
+
+            // Calculate available slots
+            let max_slots = village.max_foundation_slots();
+            let available_slots = max_slots.saturating_sub(child_count as u8);
+
+            if available_slots == 0 {
+                return Err(ApplicationError::Game(
+                    GameError::NoFoundationSlotsAvailable,
+                ));
+            }
+
+            // Get active training jobs to calculate committed units
+            let active_jobs = job_repo
+                .list_active_jobs_by_village(command.village_id as i32)
+                .await?;
+
+            // Count chiefs and settlers in training, at home, and deployed
+            let (chiefs_total, settlers_total) =
+                Self::count_expansion_units(&village, &active_jobs);
+
+            // Use the domain method to calculate max trainable for this unit
+            let max_trainable =
+                parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                    unit.role.clone(),
+                    available_slots,
+                    chiefs_total,
+                    settlers_total,
+                    0, // We'll add the current request below
+                );
+
+            if command.quantity as u32 > max_trainable {
+                return match unit.role {
+                    parabellum_types::army::UnitRole::Chief => {
+                        Err(ApplicationError::Game(GameError::ChiefLimitExceeded {
+                            max: max_trainable,
+                            current: chiefs_total,
+                            requested: command.quantity as u32,
+                        }))
+                    }
+                    parabellum_types::army::UnitRole::Settler => {
+                        Err(ApplicationError::Game(GameError::SettlerLimitExceeded {
+                            max: max_trainable + settlers_total,
+                            current: settlers_total,
+                            requested: command.quantity as u32,
+                        }))
+                    }
+                    _ => unreachable!("Only chiefs and settlers should reach this point"),
+                };
+            }
+
+            // Additional validation for settlers: check Culture Points
+            if unit.role == parabellum_types::army::UnitRole::Settler {
+                let player = uow.players().get_by_id(command.player_id).await?;
+                let village_count = player_villages.len() as u32;
+
+                // Calculate potential slots in use after training
+                let slots_in_use = child_count
+                    + parabellum_game::models::village::Village::slots_used_by_chiefs(chiefs_total)
+                    + parabellum_game::models::village::Village::slots_used_by_settlers(
+                        settlers_total + command.quantity as u32,
+                    );
+
+                let speed = match config.speed {
+                    1 => parabellum_types::common::Speed::X1,
+                    2 => parabellum_types::common::Speed::X2,
+                    3 => parabellum_types::common::Speed::X3,
+                    5 => parabellum_types::common::Speed::X5,
+                    10 => parabellum_types::common::Speed::X10,
+                    _ => parabellum_types::common::Speed::X1,
+                };
+                let required_cp = parabellum_game::models::culture_points::required_cp(
+                    speed,
+                    (village_count + slots_in_use) as usize,
+                );
+
+                if (player.culture_points as u32) < required_cp {
+                    return Err(ApplicationError::Game(
+                        GameError::InsufficientCulturePoints {
+                            required: required_cp,
+                            current: player.culture_points as u32,
+                        },
+                    ));
+                }
+            }
+        }
+
         let (slot_id, unit_name, time_per_unit) = village.init_unit_training(
             command.unit_idx,
             &command.building_name,
@@ -86,6 +191,58 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
 }
 
 impl TrainUnitsCommandHandler {
+    /// Count total chiefs and settlers (at home, deployed, and in training queue)
+    fn count_expansion_units(
+        village: &parabellum_game::models::village::Village,
+        active_jobs: &[Job],
+    ) -> (u32, u32) {
+        let chiefs_at_home = village.count_chiefs_at_home();
+        let settlers_at_home = village.count_settlers_at_home();
+
+        // Count deployed units
+        let chiefs_deployed: u32 = village
+            .deployed_armies()
+            .iter()
+            .map(|army| army.units().get(8))
+            .sum();
+        let settlers_deployed: u32 = village
+            .deployed_armies()
+            .iter()
+            .map(|army| army.units().get(9))
+            .sum();
+
+        // Count units in training queue
+        let (chiefs_in_training, settlers_in_training): (u32, u32) = active_jobs
+            .iter()
+            .filter_map(|job| {
+                if job.task.task_type != "TrainUnits" {
+                    return None;
+                }
+                let payload: crate::jobs::tasks::TrainUnitsTask =
+                    serde_json::from_value(job.task.data.clone()).ok()?;
+
+                // Check if this job is for a chief (any chief type, not just current_unit_name)
+                let is_chief = village.tribe.units().iter().any(|u| {
+                    u.name == payload.unit && u.role == parabellum_types::army::UnitRole::Chief
+                });
+                let is_settler = payload.unit == parabellum_types::army::UnitName::Settler;
+
+                if is_chief {
+                    Some((payload.quantity as u32, 0))
+                } else if is_settler {
+                    Some((0, payload.quantity as u32))
+                } else {
+                    None
+                }
+            })
+            .fold((0, 0), |(c, s), (new_c, new_s)| (c + new_c, s + new_s));
+
+        let chiefs_total = chiefs_at_home + chiefs_deployed + chiefs_in_training;
+        let settlers_total = settlers_at_home + settlers_deployed + settlers_in_training;
+
+        (chiefs_total, settlers_total)
+    }
+
     fn initial_completion_deadline(
         slot_id: u8,
         time_per_unit: u32,
@@ -99,9 +256,7 @@ impl TrainUnitsCommandHandler {
                 if job.task.task_type != "TrainUnits" {
                     return None;
                 }
-
                 let payload: TrainUnitsTask = serde_json::from_value(job.task.data.clone()).ok()?;
-
                 if payload.slot_id != slot_id {
                     return None;
                 }

@@ -89,6 +89,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
             db_village.culture_points as u32,
             db_village.culture_points_production as u32,
             db_village.updated_at,
+            db_village.parent_village_id.map(|id| id as u32),
         );
         Ok(village)
     }

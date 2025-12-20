@@ -3,6 +3,15 @@ use uuid::Uuid;
 
 use crate::tribe::Tribe;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Speed {
+    X1,
+    X2,
+    X3,
+    X5,
+    X10,
+}
+
 #[derive(Debug, Clone)]
 pub struct MerchantStats {
     pub speed: u8,

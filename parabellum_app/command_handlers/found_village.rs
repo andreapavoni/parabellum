@@ -38,7 +38,7 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
 
         let map_field = map_repo.get_field_by_id(village_id).await?;
         let valley = Valley::try_from(map_field)?;
-        let village = Village::new(
+        let mut village = Village::new(
             "New Village".to_string(),
             &valley,
             &command.player,
@@ -46,6 +46,9 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
             config.world_size as i32,
             config.speed,
         );
+
+        // Set parent village if provided (for settler-founded villages)
+        village.parent_village_id = command.parent_village_id;
 
         village_repo.save(&village).await?;
 

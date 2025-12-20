@@ -253,9 +253,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                 INSERT INTO villages (
                     id, player_id, name, position, buildings, production,
                     stocks, smithy_upgrades, academy_research, population,
-                    loyalty, is_capital, culture_points, culture_points_production
+                    loyalty, is_capital, culture_points, culture_points_production, parent_village_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 ON CONFLICT (id) DO UPDATE
                 SET
                     name = $3,
@@ -268,6 +268,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                     loyalty = $11,
                     culture_points = $13,
                     culture_points_production = $14,
+                    parent_village_id = $15,
                     updated_at = NOW()
                 "#,
             village.id as i32,
@@ -283,7 +284,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             village.loyalty() as i16,
             village.is_capital,
             village.culture_points as i32,
-            village.culture_points_production as i32
+            village.culture_points_production as i32,
+            village.parent_village_id.map(|id| id as i32)
         )
         .execute(&mut *tx_guard.as_mut())
         .await

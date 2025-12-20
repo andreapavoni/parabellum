@@ -83,11 +83,24 @@ impl Command for ReinforceVillage {}
 pub struct FoundVillage {
     pub player: Player,
     pub position: Position,
+    pub parent_village_id: Option<u32>,
 }
 
 impl FoundVillage {
     pub fn new(player: Player, position: Position) -> Self {
-        Self { player, position }
+        Self {
+            player,
+            position,
+            parent_village_id: None,
+        }
+    }
+
+    pub fn with_parent(player: Player, position: Position, parent_village_id: u32) -> Self {
+        Self {
+            player,
+            position,
+            parent_village_id: Some(parent_village_id),
+        }
     }
 }
 

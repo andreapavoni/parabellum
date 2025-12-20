@@ -82,6 +82,11 @@
         "ordinal": 15,
         "name": "culture_points_production",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "parent_village_id",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -105,7 +110,8 @@
       false,
       false,
       false,
-      false
+      false,
+      true
     ]
   },
   "hash": "3cd512d17f7401bf4436881295abfaa2afc4685e524c935941a78fe5402c47e8"

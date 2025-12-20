@@ -47,6 +47,7 @@ pub struct Village {
     pub culture_points_production: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub parent_village_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, FromRow)]

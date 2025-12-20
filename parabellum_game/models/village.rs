@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use parabellum_types::army::{Unit, UnitGroup};
+use parabellum_types::army::{Unit, UnitGroup, UnitRole};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -125,6 +125,7 @@ pub struct Village {
     pub culture_points: u32,
     pub culture_points_production: u32,
     pub updated_at: DateTime<Utc>,
+    pub parent_village_id: Option<u32>,
 }
 
 impl Village {
@@ -167,6 +168,7 @@ impl Village {
             culture_points_production: 0,
             stocks: Default::default(),
             updated_at: Utc::now(),
+            parent_village_id: None,
         };
 
         // FIXME: either fix the method return value or this method one.
@@ -201,6 +203,7 @@ impl Village {
         culture_points: u32,
         culture_points_production: u32,
         updated_at: DateTime<Utc>,
+        parent_village_id: Option<u32>,
     ) -> Self {
         let mut village = Self {
             id,
@@ -225,6 +228,7 @@ impl Village {
             culture_points,
             culture_points_production,
             updated_at,
+            parent_village_id,
         };
 
         village.update_state();
@@ -565,6 +569,121 @@ impl Village {
         None
     }
 
+    /// Returns the maximum number of foundation slots available based on Palace/Residence level.
+    /// Residence: Level 10 → 1 slot, Level 20 → 2 slots
+    /// Palace: Level 10 → 1 slot, Level 15 → 2 slots, Level 20 → 3 slots
+    pub fn max_foundation_slots(&self) -> u8 {
+        if let Some((building, building_name)) = self.get_palace_or_residence() {
+            match building_name {
+                BuildingName::Residence => {
+                    if building.level >= 20 {
+                        2
+                    } else if building.level >= 10 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                BuildingName::Palace => {
+                    if building.level >= 20 {
+                        3
+                    } else if building.level >= 15 {
+                        2
+                    } else if building.level >= 10 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                _ => 0,
+            }
+        } else {
+            0
+        }
+    }
+
+    /// Returns the number of settlers currently in the home army (not deployed).
+    pub fn count_settlers_at_home(&self) -> u32 {
+        if let Some(army) = &self.army {
+            army.units().get(9)
+        } else {
+            0
+        }
+    }
+
+    /// Returns the number of chiefs/senators/chieftains currently in the home army (not deployed).
+    pub fn count_chiefs_at_home(&self) -> u32 {
+        if let Some(army) = &self.army {
+            return army.units().get(8);
+        } else {
+            0
+        }
+    }
+
+    /// Constants for expansion units
+    const SETTLERS_PER_SLOT: u32 = 3;
+    const CHIEFS_PER_SLOT: u32 = 1;
+
+    /// Calculate slots used by settlers (rounds up: 1-3 settlers = 1 slot)
+    pub fn slots_used_by_settlers(settlers_count: u32) -> u32 {
+        if settlers_count == 0 {
+            0
+        } else {
+            (settlers_count + Self::SETTLERS_PER_SLOT - 1) / Self::SETTLERS_PER_SLOT
+        }
+    }
+
+    /// Calculate slots used by chiefs (1 chief = 1 slot)
+    pub fn slots_used_by_chiefs(chiefs_count: u32) -> u32 {
+        chiefs_count * Self::CHIEFS_PER_SLOT
+    }
+
+    /// Calculate maximum settlers trainable given available slots
+    pub fn max_settlers_for_slots(available_slots: u8) -> u32 {
+        available_slots as u32 * Self::SETTLERS_PER_SLOT
+    }
+
+    /// Calculate maximum chiefs trainable given available slots
+    pub fn max_chiefs_for_slots(available_slots: u8) -> u32 {
+        available_slots as u32 * Self::CHIEFS_PER_SLOT
+    }
+
+    /// Calculate max trainable quantity for an expansion unit
+    ///
+    /// Accounts for:
+    /// - Available foundation slots
+    /// - Slots used by the other expansion unit type
+    /// - Units already committed (at home, deployed, in training)
+    pub fn max_expansion_unit_trainable(
+        unit_role: UnitRole,
+        available_slots: u8,
+        total_chiefs: u32,
+        total_settlers: u32,
+        committed_this_unit: u32,
+    ) -> u32 {
+        if available_slots == 0 {
+            return 0;
+        }
+
+        let max_allowed = match unit_role {
+            UnitRole::Chief => {
+                // Chiefs: 1 per slot, minus slots used by settlers
+                let slots_used_by_settlers = Self::slots_used_by_settlers(total_settlers);
+                let slots_for_chiefs = available_slots.saturating_sub(slots_used_by_settlers as u8);
+                Self::max_chiefs_for_slots(slots_for_chiefs)
+            }
+            UnitRole::Settler => {
+                // Settlers: 3 per slot, minus slots used by chiefs
+                let slots_used_by_chiefs = Self::slots_used_by_chiefs(total_chiefs);
+                let slots_for_settlers = available_slots.saturating_sub(slots_used_by_chiefs as u8);
+                Self::max_settlers_for_slots(slots_for_settlers)
+            }
+            _ => 0,
+        };
+
+        max_allowed.saturating_sub(committed_this_unit)
+    }
+
     /// Returns the village wall, if any, according to the actual tribe.
     pub fn wall(&self) -> Option<Building> {
         self.tribe
@@ -737,7 +856,9 @@ impl Village {
             .units()
             .iter()
             .enumerate()
-            .filter(|(idx, u)| self.academy_research().get(*idx) && u.group == group)
+            .filter(|(idx, u)| {
+                (self.academy_research().get(*idx) || u.research_cost.time == 0) && u.group == group
+            })
             .map(|(_, u)| u)
             .collect()
     }
