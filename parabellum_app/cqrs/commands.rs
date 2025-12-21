@@ -178,6 +178,14 @@ pub struct AcceptMarketplaceOffer {
 impl Command for AcceptMarketplaceOffer {}
 
 #[derive(Debug, Clone)]
+pub struct CancelMarketplaceOffer {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub offer_id: Uuid,
+}
+impl Command for CancelMarketplaceOffer {}
+
+#[derive(Debug, Clone)]
 pub struct CreateHero {
     pub id: Uuid,
     pub player_id: Uuid,

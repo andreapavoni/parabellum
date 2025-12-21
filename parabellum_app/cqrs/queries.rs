@@ -305,3 +305,23 @@ pub struct CulturePointsInfo {
 impl Query for GetCulturePointsInfo {
     type Output = CulturePointsInfo;
 }
+
+/// Fetch all marketplace data for a village (offers and village info).
+pub struct GetMarketplaceData {
+    pub village_id: u32,
+}
+
+use crate::repository::VillageInfo;
+use parabellum_game::models::marketplace::MarketplaceOffer;
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub struct MarketplaceData {
+    pub own_offers: Vec<MarketplaceOffer>,
+    pub global_offers: Vec<MarketplaceOffer>,
+    pub village_info: HashMap<u32, VillageInfo>,
+}
+
+impl Query for GetMarketplaceData {
+    type Output = MarketplaceData;
+}

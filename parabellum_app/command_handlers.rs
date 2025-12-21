@@ -1,6 +1,9 @@
+mod accept_marketplace_offer;
 mod add_building;
 mod attack_village;
+mod cancel_marketplace_offer;
 mod create_hero;
+mod create_marketplace_offer;
 mod downgrade_building;
 mod found_village;
 mod helpers;
@@ -17,9 +20,12 @@ mod send_resources;
 mod train_units;
 mod upgrade_building;
 
+pub use accept_marketplace_offer::AcceptMarketplaceOfferCommandHandler;
 pub use add_building::AddBuildingCommandHandler;
 pub use attack_village::AttackVillageCommandHandler;
+pub use cancel_marketplace_offer::CancelMarketplaceOfferCommandHandler;
 pub use create_hero::CreateHeroCommandHandler;
+pub use create_marketplace_offer::CreateMarketplaceOfferCommandHandler;
 pub use downgrade_building::DowngradeBuildingCommandHandler;
 pub use found_village::FoundVillageCommandHandler;
 pub use mark_report_read::MarkReportReadCommandHandler;

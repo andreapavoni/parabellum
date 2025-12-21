@@ -86,7 +86,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let busy_merchants_result = sqlx::query!(
+        // Count busy merchants from both jobs (deliveries) and marketplace offers (reservations)
+        let busy_merchants_from_jobs = sqlx::query!(
                     r#"
                     SELECT COALESCE(SUM((task->'data'->>'merchants_used')::smallint), 0) as total_busy
                     FROM jobs
@@ -100,7 +101,21 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                 .await
                 .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let busy_merchants = busy_merchants_result.total_busy.unwrap_or(0) as u8;
+        let busy_merchants_from_offers = sqlx::query!(
+            r#"
+                    SELECT COALESCE(SUM(merchants_required), 0) as total_reserved
+                    FROM marketplace_offers
+                    WHERE village_id = $1
+                    "#,
+            village_id_i32
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let busy_merchants = (busy_merchants_from_jobs.total_busy.unwrap_or(0)
+            + busy_merchants_from_offers.total_reserved.unwrap_or(0))
+            as u8;
 
         let aggregate = VillageAggregate {
             village: db_village,

@@ -66,8 +66,9 @@ pub mod tests {
                 .ok_or_else(|| ApplicationError::Db(DbError::JobNotFound(id)))?)
         }
 
-        async fn list_by_player_id(&self, _id: Uuid) -> Result<Vec<Job>, ApplicationError> {
-            Ok(self.added_jobs.lock().unwrap().clone())
+        async fn list_by_player_id(&self, id: Uuid) -> Result<Vec<Job>, ApplicationError> {
+            let jobs = self.added_jobs.lock().unwrap().clone();
+            Ok(jobs.iter().filter(|j| j.player_id == id).cloned().collect())
         }
 
         async fn list_active_jobs_by_village(
