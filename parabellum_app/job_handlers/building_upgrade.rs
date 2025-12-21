@@ -40,6 +40,14 @@ impl JobHandler for UpgradeBuildingJobHandler {
         let village_id = job.village_id as u32;
         let village_repo = ctx.uow.villages();
         let mut village = village_repo.get_by_id(village_id).await?;
+        let current_level = village
+            .get_building_by_slot_id(self.payload.slot_id)
+            .map(|slot| slot.building.level)
+            .unwrap_or_default();
+
+        if current_level >= self.payload.level {
+            return Ok(());
+        }
 
         village.set_building_level_at_slot(
             self.payload.slot_id,

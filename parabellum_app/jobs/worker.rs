@@ -53,8 +53,9 @@ impl JobWorker {
     /// Process due jobs.
     pub async fn process_due_jobs(&self) -> Result<()> {
         let uow = self.uow_provider.tx().await?;
-        let due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
+        let mut due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
         uow.commit().await?;
+        due_jobs.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
         if !due_jobs.is_empty() {
             info!(count = due_jobs.len(), "Processing due jobs");
         }
