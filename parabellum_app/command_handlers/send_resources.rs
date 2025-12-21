@@ -1,4 +1,5 @@
 use crate::{
+    command_handlers::helpers::calculate_merchants_needed,
     config::Config,
     cqrs::{CommandHandler, commands::SendResources},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -22,20 +23,6 @@ impl Default for SendResourcesCommandHandler {
 impl SendResourcesCommandHandler {
     pub fn new() -> Self {
         Self {}
-    }
-
-    /// Calculates the amount of merchants needed to transport the amount of resources.
-    fn calculate_merchants_needed(capacity: u32, resources_total: u32) -> Result<u8, GameError> {
-        if capacity == 0 {
-            return Err(GameError::NotEnoughMerchants);
-        }
-
-        let merchants = (resources_total as f64 / capacity as f64).ceil() as u8;
-        if resources_total > 0 && merchants == 0 {
-            Ok(1)
-        } else {
-            Ok(merchants)
-        }
     }
 }
 
@@ -68,9 +55,8 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
         }
         sender_village.deduct_resources(&resources_to_send)?;
 
-        let merchant_stats = sender_village.tribe.merchant_stats();
         let merchants_needed =
-            Self::calculate_merchants_needed(merchant_stats.capacity, resources_to_send.total())?;
+            calculate_merchants_needed(&sender_village.tribe, resources_to_send.total())?;
 
         if sender_village.available_merchants() < merchants_needed {
             return Err(ApplicationError::Game(GameError::NotEnoughMerchants));
@@ -78,6 +64,7 @@ impl CommandHandler<SendResources> for SendResourcesCommandHandler {
 
         village_repo.save(&sender_village).await?;
 
+        let merchant_stats = sender_village.tribe.merchant_stats();
         let travel_time_secs = sender_village.position.calculate_travel_time_secs(
             target_village.position,
             merchant_stats.speed,

@@ -1,4 +1,5 @@
 use crate::{
+    command_handlers::helpers::calculate_merchants_needed,
     config::Config,
     cqrs::{CommandHandler, commands::AcceptMarketplaceOffer},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -22,20 +23,6 @@ impl Default for AcceptMarketplaceOfferCommandHandler {
 impl AcceptMarketplaceOfferCommandHandler {
     pub fn new() -> Self {
         Self {}
-    }
-
-    /// Calculates the amount of merchants needed to transport the amount of resources.
-    fn calculate_merchants_needed(capacity: u32, resources_total: u32) -> Result<u8, GameError> {
-        if capacity == 0 {
-            return Err(GameError::NotEnoughMerchants);
-        }
-
-        let merchants = (resources_total as f64 / capacity as f64).ceil() as u8;
-        if resources_total > 0 && merchants == 0 {
-            Ok(1)
-        } else {
-            Ok(merchants)
-        }
     }
 }
 
@@ -81,15 +68,14 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
             .get_building_by_name(&BuildingName::Marketplace)
             .is_none()
         {
-            return Err(ApplicationError::Game(GameError::OfferNoLongerValid));
+            return Err(ApplicationError::Game(
+                GameError::MarketplaceOfferNoLongerValid,
+            ));
         }
 
         // Calculate merchants needed for acceptor
-        let acceptor_merchant_stats = acceptor_village.tribe.merchant_stats();
-        let acceptor_merchants_needed = Self::calculate_merchants_needed(
-            acceptor_merchant_stats.capacity,
-            offer.seek_resources.total(),
-        )?;
+        let acceptor_merchants_needed =
+            calculate_merchants_needed(&acceptor_village.tribe, offer.seek_resources.total())?;
 
         // Validate acceptor has enough seek_resources
         acceptor_village.deduct_resources(&offer.seek_resources)?;
@@ -101,6 +87,8 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
 
         // Calculate travel times
         let offerer_merchant_stats = offerer_village.tribe.merchant_stats();
+        let acceptor_merchant_stats = acceptor_village.tribe.merchant_stats();
+
         let offerer_to_acceptor_travel_time = offerer_village.position.calculate_travel_time_secs(
             acceptor_village.position.clone(),
             offerer_merchant_stats.speed,

@@ -145,6 +145,6 @@ pub enum GameError {
     #[error("Invalid marketplace offer")]
     InvalidMarketplaceOffer,
 
-    #[error("Offer no longer valid (offerer's marketplace was destroyed)")]
-    OfferNoLongerValid,
+    #[error("Offer is no longer valid (offerer's marketplace was destroyed)")]
+    MarketplaceOfferNoLongerValid,
 }

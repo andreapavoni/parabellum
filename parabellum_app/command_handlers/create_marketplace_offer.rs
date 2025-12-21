@@ -1,4 +1,5 @@
 use crate::{
+    command_handlers::helpers::calculate_merchants_needed,
     config::Config,
     cqrs::{CommandHandler, commands::CreateMarketplaceOffer},
     uow::UnitOfWork,
@@ -22,20 +23,6 @@ impl Default for CreateMarketplaceOfferCommandHandler {
 impl CreateMarketplaceOfferCommandHandler {
     pub fn new() -> Self {
         Self {}
-    }
-
-    /// Calculates the amount of merchants needed to transport the amount of resources.
-    fn calculate_merchants_needed(capacity: u32, resources_total: u32) -> Result<u8, GameError> {
-        if capacity == 0 {
-            return Err(GameError::NotEnoughMerchants);
-        }
-
-        let merchants = (resources_total as f64 / capacity as f64).ceil() as u8;
-        if resources_total > 0 && merchants == 0 {
-            Ok(1)
-        } else {
-            Ok(merchants)
-        }
     }
 }
 
@@ -77,9 +64,7 @@ impl CommandHandler<CreateMarketplaceOffer> for CreateMarketplaceOfferCommandHan
         village.deduct_resources(&offer_resources)?;
 
         // Calculate merchants needed
-        let merchant_stats = village.tribe.merchant_stats();
-        let merchants_needed =
-            Self::calculate_merchants_needed(merchant_stats.capacity, offer_resources.total())?;
+        let merchants_needed = calculate_merchants_needed(&village.tribe, offer_resources.total())?;
 
         // Check if enough merchants available
         if village.available_merchants() < merchants_needed {
