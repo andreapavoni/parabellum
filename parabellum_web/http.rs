@@ -26,7 +26,7 @@ use crate::handlers::{
     reports::{report_page, reports_page},
     resources::resources_page,
     stats::stats_page,
-    village::village_page,
+    village::{switch_village, village_page},
 };
 
 #[derive(Clone)]
@@ -74,6 +74,7 @@ impl WebRouter {
         let protected_routes = Router::new()
             // Dioxus routes (primary)
             .route("/village", get(village_page))
+            .route("/village/switch/{id}", post(switch_village))
             .route("/resources", get(resources_page))
             .route("/map", get(map_page))
             .route("/map/{field_id}", get(map_page_with_id))
