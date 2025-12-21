@@ -3,7 +3,7 @@ use parabellum_types::common::ResourceGroup;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MarketplaceOffer {
     pub id: Uuid,
     pub player_id: Uuid,

@@ -109,6 +109,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
                 (task ->> 'task_type' = 'Attack' AND (task -> 'data' ->> 'target_village_id')::integer = $1)
                 OR (task ->> 'task_type' = 'Scout' AND (task -> 'data' ->> 'target_village_id')::integer = $1)
                 OR (task ->> 'task_type' = 'Reinforcement' AND (task -> 'data' ->> 'village_id')::integer = $1)
+                OR (task ->> 'task_type' = 'MerchantGoing' AND (task -> 'data' ->> 'destination_village_id')::integer = $1)
               )
             ORDER BY completed_at ASC
             "#,

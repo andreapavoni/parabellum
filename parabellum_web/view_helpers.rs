@@ -1,11 +1,14 @@
 use chrono::Utc;
 use parabellum_app::cqrs::queries::{
-    BuildingQueueItem, TrainingQueueItem, TroopMovementType, VillageTroopMovements,
+    BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TrainingQueueItem,
+    TroopMovementType, VillageTroopMovements,
 };
 use parabellum_app::jobs::JobStatus;
 use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
-use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{
+    army::UnitName, buildings::BuildingName, common::ResourceGroup, map::Position,
+};
 use rust_i18n::t;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -346,4 +349,172 @@ pub fn building_description_paragraphs(building: &BuildingName) -> Vec<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
+}
+
+// ============================================================================
+// Marketplace View Helpers
+// ============================================================================
+
+/// View model for marketplace offers displayed in tables
+#[derive(Debug, Clone)]
+pub struct MarketplaceOfferView {
+    pub offer_id: String,
+    pub village_id: u32,
+    pub village_name: String,
+    pub position: Position,
+    pub offer_resources: ResourceGroup,
+    pub seek_resources: ResourceGroup,
+    pub merchants_required: u8,
+    pub created_at_text: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MerchantMovementDirection {
+    Outgoing,
+    Incoming,
+}
+
+/// View model for merchant movements on the marketplace page
+#[derive(Debug, Clone)]
+pub struct MerchantMovementView {
+    pub job_id: String,
+    pub direction: MerchantMovementDirection,
+    pub kind: MerchantMovementKind,
+    pub origin_name: String,
+    pub origin_position: Option<Position>,
+    pub destination_name: String,
+    pub destination_position: Option<Position>,
+    pub resources: ResourceGroup,
+    pub merchants_used: u8,
+    pub time_remaining_secs: u32,
+}
+
+/// Formats a trade offer as "Offering → Seeking" with resource emojis
+pub fn format_trade_offer(offer: &ResourceGroup, seek: &ResourceGroup) -> String {
+    let offer_parts: Vec<String> = [
+        (offer.lumber(), "🌲"),
+        (offer.clay(), "🧱"),
+        (offer.iron(), "⛏️"),
+        (offer.crop(), "🌾"),
+    ]
+    .iter()
+    .filter(|(amount, _)| *amount > 0)
+    .map(|(amount, emoji)| format!("{} {}", amount, emoji))
+    .collect();
+
+    let seek_parts: Vec<String> = [
+        (seek.lumber(), "🌲"),
+        (seek.clay(), "🧱"),
+        (seek.iron(), "⛏️"),
+        (seek.crop(), "🌾"),
+    ]
+    .iter()
+    .filter(|(amount, _)| *amount > 0)
+    .map(|(amount, emoji)| format!("{} {}", amount, emoji))
+    .collect();
+
+    format!("{} → {}", offer_parts.join(" "), seek_parts.join(" "))
+}
+
+/// Converts MarketplaceData into view models for own offers
+pub fn prepare_own_offers(marketplace_data: &MarketplaceData) -> Vec<MarketplaceOfferView> {
+    marketplace_data
+        .own_offers
+        .iter()
+        .map(|offer| {
+            let village_info = marketplace_data
+                .village_info
+                .get(&offer.village_id)
+                .expect("Village info should exist for own offer");
+
+            MarketplaceOfferView {
+                offer_id: offer.id.to_string(),
+                village_id: offer.village_id,
+                village_name: village_info.name.clone(),
+                position: village_info.position.clone(),
+                offer_resources: offer.offer_resources.clone(),
+                seek_resources: offer.seek_resources.clone(),
+                merchants_required: offer.merchants_required,
+                created_at_text: format_relative_time(offer.created_at),
+            }
+        })
+        .collect()
+}
+
+/// Converts MarketplaceData into view models for global offers (sorted by distance)
+pub fn prepare_global_offers(marketplace_data: &MarketplaceData) -> Vec<MarketplaceOfferView> {
+    marketplace_data
+        .global_offers
+        .iter()
+        .map(|offer| {
+            let village_info = marketplace_data
+                .village_info
+                .get(&offer.village_id)
+                .expect("Village info should exist for global offer");
+
+            MarketplaceOfferView {
+                offer_id: offer.id.to_string(),
+                village_id: offer.village_id,
+                village_name: village_info.name.clone(),
+                position: village_info.position.clone(),
+                offer_resources: offer.offer_resources.clone(),
+                seek_resources: offer.seek_resources.clone(),
+                merchants_required: offer.merchants_required,
+                created_at_text: format_relative_time(offer.created_at),
+            }
+        })
+        .collect()
+}
+
+/// Converts merchant movements into view models for the marketplace page
+pub fn prepare_merchant_movements(
+    movements: &[MerchantMovement],
+    village_info: &HashMap<u32, VillageInfo>,
+    direction: MerchantMovementDirection,
+) -> Vec<MerchantMovementView> {
+    let now = Utc::now();
+    movements
+        .iter()
+        .map(|movement| {
+            let origin_info = village_info.get(&movement.origin_village_id);
+            let destination_info = village_info.get(&movement.destination_village_id);
+            let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
+
+            MerchantMovementView {
+                job_id: movement.job_id.to_string(),
+                direction: direction.clone(),
+                kind: movement.kind.clone(),
+                origin_name: origin_info
+                    .map(|info| info.name.clone())
+                    .unwrap_or_else(|| format!("Village #{}", movement.origin_village_id)),
+                origin_position: origin_info.map(|info| info.position.clone()),
+                destination_name: destination_info
+                    .map(|info| info.name.clone())
+                    .unwrap_or_else(|| format!("Village #{}", movement.destination_village_id)),
+                destination_position: destination_info.map(|info| info.position.clone()),
+                resources: movement.resources.clone(),
+                merchants_used: movement.merchants_used,
+                time_remaining_secs,
+            }
+        })
+        .collect()
+}
+
+/// Formats a timestamp as a relative time string (e.g., "5 minutes ago")
+fn format_relative_time(timestamp: chrono::DateTime<chrono::Utc>) -> String {
+    let now = Utc::now();
+    let duration = now.signed_duration_since(timestamp);
+
+    if duration.num_seconds() < 60 {
+        "just now".to_string()
+    } else if duration.num_minutes() < 60 {
+        let mins = duration.num_minutes();
+        format!("{} minute{} ago", mins, if mins == 1 { "" } else { "s" })
+    } else if duration.num_hours() < 24 {
+        let hours = duration.num_hours();
+        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
+    } else {
+        let days = duration.num_days();
+        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
+    }
 }

@@ -1,13 +1,14 @@
 use std::{collections::HashSet, sync::Arc};
 
-use parabellum_types::Result;
+use parabellum_types::{Result, common::ResourceGroup};
 
 use crate::{
     config::Config,
     cqrs::{
         QueryHandler,
-        queries::{GetMarketplaceData, MarketplaceData},
+        queries::{GetMarketplaceData, MarketplaceData, MerchantMovement, MerchantMovementKind},
     },
+    jobs::tasks::{MerchantGoingTask, MerchantReturnTask},
     uow::UnitOfWork,
 };
 
@@ -36,24 +37,87 @@ impl QueryHandler<GetMarketplaceData> for GetMarketplaceDataHandler {
         // Load current village to get its position for distance calculations
         let village = uow.villages().get_by_id(query.village_id).await?;
         let village_position = village.position;
-        let player_id = village.player_id;
-
         // Fetch own offers
         let own_offers = uow.marketplace().list_by_village(query.village_id).await?;
 
         // Fetch all global offers
         let all_offers = uow.marketplace().list_all().await?;
 
-        // Filter out own offers and calculate distances
+        // Filter out own village offers and calculate distances
         let mut global_offers_with_distance: Vec<_> = all_offers
             .into_iter()
-            .filter(|offer| offer.village_id != query.village_id && offer.player_id != player_id)
+            .filter(|offer| offer.village_id != query.village_id)
             .map(|offer| {
                 // We'll need to fetch the offer village's position to calculate distance
                 // Store offer with a placeholder distance for now
                 (offer, 0)
             })
             .collect();
+
+        // Fetch merchant movements
+        let job_repo = uow.jobs();
+        let outgoing_jobs = job_repo
+            .list_active_jobs_by_village(query.village_id as i32)
+            .await?;
+        let incoming_jobs = job_repo
+            .list_village_targeting_movements(query.village_id as i32)
+            .await?;
+
+        let mut outgoing_merchants = Vec::new();
+        let mut incoming_merchants = Vec::new();
+
+        for job in outgoing_jobs {
+            match job.task.task_type.as_str() {
+                "MerchantGoing" => {
+                    let payload: MerchantGoingTask = serde_json::from_value(job.task.data.clone())?;
+                    outgoing_merchants.push(MerchantMovement {
+                        job_id: job.id,
+                        kind: MerchantMovementKind::Going,
+                        origin_village_id: payload.origin_village_id,
+                        destination_village_id: payload.destination_village_id,
+                        resources: payload.resources,
+                        merchants_used: payload.merchants_used,
+                        arrives_at: job.completed_at,
+                    });
+                }
+                "MerchantReturn" => {
+                    let payload: MerchantReturnTask =
+                        serde_json::from_value(job.task.data.clone())?;
+                    outgoing_merchants.push(MerchantMovement {
+                        job_id: job.id,
+                        kind: MerchantMovementKind::Return,
+                        origin_village_id: payload.origin_village_id,
+                        destination_village_id: payload.destination_village_id,
+                        resources: ResourceGroup::default(),
+                        merchants_used: payload.merchants_used,
+                        arrives_at: job.completed_at,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        for job in incoming_jobs {
+            if job.task.task_type != "MerchantGoing" {
+                continue;
+            }
+            let payload: MerchantGoingTask = serde_json::from_value(job.task.data.clone())?;
+            if payload.destination_village_id != query.village_id {
+                continue;
+            }
+            incoming_merchants.push(MerchantMovement {
+                job_id: job.id,
+                kind: MerchantMovementKind::Going,
+                origin_village_id: payload.origin_village_id,
+                destination_village_id: payload.destination_village_id,
+                resources: payload.resources,
+                merchants_used: payload.merchants_used,
+                arrives_at: job.completed_at,
+            });
+        }
+
+        outgoing_merchants.sort_by_key(|movement| movement.arrives_at);
+        incoming_merchants.sort_by_key(|movement| movement.arrives_at);
 
         // Collect all village IDs we need info for
         let mut village_ids: HashSet<u32> = HashSet::new();
@@ -62,6 +126,10 @@ impl QueryHandler<GetMarketplaceData> for GetMarketplaceDataHandler {
         }
         for (offer, _) in &global_offers_with_distance {
             village_ids.insert(offer.village_id);
+        }
+        for movement in outgoing_merchants.iter().chain(incoming_merchants.iter()) {
+            village_ids.insert(movement.origin_village_id);
+            village_ids.insert(movement.destination_village_id);
         }
 
         // Fetch village info for all referenced villages
@@ -92,6 +160,8 @@ impl QueryHandler<GetMarketplaceData> for GetMarketplaceDataHandler {
         Ok(MarketplaceData {
             own_offers,
             global_offers,
+            outgoing_merchants,
+            incoming_merchants,
             village_info,
         })
     }

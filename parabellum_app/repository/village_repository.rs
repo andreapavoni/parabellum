@@ -14,11 +14,16 @@ pub struct VillageInfo {
 
 #[async_trait::async_trait]
 pub trait VillageRepository: Send + Sync {
+    /// Gets villages by ID.
     async fn get_by_id(&self, village_id: u32) -> Result<Village, ApplicationError>;
+
+    /// Lists villages by player ID.
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError>;
+
+    /// Stores village.
     async fn save(&self, village: &Village) -> Result<(), ApplicationError>;
 
-    /// Fetch basic info (name, position) for multiple villages by IDs
+    /// Fetch basic info (name, position) for multiple villages by IDs.
     async fn get_info_by_ids(
         &self,
         village_ids: &[u32],

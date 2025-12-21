@@ -35,7 +35,7 @@ use crate::{
     http::AppState,
     pages::buildings::{
         AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, BuildingValueType,
-        EmptySlotPage, ExpansionBuildingPage, GenericBuildingPage, RallyPointPage,
+        EmptySlotPage, ExpansionBuildingPage, GenericBuildingPage, MarketplacePage, RallyPointPage,
         ResourceFieldPage, SmithyPage, SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage,
         TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
     },
@@ -575,6 +575,53 @@ async fn render_building_page(
                         next_value: next_value_display.clone(),
                         target_x: target_x,
                         target_y: target_y,
+                    }
+                }
+            })
+        }
+        BuildingName::Marketplace => {
+            use parabellum_app::cqrs::queries::{GetMarketplaceData, MarketplaceData};
+            use parabellum_app::queries_handlers::GetMarketplaceDataHandler;
+
+            let marketplace_data = state
+                .app_bus
+                .query(
+                    GetMarketplaceData {
+                        village_id: user.village.id,
+                    },
+                    GetMarketplaceDataHandler::new(),
+                )
+                .await
+                .unwrap_or_else(|err| {
+                    tracing::warn!("Failed to load marketplace data: {err}");
+                    MarketplaceData {
+                        own_offers: Vec::new(),
+                        global_offers: Vec::new(),
+                        outgoing_merchants: Vec::new(),
+                        incoming_merchants: Vec::new(),
+                        village_info: HashMap::new(),
+                    }
+                });
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    MarketplacePage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: slot_building.building.level,
+                        population: slot_building.building.population,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: effective_queue_full,
+                        marketplace_data: marketplace_data,
+                        csrf_token: csrf_token,
+                        flash_error: flash_error,
+                        next_value: next_value_display.clone(),
                     }
                 }
             })

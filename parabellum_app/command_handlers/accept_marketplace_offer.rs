@@ -41,8 +41,8 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
         // Load offer
         let offer = marketplace_repo.get_by_id(command.offer_id).await?;
 
-        // Validate acceptor is not the offerer
-        if offer.player_id == command.player_id {
+        // Validate acceptor is not the same village
+        if offer.village_id == command.village_id {
             return Err(ApplicationError::Game(GameError::InvalidMarketplaceOffer));
         }
 

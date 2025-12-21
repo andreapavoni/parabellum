@@ -3,7 +3,7 @@ use parabellum_game::models::village::Village;
 use parabellum_types::{
     army::{TroopSet, UnitName},
     buildings::BuildingName,
-    common::{Player, User},
+    common::{Player, ResourceGroup, User},
     map::Position,
     reports::ReportPayload,
 };
@@ -315,13 +315,32 @@ use crate::repository::VillageInfo;
 use parabellum_game::models::marketplace::MarketplaceOffer;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MarketplaceData {
     pub own_offers: Vec<MarketplaceOffer>,
     pub global_offers: Vec<MarketplaceOffer>,
+    pub outgoing_merchants: Vec<MerchantMovement>,
+    pub incoming_merchants: Vec<MerchantMovement>,
     pub village_info: HashMap<u32, VillageInfo>,
 }
 
 impl Query for GetMarketplaceData {
     type Output = MarketplaceData;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MerchantMovementKind {
+    Going,
+    Return,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MerchantMovement {
+    pub job_id: Uuid,
+    pub kind: MerchantMovementKind,
+    pub origin_village_id: u32,
+    pub destination_village_id: u32,
+    pub resources: ResourceGroup,
+    pub merchants_used: u8,
+    pub arrives_at: DateTime<Utc>,
 }
