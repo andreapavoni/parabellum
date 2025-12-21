@@ -12,14 +12,14 @@ This project is for those who love the deep strategy and community of the origin
 
 The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
-**HEADS UP!** Parabellum is under heavy development and is **barely playable**. Many core mechanics are being built. You can signup, develop your village, research/training troops, military ops like attack/raid/scout/reinforce, and few other things, but it's not a complete game yet, we're getting there.
+**HEADS UP!** Parabellum is under heavy development and is **mostly playable**. Many core mechanics have been built, others are coming. It's possible to signup and have a _decent_ game until founding a new village, but it's not complete or full-featured yet, we're getting there. Check the roadmap and status below.
 
 ---
 
 ## Project Goals
 
 * **Core Travian Experience**: Replicate the core 80-90% of the game mechanics (building, resource management, troops, attacks, alliances).
-* **Fast, Robust & Lightweight**: Use Rust to create a high-performance server that's easy for anyone to run. Code has unit and integration tests to ensure everything is working as expected.
+* **Fast, Robust & Lightweight**: Use Rust to create a high-performance server that's easy for anyone to run. Code comes with unit and integration tests to ensure everything is working as expected.
 * **No "Pay-to-Win"**: This is a non-negotiable. This project is for the love of the game, not for predatory monetization.
 * **Modern Stack**: Intentionally skipping outdated features like in-game forums or chats, assuming players will use modern tools like Discord.
 * **Open Source**: Create a community-driven project that can be forked, modified, and learned from.
@@ -119,10 +119,10 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Users and Auth**: Login/register/logout, needs password recovery
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 - [x] **Settler Expansion**: Training settlers, tracking culture points, founding new villages.
+- [x] **i18n System**: builtin i18n support (actually only English for now).
 
 ### In Progress
 **API / UI**: Getting the minimal viable views to navigate the game:
-- [ ] **i18n**: add translations in several languages.
 - [x] Layout, basic navbar
 - [x] Login, Register
 - [x] Village Overview (Resources + Buildings)
@@ -137,31 +137,40 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
     - [x] view troop movements (ongoing/incoming attacks/raids/reinforcements/army returns)
     - [x] view reinforcements in own and other villages
     - [x] release/recall reinforcements from/in other villages
-  - [ ] Reports
+  - [x] Reports
     - [x] troop movements (attack, raid, scout, reinforce)
-    - [ ] marketplace
+    - [x] marketplace
   - [x] Academy (research units)
   - [x] Smithy (upgrade units)
-  - [ ] Merchant, Marketplace
-    - [ ] Send resources to a village
-    - [ ] Sell/buy resources
+  - [x] Merchant, Marketplace
+    - [x] Send resources to a village
+    - [x] Sell/buy resources
   - [ ] Hero Mansion (hero stuff)
-  - [x] Castle/Residence (train settlers, expansion slots, culture points)
+  - [x] Palace/Residence (train settlers, expansion slots, culture points)
   - [ ] Town Hall (small/big party)
   - [ ] Main Building (building downgrades)
-- [ ] Map
+- [x] Map
 
 ### ToDo (Not Started)
-- [ ] **Alliances**: Creating and managing alliances.
-- [ ] **Chief Expansion**: Add battle calculation for loyalty and conquest. Chiefs are already researchable in Academy and trainable in Palace/Residence.
+- [ ] **Edit Player Profile**: have a bare profile to show
+- [ ] **Messages**
+  - [ ] Player-Player
+  - [ ] Alliance-Player
+- [ ] **Heroes**:
+  - [ ] Complete integration into battles and reports
+  - [ ] Lifecycle: complete integration with hero lifecycle (points, levels...)
+  - [ ] Oases conquering
 - [ ] **Oases**:
   - [ ] Capturing and managing oases (models exist, logic does not).
   - [ ] Resources bonus when conquered.
   - [ ] Resource production and spawn Nature army in free oases.
+- [ ] **Alliances**: Creating and managing alliances.
+- [ ] **Chief Expansion**: Add battle calculation for loyalty and conquest. Chiefs are already researchable in Academy and trainable in Palace/Residence.
 - [ ] **User Password recovery**: using email? Switching to OAuth?
-- [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.
+- [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **Help/Manual**: to learn.
+- [ ] **More i18n**: add translations for different languages.
 
 ---
 

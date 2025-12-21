@@ -86,7 +86,8 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let busy_merchants_result = sqlx::query!(
+        // Count busy merchants from both jobs (deliveries) and marketplace offers (reservations)
+        let busy_merchants_from_jobs = sqlx::query!(
                     r#"
                     SELECT COALESCE(SUM((task->'data'->>'merchants_used')::smallint), 0) as total_busy
                     FROM jobs
@@ -100,7 +101,21 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                 .await
                 .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let busy_merchants = busy_merchants_result.total_busy.unwrap_or(0) as u8;
+        let busy_merchants_from_offers = sqlx::query!(
+            r#"
+                    SELECT COALESCE(SUM(merchants_required), 0) as total_reserved
+                    FROM marketplace_offers
+                    WHERE village_id = $1
+                    "#,
+            village_id_i32
+        )
+        .fetch_one(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let busy_merchants = (busy_merchants_from_jobs.total_busy.unwrap_or(0)
+            + busy_merchants_from_offers.total_reserved.unwrap_or(0))
+            as u8;
 
         let aggregate = VillageAggregate {
             village: db_village,
@@ -202,6 +217,20 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
+        let offer_counts = sqlx::query_as!(
+            BusyMerchants,
+            r#"
+            SELECT village_id, COALESCE(SUM(merchants_required), 0) as total_busy
+            FROM marketplace_offers
+            WHERE village_id = ANY($1)
+            GROUP BY village_id
+            "#,
+            &village_ids
+        )
+        .fetch_all(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
         drop(tx_guard);
 
         let oases_map: HashMap<i32, Vec<db_models::MapField>> =
@@ -214,10 +243,17 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                     acc
                 });
 
-        let merchants_map: HashMap<i32, u8> = merchant_counts
+        let mut merchants_map: HashMap<i32, u8> = merchant_counts
             .into_iter()
             .map(|rec| (rec.village_id, rec.total_busy.unwrap_or(0) as u8))
             .collect();
+        for rec in offer_counts {
+            let reserved = rec.total_busy.unwrap_or(0) as u8;
+            merchants_map
+                .entry(rec.village_id)
+                .and_modify(|value| *value = value.saturating_add(reserved))
+                .or_insert(reserved);
+        }
 
         let mut game_villages: Vec<Village> = Vec::with_capacity(db_villages.len());
 

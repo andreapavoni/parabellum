@@ -15,6 +15,7 @@ use parabellum_types::{
     Result,
     army::TroopSet,
     errors::{AppError, ApplicationError, GameError},
+    tribe::Tribe,
 };
 
 fn job_slot_id(job: &Job) -> Option<u8> {
@@ -152,4 +153,20 @@ pub async fn deploy_army_from_village(
     army_repo.save(&deployed_army).await?;
 
     Ok((village, deployed_army))
+}
+
+/// Calculates the number of merchants needed to transport the given amount of resources.
+pub fn calculate_merchants_needed(tribe: &Tribe, resources_total: u32) -> Result<u8, GameError> {
+    let capacity = tribe.merchant_stats().capacity;
+
+    if capacity == 0 {
+        return Err(GameError::NotEnoughMerchants);
+    }
+
+    let merchants = (resources_total as f64 / capacity as f64).ceil() as u8;
+    if resources_total > 0 && merchants == 0 {
+        Ok(1)
+    } else {
+        Ok(merchants)
+    }
 }

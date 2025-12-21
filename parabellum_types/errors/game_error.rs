@@ -141,4 +141,10 @@ pub enum GameError {
 
     #[error("No army in village")]
     NoArmyInVillage,
+
+    #[error("Invalid marketplace offer")]
+    InvalidMarketplaceOffer,
+
+    #[error("Offer is no longer valid (offerer's marketplace was destroyed)")]
+    MarketplaceOfferNoLongerValid,
 }
