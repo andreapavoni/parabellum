@@ -18,7 +18,7 @@ use crate::{
     components::{PageLayout, ReportListEntry, wrap_in_html},
     handlers::helpers::{CurrentUser, create_layout_data},
     http::AppState,
-    pages::{BattleReportPage, ReinforcementReportPage, ReportsPage},
+    pages::{BattleReportPage, GenericReportPage, ReinforcementReportPage, ReportsPage},
     view_helpers::format_resource_summary,
 };
 use parabellum_types::{battle::AttackType, reports::ReportPayload};
@@ -161,6 +161,25 @@ fn map_report(report: ReportView) -> ReportListEntry {
 
             (title, summary)
         }
+        parabellum_types::reports::ReportPayload::MarketplaceDelivery(payload) => {
+            let title = format!(
+                "{} delivered resources to {}",
+                payload.sender_village, payload.receiver_village
+            );
+
+            let summary = format!(
+                "{} ({}|{}) delivered {} to {} ({}|{})",
+                payload.sender_village,
+                payload.sender_position.x,
+                payload.sender_position.y,
+                format_resource_summary(&payload.resources),
+                payload.receiver_village,
+                payload.receiver_position.x,
+                payload.receiver_position.y
+            );
+
+            (title, summary)
+        }
     };
 
     ReportListEntry {
@@ -200,6 +219,38 @@ fn render_report_page(report: ReportView, layout_data: crate::components::Layout
                     }
                 }
             });
+            Html(wrap_in_html(&body_content)).into_response()
+        }
+        ReportPayload::MarketplaceDelivery(payload) => {
+            let created_at_formatted = report.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+            let report_reference_label =
+                t!("game.reports.detail_id", id = report.id.to_string()).to_string();
+
+            let heading = "Marketplace delivery".to_string();
+            let message = format!(
+                "{} delivered {} to {} ({}|{}).",
+                payload.sender_village,
+                format_resource_summary(&payload.resources),
+                payload.receiver_village,
+                payload.receiver_position.x,
+                payload.receiver_position.y
+            );
+
+            let body_content = dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    GenericReportPage {
+                        data: crate::components::GenericReportData {
+                            report_reference: report.id.to_string(),
+                            report_reference_label: report_reference_label,
+                            created_at_formatted: created_at_formatted,
+                            heading: heading,
+                            message: message,
+                        }
+                    }
+                }
+            });
+
             Html(wrap_in_html(&body_content)).into_response()
         }
     }

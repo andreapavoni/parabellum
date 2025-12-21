@@ -20,10 +20,23 @@ pub struct ReinforcementReportPayload {
     pub units: TroopSet,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MarketplaceDeliveryReportPayload {
+    pub sender_player: String,
+    pub sender_village: String,
+    pub sender_position: Position,
+    pub receiver_player: String,
+    pub receiver_village: String,
+    pub receiver_position: Position,
+    pub resources: ResourceGroup,
+    pub merchants_used: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ReportPayload {
     Battle(BattleReportPayload),
     Reinforcement(ReinforcementReportPayload),
+    MarketplaceDelivery(MarketplaceDeliveryReportPayload),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
