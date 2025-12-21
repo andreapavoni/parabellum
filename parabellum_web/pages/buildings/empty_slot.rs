@@ -81,7 +81,7 @@ pub fn BuildingOptionCard(
                     action: "/build/{slot_id}",
                     input { r#type: "hidden", name: "slot_id", value: "{slot_id}" }
                     input { r#type: "hidden", name: "action", value: "build" }
-                    input { r#type: "hidden", name: "building_name", value: "{option.name}" }
+                    input { r#type: "hidden", name: "building_name", value: "{option.name:?}" }
                     input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
 
                     button {
