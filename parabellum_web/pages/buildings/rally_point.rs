@@ -41,8 +41,10 @@ pub fn RallyPointPage(
         .unwrap_or(TroopSet::default());
     let tribe_units = village.tribe.units();
     let description_paragraphs = building_description_paragraphs(&building_name);
-    let target_x_value = target_x.map(|value| value.to_string()).unwrap_or_default();
-    let target_y_value = target_y.map(|value| value.to_string()).unwrap_or_default();
+    let (target_x_value, target_y_value) = match (target_x, target_y) {
+        (Some(x), Some(y)) => (x.to_string(), y.to_string()),
+        _ => (String::new(), String::new()),
+    };
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",

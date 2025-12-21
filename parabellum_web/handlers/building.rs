@@ -223,6 +223,11 @@ async fn render_building_page(
         let queue_views = building_queue_to_views(&queues.building);
         let has_queue_for_slot = queue_views.iter().any(|q| q.slot_id == slot_id);
 
+        let queued_building = queue_views
+            .iter()
+            .find(|q| q.slot_id == slot_id)
+            .map(|q| (format!("{:?}", q.building_name), q.target_level));
+
         let (buildable_buildings, locked_buildings) = if has_queue_for_slot {
             (vec![], vec![])
         } else {
@@ -239,6 +244,7 @@ async fn render_building_page(
                     locked_buildings: locked_buildings,
                     queue_full: queue_full,
                     has_queue_for_slot: has_queue_for_slot,
+                    queued_building: queued_building,
                     csrf_token: csrf_token,
                     flash_error: flash_error,
                 }

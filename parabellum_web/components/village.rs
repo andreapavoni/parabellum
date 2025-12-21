@@ -92,7 +92,7 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                         if let Some(slot) = slot {
                             let is_empty = slot.building_name.is_none();
                             let level_text = if is_empty {
-                                slot_id.to_string()
+                                "-".to_string()
                             } else {
                                 slot.level.to_string()
                             };
@@ -107,8 +107,6 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                                             cx: "{cx}",
                                             cy: "{cy}",
                                             r: "55",
-                                            fill: if is_empty { "#8B7355" } else { "#8BC34A" },
-                                            stroke: if is_empty { "#5c4033" } else { "#2E5A1C" },
                                             stroke_width: "2",
                                             stroke_dasharray: "6,4",
                                             opacity: if is_empty { "0.6" } else { "1.0" },

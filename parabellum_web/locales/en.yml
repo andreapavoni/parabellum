@@ -329,6 +329,7 @@ game:
     construct_action: Construct
     upgrade_action: "Upgrade to Lv %{level}"
     construction_in_progress: "%{name} to level %{level} is currently under construction."
+    construction_in_progress_short: "Construction in progress"
     queue_locked: Another construction is already queued for this slot.
     construction_queue_full: Construction queue is full. Wait for an ongoing build to finish.
     construction_queue_full_short: Construction queue is full.
