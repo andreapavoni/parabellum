@@ -55,14 +55,13 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                     a {
                         href: "/build/40",
                         circle {
-                            class: "village-wall-ring",
+                            class: if wall.level == 0 { "village-wall-ring village-wall-empty" } else { "village-wall-ring" },
                             cx: "500",
                             cy: "500",
                             r: "460",
                             fill: "none",
                             stroke: "#E88C30",
                             stroke_width: "18",
-                            opacity: "0.9",
                         }
                         title { "{wall.title()}" }
                     }

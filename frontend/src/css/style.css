@@ -436,6 +436,16 @@
    pointer-events: none;
  }
 
+ /* Wall ring */
+ .village-wall-ring {
+   opacity: 0.9;
+ }
+
+ .village-wall-ring.village-wall-empty {
+   opacity: 0.5;
+   stroke-dasharray: 10 8;
+ }
+
  /* Main building center */
  #village-main-node {
    cursor: pointer;
