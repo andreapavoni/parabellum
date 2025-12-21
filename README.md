@@ -1,6 +1,6 @@
 # Parabellum
 
-<img src="frontend/static/header_landing.jpg" alt="Parabellum hero" width="900">
+<img src="frontend/static/header_landing.jpg" alt="Parabellum Hero" width="900">
 
 ![Rust](https://img.shields.io/badge/min%20rust-1.85-green.svg)
 [![CI/CD Pipeline](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml/badge.svg)](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml)
@@ -118,6 +118,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Heroes**: Hero model and basic bonus logic exists, but they are not yet integrated into armies or battles.
 - [x] **Users and Auth**: Login/register/logout, needs password recovery
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
+- [x] **Settler Expansion**: Training settlers, tracking culture points, founding new villages.
 
 ### In Progress
 **API / UI**: Getting the minimal viable views to navigate the game:
@@ -145,15 +146,18 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
     - [ ] Send resources to a village
     - [ ] Sell/buy resources
   - [ ] Hero Mansion (hero stuff)
-  - [ ] Castle/Residence (train settlers, expansion slots, culture points)
+  - [x] Castle/Residence (train settlers, expansion slots, culture points)
   - [ ] Town Hall (small/big party)
-  - [ ] Main Building (downgrades)
+  - [ ] Main Building (building downgrades)
 - [ ] Map
 
 ### ToDo (Not Started)
 - [ ] **Alliances**: Creating and managing alliances.
-- [ ] **Expansion**: Training settlers, tracking culture points, founding new villages (command exists, but not settlers training), and conquering.
-- [ ] **Oases**: Capturing and managing oases (models exist, logic does not). Nature troops in free oases.
+- [ ] **Chief Expansion**: Add battle calculation for loyalty and conquest. Chiefs are already researchable in Academy and trainable in Palace/Residence.
+- [ ] **Oases**:
+  - [ ] Capturing and managing oases (models exist, logic does not).
+  - [ ] Resources bonus when conquered.
+  - [ ] Resource production and spawn Nature army in free oases.
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **Admin UI**: a minimal dashboard to manage the game.
 - [ ] **End Game**: Wonder of the World, Natars, etc.

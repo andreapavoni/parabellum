@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::SignedCookieJar;
@@ -48,6 +48,12 @@ use super::helpers::create_layout_data;
 
 pub const MAX_SLOT_ID: u8 = 40;
 
+#[derive(Debug, Deserialize, Default)]
+pub struct RallyPointQuery {
+    pub target_x: Option<i32>,
+    pub target_y: Option<i32>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BuildAction {
@@ -73,6 +79,7 @@ impl HasCsrfToken for BuildActionForm {
 pub async fn building_page(
     State(state): State<AppState>,
     Path(slot_id): Path<u8>,
+    Query(query): Query<RallyPointQuery>,
     user: CurrentUser,
     jar: SignedCookieJar,
 ) -> impl IntoResponse {
@@ -97,6 +104,8 @@ pub async fn building_page(
         queues,
         movements,
         village_info,
+        query.target_x,
+        query.target_y,
     )
     .await;
 
@@ -187,6 +196,8 @@ async fn render_building_page(
     queues: VillageQueues,
     movements: VillageTroopMovements,
     village_info: std::collections::HashMap<u32, parabellum_app::repository::VillageInfo>,
+    target_x: Option<i32>,
+    target_y: Option<i32>,
 ) -> Response {
     let layout_data = create_layout_data(
         user,
@@ -556,6 +567,8 @@ async fn render_building_page(
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                         next_value: next_value_display.clone(),
+                        target_x: target_x,
+                        target_y: target_y,
                     }
                 }
             })
@@ -976,6 +989,8 @@ pub async fn render_with_error(
         queues,
         movements,
         village_info,
+        None,
+        None,
     )
     .await
 }

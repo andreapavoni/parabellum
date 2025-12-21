@@ -28,6 +28,8 @@ pub fn RallyPointPage(
     csrf_token: String,
     flash_error: Option<String>,
     #[props(default = None)] next_value: Option<String>,
+    #[props(default = None)] target_x: Option<i32>,
+    #[props(default = None)] target_y: Option<i32>,
 ) -> Element {
     // Prepare all army cards using the view helper
     let army_cards = prepare_rally_point_cards(&village, &movements, &village_info);
@@ -39,6 +41,8 @@ pub fn RallyPointPage(
         .unwrap_or(TroopSet::default());
     let tribe_units = village.tribe.units();
     let description_paragraphs = building_description_paragraphs(&building_name);
+    let target_x_value = target_x.map(|value| value.to_string()).unwrap_or_default();
+    let target_y_value = target_y.map(|value| value.to_string()).unwrap_or_default();
 
     rsx! {
         div { class: "container mx-auto px-4 py-6 max-w-6xl",
@@ -214,6 +218,7 @@ pub fn RallyPointPage(
                                 input {
                                     r#type: "number",
                                     name: "target_x",
+                                    value: "{target_x_value}",
                                     required: true,
                                     class: "mt-1 w-full border rounded px-3 py-2 text-gray-700"
                                 }
@@ -223,6 +228,7 @@ pub fn RallyPointPage(
                                 input {
                                     r#type: "number",
                                     name: "target_y",
+                                    value: "{target_y_value}",
                                     required: true,
                                     class: "mt-1 w-full border rounded px-3 py-2 text-gray-700"
                                 }
