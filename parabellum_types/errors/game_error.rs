@@ -109,4 +109,36 @@ pub enum GameError {
 
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),
+
+    #[error("No foundation slots available")]
+    NoFoundationSlotsAvailable,
+
+    #[error("Insufficient culture points: have {current}, need {required}")]
+    InsufficientCulturePoints { current: u32, required: u32 },
+
+    #[error("Not enough settlers (need 3)")]
+    InsufficientSettlers,
+
+    #[error("Maximum settlers for available slots exceeded: {current} + {requested} > {max}")]
+    SettlerLimitExceeded {
+        max: u32,
+        current: u32,
+        requested: u32,
+    },
+
+    #[error("Maximum chiefs for available slots exceeded: {current} + {requested} > {max}")]
+    ChiefLimitExceeded {
+        max: u32,
+        current: u32,
+        requested: u32,
+    },
+
+    #[error("Target position is already occupied")]
+    TargetOccupied,
+
+    #[error("Invalid settler count: need {required}, have {actual}")]
+    InvalidSettlerCount { required: u32, actual: u32 },
+
+    #[error("No army in village")]
+    NoArmyInVillage,
 }

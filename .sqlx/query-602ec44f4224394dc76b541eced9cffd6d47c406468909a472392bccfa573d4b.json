@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, tribe AS \"tribe: _\", user_id FROM players WHERE  2=2 AND id = $1",
+  "query": "SELECT id, username, tribe AS \"tribe: _\", user_id, culture_points FROM players WHERE  2=2 AND id = $1",
   "describe": {
     "columns": [
       {
@@ -35,6 +35,11 @@
         "ordinal": 3,
         "name": "user_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "culture_points",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -46,8 +51,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "1caf0fb20973e250fbe5266ca2a4ebbb9a7bafcd2958978c75cfae69c12e1a66"
+  "hash": "602ec44f4224394dc76b541eced9cffd6d47c406468909a472392bccfa573d4b"
 }

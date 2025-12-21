@@ -7,11 +7,11 @@ use crate::{
     job_handlers::{
         add_building::AddBuildingJobHandler, army_return::ArmyReturnJobHandler,
         attack::AttackJobHandler, building_downgrade::DowngradeBuildingJobHandler,
-        building_upgrade::UpgradeBuildingJobHandler, hero_revival::HeroRevivalJobHandler,
-        merchant_going::MerchantGoingJobHandler, merchant_return::MerchantReturnJobHandler,
-        reinforcement::ReinforcementJobHandler, research_academy::ResearchAcademyJobHandler,
-        research_smithy::ResearchSmithyJobHandler, scout::ScoutJobHandler,
-        train_units::TrainUnitsJobHandler,
+        building_upgrade::UpgradeBuildingJobHandler, found_village::FoundVillageJobHandler,
+        hero_revival::HeroRevivalJobHandler, merchant_going::MerchantGoingJobHandler,
+        merchant_return::MerchantReturnJobHandler, reinforcement::ReinforcementJobHandler,
+        research_academy::ResearchAcademyJobHandler, research_smithy::ResearchSmithyJobHandler,
+        scout::ScoutJobHandler, train_units::TrainUnitsJobHandler,
     },
     jobs::{
         handler::{JobHandler, JobRegistry},
@@ -35,6 +35,7 @@ enum AppTaskType {
     BuildingUpgrade,
     BuildingDowngrade,
     HeroRevival,
+    FoundVillage,
 }
 
 impl AppTaskType {
@@ -45,6 +46,7 @@ impl AppTaskType {
             "ArmyReturn" => Some(Self::ArmyReturn),
             "Attack" => Some(Self::Attack),
             "BuildingDowngrade" => Some(Self::BuildingDowngrade),
+            "FoundVillage" => Some(Self::FoundVillage),
             "HeroRevival" => Some(Self::HeroRevival),
             "Scout" => Some(Self::Scout),
             "Reinforcement" => Some(Self::Reinforcement),
@@ -137,6 +139,11 @@ impl JobRegistry for AppJobRegistry {
             AppTaskType::HeroRevival => {
                 let payload: HeroRevivalTask = serde_json::from_value(data.clone())?;
                 Ok(Box::new(HeroRevivalJobHandler::new(payload)))
+            }
+
+            AppTaskType::FoundVillage => {
+                let payload: FoundVillageTask = serde_json::from_value(data.clone())?;
+                Ok(Box::new(FoundVillageJobHandler::new(payload)))
             }
         }
     }

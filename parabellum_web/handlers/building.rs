@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::SignedCookieJar;
@@ -35,9 +35,9 @@ use crate::{
     http::AppState,
     pages::buildings::{
         AcademyPage, AcademyQueueItem, AcademyResearchOption, BuildingOption, BuildingValueType,
-        EmptySlotPage, GenericBuildingPage, RallyPointPage, ResourceFieldPage, SmithyPage,
-        SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage, TrainingBuildingPage,
-        TrainingQueueItem, UnitTrainingOption,
+        EmptySlotPage, ExpansionBuildingPage, GenericBuildingPage, RallyPointPage,
+        ResourceFieldPage, SmithyPage, SmithyQueueItem, SmithyUpgradeOption, StaticBuildingPage,
+        TrainingBuildingPage, TrainingQueueItem, UnitTrainingOption,
     },
     view_helpers::{
         BuildingQueueItemView, building_queue_to_views, training_queue_to_views, unit_display_name,
@@ -47,6 +47,12 @@ use crate::{
 use super::helpers::create_layout_data;
 
 pub const MAX_SLOT_ID: u8 = 40;
+
+#[derive(Debug, Deserialize, Default)]
+pub struct RallyPointQuery {
+    pub target_x: Option<i32>,
+    pub target_y: Option<i32>,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -73,6 +79,7 @@ impl HasCsrfToken for BuildActionForm {
 pub async fn building_page(
     State(state): State<AppState>,
     Path(slot_id): Path<u8>,
+    Query(query): Query<RallyPointQuery>,
     user: CurrentUser,
     jar: SignedCookieJar,
 ) -> impl IntoResponse {
@@ -97,7 +104,10 @@ pub async fn building_page(
         queues,
         movements,
         village_info,
-    );
+        query.target_x,
+        query.target_y,
+    )
+    .await;
 
     (jar, response).into_response()
 }
@@ -177,7 +187,7 @@ pub async fn build(
 }
 
 /// Render building page based on slot contents
-fn render_building_page(
+async fn render_building_page(
     state: &AppState,
     user: &CurrentUser,
     slot_id: u8,
@@ -186,6 +196,8 @@ fn render_building_page(
     queues: VillageQueues,
     movements: VillageTroopMovements,
     village_info: std::collections::HashMap<u32, parabellum_app::repository::VillageInfo>,
+    target_x: Option<i32>,
+    target_y: Option<i32>,
 ) -> Response {
     let layout_data = create_layout_data(
         user,
@@ -211,6 +223,11 @@ fn render_building_page(
         let queue_views = building_queue_to_views(&queues.building);
         let has_queue_for_slot = queue_views.iter().any(|q| q.slot_id == slot_id);
 
+        let queued_building = queue_views
+            .iter()
+            .find(|q| q.slot_id == slot_id)
+            .map(|q| (format!("{:?}", q.building_name), q.target_level));
+
         let (buildable_buildings, locked_buildings) = if has_queue_for_slot {
             (vec![], vec![])
         } else {
@@ -227,6 +244,7 @@ fn render_building_page(
                     locked_buildings: locked_buildings,
                     queue_full: queue_full,
                     has_queue_for_slot: has_queue_for_slot,
+                    queued_building: queued_building,
                     csrf_token: csrf_token,
                     flash_error: flash_error,
                 }
@@ -356,6 +374,8 @@ fn render_building_page(
                 Some(&slot_building),
                 &[BuildingName::Barracks, BuildingName::GreatBarracks],
                 UnitGroup::Infantry,
+                &queues.training,
+                &user.villages,
             );
             let training_queue = training_queue_for_slot(slot_id, &queues.training);
 
@@ -392,6 +412,8 @@ fn render_building_page(
                 Some(&slot_building),
                 &[BuildingName::Stable, BuildingName::GreatStable],
                 UnitGroup::Cavalry,
+                &queues.training,
+                &user.villages,
             );
             let training_queue = training_queue_for_slot(slot_id, &queues.training);
 
@@ -428,6 +450,8 @@ fn render_building_page(
                 Some(&slot_building),
                 &[BuildingName::Workshop, BuildingName::GreatWorkshop],
                 UnitGroup::Siege,
+                &queues.training,
+                &user.villages,
             );
             let training_queue = training_queue_for_slot(slot_id, &queues.training);
 
@@ -549,6 +573,8 @@ fn render_building_page(
                         csrf_token: csrf_token,
                         flash_error: flash_error,
                         next_value: next_value_display.clone(),
+                        target_x: target_x,
+                        target_y: target_y,
                     }
                 }
             })
@@ -698,6 +724,124 @@ fn render_building_page(
                 csrf_token,
                 flash_error,
             )
+        }
+        BuildingName::Residence | BuildingName::Palace => {
+            // Expansion buildings - show culture points info and settler training
+            use parabellum_app::cqrs::queries::GetCulturePointsInfo;
+            use parabellum_app::queries_handlers::GetCulturePointsInfoQueryHandler;
+
+            let village_cpp = user.village.culture_points_production;
+            let (account_cpp, account_cp) = state
+                .app_bus
+                .query(
+                    GetCulturePointsInfo {
+                        player_id: user.player.id,
+                    },
+                    GetCulturePointsInfoQueryHandler::new(),
+                )
+                .await
+                .map(|info| {
+                    (
+                        info.account_culture_points_production,
+                        info.account_culture_points,
+                    )
+                })
+                .unwrap_or((0, 0));
+
+            // Settler training options using the same pattern as Barracks/Stable/Workshop
+            let training_units = training_options_for_group(
+                &user.village,
+                state.server_speed,
+                Some(&slot_building),
+                &[BuildingName::Residence, BuildingName::Palace],
+                UnitGroup::Expansion,
+                &queues.training,
+                &user.villages,
+            );
+            let training_queue = training_queue_for_slot(slot_id, &queues.training);
+
+            // Calculate settler training data
+            let max_slots = user.village.max_foundation_slots();
+            let child_count = if max_slots > 0 {
+                // Count child villages by checking parent_village_id in already-loaded villages
+                user.villages
+                    .iter()
+                    .filter(|v| v.parent_village_id == Some(user.village.id))
+                    .count() as u32
+            } else {
+                0
+            };
+
+            let available_slots = max_slots.saturating_sub(child_count as u8);
+            let settlers_at_home = user.village.count_settlers_at_home();
+            let settlers_deployed: u32 = user
+                .village
+                .deployed_armies()
+                .iter()
+                .map(|army| {
+                    let settler_idx = user
+                        .village
+                        .tribe
+                        .get_unit_idx_by_name(&UnitName::Settler)
+                        .unwrap_or(9);
+                    army.units().get(settler_idx)
+                })
+                .sum();
+
+            let max_settlers_trainable = if available_slots > 0 {
+                (available_slots as u32 * 3).saturating_sub(settlers_at_home + settlers_deployed)
+            } else {
+                0
+            };
+
+            // Calculate CP required for next village
+            use parabellum_game::models::culture_points::required_cp;
+            use parabellum_types::common::Speed;
+
+            let speed = match state.server_speed {
+                1 => Speed::X1,
+                2 => Speed::X2,
+                3 => Speed::X3,
+                5 => Speed::X5,
+                10 => Speed::X10,
+                _ => Speed::X1,
+            };
+
+            // Use already-loaded villages to get count
+            let village_count = user.villages.len();
+            let next_cp_required = required_cp(speed, village_count + 1);
+
+            dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data,
+                    ExpansionBuildingPage {
+                        village: user.village.clone(),
+                        slot_id: slot_id,
+                        building_name: slot_building.building.name.clone(),
+                        current_level: current_level,
+                        next_level: next_level,
+                        cost: cost,
+                        time_secs: time_secs,
+                        current_upkeep: slot_building.building.cost().upkeep,
+                        next_upkeep: next_upkeep,
+                        queue_full: effective_queue_full,
+                        csrf_token: csrf_token.clone(),
+                        flash_error: flash_error,
+                        village_culture_points_production: village_cpp,
+                        account_culture_points_production: account_cpp,
+                        account_culture_points: account_cp,
+                        next_value: next_value_display.clone(),
+                        next_cp_required: Some(next_cp_required),
+                        max_foundation_slots: max_slots,
+                        child_villages_count: child_count,
+                        settlers_at_home: settlers_at_home,
+                        settlers_deployed: settlers_deployed,
+                        max_settlers_trainable: max_settlers_trainable,
+                        training_units: training_units,
+                        training_queue: training_queue,
+                    }
+                }
+            })
         }
         _ => {
             // Generic buildings - just upgrade block
@@ -851,7 +995,10 @@ pub async fn render_with_error(
         queues,
         movements,
         village_info,
+        None,
+        None,
     )
+    .await
 }
 
 /// Calculate building options for an empty slot
@@ -968,6 +1115,8 @@ fn training_options_for_group(
     building: Option<&parabellum_game::models::village::VillageBuilding>,
     expected_buildings: &[BuildingName],
     group: UnitGroup,
+    training_queue: &[parabellum_app::cqrs::queries::TrainingQueueItem],
+    villages: &[parabellum_game::models::village::Village],
 ) -> Vec<UnitTrainingOption> {
     let Some(slot) = building else {
         return vec![];
@@ -978,15 +1127,148 @@ fn training_options_for_group(
     }
 
     let training_multiplier = slot.building.value as f64 / 1000.0;
-    let available_units = village.available_units_for_training(group);
+    let available_units = village.available_units_for_training(group.clone());
     let tribe = village.tribe.clone();
+
+    // For expansion units, calculate limits accounting for both chiefs and settlers
+    let (max_slots, child_count, chiefs_total, settlers_total) = if group == UnitGroup::Expansion {
+        let max = village.max_foundation_slots();
+        let children = villages
+            .iter()
+            .filter(|v| v.parent_village_id == Some(village.id))
+            .count() as u32;
+
+        // Count total chiefs and settlers (at home + deployed + in training)
+        let mut total_chiefs = 0u32;
+        let mut total_settlers = 0u32;
+
+        for u in tribe.units() {
+            if u.role == parabellum_types::army::UnitRole::Chief
+                || u.role == parabellum_types::army::UnitRole::Settler
+            {
+                if let Some(idx) = tribe.get_unit_idx_by_name(&u.name) {
+                    let at_home = if let Some(army) = &village.army() {
+                        army.units().get(idx)
+                    } else {
+                        0
+                    };
+                    let deployed: u32 = village
+                        .deployed_armies()
+                        .iter()
+                        .map(|army| army.units().get(idx))
+                        .sum();
+                    let in_training: u32 = training_queue
+                        .iter()
+                        .filter(|job| job.unit == u.name)
+                        .map(|job| job.quantity as u32)
+                        .sum();
+
+                    let total = at_home + deployed + in_training;
+                    if u.role == parabellum_types::army::UnitRole::Chief {
+                        total_chiefs += total;
+                    } else {
+                        total_settlers += total;
+                    }
+                }
+            }
+        }
+
+        (max, children, total_chiefs, total_settlers)
+    } else {
+        (0, 0, 0, 0)
+    };
 
     available_units
         .into_iter()
         .filter_map(|unit| {
+            // For expansion units, check if training limit is reached
+            if group == UnitGroup::Expansion {
+                let available_slots = max_slots.saturating_sub(child_count as u8);
+
+                if available_slots == 0 {
+                    return None; // No slots available
+                }
+
+                let unit_idx_check = tribe.get_unit_idx_by_name(&unit.name)?;
+
+                // Count units at home
+                let at_home = if let Some(army) = &village.army() {
+                    army.units().get(unit_idx_check)
+                } else {
+                    0
+                };
+
+                // Count deployed units
+                let deployed: u32 = village
+                    .deployed_armies()
+                    .iter()
+                    .map(|army| army.units().get(unit_idx_check))
+                    .sum();
+
+                // Count units in training queue
+                let in_training: u32 = training_queue
+                    .iter()
+                    .filter(|job| job.unit == unit.name)
+                    .map(|job| job.quantity as u32)
+                    .sum();
+
+                let committed = at_home + deployed + in_training;
+
+                // Check limits based on role using domain logic
+                let max_trainable =
+                    parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                        unit.role.clone(),
+                        available_slots,
+                        chiefs_total,
+                        settlers_total,
+                        committed,
+                    );
+
+                if max_trainable == 0 {
+                    return None; // Can't train any more of this unit
+                }
+            }
+
             let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
             let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
             let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
+
+            // Calculate max quantity for expansion units
+            let max_quantity = if group == UnitGroup::Expansion {
+                let available_slots = max_slots.saturating_sub(child_count as u8);
+
+                // Recalculate committed for this specific unit (same logic as in filter above)
+                let unit_idx_check = tribe.get_unit_idx_by_name(&unit.name)?;
+                let at_home = if let Some(army) = &village.army() {
+                    army.units().get(unit_idx_check)
+                } else {
+                    0
+                };
+                let deployed: u32 = village
+                    .deployed_armies()
+                    .iter()
+                    .map(|army| army.units().get(unit_idx_check))
+                    .sum();
+                let in_training: u32 = training_queue
+                    .iter()
+                    .filter(|job| job.unit == unit.name)
+                    .map(|job| job.quantity as u32)
+                    .sum();
+                let committed = at_home + deployed + in_training;
+
+                // Use domain method for consistent calculation
+                Some(
+                    parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                        unit.role.clone(),
+                        available_slots,
+                        chiefs_total,
+                        settlers_total,
+                        committed,
+                    ),
+                )
+            } else {
+                None
+            };
 
             Some(UnitTrainingOption {
                 unit_idx,
@@ -994,6 +1276,7 @@ fn training_options_for_group(
                 cost: unit.cost.resources.clone(),
                 upkeep: unit.cost.upkeep,
                 time_secs: time_per_unit,
+                max_quantity,
             })
         })
         .collect()

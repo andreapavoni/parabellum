@@ -19,6 +19,7 @@ pub struct Player {
     pub username: String,
     pub tribe: Tribe,
     pub user_id: Uuid,
+    pub culture_points: i32,
 }
 
 #[derive(Debug, FromRow, Clone)]
@@ -42,8 +43,11 @@ pub struct Village {
     pub population: i32,
     pub loyalty: i16,
     pub is_capital: bool,
+    pub culture_points: i32,
+    pub culture_points_production: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub parent_village_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, FromRow)]

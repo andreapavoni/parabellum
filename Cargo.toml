@@ -20,7 +20,7 @@ consolidate-commits = true
 
 [workspace.package]
 description = "A Travian 3.x clone."
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
 license = "MIT"
 edition = "2024"

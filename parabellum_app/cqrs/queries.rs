@@ -169,6 +169,7 @@ pub enum TroopMovementType {
     Raid,
     Reinforcement,
     Return,
+    FoundVillage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -254,6 +255,15 @@ impl Query for GetMapRegion {
     type Output = Vec<MapRegionTile>;
 }
 
+/// Fetch a single map field by ID
+pub struct GetMapField {
+    pub field_id: u32,
+}
+
+impl Query for GetMapField {
+    type Output = parabellum_game::models::map::MapField;
+}
+
 /// Fetch basic village info (name, position) for multiple villages by IDs
 pub struct GetVillageInfoByIds {
     pub village_ids: Vec<u32>,
@@ -279,4 +289,19 @@ pub struct GetLeaderboard {
 
 impl Query for GetLeaderboard {
     type Output = Leaderboard;
+}
+
+/// Fetch culture points information for a player.
+pub struct GetCulturePointsInfo {
+    pub player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct CulturePointsInfo {
+    pub account_culture_points: u32,
+    pub account_culture_points_production: u32,
+}
+
+impl Query for GetCulturePointsInfo {
+    type Output = CulturePointsInfo;
 }

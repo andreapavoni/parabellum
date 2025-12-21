@@ -1,5 +1,6 @@
 mod academy;
 mod empty_slot;
+mod expansion;
 mod generic;
 mod rally_point;
 mod recall_release;
@@ -11,6 +12,7 @@ mod training;
 
 pub use academy::{AcademyPage, AcademyQueueItem, AcademyResearchOption};
 pub use empty_slot::{BuildingOption, BuildingOptionCard, EmptySlotPage};
+pub use expansion::ExpansionBuildingPage;
 pub use generic::GenericBuildingPage;
 pub use rally_point::RallyPointPage;
 pub use recall_release::{RecallConfirmationPage, ReleaseConfirmationPage};

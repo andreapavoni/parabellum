@@ -6,7 +6,7 @@ use crate::components::BuildingSlot;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VillageListItem {
-    pub id: i64,
+    pub id: u32,
     pub name: String,
     pub x: i32,
     pub y: i32,
@@ -92,7 +92,7 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                         if let Some(slot) = slot {
                             let is_empty = slot.building_name.is_none();
                             let level_text = if is_empty {
-                                slot_id.to_string()
+                                "-".to_string()
                             } else {
                                 slot.level.to_string()
                             };
@@ -107,8 +107,6 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
                                             cx: "{cx}",
                                             cy: "{cy}",
                                             r: "55",
-                                            fill: if is_empty { "#8B7355" } else { "#8BC34A" },
-                                            stroke: if is_empty { "#5c4033" } else { "#2E5A1C" },
                                             stroke_width: "2",
                                             stroke_dasharray: "6,4",
                                             opacity: if is_empty { "0.6" } else { "1.0" },
@@ -175,7 +173,7 @@ pub fn VillageMap(slots: Vec<BuildingSlot>) -> Element {
 }
 
 #[component]
-pub fn VillagesList(villages: Vec<VillageListItem>) -> Element {
+pub fn VillagesList(villages: Vec<VillageListItem>, csrf_token: String) -> Element {
     rsx! {
         div { class: "w-full max-w-[400px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none",
             h3 { class: "font-bold mb-3 text-sm border-b border-gray-300 pb-2",
@@ -187,21 +185,34 @@ pub fn VillagesList(villages: Vec<VillageListItem>) -> Element {
                         class: if village.is_current {
                             "flex justify-between items-center p-1 rounded font-bold bg-gray-100 cursor-default"
                         } else {
-                            "flex justify-between items-center p-1 rounded cursor-pointer hover:bg-gray-100"
+                            "p-1 rounded hover:bg-gray-100"
                         },
-                        span { class: "flex items-center",
-                            span {
-                                class: if village.is_current {
-                                    "w-2 h-2 rounded-full mr-2 bg-orange-500"
-                                } else {
-                                    "w-2 h-2 rounded-full mr-2 bg-green-500"
-                                },
+                        if village.is_current {
+                            span { class: "flex items-center",
+                                span { class: "w-2 h-2 rounded-full mr-2 bg-orange-500" }
+                                "{village.name}"
                             }
-                            "{village.name}"
-                        }
-                        span {
-                            class: if village.is_current { "text-gray-600" } else { "text-gray-500" },
-                            "({village.x}|{village.y})"
+                            span { class: "text-gray-600",
+                                "({village.x}|{village.y})"
+                            }
+                        } else {
+                            form {
+                                method: "post",
+                                action: "/village/switch/{village.id}",
+                                class: "flex justify-between items-center w-full",
+                                input { r#type: "hidden", name: "csrf_token", value: "{csrf_token}" }
+                                button {
+                                    r#type: "submit",
+                                    class: "flex justify-between items-center w-full text-left bg-transparent border-0 p-0",
+                                    span { class: "flex items-center",
+                                        span { class: "w-2 h-2 rounded-full mr-2 bg-green-500" }
+                                        "{village.name}"
+                                    }
+                                    span { class: "text-gray-500",
+                                        "({village.x}|{village.y})"
+                                    }
+                                }
+                            }
                         }
                     }
                 }

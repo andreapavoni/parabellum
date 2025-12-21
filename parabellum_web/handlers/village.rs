@@ -1,20 +1,29 @@
 use crate::{
     components::{BuildingQueueItem, BuildingSlot, PageLayout, VillageListItem, wrap_in_html},
-    handlers::helpers::{CurrentUser, village_queues_or_empty},
+    handlers::helpers::{
+        CsrfForm, CurrentUser, HasCsrfToken, generate_csrf, village_queues_or_empty,
+    },
     http::AppState,
     pages::VillagePage,
     view_helpers::building_queue_to_views,
 };
 use axum::{
-    extract::State,
-    response::{Html, IntoResponse},
+    extract::{Path, State},
+    response::{Html, IntoResponse, Redirect},
 };
+use axum_extra::extract::{SignedCookieJar, cookie::Cookie};
 use dioxus::prelude::*;
+use serde::Deserialize;
 
 use super::helpers::create_layout_data;
 
 /// Render the village center page using Dioxus SSR
-pub async fn village_page(State(state): State<AppState>, user: CurrentUser) -> impl IntoResponse {
+pub async fn village_page(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    jar: SignedCookieJar,
+) -> impl IntoResponse {
+    let (jar, csrf_token) = generate_csrf(jar);
     let queues = village_queues_or_empty(&state, user.village.id).await;
     let building_queue_views = building_queue_to_views(&queues.building);
 
@@ -66,7 +75,7 @@ pub async fn village_page(State(state): State<AppState>, user: CurrentUser) -> i
         .villages
         .iter()
         .map(|v| VillageListItem {
-            id: v.id as i64,
+            id: v.id,
             name: v.name.clone(),
             x: v.position.x,
             y: v.position.y,
@@ -83,10 +92,44 @@ pub async fn village_page(State(state): State<AppState>, user: CurrentUser) -> i
                 village: layout_data.village.unwrap(),
                 building_slots,
                 building_queue,
-                villages
+                villages,
+                csrf_token
             }
         }
     });
 
-    Html(wrap_in_html(&body_content))
+    (jar, Html(wrap_in_html(&body_content))).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwitchVillageForm {
+    pub csrf_token: String,
+}
+
+impl HasCsrfToken for SwitchVillageForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+/// POST /village/switch/{id} - Switch current village
+pub async fn switch_village(
+    Path(id): Path<u32>,
+    user: CurrentUser,
+    CsrfForm { jar, form: _ }: CsrfForm<SwitchVillageForm>,
+) -> impl IntoResponse {
+    if !user.villages.iter().any(|v| v.id == id) {
+        tracing::warn!(
+            "User {} attempted to switch to invalid village {}",
+            user.player.id,
+            id
+        );
+        return Redirect::to("/village").into_response();
+    }
+
+    let cookie = Cookie::build(Cookie::new("current_village_id", id.to_string()))
+        .path("/")
+        .build();
+    let jar = jar.add(cookie);
+    (jar, Redirect::to("/village")).into_response()
 }

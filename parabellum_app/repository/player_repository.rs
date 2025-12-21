@@ -31,4 +31,13 @@ pub trait PlayerRepository: Send + Sync {
         offset: i64,
         limit: i64,
     ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError>;
+
+    /// Updates player's total culture points by aggregating from all their villages.
+    async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError>;
+
+    /// Gets the total culture points production (CPP) per day for all player's villages.
+    async fn get_total_culture_points_production(
+        &self,
+        player_id: Uuid,
+    ) -> Result<u32, ApplicationError>;
 }

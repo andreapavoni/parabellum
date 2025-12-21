@@ -4,10 +4,13 @@ use tracing::{info, instrument};
 use parabellum_game::models::buildings::Building;
 use parabellum_types::errors::ApplicationError;
 
-use crate::jobs::{
-    Job,
-    handler::{JobHandler, JobHandlerContext},
-    tasks::AddBuildingTask,
+use crate::{
+    job_handlers::helpers::update_player_culture_points,
+    jobs::{
+        Job,
+        handler::{JobHandler, JobHandlerContext},
+        tasks::AddBuildingTask,
+    },
 };
 
 pub struct AddBuildingJobHandler {
@@ -45,6 +48,9 @@ impl JobHandler for AddBuildingJobHandler {
 
         village.add_building_at_slot(building, self.payload.slot_id)?;
         village_repo.save(&village).await?;
+
+        // Update player's total culture points
+        update_player_culture_points(&ctx.uow, village.player_id).await?;
 
         Ok(())
     }

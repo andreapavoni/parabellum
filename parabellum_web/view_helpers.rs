@@ -238,6 +238,7 @@ pub fn prepare_rally_point_cards(
             TroopMovementType::Raid => MovementKind::Raid,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
+            TroopMovementType::FoundVillage => MovementKind::FoundVillage,
         };
 
         // No action buttons for traveling armies - can only recall once deployed
@@ -266,6 +267,7 @@ pub fn prepare_rally_point_cards(
             TroopMovementType::Raid => MovementKind::Raid,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
+            TroopMovementType::FoundVillage => MovementKind::FoundVillage,
         };
 
         cards.push(ArmyCardData {

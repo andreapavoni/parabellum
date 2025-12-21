@@ -5,9 +5,12 @@ user:
   email: Email
   password: Password
   confirm_password: Confirm Password
+  tribe: Tribe
 
 game:
   hour: Hour
+  common:
+    cancel: Cancel
   village:
     title: Village Center
     capital: "%{name} (Capital)"
@@ -40,6 +43,11 @@ game:
     troops:
       title: Troops
       no_units: No units in the village
+  resources:
+    lumber: Lumber
+    clay: Clay
+    iron: Iron
+    crop: Crop
   rally_point:
     home_troops: Troops at home
     reinforcements: Reinforcements stationed
@@ -71,6 +79,18 @@ game:
     invalid_building: You can only send troops from the Rally Point.
     army_missing: There are no troops stationed in this village.
     scout_requires_attack: Scouting can only be used with attacks or raids.
+    confirm_troops: Confirm troop dispatch
+    attack_summary: Attack summary
+    target: Target
+    troops_to_send: Troops to send
+    confirm_simple: Confirm
+    scouting_target: Scouting target
+    scout_resources: Resources
+    scout_defenses: Defenses
+    catapult_targets: Catapult targets
+    catapult_hint: Select up to two building targets for the catapults.
+    confirm_send: Confirm and send
+    cancel: Cancel
   reports:
     title: Reports
     total: "%{count} reports"
@@ -270,7 +290,6 @@ game:
     great_workshop:
       name: Great Workshop
       description: "The Great Workshop allows you to build a second Workshop in the same village, but catapults and rams cost 3 times the original amount.<br>Combined with the regular Workshop, you can train your troops twice as fast in one village"
-
   building:
     title: Building
     slot: "Slot %{slot}"
@@ -285,6 +304,7 @@ game:
     training_bonus: Training speed bonus
     training_bonus_hint: Faster than the default training time.
     requirements_title: Requirements
+    requirements: Requirements
     missing_requirements_hint: Finish the missing requirements above to unlock this building.
     invalid_academy_building: Invalid academy slot, please try again.
     invalid_smithy_building: Invalid smithy slot, please try again.
@@ -306,8 +326,10 @@ game:
     time_remaining: Time remaining
     upkeep: Upkeep
     build_action: Build
+    construct_action: Construct
     upgrade_action: "Upgrade to Lv %{level}"
     construction_in_progress: "%{name} to level %{level} is currently under construction."
+    construction_in_progress_short: "Construction in progress"
     queue_locked: Another construction is already queued for this slot.
     construction_queue_full: Construction queue is full. Wait for an ongoing build to finish.
     construction_queue_full_short: Construction queue is full.
@@ -320,6 +342,7 @@ game:
     available_ready: Ready to build
     no_available: No buildings unlocked yet.
     locked_list: Locked buildings
+    available_locked: Locked buildings
     research_available: Available research
     no_research_available: No units available for research.
     research_locked: Locked research
@@ -333,16 +356,20 @@ game:
     research_action: Research
     academy_queue_full_hint: Research queue is full. Wait for the current research to finish.
     not_enough_resources: Not enough resources in storage.
+    insufficient_resources: Insufficient resources.
     invalid_training_quantity: Invalid training quantity specified.
     smithy_available: Available upgrades
+    smithy_upgrades: Smithy upgrades
     no_smithy_upgrades: No units available for upgrades yet.
+    no_units_to_upgrade: No units available for upgrade.
     smithy_queue_title: Smithy queue
     smithy_unit_locked: Research this unit in the Academy before upgrading.
     smithy_upgrade_action: Upgrade unit
     smithy_max_level_hint: Maximum level reached. Upgrade the Smithy to continue.
     smithy_queued_hint: "Queued to reach Lv %{level}"
     smithy_queue_full_hint: Smithy queue is full. Wait for the current upgrades to finish.
-
+    upgrade_pending: Pending
+    upgrade_time: Upgrade time
     current_wood_bonus: "Current wood bonus:"
     wood_bonus_level: "Wood bonus at level"
     current_clay_bonus: "Current clay bonus:"
@@ -351,15 +378,12 @@ game:
     iron_bonus_level: "Iron bonus at level"
     current_crop_bonus: "Current crop bonus:"
     crop_bonus_level: "Crop bonus at level"
-
     max_level: "Building already at max level"
     percent: "Percent"
-
     current_capacity: "Current capacity:"
     capacity_level: "Capacity at level"
     resource_units: "Resource units"
     crop_units: "Crop units"
-
     action: "Action"
     upgrade_label: "Upgrade"
     upgrade_in_progress: "Upgrade in<br>progress"
@@ -389,30 +413,47 @@ game:
     times: "times"
     per_evasion: "per evasion"
     combat_simulator: "Combat Simulator"
-
     capital: "This is your capital"
     residence_culture_desc: "In order to extend your empire you need culture points. These culture points increase in the course of time and do so faster as your building levels increase."
     residence_loyalty_desc: "By attacking with senators, chiefs or chieftains a village's loyalty can be brought down. If it reaches zero, the village joins the realm of the attacker. The loyalty of this village is currently at "
     palace_train_desc: "In order to found a new village you need a level 10, 15 or 20 palace and 3 settlers. In order to conquer a new village you need a level 10, 15 or 20 palace and a senator, chief or chieftain."
-
     current_stability: "Current stability bonus:"
     stability_level: "Stability bonus at level"
     current_bonus: "Current bonus:"
     bonus_level: "Bonus at level"
     max_level_reached: "Max level reached"
-
     current_traps: "Currect maximum traps to train:"
     traps_level: "Maximum traps to train at level"
-
     training_commence_great_workshop: "Training can commence when great workshop is completed."
-
+  map:
+    back_to_map: "Back to map"
+    send_troops: "Send troops"
+    village_name: "Village"
+    coordinates: "Coordinates"
+    population: "Population"
+    empty_valley: "Empty valley"
+    valley_resources: "Valley resources"
+    oasis: "Oasis"
+    oasis_description: "Wild oasis rich in resources."
+  expansion:
+    found_new_village: "Found new village"
+    found_village_description: "Settle this valley to establish a new village."
+    found_village: "Found village"
+    cannot_found_village: "Cannot found village"
+    requires_culture_points_and_settlers: "Requires culture points and settlers."
+    confirm_founding: "Confirm founding"
+    confirm_founding_question: "Are you sure you want to found this village?"
+    confirm_found_village: "Found village"
+    founding_summary: "Founding summary"
+    target_valley: "Target valley"
+    settlers_to_send: "Settlers to send"
+    founding_warning: "This action cannot be undone."
   starting_position:
     title: Starting position
     north_east: North-East %{key}
     north_west: North-West %{key}
     south_east: South-East %{key}
     south_west: South-West %{key}
-
   tribes:
     roman:
       title: Romans (For newcomers)
@@ -426,7 +467,6 @@ game:
       title: Teutons (Aggressive raiders)
       description: >
         The most offensive tribe. Cheap units but slow and weak in defense.
-
   artefacts:
     owner: "Owner"
     area_effect: "Area of effect"
@@ -515,7 +555,6 @@ game:
       small_village: "Pendant of Mischief"
       unique: "Artefact of the unique fool"
       unique_village: "Forbidden Manuscript"
-
 home:
   title: Home
   welcome: Welcome to Parabellum
@@ -531,16 +570,13 @@ home:
   players: Players
   active_today: Active Today
   server_starting: Server starting
-
 nav:
   logout: Logout
   login: Login
   register: Register
   reports: Reports
-
 footer:
   not_affiliated: Not affiliated to %{name}
-
 login:
   title: Login
   register_question: Need an account?
@@ -548,7 +584,6 @@ login:
   form:
     title: Access Your Village
     submit: ENTER
-
 register:
   title: Register
   login_question: Already owning a village?

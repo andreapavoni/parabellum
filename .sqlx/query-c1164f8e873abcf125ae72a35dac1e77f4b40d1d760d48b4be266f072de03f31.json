@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n              INSERT INTO players (id, username, tribe, user_id)\n              VALUES ($1, $2, $3, $4)\n              ON CONFLICT (id) DO UPDATE\n              SET\n                  username = $2,\n                  tribe = $3\n              ",
+  "query": "\n              INSERT INTO players (id, username, tribe, user_id, culture_points)\n              VALUES ($1, $2, $3, $4, $5)\n              ON CONFLICT (id) DO UPDATE\n              SET\n                  username = $2,\n                  tribe = $3,\n                  culture_points = $5\n              ",
   "describe": {
     "columns": [],
     "parameters": {
@@ -21,10 +21,11 @@
             }
           }
         },
-        "Uuid"
+        "Uuid",
+        "Int4"
       ]
     },
     "nullable": []
   },
-  "hash": "567b56241f918bf33dd299fadae881c4c17cf90fc22914a6911d4d449f9eaaf9"
+  "hash": "c1164f8e873abcf125ae72a35dac1e77f4b40d1d760d48b4be266f072de03f31"
 }

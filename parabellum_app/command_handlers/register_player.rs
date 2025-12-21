@@ -47,6 +47,7 @@ impl CommandHandler<RegisterPlayer> for RegisterPlayerCommandHandler {
             username: command.username.clone(),
             tribe: command.tribe,
             user_id: user.id,
+            culture_points: 0,
         };
         player_repo.save(&player).await?;
 

@@ -290,7 +290,10 @@ function startMapHandler() {
             cancelDetailsTimeout();
           });
           g.addEventListener('click', () => {
-            showDetails(tileData, visual, wrappedX, wrappedY, g);
+            // Navigate to field detail page
+            if (tileData && tileData.field_id) {
+              window.location.href = `/map/field/${tileData.field_id}`;
+            }
           });
 
           tilesContainer.appendChild(g);

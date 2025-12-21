@@ -14,6 +14,7 @@ pub enum MovementKind {
     Raid,
     Reinforcement,
     Return,
+    FoundVillage,
 }
 
 /// Army card category for rally point display
@@ -69,6 +70,7 @@ pub fn ArmyCard(card: ArmyCardData, csrf_token: String) -> Element {
         MovementKind::Raid => "text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-800",
         MovementKind::Reinforcement => "text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800",
         MovementKind::Return => "text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800",
+        MovementKind::FoundVillage => "text-xs px-2 py-0.5 rounded bg-green-100 text-green-800",
     });
 
     let title = card.village_name.as_deref().unwrap_or("Unknown Village");

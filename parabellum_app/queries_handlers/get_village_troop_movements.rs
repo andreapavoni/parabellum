@@ -4,12 +4,7 @@ use chrono::Utc;
 use parabellum_game::models::army::Army;
 use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
-use parabellum_types::{
-    Result,
-    errors::{ApplicationError, DbError},
-    map::Position,
-    tribe::Tribe,
-};
+use parabellum_types::{Result, errors::ApplicationError, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::{
@@ -23,7 +18,7 @@ use crate::{
     },
     jobs::{
         Job,
-        tasks::{ArmyReturnTask, AttackTask, ReinforcementTask, ScoutTask},
+        tasks::{ArmyReturnTask, AttackTask, FoundVillageTask, ReinforcementTask, ScoutTask},
     },
     repository::{ArmyRepository, VillageRepository},
     uow::UnitOfWork,
@@ -118,6 +113,19 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                         incoming.push(movement);
                     }
                 }
+                "FoundVillage" => {
+                    if let Some(movement) = found_village_movement(
+                        job,
+                        &village_repo,
+                        &army_repo,
+                        &mut village_cache,
+                        &mut army_cache,
+                    )
+                    .await?
+                    {
+                        outgoing.push(movement);
+                    }
+                }
                 _ => {}
             }
         }
@@ -209,17 +217,16 @@ async fn army_for(
     repo: &Arc<dyn ArmyRepository + '_>,
     cache: &mut HashMap<Uuid, Army>,
     army_id: Uuid,
-) -> Result<Option<Army>, ApplicationError> {
+) -> Result<Army, ApplicationError> {
     if let Some(army) = cache.get(&army_id) {
-        return Ok(Some(army.clone()));
+        return Ok(army.clone());
     }
 
     match repo.get_by_id(army_id).await {
         Ok(army) => {
             cache.insert(army_id, army.clone());
-            Ok(Some(army))
+            Ok(army)
         }
-        Err(ApplicationError::Db(DbError::ArmyNotFound(_))) => Ok(None),
         Err(err) => Err(err),
     }
 }
@@ -242,14 +249,7 @@ async fn attack_movement(
 
     let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
     let target = snapshot_for(village_repo, village_cache, target_id).await?;
-    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
-        tracing::warn!(
-            job_id = %job.id,
-            army_id = %payload.army_id,
-            "Skipping attack movement because deployed army record is missing"
-        );
-        return Ok(None);
-    };
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     let movement_type = match payload.attack_type {
         AttackType::Raid => TroopMovementType::Raid,
@@ -285,14 +285,7 @@ async fn scout_movement(
 
     let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
     let target = snapshot_for(village_repo, village_cache, target_id).await?;
-    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
-        tracing::warn!(
-            job_id = %job.id,
-            army_id = %payload.army_id,
-            "Skipping scout movement because deployed army record is missing"
-        );
-        return Ok(None);
-    };
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     let movement_type = match payload.attack_type {
         AttackType::Raid => TroopMovementType::Raid,
@@ -327,14 +320,7 @@ async fn reinforcement_movement(
     let target_id = payload.village_id as u32;
     let origin = snapshot_for(village_repo, village_cache, origin_id).await?;
     let target = snapshot_for(village_repo, village_cache, target_id).await?;
-    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
-        tracing::warn!(
-            job_id = %job.id,
-            army_id = %payload.army_id,
-            "Skipping reinforcement movement because deployed army record is missing"
-        );
-        return Ok(None);
-    };
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     Ok(Some(build_movement(
         job,
@@ -366,19 +352,44 @@ async fn return_movement(
         payload.destination_village_id as u32,
     )
     .await?;
-    let Some(army) = army_for(army_repo, army_cache, payload.army_id).await? else {
-        tracing::warn!(
-            job_id = %job.id,
-            army_id = %payload.army_id,
-            "Skipping return movement because deployed army record is missing"
-        );
-        return Ok(None);
-    };
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
 
     Ok(Some(build_movement(
         job,
         TroopMovementType::Return,
         TroopMovementDirection::Incoming,
+        origin,
+        target,
+        army.units().clone(),
+        army.tribe.clone(),
+    )))
+}
+
+async fn found_village_movement(
+    job: &Job,
+    village_repo: &Arc<dyn VillageRepository + '_>,
+    army_repo: &Arc<dyn ArmyRepository + '_>,
+    village_cache: &mut HashMap<u32, VillageSnapshot>,
+    army_cache: &mut HashMap<Uuid, Army>,
+) -> Result<Option<TroopMovement>, ApplicationError> {
+    let payload: FoundVillageTask = serde_json::from_value(job.task.data.clone())?;
+
+    let origin = snapshot_for(village_repo, village_cache, payload.origin_village_id).await?;
+    let army = army_for(army_repo, army_cache, payload.army_id).await?;
+
+    // For target, create a snapshot using the map field ID from payload
+    // The village doesn't exist yet, but the map field has the same ID
+    let target = VillageSnapshot {
+        id: payload.target_field_id,
+        name: "New Village".to_string(),
+        position: payload.target_position,
+        player_id: payload.settler_player_id,
+    };
+
+    Ok(Some(build_movement(
+        job,
+        TroopMovementType::FoundVillage,
+        TroopMovementDirection::Outgoing,
         origin,
         target,
         army.units().clone(),

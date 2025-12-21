@@ -136,15 +136,33 @@ pub fn EmptySlotPage(
     locked_buildings: Vec<BuildingOption>,
     queue_full: bool,
     has_queue_for_slot: bool,
+    queued_building: Option<(String, u8)>,
     csrf_token: String,
     flash_error: Option<String>,
 ) -> Element {
     let stored = village.stored_resources();
 
+    let title = if has_queue_for_slot {
+        t!("game.building.construction_in_progress_short")
+    } else {
+        t!("game.building.empty_slot")
+    };
+    let construction_label = queued_building
+        .as_ref()
+        .map(|(name, level)| {
+            t!(
+                "game.building.construction_in_progress",
+                name = name,
+                level = level
+            )
+            .to_string()
+        })
+        .unwrap_or_default();
+
     rsx! {
         div { class: "container mx-auto p-4 max-w-4xl",
             h1 { class: "text-2xl font-bold mb-4",
-                "{t!(\"game.building.empty_slot\")}"
+                "{title}"
             }
 
             if let Some(error) = flash_error {
@@ -155,14 +173,25 @@ pub fn EmptySlotPage(
 
             div { class: "space-y-6 py-6",
                 div { class: "text-center",
-                    p { class: "text-lg text-gray-600", "{t!(\"game.building.empty_slot\")}" }
-                    p { class: "text-sm text-gray-500 mt-2", "{t!(\"game.building.empty_slot_hint\")}" }
+                    if has_queue_for_slot {
+                        div { class: "inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-md text-sm font-semibold",
+                            "{t!(\"game.building.queue_locked\")}"
+                        }
+                        if queued_building.is_some() {
+                            p { class: "text-sm text-gray-600 mt-2",
+                                "{construction_label}"
+                            }
+                        }
+                    } else {
+                        p { class: "text-lg text-gray-600", "{t!(\"game.building.empty_slot\")}" }
+                        p { class: "text-sm text-gray-500 mt-2", "{t!(\"game.building.empty_slot_hint\")}" }
+                    }
                 }
 
                 if buildable_buildings.is_empty() && locked_buildings.is_empty() {
                     div { class: "text-center text-sm text-gray-500",
                         if has_queue_for_slot {
-                            "{t!(\"game.building.queue_locked\")}"
+                            ""
                         } else {
                             "{t!(\"game.building.no_available\")}"
                         }

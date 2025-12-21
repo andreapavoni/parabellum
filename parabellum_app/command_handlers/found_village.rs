@@ -1,12 +1,14 @@
 use std::sync::Arc;
+use tracing::info;
 
-use parabellum_game::models::{map::Valley, village::Village};
-use parabellum_types::Result;
+use parabellum_types::errors::ApplicationError;
 
 use crate::{
+    command_handlers::helpers::deploy_army_from_village,
     config::Config,
     cqrs::{CommandHandler, commands::FoundVillage},
-    repository::{MapRepository, VillageRepository},
+    jobs::{Job, JobPayload, tasks::FoundVillageTask},
+    repository::{JobRepository, VillageRepository},
     uow::UnitOfWork,
 };
 
@@ -31,23 +33,55 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
         command: FoundVillage,
         uow: &Box<dyn UnitOfWork<'_> + '_>,
         config: &Arc<Config>,
-    ) -> Result<()> {
-        let village_id: i32 = command.position.to_id(config.world_size as i32) as i32;
+    ) -> Result<(), ApplicationError> {
+        let job_repo: Arc<dyn JobRepository + '_> = uow.jobs();
         let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
-        let map_repo: Arc<dyn MapRepository + '_> = uow.map();
 
-        let map_field = map_repo.get_field_by_id(village_id).await?;
-        let valley = Valley::try_from(map_field)?;
-        let village = Village::new(
-            "New Village".to_string(),
-            &valley,
-            &command.player,
-            false,
+        let origin_village = village_repo.get_by_id(command.village_id).await?;
+        let (origin_village, deployed_army) = deploy_army_from_village(
+            uow,
+            origin_village,
+            command.army_id,
+            command.units,
+            None, // No hero
+        )
+        .await?;
+
+        // Calculate travel time to target position
+        let travel_time_secs = origin_village.position.calculate_travel_time_secs(
+            command.target_position.clone(),
+            deployed_army.speed(),
             config.world_size as i32,
-            config.speed,
-        );
+            config.speed as u8,
+        ) as i64;
 
-        village_repo.save(&village).await?;
+        // Create and enqueue a FoundVillage job for when the settlers arrive
+        let target_field_id = command.target_position.to_id(config.world_size as i32);
+        let found_village_payload = FoundVillageTask {
+            army_id: deployed_army.id,
+            settler_player_id: command.player_id,
+            origin_village_id: command.village_id,
+            target_position: command.target_position.clone(),
+            target_field_id,
+        };
+        let job_payload = JobPayload::new(
+            "FoundVillage",
+            serde_json::to_value(&found_village_payload)?,
+        );
+        let new_job = Job::new(
+            command.player_id,
+            command.village_id as i32,
+            travel_time_secs,
+            job_payload,
+        );
+        job_repo.add(&new_job).await?;
+
+        info!(
+            found_village_job_id = %new_job.id,
+            arrival_at = %new_job.completed_at,
+            target_position = ?command.target_position,
+            "FoundVillage job planned."
+        );
 
         Ok(())
     }
@@ -57,8 +91,9 @@ impl CommandHandler<FoundVillage> for FoundVillageCommandHandler {
 mod tests {
     use std::sync::Arc;
 
-    use parabellum_game::test_utils::{PlayerFactoryOptions, player_factory};
-    use parabellum_types::Result;
+    use parabellum_game::test_utils::setup_player_party;
+    use parabellum_types::army::TroopSet;
+    use parabellum_types::errors::ApplicationError;
     use parabellum_types::{map::Position, tribe::Tribe};
 
     use super::*;
@@ -68,30 +103,48 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_found_village_handler_success() -> Result<()> {
+    async fn test_found_village_handler_creates_job() -> Result<(), ApplicationError> {
         let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
         let config = Arc::new(Config::from_env());
         let handler = FoundVillageCommandHandler::new();
 
-        let player = player_factory(PlayerFactoryOptions {
-            tribe: Some(Tribe::Gaul),
-            ..Default::default()
-        });
+        // Set up a village with settlers
+        let (player, village, army, _) = setup_player_party(
+            None,
+            Tribe::Roman,
+            TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 3]),
+            false,
+        )?;
 
-        // The mock map repo will return a valley at (10, 10)
-        let position = Position { x: 10, y: 10 };
-        let command = FoundVillage::new(player.clone(), position);
+        // Save to mock
+        mock_uow.villages().save(&village).await?;
+        mock_uow.armies().save(&army).await?;
+
+        let target_position = Position { x: 10, y: 10 };
+        let mut settler_troops = TroopSet::default();
+        settler_troops.set(9, 3); // 3 settlers
+
+        let command = FoundVillage {
+            player_id: player.id,
+            village_id: village.id,
+            army_id: army.id,
+            units: settler_troops,
+            target_position,
+        };
 
         handler.handle(command, &mock_uow, &config).await?;
 
-        let villages = mock_uow.villages().list_by_player_id(player.id).await?;
-        assert_eq!(villages.len(), 1, "One village should be created");
+        // Check that a job was created
+        let jobs = mock_uow.jobs().list_by_player_id(player.id).await?;
+        assert_eq!(
+            jobs.len(),
+            1,
+            "One job should be created for settler movement"
+        );
 
-        let village = &villages[0];
-        assert_eq!(village.player_id, player.id);
-        assert_eq!(village.name, "New Village");
-        assert_eq!(village.position, Position { x: 10, y: 10 });
-        assert!(!village.is_capital); // Found village is not capital
+        let job = &jobs[0];
+        assert_eq!(job.task.task_type, "FoundVillage");
+
         Ok(())
     }
 }

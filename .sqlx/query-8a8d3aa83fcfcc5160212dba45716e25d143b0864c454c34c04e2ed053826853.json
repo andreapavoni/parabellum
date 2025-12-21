@@ -72,6 +72,21 @@
         "ordinal": 13,
         "name": "academy_research",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "culture_points",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "culture_points_production",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "parent_village_id",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -93,7 +108,10 @@
       false,
       false,
       false,
-      false
+      false,
+      false,
+      false,
+      true
     ]
   },
   "hash": "8a8d3aa83fcfcc5160212dba45716e25d143b0864c454c34c04e2ed053826853"

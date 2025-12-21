@@ -38,7 +38,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         let db_player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE  2=2 AND id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE  2=2 AND id = $1"#,
             db_village.player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -118,7 +118,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let db_player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id FROM players WHERE 3=3 AND id = $1"#,
+            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE 3=3 AND id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -253,9 +253,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                 INSERT INTO villages (
                     id, player_id, name, position, buildings, production,
                     stocks, smithy_upgrades, academy_research, population,
-                    loyalty, is_capital
+                    loyalty, is_capital, culture_points, culture_points_production, parent_village_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 ON CONFLICT (id) DO UPDATE
                 SET
                     name = $3,
@@ -266,6 +266,9 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
                     academy_research = $9,
                     population = $10,
                     loyalty = $11,
+                    culture_points = $13,
+                    culture_points_production = $14,
+                    parent_village_id = $15,
                     updated_at = NOW()
                 "#,
             village.id as i32,
@@ -279,7 +282,10 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
             Json(&village.academy_research()) as _,
             village.population as i32,
             village.loyalty() as i16,
-            village.is_capital
+            village.is_capital,
+            village.culture_points as i32,
+            village.culture_points_production as i32,
+            village.parent_village_id.map(|id| id as i32)
         )
         .execute(&mut *tx_guard.as_mut())
         .await

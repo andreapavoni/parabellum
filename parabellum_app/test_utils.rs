@@ -470,6 +470,17 @@ pub mod tests {
 
             Ok((page_entries, total))
         }
+
+        async fn update_culture_points(&self, _player_id: Uuid) -> Result<(), ApplicationError> {
+            Ok(())
+        }
+
+        async fn get_total_culture_points_production(
+            &self,
+            _player_id: Uuid,
+        ) -> Result<u32, ApplicationError> {
+            Ok(1)
+        }
     }
 
     #[derive(Default, Clone)]

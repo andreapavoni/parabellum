@@ -1,3 +1,8 @@
 @source "../../../parabellum_web/**/*.{rs,html,css}";
 @import "tailwindcss" source("..");
 @source "../../../parabellum_web/templates/";
+
+@theme {
+  --color-brand-500: #80ba34;
+  --color-brand-600: #6a9e2a;
+}

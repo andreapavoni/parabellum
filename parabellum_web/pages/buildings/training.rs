@@ -16,6 +16,7 @@ pub struct UnitTrainingOption {
     pub cost: ResourceGroup,
     pub upkeep: u32,
     pub time_secs: u32,
+    pub max_quantity: Option<u32>,
 }
 
 /// Training queue item
@@ -197,6 +198,7 @@ pub fn TrainingUnitCard(
                     input {
                         r#type: "number",
                         min: "1",
+                        max: if let Some(max) = unit.max_quantity { "{max}" } else { "" },
                         name: "quantity",
                         value: "1",
                         class: "mt-1 w-full border rounded px-3 py-2 text-gray-700"

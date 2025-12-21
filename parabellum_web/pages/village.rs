@@ -12,6 +12,7 @@ pub fn VillagePage(
     building_slots: Vec<BuildingSlot>,
     building_queue: Vec<BuildingQueueItem>,
     villages: Vec<VillageListItem>,
+    csrf_token: String,
 ) -> Element {
     rsx! {
         div { class: "container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col md:flex-row justify-center items-center md:items-start gap-8 pb-12",
@@ -25,7 +26,7 @@ pub fn VillagePage(
                 BuildingQueue { queue: building_queue }
             }
 
-            VillagesList { villages: villages }
+            VillagesList { villages: villages, csrf_token: csrf_token }
         }
     }
 }
