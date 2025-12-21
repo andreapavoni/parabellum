@@ -3,6 +3,7 @@ pub mod army_return;
 pub mod attack;
 pub mod building_downgrade;
 pub mod building_upgrade;
+pub mod found_village;
 pub mod hero_revival;
 pub mod merchant_going;
 pub mod merchant_return;

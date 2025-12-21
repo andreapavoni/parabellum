@@ -1,6 +1,6 @@
 use crate::{
     components::{PageLayout, wrap_in_html},
-    handlers::helpers::CurrentUser,
+    handlers::helpers::{CsrfForm, CurrentUser, HasCsrfToken, create_layout_data, generate_csrf},
     http::AppState,
     pages::MapPage,
 };
@@ -8,20 +8,31 @@ use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use dioxus::prelude::*;
 use parabellum_app::{
-    cqrs::queries::{GetMapRegion, GetVillageById},
-    queries_handlers::{GetMapRegionHandler, GetVillageByIdHandler},
+    command_handlers::FoundVillageCommandHandler,
+    cqrs::{
+        commands::FoundVillage,
+        queries::{GetMapField, GetMapRegion, GetVillageById, ListVillagesByPlayerId},
+    },
+    queries_handlers::{
+        GetMapFieldHandler, GetMapRegionHandler, GetVillageByIdHandler,
+        ListVillagesByPlayerIdHandler,
+    },
     repository::MapRegionTile,
 };
-use parabellum_game::models::map::MapFieldTopology;
-use parabellum_types::map::{Position, ValleyTopology};
-use serde::{Deserialize, Serialize};
+use parabellum_game::models::{culture_points, map::MapFieldTopology};
+use parabellum_types::{
+    army::TroopSet,
+    map::{Position, ValleyTopology},
+};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{self, MapAccess, Visitor},
+};
 use uuid::Uuid;
-
-use super::helpers::create_layout_data;
 
 const MAP_REGION_RADIUS: i32 = 7;
 
@@ -192,6 +203,144 @@ pub async fn map_page_with_id(
     Html(wrap_in_html(&body_content))
 }
 
+/// GET /map/field/{id} - Render detailed info about a specific map field (valley/village/oasis)
+pub async fn map_field_page(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(field_id): Path<u32>,
+    jar: axum_extra::extract::SignedCookieJar,
+) -> Response {
+    // Fetch the map field
+    let field = match state
+        .app_bus
+        .query(GetMapField { field_id }, GetMapFieldHandler::new())
+        .await
+    {
+        Ok(field) => field,
+        Err(e) => {
+            tracing::error!("Unable to load map field {}: {}", field_id, e);
+            return (StatusCode::NOT_FOUND, "Map field not found").into_response();
+        }
+    };
+
+    let layout_data = create_layout_data(&user, "map");
+
+    // Get player's village count for CP calculation
+    let player_villages = match state
+        .app_bus
+        .query(
+            ListVillagesByPlayerId {
+                player_id: user.player.id,
+            },
+            ListVillagesByPlayerIdHandler::new(),
+        )
+        .await
+    {
+        Ok(villages) => villages,
+        Err(e) => {
+            tracing::error!("Unable to load player villages: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unable to load player data",
+            )
+                .into_response();
+        }
+    };
+
+    let village_count = player_villages.len();
+    let speed = parabellum_types::common::Speed::from(state.server_speed);
+    let required_cp = culture_points::required_cp(speed, village_count + 1);
+
+    // Determine if the current village has enough culture points and settlers to found
+    let can_found_village = user.player.culture_points >= required_cp
+        && user
+            .village
+            .army()
+            .map(|army| {
+                let settler_idx = user
+                    .village
+                    .tribe
+                    .get_unit_idx_by_name(&parabellum_types::army::UnitName::Settler)
+                    .unwrap_or(9);
+                army.units().get(settler_idx) >= 3
+            })
+            .unwrap_or(false);
+
+    // Render different components based on tile type
+    match field.topology {
+        MapFieldTopology::Valley(valley) => {
+            if field.village_id.is_some() {
+                // This valley has a village on it - show village info
+                let village = match state
+                    .app_bus
+                    .query(
+                        GetVillageById { id: field_id },
+                        GetVillageByIdHandler::new(),
+                    )
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return (StatusCode::NOT_FOUND, "Village not found").into_response();
+                    }
+                };
+
+                let (jar, csrf_token) = super::helpers::generate_csrf(jar);
+
+                let body_content = dioxus_ssr::render_element(rsx! {
+                    PageLayout {
+                        data: layout_data.clone(),
+                        crate::pages::MapFieldVillagePage {
+                            village: village,
+                            current_village_id: user.village.id,
+                            csrf_token: csrf_token,
+                        }
+                    }
+                });
+
+                (jar, Html(wrap_in_html(&body_content))).into_response()
+            } else {
+                // Empty valley - show valley info with optional "Found Village" button
+                let (jar, csrf_token) = super::helpers::generate_csrf(jar);
+
+                let body_content = dioxus_ssr::render_element(rsx! {
+                    PageLayout {
+                        data: layout_data.clone(),
+                        crate::pages::MapFieldValleyPage {
+                            field_id: field_id,
+                            position: field.position.clone(),
+                            valley: valley,
+                            can_found_village: can_found_village,
+                            current_village_id: user.village.id,
+                            current_village_name: user.village.name.clone(),
+                            csrf_token: csrf_token,
+                        }
+                    }
+                });
+
+                (jar, Html(wrap_in_html(&body_content))).into_response()
+            }
+        }
+        MapFieldTopology::Oasis(_oasis) => {
+            // Oasis info page
+            let (jar, csrf_token) = super::helpers::generate_csrf(jar);
+
+            let body_content = dioxus_ssr::render_element(rsx! {
+                PageLayout {
+                    data: layout_data.clone(),
+                    crate::pages::MapFieldOasisPage {
+                        field_id: field_id,
+                        position: field.position.clone(),
+                        csrf_token: csrf_token,
+                    }
+                }
+            });
+
+            (jar, Html(wrap_in_html(&body_content))).into_response()
+        }
+    }
+}
+
 /// GET /map?x={x}&y={y}
 pub async fn map_region(
     State(state): State<AppState>,
@@ -289,4 +438,385 @@ fn map_error(status: StatusCode, message: impl Into<String>) -> Response {
         }),
     )
         .into_response()
+}
+
+#[derive(Debug)]
+pub struct FoundVillageConfirmForm {
+    pub field_id: u32,
+    pub target_x: i32,
+    pub target_y: i32,
+    pub csrf_token: String,
+}
+
+impl<'de> Deserialize<'de> for FoundVillageConfirmForm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier)]
+        enum Field {
+            #[serde(rename = "field_id")]
+            FieldId,
+            #[serde(rename = "target_x")]
+            TargetX,
+            #[serde(rename = "target_y")]
+            TargetY,
+            #[serde(rename = "csrf_token")]
+            CsrfToken,
+        }
+
+        struct FormVisitor;
+
+        impl<'de> Visitor<'de> for FormVisitor {
+            type Value = FoundVillageConfirmForm;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("found village confirm form data")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut field_id = None;
+                let mut target_x = None;
+                let mut target_y = None;
+                let mut csrf_token = None;
+
+                while let Some(key) = map.next_key::<Field>()? {
+                    match key {
+                        Field::FieldId => {
+                            if field_id.is_some() {
+                                return Err(de::Error::duplicate_field("field_id"));
+                            }
+                            field_id = Some(map.next_value()?);
+                        }
+                        Field::TargetX => {
+                            if target_x.is_some() {
+                                return Err(de::Error::duplicate_field("target_x"));
+                            }
+                            target_x = Some(map.next_value()?);
+                        }
+                        Field::TargetY => {
+                            if target_y.is_some() {
+                                return Err(de::Error::duplicate_field("target_y"));
+                            }
+                            target_y = Some(map.next_value()?);
+                        }
+                        Field::CsrfToken => {
+                            if csrf_token.is_some() {
+                                return Err(de::Error::duplicate_field("csrf_token"));
+                            }
+                            csrf_token = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let field_id = field_id.ok_or_else(|| de::Error::missing_field("field_id"))?;
+                let target_x = target_x.ok_or_else(|| de::Error::missing_field("target_x"))?;
+                let target_y = target_y.ok_or_else(|| de::Error::missing_field("target_y"))?;
+                let csrf_token =
+                    csrf_token.ok_or_else(|| de::Error::missing_field("csrf_token"))?;
+
+                Ok(FoundVillageConfirmForm {
+                    field_id,
+                    target_x,
+                    target_y,
+                    csrf_token,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(FormVisitor)
+    }
+}
+
+impl HasCsrfToken for FoundVillageConfirmForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+/// POST /map/field/{id}/found/confirm - Show confirmation page for founding a village
+pub async fn found_village_confirm(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(field_id): Path<u32>,
+    CsrfForm { jar, .. }: CsrfForm<FoundVillageConfirmForm>,
+) -> Response {
+    // Fetch the map field
+    let field = match state
+        .app_bus
+        .query(GetMapField { field_id }, GetMapFieldHandler::new())
+        .await
+    {
+        Ok(field) => field,
+        Err(e) => {
+            tracing::error!("Unable to load map field {}: {}", field_id, e);
+            return (StatusCode::NOT_FOUND, "Map field not found").into_response();
+        }
+    };
+
+    // Ensure it's a valley (not an oasis)
+    match field.topology {
+        MapFieldTopology::Valley(_) => (),
+        MapFieldTopology::Oasis(_) => {
+            return (StatusCode::BAD_REQUEST, "Cannot found village on an oasis").into_response();
+        }
+    };
+
+    // Ensure it's an empty valley
+    if field.village_id.is_some() {
+        return (StatusCode::BAD_REQUEST, "This valley already has a village").into_response();
+    }
+
+    // Get settler unit index
+    let settler_idx = user
+        .village
+        .tribe
+        .get_unit_idx_by_name(&parabellum_types::army::UnitName::Settler)
+        .unwrap_or(9);
+
+    let mut settlers = TroopSet::default();
+    settlers.set(settler_idx, 3);
+
+    // Get player's village count for CP calculation
+    let player_villages = match state
+        .app_bus
+        .query(
+            ListVillagesByPlayerId {
+                player_id: user.player.id,
+            },
+            ListVillagesByPlayerIdHandler::new(),
+        )
+        .await
+    {
+        Ok(villages) => villages,
+        Err(e) => {
+            tracing::error!("Unable to load player villages: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unable to load player data",
+            )
+                .into_response();
+        }
+    };
+
+    let village_count = player_villages.len();
+    let speed = parabellum_types::common::Speed::from(state.server_speed);
+    let required_cp = culture_points::required_cp(speed, village_count + 1);
+
+    // Verify the account has the required culture points and village has settlers
+    let can_found = user.player.culture_points >= required_cp
+        && user
+            .village
+            .army()
+            .map(|army| army.units().get(settler_idx) >= 3)
+            .unwrap_or(false);
+
+    if !can_found {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Insufficient culture points or settlers",
+        )
+            .into_response();
+    }
+
+    let (jar, csrf_token) = generate_csrf(jar);
+    let layout_data = create_layout_data(&user, "map");
+
+    let body_content = dioxus_ssr::render_element(rsx! {
+        PageLayout {
+            data: layout_data.clone(),
+            crate::pages::FoundVillageConfirmationPage {
+                village_id: user.village.id,
+                village_name: user.village.name.clone(),
+                village_position: user.village.position.clone(),
+                target_field_id: field_id,
+                target_position: field.position.clone(),
+                tribe: user.village.tribe.clone(),
+                settlers: settlers,
+                csrf_token: csrf_token,
+            }
+        }
+    });
+
+    (jar, Html(wrap_in_html(&body_content))).into_response()
+}
+
+#[derive(Debug)]
+pub struct FoundVillageExecuteForm {
+    pub village_id: u32,
+    pub target_field_id: u32,
+    pub target_x: i32,
+    pub target_y: i32,
+    pub units: Vec<i32>,
+    pub csrf_token: String,
+}
+
+impl<'de> Deserialize<'de> for FoundVillageExecuteForm {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier)]
+        enum Field {
+            #[serde(rename = "village_id")]
+            VillageId,
+            #[serde(rename = "target_field_id")]
+            TargetFieldId,
+            #[serde(rename = "target_x")]
+            TargetX,
+            #[serde(rename = "target_y")]
+            TargetY,
+            #[serde(rename = "units[]")]
+            Units,
+            #[serde(rename = "csrf_token")]
+            CsrfToken,
+        }
+
+        struct FormVisitor;
+
+        impl<'de> Visitor<'de> for FormVisitor {
+            type Value = FoundVillageExecuteForm;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("found village execute form data")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut village_id = None;
+                let mut target_field_id = None;
+                let mut target_x = None;
+                let mut target_y = None;
+                let mut units = Vec::new();
+                let mut csrf_token = None;
+
+                while let Some(key) = map.next_key::<Field>()? {
+                    match key {
+                        Field::VillageId => {
+                            if village_id.is_some() {
+                                return Err(de::Error::duplicate_field("village_id"));
+                            }
+                            village_id = Some(map.next_value()?);
+                        }
+                        Field::TargetFieldId => {
+                            if target_field_id.is_some() {
+                                return Err(de::Error::duplicate_field("target_field_id"));
+                            }
+                            target_field_id = Some(map.next_value()?);
+                        }
+                        Field::TargetX => {
+                            if target_x.is_some() {
+                                return Err(de::Error::duplicate_field("target_x"));
+                            }
+                            target_x = Some(map.next_value()?);
+                        }
+                        Field::TargetY => {
+                            if target_y.is_some() {
+                                return Err(de::Error::duplicate_field("target_y"));
+                            }
+                            target_y = Some(map.next_value()?);
+                        }
+                        Field::Units => {
+                            let value: i32 = map.next_value()?;
+                            units.push(value);
+                        }
+                        Field::CsrfToken => {
+                            if csrf_token.is_some() {
+                                return Err(de::Error::duplicate_field("csrf_token"));
+                            }
+                            csrf_token = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let village_id =
+                    village_id.ok_or_else(|| de::Error::missing_field("village_id"))?;
+                let target_field_id =
+                    target_field_id.ok_or_else(|| de::Error::missing_field("target_field_id"))?;
+                let target_x = target_x.ok_or_else(|| de::Error::missing_field("target_x"))?;
+                let target_y = target_y.ok_or_else(|| de::Error::missing_field("target_y"))?;
+                let csrf_token =
+                    csrf_token.ok_or_else(|| de::Error::missing_field("csrf_token"))?;
+
+                Ok(FoundVillageExecuteForm {
+                    village_id,
+                    target_field_id,
+                    target_x,
+                    target_y,
+                    units,
+                    csrf_token,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(FormVisitor)
+    }
+}
+
+impl HasCsrfToken for FoundVillageExecuteForm {
+    fn csrf_token(&self) -> &str {
+        &self.csrf_token
+    }
+}
+
+/// POST /map/field/{id}/found/execute - Execute the founding of a new village
+pub async fn found_village_execute(
+    State(state): State<AppState>,
+    user: CurrentUser,
+    Path(_field_id): Path<u32>,
+    CsrfForm { jar: _jar, form }: CsrfForm<FoundVillageExecuteForm>,
+) -> Response {
+    let home_army = match user.village.army() {
+        Some(army) => army,
+        None => {
+            return (StatusCode::BAD_REQUEST, "No army found").into_response();
+        }
+    };
+
+    let troop_set = parse_troop_set(&form.units);
+
+    let position = Position {
+        x: form.target_x,
+        y: form.target_y,
+    };
+
+    let army_id = home_army.id;
+
+    let command = FoundVillage {
+        player_id: user.player.id,
+        village_id: user.village.id,
+        army_id,
+        units: troop_set,
+        target_position: position,
+    };
+
+    match state
+        .app_bus
+        .execute(command, FoundVillageCommandHandler::new())
+        .await
+    {
+        Ok(()) => Redirect::to("/build/39").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to found village: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
+}
+
+fn parse_troop_set(values: &[i32]) -> TroopSet {
+    let mut troops = TroopSet::default();
+    for idx in 0..troops.units().len() {
+        let amount = *values.get(idx).unwrap_or(&0);
+        if amount >= 0 {
+            troops.set(idx, amount as u32);
+        }
+    }
+    troops
 }

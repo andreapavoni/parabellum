@@ -1,6 +1,8 @@
 use parabellum_types::battle::AttackType;
 use parabellum_types::battle::ScoutingTarget;
-use parabellum_types::{army::UnitName, buildings::BuildingName, common::ResourceGroup};
+use parabellum_types::{
+    army::UnitName, buildings::BuildingName, common::ResourceGroup, map::Position,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -167,3 +169,12 @@ pub struct CelebrationTownHallTask {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CelebrationBreweryTask {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FoundVillageTask {
+    pub army_id: Uuid,
+    pub settler_player_id: Uuid,
+    pub origin_village_id: u32,
+    pub target_position: Position,
+    pub target_field_id: u32,
+}

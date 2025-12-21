@@ -240,8 +240,8 @@ pub async fn send_troops(
     };
     let target_village_id = position.to_id(state.world_size);
 
-    // Validate target village exists
-    if state
+    // Validate that target has a village (required for attack/raid/reinforcement)
+    let target_village_exists = state
         .app_bus
         .query(
             GetVillageById {
@@ -250,8 +250,9 @@ pub async fn send_troops(
             GetVillageByIdHandler::new(),
         )
         .await
-        .is_err()
-    {
+        .is_ok();
+
+    if !target_village_exists {
         return render_with_error(
             &state,
             jar,

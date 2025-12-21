@@ -4,12 +4,8 @@ use uuid::Uuid;
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::{
-    army::UnitName,
-    battle::AttackType,
-    buildings::BuildingName,
-    common::{Player, ResourceGroup},
-    map::Position,
-    tribe::Tribe,
+    army::UnitName, battle::AttackType, buildings::BuildingName, common::ResourceGroup,
+    map::Position, tribe::Tribe,
 };
 
 use crate::cqrs::Command;
@@ -81,27 +77,11 @@ impl Command for ReinforceVillage {}
 
 #[derive(Clone)]
 pub struct FoundVillage {
-    pub player: Player,
-    pub position: Position,
-    pub parent_village_id: Option<u32>,
-}
-
-impl FoundVillage {
-    pub fn new(player: Player, position: Position) -> Self {
-        Self {
-            player,
-            position,
-            parent_village_id: None,
-        }
-    }
-
-    pub fn with_parent(player: Player, position: Position, parent_village_id: u32) -> Self {
-        Self {
-            player,
-            position,
-            parent_village_id: Some(parent_village_id),
-        }
-    }
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+    pub units: TroopSet,
+    pub target_position: Position,
 }
 
 impl Command for FoundVillage {}

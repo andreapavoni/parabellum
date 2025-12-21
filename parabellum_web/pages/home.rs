@@ -121,34 +121,37 @@ pub fn HomePage() -> Element {
             }
         }
 
-        section { class: "py-20 bg-gray-50 border-b border-gray-200",
-            div { class: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+        section { class: "py-20 bg-gray-50 border-b border-gray-200 relative overflow-hidden",
+            div { class: "pointer-events-none absolute -top-32 -left-24 h-72 w-72 rounded-full bg-gray-200/50 blur-3xl" }
+            div { class: "pointer-events-none absolute -bottom-40 -right-24 h-80 w-80 rounded-full bg-gray-100/70 blur-3xl" }
+            div { class: "relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
 
                 div { class: "text-center mb-16",
-                    h2 { class: "text-3xl font-extrabold text-gray-900 sm:text-4xl mb-4",
+                    h2 { class: "text-4xl font-extrabold text-stone-900 sm:text-5xl tracking-tight",
                         "Choose Your Destiny"
                     }
-                    p { class: "text-lg text-gray-600 max-w-2xl mx-auto",
+                    div { class: "mx-auto mt-4 mb-6 h-1 w-24 rounded-full bg-gray-300" }
+                    p { class: "text-lg text-stone-600 max-w-2xl mx-auto",
                         "Three unique tribes, three distinct playstyles. Will you choose discipline, speed, or brute force?"
                     }
                 }
 
-                div { class: "p-2 grid grid-cols-1 md:grid-cols-3 gap-8",
-
+                div { class: "grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-10",
                     // ROMANS
-                    div { class: "bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition duration-300 transform hover:-translate-y-1 border border-gray-100 flex flex-col",
+                    div { class: "bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 transition duration-300 transform hover:-translate-y-1 hover:shadow-xl flex flex-col",
+                        div { class: "h-1.5 w-full bg-gradient-to-r from-red-700 via-red-500 to-amber-400" }
                         div { class: "p-8 flex-grow",
-                            h3 { class: "text-2xl font-bold text-gray-900 mb-3", "The Romans" }
-                            p { class: "text-gray-600 text-sm leading-relaxed mb-6",
+                            h3 { class: "text-2xl font-bold text-stone-900 mb-3", "The Romans" }
+                            p { class: "text-stone-600 text-sm leading-relaxed mb-6",
                                 "Masters of engineering and discipline. Their troops are elite but expensive. The only tribe capable of simultaneous construction."
                             }
-                            ul { class: "space-y-2 mb-6",
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-red-500 mr-2" }
+                            ul { class: "space-y-2.5 mb-6",
+                                li { class: "flex items-center text-xs font-semibold text-red-700 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-red-600 mr-2 ring-2 ring-red-200/70 shadow-[0_0_6px_rgba(185,28,28,0.35)]" }
                                     "High Defense"
                                 }
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-red-500 mr-2" }
+                                li { class: "flex items-center text-xs font-semibold text-red-700 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-red-600 mr-2 ring-2 ring-red-200/70 shadow-[0_0_6px_rgba(185,28,28,0.35)]" }
                                     "Elite Infantry"
                                 }
                             }
@@ -156,19 +159,20 @@ pub fn HomePage() -> Element {
                     }
 
                     // GAULS
-                    div { class: "bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition duration-300 transform hover:-translate-y-1 border border-gray-100 flex flex-col",
+                    div { class: "bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 transition duration-300 transform hover:-translate-y-1 hover:shadow-xl flex flex-col",
+                        div { class: "h-1.5 w-full bg-gradient-to-r from-blue-800 via-blue-600 to-teal-400" }
                         div { class: "p-8 flex-grow",
-                            h3 { class: "text-2xl font-bold text-gray-900 mb-3", "The Gauls" }
-                            p { class: "text-gray-600 text-sm leading-relaxed mb-6",
+                            h3 { class: "text-2xl font-bold text-stone-900 mb-3", "The Gauls" }
+                            p { class: "text-stone-600 text-sm leading-relaxed mb-6",
                                 "Swift and defensive. Known for the fastest cavalry and unique traps to protect their villages. The best choice for tactical players."
                             }
-                            ul { class: "space-y-2 mb-6",
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-blue-500 mr-2" }
+                            ul { class: "space-y-2.5 mb-6",
+                                li { class: "flex items-center text-xs font-semibold text-blue-700 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-blue-600 mr-2 ring-2 ring-blue-200/70 shadow-[0_0_6px_rgba(29,78,216,0.35)]" }
                                     "Fastest Speed"
                                 }
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-blue-500 mr-2" }
+                                li { class: "flex items-center text-xs font-semibold text-blue-700 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-blue-600 mr-2 ring-2 ring-blue-200/70 shadow-[0_0_6px_rgba(29,78,216,0.35)]" }
                                     "Trap Defense"
                                 }
                             }
@@ -176,19 +180,20 @@ pub fn HomePage() -> Element {
                     }
 
                     // TEUTONS
-                    div { class: "bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition duration-300 transform hover:-translate-y-1 border border-gray-100 flex flex-col",
+                    div { class: "bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 transition duration-300 transform hover:-translate-y-1 hover:shadow-xl flex flex-col",
+                        div { class: "h-1.5 w-full bg-gradient-to-r from-amber-800 via-amber-600 to-yellow-400" }
                         div { class: "p-8 flex-grow",
-                            h3 { class: "text-2xl font-bold text-gray-900 mb-3", "The Teutons" }
-                            p { class: "text-gray-600 text-sm leading-relaxed mb-6",
+                            h3 { class: "text-2xl font-bold text-stone-900 mb-3", "The Teutons" }
+                            p { class: "text-stone-600 text-sm leading-relaxed mb-6",
                                 "Fearless raiders. Their troops are cheap and quick to train, overwhelming enemies with numbers. Perfect for aggressive playstyles."
                             }
-                            ul { class: "space-y-2 mb-6",
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-yellow-600 mr-2" }
+                            ul { class: "space-y-2.5 mb-6",
+                                li { class: "flex items-center text-xs font-semibold text-amber-800 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-amber-700 mr-2 ring-2 ring-amber-200/70 shadow-[0_0_6px_rgba(180,83,9,0.35)]" }
                                     "Cheap Army"
                                 }
-                                li { class: "flex items-center text-xs font-bold text-gray-500 uppercase tracking-wide",
-                                    span { class: "w-2 h-2 rounded-full bg-yellow-600 mr-2" }
+                                li { class: "flex items-center text-xs font-semibold text-amber-800 uppercase tracking-wider",
+                                    span { class: "w-2.5 h-2.5 rounded-full bg-amber-700 mr-2 ring-2 ring-amber-200/70 shadow-[0_0_6px_rgba(180,83,9,0.35)]" }
                                     "Raid Bonus"
                                 }
                             }

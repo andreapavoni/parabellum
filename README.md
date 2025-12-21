@@ -1,5 +1,7 @@
 # Parabellum
 
+<img src="frontend/static/header_landing.jpg" alt="Parabellum hero" width="900">
+
 ![Rust](https://img.shields.io/badge/min%20rust-1.85-green.svg)
 [![CI/CD Pipeline](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml/badge.svg)](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
@@ -77,6 +79,14 @@ Want to get the server running locally? Here’s how.
     ```
 
   From now, you can go to `http://localhost:8080` and see the progress.
+
+---
+
+## Screenshots
+
+<img src="frontend/static/screenshots_resources.png" alt="Resources view" width="600">
+<img src="frontend/static/screenshots_village.png" alt="Village overview" width="600">
+<img src="frontend/static/screenshots_map.png" alt="World map view" width="600">
 
 ---
 

@@ -12,6 +12,18 @@ pub enum Speed {
     X10,
 }
 
+impl From<i8> for Speed {
+    fn from(value: i8) -> Self {
+        match value {
+            2 => Self::X2,
+            3 => Self::X3,
+            5 => Self::X5,
+            10 => Self::X10,
+            _ => Self::X1,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MerchantStats {
     pub speed: u8,
