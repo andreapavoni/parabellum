@@ -91,6 +91,7 @@ game:
     catapult_hint: Select up to two building targets for the catapults.
     confirm_send: Confirm and send
     cancel: Cancel
+    unit_unresearched: Unit not researched yet
   reports:
     title: Reports
     total: "%{count} reports"

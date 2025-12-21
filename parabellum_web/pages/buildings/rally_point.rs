@@ -253,18 +253,29 @@ pub fn RallyPointPage(
                                 {
                                     let available = available_units.get(idx);
                                     let name = unit_display_name(&unit.name);
+                                    let is_researched = village.academy_research().get(idx)
+                                        || unit.research_cost.time == 0;
                                     rsx! {
                                         label {
-                                            class: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2",
+                                            class: if is_researched {
+                                                "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-700 border rounded-md px-3 py-2"
+                                            } else {
+                                                "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-400 border rounded-md px-3 py-2 bg-gray-50"
+                                            },
                                             span { class: "font-semibold", "{name}" }
-                                            span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.available\")}: {available}" }
-                                            input {
-                                                r#type: "number",
-                                                min: "0",
-                                                max: "{available}",
-                                                name: "units[]",
-                                                value: "0",
-                                                class: "w-full sm:w-32 border rounded px-2 py-1 text-gray-700"
+                                            if is_researched {
+                                                span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.available\")}: {available}" }
+                                                input {
+                                                    r#type: "number",
+                                                    min: "0",
+                                                    max: "{available}",
+                                                    name: "units[]",
+                                                    value: "0",
+                                                    class: "w-full sm:w-32 border rounded px-2 py-1 text-gray-700"
+                                                }
+                                            } else {
+                                                span { class: "text-xs text-gray-500", "{t!(\"game.rally_point.unit_unresearched\")}" }
+                                                input { r#type: "hidden", name: "units[]", value: "0" }
                                             }
                                         }
                                     }
