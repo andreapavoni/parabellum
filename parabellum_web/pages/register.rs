@@ -76,7 +76,7 @@ pub fn RegisterPage(
                     }
                     select {
                         class: "input-field",
-                        name: selected_quadrant.clone(),
+                        name: "quadrant",
                         option { value: "NorthEast", selected: selected_quadrant == "NorthEast", "{t!(\"game.starting_position.north_east\", key=\"(+/+)\")}" }
                         option { value: "NorthWest", selected: selected_quadrant == "NorthWest", "{t!(\"game.starting_position.north_west\", key=\"(-/+)\")}" }
                         option { value: "SouthEast", selected: selected_quadrant == "SouthEast", "{t!(\"game.starting_position.south_east\", key=\"(+/-)\")}" }
