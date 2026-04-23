@@ -5,7 +5,8 @@ export type Route =
   | { name: "village" }
   | { name: "resources" }
   | { name: "building"; slotId: number }
-  | { name: "map"; fieldId?: number }
+  | { name: "map"; x?: number; y?: number }
+  | { name: "mapField"; fieldId: number }
   | { name: "stats"; page: number }
   | { name: "player"; playerId: string }
   | { name: "reports" }
@@ -21,9 +22,20 @@ function parseRouteParts(path: string, search: URLSearchParams): Route {
   if (/^\/app\/build\/\d+$/.test(path)) {
     return { name: "building", slotId: Number(path.split("/")[3]) };
   }
-  if (path === "/map") return { name: "map" };
-  if (/^\/map\/\d+$/.test(path)) {
-    return { name: "map", fieldId: Number(path.split("/")[2]) };
+  if (path === "/map") {
+    const rawX = search.get("x");
+    const rawY = search.get("y");
+    if (rawX !== null && rawY !== null) {
+      const parsedX = Number(rawX);
+      const parsedY = Number(rawY);
+      if (Number.isFinite(parsedX) && Number.isFinite(parsedY)) {
+        return { name: "map", x: parsedX, y: parsedY };
+      }
+    }
+    return { name: "map" };
+  }
+  if (/^\/map\/field\/\d+$/.test(path)) {
+    return { name: "mapField", fieldId: Number(path.split("/")[3]) };
   }
   if (path === "/stats") {
     return { name: "stats", page: Number(search.get("page") ?? "1") || 1 };

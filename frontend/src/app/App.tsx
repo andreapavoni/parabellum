@@ -13,6 +13,7 @@ import { StatsPage } from "@/pages/StatsPage";
 import { PlayerPage } from "@/pages/PlayerPage";
 import { ReportDetailPage, ReportsPage } from "@/pages/ReportsPage";
 import { MapPage } from "@/pages/MapPage";
+import { MapFieldPage } from "@/pages/MapFieldPage";
 import { BuildingPage } from "@/pages/BuildingPage";
 import { usePageData } from "@/hooks/usePageData";
 
@@ -91,7 +92,10 @@ export function App() {
       navigate("/login", true);
       return;
     }
-    if (session.authenticated && (route.name === "login" || route.name === "register")) {
+    if (
+      session.authenticated &&
+      (route.name === "login" || route.name === "register" || route.name === "home")
+    ) {
       navigate("/village", true);
     }
   }, [booting, route, session.authenticated]);
@@ -124,7 +128,18 @@ export function App() {
       case "report":
         return <ProtectedReport reportId={route.reportId} reloadKey={reloadKey} />;
       case "map":
-        return <ProtectedMap worldSize={bootstrap?.worldSize ?? 100} fieldId={route.fieldId} />;
+        return (
+          <ProtectedMap
+            worldSize={bootstrap?.worldSize ?? 100}
+            centerX={route.x}
+            centerY={route.y}
+            homeVillageId={bootstrap?.village.id}
+            homeX={bootstrap?.village.x}
+            homeY={bootstrap?.village.y}
+          />
+        );
+      case "mapField":
+        return <ProtectedMapField fieldId={route.fieldId} reloadKey={reloadKey} />;
       case "login":
         return (
           <LoginPage
@@ -187,6 +202,8 @@ export function App() {
       active={
         route.name === "report"
           ? "reports"
+          : route.name === "mapField"
+            ? "map"
           : route.name === "player"
             ? "stats"
             : route.name
@@ -251,8 +268,38 @@ function ProtectedReport({ reportId, reloadKey }: { reportId: string; reloadKey:
   return <ReportDetailPage data={data} />;
 }
 
-function ProtectedMap({ worldSize, fieldId }: { worldSize: number; fieldId?: number }) {
-  return <MapPage worldSize={worldSize} initialFieldId={fieldId} />;
+function ProtectedMap({
+  worldSize,
+  centerX,
+  centerY,
+  homeVillageId,
+  homeX,
+  homeY,
+}: {
+  worldSize: number;
+  centerX?: number;
+  centerY?: number;
+  homeVillageId?: number;
+  homeX?: number;
+  homeY?: number;
+}) {
+  return (
+    <MapPage
+      worldSize={worldSize}
+      initialCenterX={centerX}
+      initialCenterY={centerY}
+      homeVillageId={homeVillageId}
+      homeX={homeX}
+      homeY={homeY}
+    />
+  );
+}
+
+function ProtectedMapField({ fieldId, reloadKey }: { fieldId: number; reloadKey: number }) {
+  const { data, error, loading } = usePageData(() => api.mapField(fieldId), [fieldId, reloadKey]);
+  if (loading) return <Loading label="Loading field..." />;
+  if (error || !data) return <ErrorState message={error ?? "Unable to load field."} />;
+  return <MapFieldPage data={data} />;
 }
 
 function ProtectedBuilding({

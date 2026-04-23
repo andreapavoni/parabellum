@@ -18,7 +18,7 @@ export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
             {data.villages.map((village) => (
               <tr key={village.villageId}>
                 <td class="px-4 py-3 font-semibold text-gray-800">
-                  <Link to={`/map/${village.villageId}`} class="text-green-700 hover:underline">
+                  <Link to={`/map/field/${village.villageId}`} class="text-green-700 hover:underline">
                     {village.name}
                   </Link>
                 </td>

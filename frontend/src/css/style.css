@@ -5,6 +5,20 @@
    overflow-x: hidden;
  }
 
+ a[href],
+ button,
+ [role="button"],
+ input[type="button"],
+ input[type="submit"] {
+   cursor: pointer;
+ }
+
+ button:disabled,
+ input[type="button"]:disabled,
+ input[type="submit"]:disabled {
+   cursor: not-allowed;
+ }
+
  .nav-icon {
    width: 45px;
    height: 45px;
@@ -60,18 +74,18 @@
 
  /* --- SVG MAP LAYOUT --- */
 
- @media (max-width: 768px) {
-   .map-layout {
-     max-width: 95vw;
-   }
- }
+@media (max-width: 768px) {
+  .map-layout {
+    max-width: 98vw;
+  }
+}
 
- @media (max-width: 600px) {
-   .map-layout {
-     max-width: 98vw;
-     margin: 5px auto 10px;
-   }
- }
+@media (max-width: 600px) {
+  .map-layout {
+    max-width: 100%;
+    margin: 5px auto 10px;
+  }
+}
 
  /* Map center (SVG container) */
  .map-center {
@@ -136,13 +150,15 @@
    font-weight: 900;
  }
 
- .nav-overlay {
-   position: absolute;
-   background-color: #9ACD32;
-   cursor: pointer;
-   z-index: 10;
-   transition: background-color 0.2s;
- }
+.nav-overlay {
+  position: absolute;
+  background-color: #9ACD32;
+  cursor: pointer;
+  z-index: 10;
+  transition: background-color 0.2s;
+  border: 0;
+  padding: 0;
+}
 
  .nav-overlay:hover {
    background-color: #7BB642;
@@ -196,10 +212,15 @@
    cursor: pointer;
  }
 
- .map-tile:hover rect.hover-bg {
-   opacity: 0.3;
-   fill: white;
- }
+.map-tile:hover rect.hover-bg {
+  opacity: 0.3;
+  fill: white;
+}
+
+.map-tile-selected rect.hover-bg {
+  opacity: 0.5;
+  fill: #fff59d;
+}
 
  /* ---------- Landing Page Styles -------- */
  .browser-frame {
@@ -651,7 +672,7 @@
    /*border-radius: 8px;
    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);*/
    width: 100%;
-   max-width: 600px;
+   max-width: min(840px, 100%);
    aspect-ratio: 1 / 1;
  }
 
@@ -670,8 +691,8 @@
    grid-template-rows: repeat(15, 1fr);
    align-items: center;
    text-align: right;
-   padding-right: 20px;
-   font-size: 10px;
+   padding-right: 10px;
+   font-size: 9px;
    font-weight: bold;
    color: #555;
  }
@@ -683,10 +704,10 @@
    grid-template-columns: repeat(15, 1fr);
    align-items: center;
    justify-items: center;
-   font-size: 10px;
+   font-size: 9px;
    font-weight: bold;
    color: #555;
-   padding-top: 20px;
+   padding-top: 10px;
  }
 
  .nav-btn {

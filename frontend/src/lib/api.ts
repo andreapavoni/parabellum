@@ -13,6 +13,35 @@ import type {
   VillagePageResponse,
 } from "@/types/api";
 
+type RawMapTile = {
+  x: number;
+  y: number;
+  field_id: number;
+  village_id?: number;
+  player_id?: string;
+  village_name?: string;
+  village_population?: number;
+  player_name?: string;
+  tribe?: string;
+  tile_type: "village" | "valley" | "oasis";
+  valley?: {
+    lumber: number;
+    clay: number;
+    iron: number;
+    crop: number;
+  };
+  oasis?: string;
+};
+
+type RawMapRegionResponse = {
+  center: {
+    x: number;
+    y: number;
+  };
+  radius: number;
+  tiles: RawMapTile[];
+};
+
 type ApiErrorPayload = {
   code: string;
   message: string;
@@ -204,7 +233,24 @@ export const api = {
       search.set("village_id", String(params.villageId));
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<MapRegionResponse>(`/map/region${suffix}`);
+    return request<RawMapRegionResponse>(`/map/region${suffix}`).then((res) => ({
+      center: res.center,
+      radius: res.radius,
+      tiles: res.tiles.map((tile) => ({
+        x: tile.x,
+        y: tile.y,
+        fieldId: tile.field_id,
+        villageId: tile.village_id,
+        playerId: tile.player_id,
+        villageName: tile.village_name,
+        villagePopulation: tile.village_population,
+        playerName: tile.player_name,
+        tribe: tile.tribe,
+        tileType: tile.tile_type,
+        valley: tile.valley,
+        oasis: tile.oasis,
+      })),
+    }));
   },
   mapField: (fieldId: number) => request<MapFieldDetailResponse>(`/map/fields/${fieldId}`),
   addBuilding: (payload: { slotId: number; buildingName: string }) =>
