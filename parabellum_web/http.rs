@@ -1,5 +1,6 @@
 use axum::{
     Router,
+    response::IntoResponse,
     routing::{get, post},
 };
 use sqlx::PgPool;
@@ -25,7 +26,7 @@ use crate::{
         },
     },
     auth_tokens::AuthTokenService,
-    web::spa::spa_shell,
+    web::{health::health, spa::spa_shell},
 };
 
 #[derive(Clone)]
@@ -58,12 +59,6 @@ impl WebRouter {
         // Set default locale. We initialize with user locale later
         rust_i18n::set_locale("en-EN");
         // rust_i18n::set_locale("it-IT");
-
-        // Public routes (no authentication required)
-        let public_routes = Router::new()
-            .route("/", get(spa_shell))
-            .route("/login", get(spa_shell))
-            .route("/register", get(spa_shell));
 
         let api_routes = Router::new()
             .route("/auth/token/login", post(token_login))
@@ -100,26 +95,16 @@ impl WebRouter {
             .route("/reports", get(reports))
             .route("/reports/{id}", get(report_detail))
             .route("/players/{id}", get(player_profile))
-            .route("/stats", get(stats));
-
-        // Protected routes (require authenticated user)
-        let protected_routes = Router::new()
-            .route("/village", get(spa_shell))
-            .route("/resources", get(spa_shell))
-            .route("/app/build/{slot_id}", get(spa_shell))
-            .route("/map", get(spa_shell))
-            .route("/map/{field_id}", get(spa_shell))
-            .route("/reports", get(spa_shell))
-            .route("/reports/{id}", get(spa_shell))
-            .route("/players/{id}", get(spa_shell))
-            .route("/stats", get(spa_shell));
+            .route("/stats", get(stats))
+            .fallback(api_not_found);
 
         let router = Router::new()
             .nest_service("/assets", ServeDir::new("frontend/assets"))
             .nest_service("/static", ServeDir::new("frontend/static"))
             .nest("/api/v1", api_routes)
-            .merge(public_routes)
-            .merge(protected_routes)
+            .route("/health", get(health))
+            .route("/", get(spa_shell))
+            .fallback(get(spa_shell))
             .with_state(state)
             .layer(TraceLayer::new_for_http());
 
@@ -142,4 +127,8 @@ impl WebRouter {
 fn infra_error(e: Error) -> ApplicationError {
     let err = format!("{:#?}", e);
     ApplicationError::Infrastructure(err)
+}
+
+async fn api_not_found() -> impl IntoResponse {
+    crate::api::errors::ApiError::not_found("API route not found")
 }

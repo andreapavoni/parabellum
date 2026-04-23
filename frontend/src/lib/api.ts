@@ -65,6 +65,7 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let refreshInFlight: Promise<void> | null = null;
 const REFRESH_TOKEN_STORAGE_KEY = "parabellum_refresh_token";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(/\/+$/, "");
 
 if (typeof window !== "undefined") {
   refreshToken = window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
@@ -97,7 +98,7 @@ async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...(init.headers ?? {}),
   };
 
-  const response = await fetch(`/api/v1${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers,
   });
@@ -183,16 +184,16 @@ export const api = {
   tokenRefresh: () =>
     refreshToken
       ? request<TokenAuthResponse>(
-          "/auth/refresh",
-          {
-            method: "POST",
-            body: JSON.stringify({ refreshToken }),
-          },
-          false,
-        ).then((res) => {
-          setTokens(res);
-          return res;
-        })
+        "/auth/refresh",
+        {
+          method: "POST",
+          body: JSON.stringify({ refreshToken }),
+        },
+        false,
+      ).then((res) => {
+        setTokens(res);
+        return res;
+      })
       : Promise.reject(new ApiError(401, { code: "refresh_expired", message: "Refresh token missing" })),
   tokenLogout: async () => {
     if (!refreshToken) {
@@ -225,7 +226,7 @@ export const api = {
   player: (playerId: string) => request<PlayerProfileResponse>(`/players/${playerId}`),
   reports: () => request<ReportsResponse>("/reports"),
   report: (reportId: string) => request<ReportDetailResponse>(`/reports/${reportId}`),
-  mapRegion: (params?: { x?: number; y?: number; villageId?: number }) => {
+  mapRegion: async (params?: { x?: number; y?: number; villageId?: number }) => {
     const search = new URLSearchParams();
     if (params?.x !== undefined) search.set("x", String(params.x));
     if (params?.y !== undefined) search.set("y", String(params.y));
@@ -233,7 +234,8 @@ export const api = {
       search.set("village_id", String(params.villageId));
     }
     const suffix = search.toString() ? `?${search.toString()}` : "";
-    return request<RawMapRegionResponse>(`/map/region${suffix}`).then((res) => ({
+    const res = await request<RawMapRegionResponse>(`/map/region${suffix}`);
+    return ({
       center: res.center,
       radius: res.radius,
       tiles: res.tiles.map((tile) => ({
@@ -250,7 +252,7 @@ export const api = {
         valley: tile.valley,
         oasis: tile.oasis,
       })),
-    }));
+    });
   },
   mapField: (fieldId: number) => request<MapFieldDetailResponse>(`/map/fields/${fieldId}`),
   addBuilding: (payload: { slotId: number; buildingName: string }) =>
