@@ -4,7 +4,9 @@ use std::env;
 pub struct Config {
     pub world_size: i16,
     pub speed: i8,
-    pub auth_cookie_secret: String,
+    pub access_token_ttl_secs: i64,
+    pub refresh_token_ttl_secs: i64,
+    pub token_signing_key: String,
 }
 
 impl Config {
@@ -21,15 +23,30 @@ impl Config {
             Err(_) => 1,
         };
 
-        let auth_cookie_secret = match env::var("PARABELLUM_COOKIE_SECRET") {
+        let access_token_ttl_secs = match env::var("PARABELLUM_ACCESS_TOKEN_TTL_SECS") {
+            Ok(val) => val.parse::<i64>().unwrap_or(900).max(60),
+            Err(_) => 900,
+        };
+        let refresh_token_ttl_secs = match env::var("PARABELLUM_REFRESH_TOKEN_TTL_SECS") {
+            Ok(val) => val.parse::<i64>().unwrap_or(2_592_000).max(300),
+            Err(_) => 2_592_000,
+        };
+        let token_signing_key = match env::var("PARABELLUM_TOKEN_SIGNING_KEY") {
             Ok(val) => val,
-            Err(_) => panic!("You need to set env PARABELLUM_COOKIE_SECRET"),
+            Err(_) => {
+                tracing::warn!(
+                    "PARABELLUM_TOKEN_SIGNING_KEY is not set; using insecure default key for local/dev usage"
+                );
+                "dev-insecure-signing-key-change-me".to_string()
+            }
         };
 
         Self {
             world_size,
             speed,
-            auth_cookie_secret,
+            access_token_ttl_secs,
+            refresh_token_ttl_secs,
+            token_signing_key,
         }
     }
 }

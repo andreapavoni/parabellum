@@ -249,7 +249,9 @@ mod tests {
         let config = Arc::new(Config {
             world_size: 100,
             speed: 1,
-            auth_cookie_secret: "test-secret".to_string(),
+            access_token_ttl_secs: 900,
+            refresh_token_ttl_secs: 2_592_000,
+            token_signing_key: "test-signing-key".to_string(),
         });
 
         let attacker_player = player_factory(PlayerFactoryOptions {

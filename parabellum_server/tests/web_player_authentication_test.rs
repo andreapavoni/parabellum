@@ -1,13 +1,12 @@
 mod test_utils;
 
 use axum::http::StatusCode;
-use std::collections::HashMap;
 
 use parabellum_types::tribe::Tribe;
 use parabellum_types::{army::TroopSet, errors::ApplicationError};
 
 use crate::test_utils::tests::{
-    fetch_csrf_token, setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
+    login_tokens, setup_http_client, setup_player_party, setup_web_app,
 };
 
 #[tokio::test]
@@ -15,34 +14,26 @@ async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
     let uow_provider = setup_web_app().await?;
     let client = setup_http_client(None, Some(1)).await;
 
-    let res = client
-        .get("http://localhost:8088/login")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
     let (player, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
-    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login").await?;
-
-    let mut form = HashMap::new();
-    form.insert("email", user.email.as_str());
-    form.insert("password", "parabellum!");
-    form.insert("csrf_token", csrf_token.as_str());
 
     let res = client
-        .post("http://localhost:8088/login")
-        .form(&form)
+        .post("http://localhost:8088/api/v1/auth/token/login")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "email": user.email,
+                "password": "parabellum!",
+            })
+            .to_string(),
+        )
         .send()
         .await
         .unwrap();
 
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.text().await.unwrap().to_string();
-    // println!("==== body {} =======", body);
     assert!(body.contains(&player.username));
-    // assert!(body.contains(&format!("{}", player.username)));
 
     Ok(())
 }
@@ -55,16 +46,16 @@ async fn test_login_player_wrong_password() -> Result<(), ApplicationError> {
     let (_, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
 
-    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login").await?;
-
-    let mut form = HashMap::new();
-    form.insert("email", user.email.as_str());
-    form.insert("password", "wrong");
-    form.insert("csrf_token", csrf_token.as_str());
-
     let res = client
-        .post("http://localhost:8088/login")
-        .form(&form)
+        .post("http://localhost:8088/api/v1/auth/token/login")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "email": user.email,
+                "password": "wrong",
+            })
+            .to_string(),
+        )
         .send()
         .await
         .unwrap();
@@ -89,18 +80,70 @@ async fn test_logout_success() -> Result<(), ApplicationError> {
     )
     .await?;
 
-    let cookie = setup_user_cookie(user).await;
+    let client = setup_http_client(None, None).await;
+    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
 
-    let client = setup_http_client(Some(cookie), None).await;
     let res = client
-        .get("http://localhost:8088/logout")
+        .post("http://localhost:8088/api/v1/auth/token/logout")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "refreshToken": tokens.refresh_token,
+            })
+            .to_string(),
+        )
         .send()
         .await
         .unwrap();
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.status(), StatusCode::OK);
 
-    let location = res.headers().get("location").unwrap().to_str().unwrap();
-    assert_eq!(location, "/");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_refresh_rotates_and_old_refresh_is_rejected() -> Result<(), ApplicationError> {
+    let uow_provider = setup_web_app().await?;
+    let client = setup_http_client(None, None).await;
+    let (_, _, _, _, user) =
+        setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
+
+    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
+
+    let rotate = client
+        .post("http://localhost:8088/api/v1/auth/refresh")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "refreshToken": tokens.refresh_token,
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rotate.status(), StatusCode::OK);
+
+    let rotated_body: serde_json::Value =
+        serde_json::from_str(&rotate.text().await.unwrap()).unwrap();
+    let rotated_refresh = rotated_body["refreshToken"].as_str().unwrap();
+    assert_ne!(rotated_refresh, tokens.refresh_token);
+
+    let old_reuse = client
+        .post("http://localhost:8088/api/v1/auth/refresh")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "refreshToken": tokens.refresh_token,
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(old_reuse.status(), StatusCode::UNAUTHORIZED);
+    let old_reuse_body: serde_json::Value =
+        serde_json::from_str(&old_reuse.text().await.unwrap()).unwrap();
+    assert_eq!(old_reuse_body["code"], "session_revoked");
 
     Ok(())
 }

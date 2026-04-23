@@ -27,7 +27,6 @@ async-trait = { workspace = true }
 sqlx = { workspace = true }
 rand = { workspace = true }
 axum = { workspace = true }
-axum-extra = { workspace = true }
 
 
 std_prelude = "0.2"

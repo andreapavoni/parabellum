@@ -24,15 +24,12 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: parabellum_test
         options: >-
-          --health-cmd="pg_isready -U user"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd="pg_isready -U user" --health-interval=10s
+          --health-timeout=5s --health-retries=5
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost/parabellum_test
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost/parabellum_test
-      PARABELLUM_COOKIE_SECRET: 4OZ+ZW10mf3+rstw1BZdCKsofkYXACC7iNtjvG1UZkou1oepg86gDXRfb3Q9sH4N
 
     steps:
       - name: Checkout code

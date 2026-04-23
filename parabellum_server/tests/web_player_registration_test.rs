@@ -1,13 +1,12 @@
 mod test_utils;
 
 use axum::http::StatusCode;
-use std::collections::HashMap;
 
 use parabellum_types::tribe::Tribe;
 use parabellum_types::{army::TroopSet, errors::ApplicationError};
 
 use crate::test_utils::tests::{
-    fetch_csrf_token, setup_http_client, setup_player_party, setup_user_cookie, setup_web_app,
+    login_tokens, setup_http_client, setup_player_party, setup_web_app,
 };
 
 #[tokio::test]
@@ -18,26 +17,27 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
 
     let email = "inttest@example.com";
     let username = "IntegrationUser";
-    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/register").await?;
-
-    let mut form = HashMap::new();
-    form.insert("username", username);
-    form.insert("email", email);
-    form.insert("password", "Secure123!");
-    form.insert("tribe", "Teuton");
-    form.insert("quadrant", "SouthWest");
-    form.insert("csrf_token", csrf_token.as_str());
 
     assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
-        .post("http://localhost:8088/register")
-        .form(&form)
+        .post("http://localhost:8088/api/v1/auth/token/register")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "username": username,
+                "email": email,
+                "password": "Secure123!",
+                "tribe": "Teuton",
+                "quadrant": "SouthWest",
+            })
+            .to_string(),
+        )
         .send()
         .await
         .unwrap();
 
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.status(), StatusCode::OK);
 
     let username = username.to_string();
     let user = uow.users().get_by_email(email).await?;
@@ -79,30 +79,25 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
 
     let email = "inttest@example.com";
     let username = "IntegrationUser";
-    let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/register").await?;
-
-    let mut form = HashMap::new();
-    form.insert("username", username);
-    form.insert("tribe", "Teuton");
-    form.insert("quadrant", "SouthWest");
-    form.insert("csrf_token", csrf_token.as_str());
 
     assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
-        .post("http://localhost:8088/register")
-        .form(&form)
+        .post("http://localhost:8088/api/v1/auth/token/register")
+        .header("content-type", "application/json")
+        .body(
+            serde_json::json!({
+                "username": username,
+                "tribe": "Teuton",
+                "quadrant": "SouthWest",
+            })
+            .to_string(),
+        )
         .send()
         .await
         .unwrap();
 
     assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
-
-    let body = res.text().await.unwrap();
-    assert_eq!(
-        body.to_string(),
-        "Failed to deserialize form body: missing field `email`",
-    );
 
     uow.rollback().await?;
     Ok(())
@@ -121,18 +116,16 @@ async fn test_register_authenticated_player() -> Result<(), ApplicationError> {
     )
     .await?;
 
-    let cookie = setup_user_cookie(user).await;
-    let client = setup_http_client(Some(cookie), None).await;
+    let client = setup_http_client(None, None).await;
+    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
 
     let res = client
-        .get("http://localhost:8088/register")
+        .get("http://localhost:8088/api/v1/auth/token/session")
+        .bearer_auth(tokens.access_token)
         .send()
         .await
         .unwrap();
-    // assert_eq!(res.status(), StatusCode::SEE_OTHER);
-
-    let location = res.headers().get("location").unwrap().to_str().unwrap();
-    assert_eq!(location, "/village");
+    assert_eq!(res.status(), StatusCode::OK);
 
     Ok(())
 }

@@ -5,8 +5,9 @@ pub mod tests {
     use parabellum_web::{AppState, WebRouter};
     use rand::Rng;
     use reqwest::{Client, header, redirect::Policy};
+    use serde_json::Value;
     use sqlx::{Postgres, Transaction};
-    use std::{collections::HashMap, sync::Arc};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
 
     use parabellum_app::{
@@ -40,6 +41,13 @@ pub mod tests {
         map::Position,
         tribe::Tribe,
     };
+
+    #[allow(dead_code)]
+    #[derive(Debug, Clone)]
+    pub struct AuthTokens {
+        pub access_token: String,
+        pub refresh_token: String,
+    }
 
     #[derive(Clone)]
     pub struct TestUnitOfWork<'a> {
@@ -156,50 +164,11 @@ pub mod tests {
     pub async fn setup_web_app() -> Result<Arc<dyn UnitOfWorkProvider>> {
         let (app_bus, _, uow_provider, config) = setup_app(true).await?;
         let app = Arc::new(app_bus);
-        let state = AppState::new(app, &config);
+        let db_pool = establish_test_connection_pool().await.unwrap();
+        let state = AppState::new(app, db_pool, &config);
         tokio::spawn(WebRouter::serve(state.clone(), 8088));
 
         Ok(uow_provider)
-    }
-
-    #[allow(dead_code)]
-    pub async fn setup_user_cookie(user: User) -> HeaderValue {
-        let client = setup_http_client(None, None).await;
-        let csrf_token = fetch_csrf_token(&client, "http://localhost:8088/login")
-            .await
-            .expect("Failed to fetch CSRF token");
-        let mut form = HashMap::new();
-        form.insert("email", user.email.as_str());
-        form.insert("password", "parabellum!");
-        form.insert("csrf_token", csrf_token.as_str());
-        let res = client
-            .post("http://localhost:8088/login")
-            .form(&form)
-            .send()
-            .await
-            .unwrap();
-
-        let cookies = res.headers().get_all("set-cookie");
-        let mut cookie_pairs = Vec::new();
-        for value in cookies.iter() {
-            if let Ok(val_str) = value.to_str() {
-                if let Some((pair, _)) = val_str.split_once(';') {
-                    cookie_pairs.push(pair.to_string());
-                } else {
-                    cookie_pairs.push(val_str.to_string());
-                }
-            }
-        }
-
-        if cookie_pairs.is_empty() {
-            panic!(
-                "setup cookie failed: {:#?}",
-                res.text().await.unwrap().to_string()
-            );
-        }
-
-        let header_value = cookie_pairs.join("; ");
-        HeaderValue::from_str(&header_value).unwrap()
     }
 
     #[allow(dead_code)]
@@ -219,31 +188,28 @@ pub mod tests {
         client.default_headers(request_headers).build().unwrap()
     }
 
-    /// Fetches a CSRF token from a form page (login or register).
-    /// Makes a GET request to the page, parses the HTML to extract the CSRF token
-    /// from the hidden input field, and returns it along with the client (which has
-    /// the CSRF cookie stored).
     #[allow(dead_code)]
-    pub async fn fetch_csrf_token(
-        client: &Client,
-        page_url: &str,
-    ) -> Result<String, ApplicationError> {
-        let res = client.get(page_url).send().await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
+    pub async fn login_tokens(client: &Client, email: &str, password: &str) -> AuthTokens {
+        let response = client
+            .post("http://localhost:8088/api/v1/auth/token/login")
+            .header("content-type", "application/json")
+            .body(
+                serde_json::json!({
+                    "email": email,
+                    "password": password,
+                })
+                .to_string(),
+            )
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let payload: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
 
-        let body = res.text().await.unwrap();
-        // Parse HTML to find: <input type="hidden" name="csrf_token" value="...">
-        if let Some(start) = body.find(r#"name="csrf_token" value=""#) {
-            let value_start = start + r#"name="csrf_token" value=""#.len();
-            if let Some(end) = body[value_start..].find('"') {
-                let token = body[value_start..value_start + end].to_string();
-                return Ok(token);
-            }
+        AuthTokens {
+            access_token: payload["accessToken"].as_str().unwrap().to_string(),
+            refresh_token: payload["refreshToken"].as_str().unwrap().to_string(),
         }
-
-        Err(ApplicationError::Infrastructure(
-            "Failed to extract CSRF token from form page".to_string(),
-        ))
     }
 
     #[allow(dead_code)]
