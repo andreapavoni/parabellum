@@ -78,11 +78,12 @@ export function Layout(props: LayoutProps) {
   const village = props.bootstrap?.village;
   const villages = props.bootstrap?.villages ?? [];
   const player = props.bootstrap?.player;
+  const isGuestHome = !player && props.active === "home";
   const showVillageSwitcher = Boolean(player) && props.active === "village" && villages.length > 0;
 
   return (
     <>
-      <header class="bg-white border-b border-gray-300 shadow-sm">
+      {!isGuestHome ? <header class="bg-white border-b border-gray-300 shadow-sm">
         {player ? (
           <>
             <div class="flex justify-between items-center px-4 py-1 bg-gray-200 border-b border-gray-300 text-xs">
@@ -134,7 +135,7 @@ export function Layout(props: LayoutProps) {
             </div>
           </div>
         )}
-      </header>
+      </header> : null}
 
       {player ? (
         <div class={`mx-auto w-full max-w-6xl px-4 mt-4 mb-8 ${showVillageSwitcher ? "md:flex md:items-start md:gap-8" : ""}`}>
@@ -146,10 +147,10 @@ export function Layout(props: LayoutProps) {
           ) : null}
         </div>
       ) : (
-        <main class="flex-grow container mx-auto">{props.children}</main>
+        isGuestHome ? <main class="flex-grow">{props.children}</main> : <main class="flex-grow container mx-auto">{props.children}</main>
       )}
 
-      <footer class="bg-white border-t border-gray-300 py-4 text-center text-xs text-gray-400">
+      {!isGuestHome ? <footer class="bg-white border-t border-gray-300 py-4 text-center text-xs text-gray-400">
         <p>
           A{" "}
           <a class="hover:underline" href="https://pavonz.com">
@@ -163,7 +164,7 @@ export function Layout(props: LayoutProps) {
         <div class="mt-2 space-x-3">
           <span>Not affiliated with Travian Games GmbH</span>
         </div>
-      </footer>
+      </footer> : null}
     </>
   );
 }
