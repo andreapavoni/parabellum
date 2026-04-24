@@ -11,22 +11,25 @@ use serde::Serialize;
 
 use parabellum_app::{
     cqrs::queries::{
-        AcademyQueueItem, BuildingQueueItem, GetMarketplaceData, GetVillageInfoByIds,
-        SmithyQueueItem, TrainingQueueItem,
+        AcademyQueueItem, BuildingQueueItem, GetCulturePointsInfo, GetMarketplaceData,
+        GetVillageInfoByIds, SmithyQueueItem, TrainingQueueItem,
     },
     jobs::JobStatus,
-    queries_handlers::{GetMarketplaceDataHandler, GetVillageInfoByIdsHandler},
+    queries_handlers::{
+        GetCulturePointsInfoQueryHandler, GetMarketplaceDataHandler, GetVillageInfoByIdsHandler,
+    },
     repository::VillageInfo,
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
+    culture_points::required_cp,
     smithy::smithy_upgrade_cost_for_unit,
     village::VillageBuilding,
 };
 use parabellum_types::{
     army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
-    common::ResourceGroup,
+    common::{ResourceGroup, Speed},
 };
 
 use crate::{
@@ -76,6 +79,8 @@ pub struct BuildingDetailDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub training: Option<TrainingDetailDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expansion: Option<ExpansionDetailDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub academy: Option<AcademyDetailDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub smithy: Option<SmithyDetailDto>,
@@ -92,10 +97,25 @@ pub enum BuildingTypeDto {
     Empty,
     Generic,
     Training,
+    Expansion,
     Academy,
     Smithy,
     Marketplace,
     RallyPoint,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpansionDetailDto {
+    pub village_culture_points_production: u32,
+    pub account_culture_points_production: u32,
+    pub account_culture_points: u32,
+    pub next_cp_required: u32,
+    pub max_foundation_slots: u8,
+    pub child_villages_count: u32,
+    pub settlers_at_home: u32,
+    pub settlers_deployed: u32,
+    pub max_settlers_trainable: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,6 +128,26 @@ pub struct EmptySlotDetailDto {
     pub queued_building_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub queued_target_level: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queued_next_level: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queued_can_upgrade: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queued_upgrade_preview: Option<QueuedUpgradePreviewDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedUpgradePreviewDto {
+    pub building_name: String,
+    pub current_level: u8,
+    pub next_level: u8,
+    pub current_upkeep: u32,
+    pub next_upkeep: u32,
+    pub time_secs: u32,
+    pub at_max_level: bool,
+    pub next_value: Option<String>,
+    pub cost: ResourceAmountsDto,
 }
 
 #[derive(Debug, Serialize)]
@@ -361,6 +401,7 @@ pub async fn building_detail(
             | BuildingName::GreatStable
             | BuildingName::Workshop
             | BuildingName::GreatWorkshop => BuildingTypeDto::Training,
+            BuildingName::Residence | BuildingName::Palace => BuildingTypeDto::Expansion,
             BuildingName::Academy => BuildingTypeDto::Academy,
             BuildingName::Smithy => BuildingTypeDto::Smithy,
             BuildingName::Marketplace => BuildingTypeDto::Marketplace,
@@ -426,6 +467,7 @@ pub async fn building_detail(
                 stored_resources: resource_group_to_dto(&stored),
                 empty_slot: None,
                 training: None,
+                expansion: None,
                 academy: None,
                 smithy: None,
                 marketplace: None,
@@ -481,6 +523,115 @@ pub async fn building_detail(
                         units,
                         queue,
                     }),
+                    expansion: None,
+                    academy: None,
+                    smithy: None,
+                    marketplace: None,
+                    rally_point: None,
+                    description_paragraphs: building_description_paragraphs(&slot.building.name),
+                }
+            }
+            BuildingTypeDto::Expansion => {
+                let culture_points_info = state
+                    .app_bus
+                    .query(
+                        GetCulturePointsInfo {
+                            player_id: user.player.id,
+                        },
+                        GetCulturePointsInfoQueryHandler::new(),
+                    )
+                    .await
+                    .ok();
+                let account_culture_points_production = culture_points_info
+                    .as_ref()
+                    .map(|info| info.account_culture_points_production)
+                    .unwrap_or(0);
+                let account_culture_points = culture_points_info
+                    .as_ref()
+                    .map(|info| info.account_culture_points)
+                    .unwrap_or(0);
+
+                let training_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    &slot,
+                    &[BuildingName::Residence, BuildingName::Palace],
+                    UnitGroup::Expansion,
+                    &queues.training,
+                );
+                let training_queue = training_queue_for_slot(slot_id, &queues.training);
+
+                let max_slots = user.village.max_foundation_slots();
+                let child_villages_count = if max_slots > 0 {
+                    user.villages
+                        .iter()
+                        .filter(|v| v.parent_village_id == Some(user.village.id))
+                        .count() as u32
+                } else {
+                    0
+                };
+                let available_slots = max_slots.saturating_sub(child_villages_count as u8);
+                let settlers_at_home = user.village.count_settlers_at_home();
+                let settler_idx = user
+                    .village
+                    .tribe
+                    .get_unit_idx_by_name(&UnitName::Settler)
+                    .unwrap_or(9);
+                let settlers_deployed: u32 = user
+                    .village
+                    .deployed_armies()
+                    .iter()
+                    .map(|army| army.units().get(settler_idx))
+                    .sum();
+                let max_settlers_trainable = if available_slots > 0 {
+                    (available_slots as u32 * 3).saturating_sub(settlers_at_home + settlers_deployed)
+                } else {
+                    0
+                };
+
+                let speed = match state.server_speed {
+                    1 => Speed::X1,
+                    2 => Speed::X2,
+                    3 => Speed::X3,
+                    5 => Speed::X5,
+                    10 => Speed::X10,
+                    _ => Speed::X1,
+                };
+                let next_cp_required = required_cp(speed, user.villages.len() + 1);
+
+                BuildingDetailDto {
+                    slot_id,
+                    village_id: user.village.id,
+                    building_name: building_key(&slot.building.name),
+                    building_type: BuildingTypeDto::Expansion,
+                    current_level,
+                    population: slot.building.population,
+                    current_upkeep: slot.building.cost().upkeep,
+                    next_level,
+                    next_upkeep,
+                    time_secs,
+                    queue_full,
+                    at_max_level,
+                    next_value,
+                    cost: resource_group_to_dto(&cost),
+                    stored_resources: resource_group_to_dto(&stored),
+                    empty_slot: None,
+                    training: Some(TrainingDetailDto {
+                        training_speed_percent: (slot.building.value as f32 / 10.0) as u32,
+                        units: training_units,
+                        queue: training_queue,
+                    }),
+                    expansion: Some(ExpansionDetailDto {
+                        village_culture_points_production: user.village.culture_points_production,
+                        account_culture_points_production,
+                        account_culture_points,
+                        next_cp_required,
+                        max_foundation_slots: max_slots,
+                        child_villages_count,
+                        settlers_at_home,
+                        settlers_deployed,
+                        max_settlers_trainable,
+                    }),
                     academy: None,
                     smithy: None,
                     marketplace: None,
@@ -512,6 +663,7 @@ pub async fn building_detail(
                     stored_resources: resource_group_to_dto(&stored),
                     empty_slot: None,
                     training: None,
+                    expansion: None,
                     academy: Some(AcademyDetailDto {
                         ready_units,
                         locked_units,
@@ -554,6 +706,7 @@ pub async fn building_detail(
                     stored_resources: resource_group_to_dto(&stored),
                     empty_slot: None,
                     training: None,
+                    expansion: None,
                     academy: None,
                     smithy: Some(SmithyDetailDto {
                         units,
@@ -675,6 +828,7 @@ pub async fn building_detail(
                     stored_resources: resource_group_to_dto(&stored),
                     empty_slot: None,
                     training: None,
+                    expansion: None,
                     academy: None,
                     smithy: None,
                     marketplace: Some(MarketplaceDetailDto {
@@ -788,6 +942,7 @@ pub async fn building_detail(
                     stored_resources: resource_group_to_dto(&stored),
                     empty_slot: None,
                     training: None,
+                    expansion: None,
                     academy: None,
                     smithy: None,
                     marketplace: None,
@@ -800,9 +955,70 @@ pub async fn building_detail(
             }
         }
     } else {
-        let (buildable_buildings, locked_buildings) =
-            build_options_for_slot(&user.village, slot_id, &queues.building, state.server_speed);
         let queued = queues.building.iter().find(|item| item.slot_id == slot_id);
+        let has_queue_for_slot = queued.is_some();
+        let (buildable_buildings, locked_buildings) = if has_queue_for_slot {
+            (vec![], vec![])
+        } else {
+            build_options_for_slot(&user.village, slot_id, &queues.building, state.server_speed)
+        };
+        let queued_target_level = queued.map(|item| item.target_level);
+        let queued_next_level = queued_target_level.map(|level| level.saturating_add(1));
+        let queued_can_upgrade = queued.and_then(|item| {
+            get_building_data(&item.building_name)
+                .ok()
+                .map(|data| item.target_level < data.rules.max_level)
+        });
+        let queued_upgrade_preview = queued.and_then(|item| {
+            let current_level = item.target_level;
+            let building_name = item.building_name.clone();
+            let template = Building::new(building_name.clone(), state.server_speed);
+            let current_building = template.at_level(current_level, state.server_speed).ok();
+            let current_upkeep = current_building
+                .as_ref()
+                .map(|b| b.cost().upkeep)
+                .unwrap_or(template.cost().upkeep);
+            let max_level = get_building_data(&building_name)
+                .map(|data| data.rules.max_level)
+                .unwrap_or(current_level);
+            let at_max_level = current_level >= max_level;
+            let next_level = current_level.saturating_add(1).min(max_level);
+            let main_building_level = user.village.main_building_level();
+            let next_building = if at_max_level {
+                None
+            } else {
+                template.at_level(next_level, state.server_speed).ok()
+            };
+            let (next_upkeep, time_secs, cost, next_value) = if let Some(ref upgraded) = next_building
+            {
+                let computed = upgraded.cost();
+                (
+                    computed.upkeep,
+                    upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level),
+                    resource_group_to_dto(&computed.resources),
+                    Some(format_next_value(building_name.clone(), upgraded.value)),
+                )
+            } else {
+                (
+                    current_upkeep,
+                    0,
+                    resource_group_to_dto(&ResourceGroup::new(0, 0, 0, 0)),
+                    None,
+                )
+            };
+
+            Some(QueuedUpgradePreviewDto {
+                building_name: building_key(&building_name),
+                current_level,
+                next_level,
+                current_upkeep,
+                next_upkeep,
+                time_secs,
+                at_max_level,
+                next_value,
+                cost,
+            })
+        });
 
         BuildingDetailDto {
             slot_id,
@@ -823,11 +1039,15 @@ pub async fn building_detail(
             empty_slot: Some(EmptySlotDetailDto {
                 buildable_buildings,
                 locked_buildings,
-                has_queue_for_slot: queued.is_some(),
+                has_queue_for_slot,
                 queued_building_name: queued.map(|item| building_key(&item.building_name)),
-                queued_target_level: queued.map(|item| item.target_level),
+                queued_target_level,
+                queued_next_level,
+                queued_can_upgrade,
+                queued_upgrade_preview,
             }),
             training: None,
+            expansion: None,
             academy: None,
             smithy: None,
             marketplace: None,

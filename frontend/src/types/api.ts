@@ -34,7 +34,7 @@ export type TokenAuthResponse = {
   currentVillageId: number;
 };
 
-export type BuildingType = "empty" | "generic" | "training" | "academy" | "smithy" | "marketplace" | "rally_point";
+export type BuildingType = "empty" | "generic" | "training" | "expansion" | "academy" | "smithy" | "marketplace" | "rally_point";
 
 export type VillageSummary = {
   id: number;
@@ -292,11 +292,35 @@ export type BuildingDetail = {
     hasQueueForSlot: boolean;
     queuedBuildingName?: string;
     queuedTargetLevel?: number;
+    queuedNextLevel?: number;
+    queuedCanUpgrade?: boolean;
+    queuedUpgradePreview?: {
+      buildingName: string;
+      currentLevel: number;
+      nextLevel: number;
+      currentUpkeep: number;
+      nextUpkeep: number;
+      timeSecs: number;
+      atMaxLevel: boolean;
+      nextValue?: string;
+      cost: ResourceAmounts;
+    };
   };
   training?: {
     trainingSpeedPercent: number;
     units: TrainingUnitOption[];
     queue: TrainingQueueItem[];
+  };
+  expansion?: {
+    villageCulturePointsProduction: number;
+    accountCulturePointsProduction: number;
+    accountCulturePoints: number;
+    nextCpRequired: number;
+    maxFoundationSlots: number;
+    childVillagesCount: number;
+    settlersAtHome: number;
+    settlersDeployed: number;
+    maxSettlersTrainable: number;
   };
   academy?: {
     readyUnits: AcademyResearchOption[];

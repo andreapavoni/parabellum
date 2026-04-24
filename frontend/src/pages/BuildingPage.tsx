@@ -152,6 +152,39 @@ function EmptySlotSection({
   const [error, setError] = useState<string | null>(null);
   if (!detail.emptySlot) return null;
 
+  if (detail.emptySlot.hasQueueForSlot) {
+    const preview = detail.emptySlot.queuedUpgradePreview;
+    const queuedUpgradeDetail = preview
+      ? {
+          ...detail,
+          buildingName: preview.buildingName,
+          buildingType: "generic" as const,
+          currentLevel: preview.currentLevel,
+          nextLevel: preview.nextLevel,
+          currentUpkeep: preview.currentUpkeep,
+          nextUpkeep: preview.nextUpkeep,
+          timeSecs: preview.timeSecs,
+          atMaxLevel: preview.atMaxLevel,
+          nextValue: preview.nextValue,
+          cost: preview.cost,
+        }
+      : null;
+
+    return (
+      <div class="space-y-4">
+        <div class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Construction in progress
+          {detail.emptySlot.queuedBuildingName && detail.emptySlot.queuedTargetLevel
+            ? `: ${buildingLabel(detail.emptySlot.queuedBuildingName)} (Level ${detail.emptySlot.queuedTargetLevel})`
+            : ""}
+        </div>
+
+        {queuedUpgradeDetail ? <UpgradeBlock data={queuedUpgradeDetail} onMutate={onMutate} /> : null}
+        {error ? <div class="text-sm text-red-600">{error}</div> : null}
+      </div>
+    );
+  }
+
   const renderOption = (option: EmptySlotBuildOption, locked: boolean) => {
     const affordable = canAfford(detail.storedResources, option.cost);
     const canBuild = !locked && !detail.queueFull && affordable;
@@ -961,12 +994,96 @@ export function BuildingPage({
           <UpgradeBlock data={detail} onMutate={onMutate} />
         )}
 
-        {detail.buildingType === "training" && detail.training ? (
+        {detail.buildingType === "expansion" && detail.expansion ? (
+          <div class="space-y-4">
+            <div class="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+              <h2 class="text-xl font-semibold mb-4 text-gray-800">Culture Points</h2>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Village Production</div>
+                  <div class="text-2xl font-bold text-blue-700">
+                    {detail.expansion.villageCulturePointsProduction}
+                    <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
+                  </div>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Total Production</div>
+                  <div class="text-2xl font-bold text-green-700">
+                    {detail.expansion.accountCulturePointsProduction}
+                    <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
+                  </div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Total Culture Points</div>
+                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.accountCulturePoints}</div>
+                </div>
+              </div>
+              <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <div class="text-sm font-medium text-gray-700">
+                  Next village requires:{" "}
+                  <span class="font-bold text-yellow-700">{detail.expansion.nextCpRequired}</span>{" "}
+                  Culture Points
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
+              <h2 class="text-xl font-semibold mb-4 text-gray-800">Expansion</h2>
+              <h3 class="text-lg font-medium mb-2 text-gray-700">Foundation Slots</h3>
+              <div class="flex items-center gap-2 flex-wrap">
+                {Array.from({ length: detail.expansion.maxFoundationSlots }).map((_, i) =>
+                  i < detail.expansion.childVillagesCount ? (
+                    <div
+                      key={i}
+                      class="w-14 h-14 bg-red-500 border-2 border-red-700 rounded flex items-center justify-center"
+                    >
+                      <span class="text-white font-bold">✓</span>
+                    </div>
+                  ) : (
+                    <div
+                      key={i}
+                      class="w-14 h-14 bg-green-500 border-2 border-green-700 rounded flex items-center justify-center"
+                    >
+                      <span class="text-white font-bold">○</span>
+                    </div>
+                  ),
+                )}
+              </div>
+              <div class="text-sm text-gray-600 mt-2">
+                {detail.expansion.childVillagesCount} / {detail.expansion.maxFoundationSlots} slots
+                used
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Settlers at Home</div>
+                  <div class="text-2xl font-bold text-blue-700">{detail.expansion.settlersAtHome}</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Settlers Deployed</div>
+                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.settlersDeployed}</div>
+                </div>
+                <div class="bg-amber-50 p-4 rounded-lg">
+                  <div class="text-sm text-gray-600 mb-1">Trainable Settlers</div>
+                  <div class="text-2xl font-bold text-amber-700">{detail.expansion.maxSettlersTrainable}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {(detail.buildingType === "training" || detail.buildingType === "expansion") && detail.training ? (
           <>
             <div class="space-y-3">
-              <div class="text-sm text-gray-500 uppercase">Train units</div>
+              <div class="text-sm text-gray-500 uppercase">
+                {detail.buildingType === "expansion" ? "Train expansion units" : "Train units"}
+              </div>
               {detail.training.units.length === 0 ? (
-                <p class="text-sm text-gray-500">No units available.</p>
+                <p class="text-sm text-gray-500">
+                  {detail.buildingType === "expansion"
+                    ? "No expansion units available for training."
+                    : "No units available."}
+                </p>
               ) : (
                 <div class="space-y-4">
                   {detail.training.units.map((option) => (
