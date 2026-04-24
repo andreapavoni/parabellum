@@ -375,27 +375,31 @@ pub async fn building_detail(
             .iter()
             .filter(|item| item.slot_id == slot_id)
             .count() as u8;
-        let next_level = current_level
-            .saturating_add(queued_upgrades)
-            .saturating_add(1);
+        let max_level = get_building_data(&slot.building.name)
+            .map(|data| data.rules.max_level)
+            .unwrap_or(current_level);
+        let pending_level = current_level.saturating_add(queued_upgrades);
+        let at_max_level = pending_level >= max_level;
+        let next_level = pending_level.saturating_add(1).min(max_level);
 
-        let upgrade_info = slot
-            .building
-            .clone()
-            .at_level(next_level, state.server_speed)
-            .ok();
-        let (cost, time_secs, next_upkeep, at_max_level) = if let Some(ref upgraded) = upgrade_info
-        {
+        let upgrade_info = if at_max_level {
+            None
+        } else {
+            slot.building
+                .clone()
+                .at_level(next_level, state.server_speed)
+                .ok()
+        };
+        let (cost, time_secs, next_upkeep) = if let Some(ref upgraded) = upgrade_info {
             let computed = upgraded.cost();
             (
                 computed.resources,
                 upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level),
                 computed.upkeep,
-                false,
             )
         } else {
             let current_cost = slot.building.cost();
-            (current_cost.resources, 0, current_cost.upkeep, true)
+            (current_cost.resources, 0, current_cost.upkeep)
         };
 
         let next_value = upgrade_info

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { isProtectedRoute, navigate, parseRoute } from "@/lib/router";
 import type { BootstrapResponse, SessionResponse } from "@/types/api";
@@ -28,6 +28,7 @@ export function App() {
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const queueRefreshInFlightRef = useRef(false);
 
   useEffect(() => {
     const onPopState = () => setRoute(parseRoute(window.location));
@@ -101,6 +102,34 @@ export function App() {
   }, [booting, route, session.authenticated]);
 
   const page = useMemo(() => {
+    const syncVillageFromPage = (
+      village: BootstrapResponse["village"],
+      villages?: BootstrapResponse["villages"],
+    ) => {
+      setBootstrap((current) =>
+        current
+          ? {
+              ...current,
+              village,
+              villages: villages ?? current.villages,
+            }
+          : current,
+      );
+    };
+
+    const refreshFromQueueElapsed = async () => {
+      if (queueRefreshInFlightRef.current) {
+        return;
+      }
+      queueRefreshInFlightRef.current = true;
+      try {
+        await Promise.all([refreshSession(), refreshBootstrap()]);
+        setReloadKey((value) => value + 1);
+      } finally {
+        queueRefreshInFlightRef.current = false;
+      }
+    };
+
     const runMutation = async () => {
       await Promise.all([refreshSession(), refreshBootstrap()]);
       setReloadKey((value) => value + 1);
@@ -108,9 +137,21 @@ export function App() {
 
     switch (route.name) {
       case "village":
-        return <ProtectedVillage reloadKey={reloadKey} />;
+        return (
+          <ProtectedVillage
+            reloadKey={reloadKey}
+            onVillageLoaded={syncVillageFromPage}
+            onQueueElapsed={refreshFromQueueElapsed}
+          />
+        );
       case "resources":
-        return <ProtectedResources reloadKey={reloadKey} />;
+        return (
+          <ProtectedResources
+            reloadKey={reloadKey}
+            onVillageLoaded={syncVillageFromPage}
+            onQueueElapsed={refreshFromQueueElapsed}
+          />
+        );
       case "building":
         return (
           <ProtectedBuilding
@@ -226,18 +267,48 @@ export function App() {
   );
 }
 
-function ProtectedVillage({ reloadKey }: { reloadKey: number }) {
+function ProtectedVillage({
+  reloadKey,
+  onVillageLoaded,
+  onQueueElapsed,
+}: {
+  reloadKey: number;
+  onVillageLoaded?: (
+    village: BootstrapResponse["village"],
+    villages?: BootstrapResponse["villages"],
+  ) => void;
+  onQueueElapsed?: () => void;
+}) {
   const { data, error, loading } = usePageData(() => api.village(), [reloadKey]);
+  useEffect(() => {
+    if (!data || !onVillageLoaded) return;
+    onVillageLoaded(data.village, data.villages);
+  }, [data, onVillageLoaded]);
   if (loading) return <Loading label="Loading village..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load village."} />;
-  return <VillagePage data={data} />;
+  return <VillagePage data={data} onQueueElapsed={onQueueElapsed} />;
 }
 
-function ProtectedResources({ reloadKey }: { reloadKey: number }) {
+function ProtectedResources({
+  reloadKey,
+  onVillageLoaded,
+  onQueueElapsed,
+}: {
+  reloadKey: number;
+  onVillageLoaded?: (
+    village: BootstrapResponse["village"],
+    villages?: BootstrapResponse["villages"],
+  ) => void;
+  onQueueElapsed?: () => void;
+}) {
   const { data, error, loading } = usePageData(() => api.resources(), [reloadKey]);
+  useEffect(() => {
+    if (!data || !onVillageLoaded) return;
+    onVillageLoaded(data.village);
+  }, [data, onVillageLoaded]);
   if (loading) return <Loading label="Loading resources..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load resources."} />;
-  return <ResourcesPage data={data} />;
+  return <ResourcesPage data={data} onQueueElapsed={onQueueElapsed} />;
 }
 
 function ProtectedStats({ page, reloadKey }: { page: number; reloadKey: number }) {

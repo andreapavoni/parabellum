@@ -56,6 +56,15 @@ pub struct ResourceAmountsDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProductionAmountsDto {
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VillageSummaryDto {
     pub id: u32,
     pub name: String,
@@ -65,7 +74,7 @@ pub struct VillageSummaryDto {
     pub warehouse_capacity: u32,
     pub granary_capacity: u32,
     pub resources: ResourceAmountsDto,
-    pub production_per_hour: ResourceAmountsDto,
+    pub production_per_hour: ProductionAmountsDto,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,11 +249,11 @@ pub fn village_summary(village: &Village) -> VillageSummaryDto {
             iron: resources.iron(),
             crop: resources.crop(),
         },
-        production_per_hour: ResourceAmountsDto {
+        production_per_hour: ProductionAmountsDto {
             lumber: village.production.effective.lumber,
             clay: village.production.effective.clay,
             iron: village.production.effective.iron,
-            crop: village.production.effective.crop as u32,
+            crop: village.production.effective.crop,
         },
     }
 }

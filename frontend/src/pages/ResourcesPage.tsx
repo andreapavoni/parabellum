@@ -2,7 +2,13 @@ import type { ResourcesPageResponse } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
 
-export function ResourcesPage({ data }: { data: ResourcesPageResponse }) {
+export function ResourcesPage({
+  data,
+  onQueueElapsed,
+}: {
+  data: ResourcesPageResponse;
+  onQueueElapsed?: () => void;
+}) {
   const production = data.village.productionPerHour;
 
   return (
@@ -12,7 +18,7 @@ export function ResourcesPage({ data }: { data: ResourcesPageResponse }) {
           {data.village.name} ({data.village.x}|{data.village.y})
         </h1>
         <ResourceFieldsMap slots={data.resourceSlots} />
-        <QueueList queue={data.buildingQueue} />
+        <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
       </div>
       <div class="w-full max-w-[360px] md:w-56 pt-4 md:pt-12 border-t md:border-t-0 border-gray-200 md:border-none">
         <h3 class="font-bold mb-3 text-sm">Production</h3>

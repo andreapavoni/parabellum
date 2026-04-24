@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { BuildingQueueItem } from "@/types/api";
 import { Link } from "./Link";
 import { buildingLabel } from "@/lib/labels";
@@ -10,11 +10,13 @@ function formatDuration(totalSeconds: number) {
   return [hours, minutes, seconds].map((value) => value.toString().padStart(2, "0")).join(":");
 }
 
-function QueueTimer({ seconds }: { seconds: number }) {
+function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
   const [remaining, setRemaining] = useState(seconds);
+  const notifiedRef = useRef(false);
 
   useEffect(() => {
     setRemaining(seconds);
+    notifiedRef.current = false;
   }, [seconds]);
 
   useEffect(() => {
@@ -24,10 +26,24 @@ function QueueTimer({ seconds }: { seconds: number }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!onElapsed || notifiedRef.current || remaining > 0) {
+      return;
+    }
+    notifiedRef.current = true;
+    onElapsed();
+  }, [remaining, onElapsed]);
+
   return <span class="font-semibold text-gray-800">{formatDuration(remaining)}</span>;
 }
 
-export function QueueList({ queue }: { queue: BuildingQueueItem[] }) {
+export function QueueList({
+  queue,
+  onQueueElapsed,
+}: {
+  queue: BuildingQueueItem[];
+  onQueueElapsed?: () => void;
+}) {
   return (
     <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
       <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Building queue</div>
@@ -43,7 +59,7 @@ export function QueueList({ queue }: { queue: BuildingQueueItem[] }) {
               <span class={item.isProcessing ? "text-green-600" : "text-yellow-600"}>⏳</span>
               {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
             </Link>
-            <QueueTimer seconds={item.timeSeconds} />
+            <QueueTimer seconds={item.timeSeconds} onElapsed={onQueueElapsed} />
           </div>
         ))
       )}

@@ -5,6 +5,13 @@ export type ResourceAmounts = {
   crop: number;
 };
 
+export type ProductionPerHour = {
+  lumber: number;
+  clay: number;
+  iron: number;
+  crop: number;
+};
+
 export type SessionUser = {
   userId: string;
   playerId: string;
@@ -38,7 +45,7 @@ export type VillageSummary = {
   warehouseCapacity: number;
   granaryCapacity: number;
   resources: ResourceAmounts;
-  productionPerHour: ResourceAmounts;
+  productionPerHour: ProductionPerHour;
 };
 
 export type VillageListItem = {

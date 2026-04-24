@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use parabellum_game::models::buildings::get_building_data;
 use parabellum_types::{
     Result,
     errors::{ApplicationError, GameError},
@@ -70,6 +71,11 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 
         let pending_level = highest_target_level_for_slot(&building_jobs, command.slot_id)
             .unwrap_or(vb.building.level);
+        let max_level = get_building_data(&vb.building.name)?.rules.max_level;
+        if pending_level >= max_level {
+            return Err(GameError::BuildingMaxLevelReached.into());
+        }
+
         let next_level = pending_level + 1;
         let next_level_building = vb.building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
