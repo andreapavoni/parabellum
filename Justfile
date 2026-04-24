@@ -31,4 +31,4 @@ setup_db:
     ./setup-db
 
 test:
-    cargo test --release -- --test-threads=1
+    cargo test --release

@@ -11,7 +11,7 @@ use crate::test_utils::tests::{
 
 #[tokio::test]
 async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
     let uow = uow_provider.tx().await?;
     let client = setup_http_client(None, None).await;
 
@@ -21,7 +21,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
     assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
-        .post("http://localhost:8088/api/v1/auth/token/register")
+        .post(format!("{base_url}/api/v1/auth/token/register"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -73,7 +73,7 @@ async fn test_register_player_happy_path() -> Result<(), ApplicationError> {
 
 #[tokio::test]
 async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
     let uow = uow_provider.tx().await?;
 
@@ -83,7 +83,7 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
     assert!(uow.users().get_by_email(email).await.is_err());
 
     let res = client
-        .post("http://localhost:8088/api/v1/auth/token/register")
+        .post(format!("{base_url}/api/v1/auth/token/register"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -105,7 +105,7 @@ async fn test_register_player_wrong_form() -> Result<(), ApplicationError> {
 
 #[tokio::test]
 async fn test_register_authenticated_player() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
 
     let (_, _, _, _, user) = setup_player_party(
         uow_provider.clone(),
@@ -117,10 +117,10 @@ async fn test_register_authenticated_player() -> Result<(), ApplicationError> {
     .await?;
 
     let client = setup_http_client(None, None).await;
-    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
+    let tokens = login_tokens(&client, &base_url, &user.email, "parabellum!").await;
 
     let res = client
-        .get("http://localhost:8088/api/v1/auth/token/session")
+        .get(format!("{base_url}/api/v1/auth/token/session"))
         .bearer_auth(tokens.access_token)
         .send()
         .await

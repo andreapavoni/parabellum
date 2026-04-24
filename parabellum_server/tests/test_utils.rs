@@ -6,9 +6,9 @@ pub mod tests {
     use rand::Rng;
     use reqwest::{Client, header, redirect::Policy};
     use serde_json::Value;
-    use sqlx::{Postgres, Transaction};
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    use sqlx::{PgPool, postgres::PgPoolOptions};
+    use std::{env, net::TcpListener, sync::Arc, time::Duration};
+    use uuid::Uuid;
 
     use parabellum_app::{
         app::AppBus,
@@ -16,17 +16,11 @@ pub mod tests {
         config::Config,
         job_registry::AppJobRegistry,
         jobs::worker::JobWorker,
-        repository::{
-            ArmyRepository, HeroRepository, JobRepository, MapRepository, MarketplaceRepository,
-            PlayerRepository, ReportRepository, UserRepository, VillageRepository,
-        },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
     use parabellum_db::{
-        PostgresArmyRepository, PostgresHeroRepository, PostgresJobRepository,
-        PostgresMapRepository, PostgresMarketplaceRepository, PostgresPlayerRepository,
-        PostgresReportRepository, PostgresUserRepository, PostgresVillageRepository,
-        bootstrap_world_map, establish_test_connection_pool,
+        bootstrap_world_map,
+        uow::PostgresUnitOfWorkProvider,
     };
     use parabellum_game::{
         models::{army::Army, hero::Hero, village::Village},
@@ -50,83 +44,97 @@ pub mod tests {
     }
 
     #[derive(Clone)]
-    pub struct TestUnitOfWork<'a> {
-        tx: Arc<Mutex<Transaction<'a, Postgres>>>,
+    struct IsolatedSchemaHandle {
+        root_url: String,
+        schema_name: String,
     }
 
-    #[async_trait]
-    impl<'a, 'p> UnitOfWork<'p> for TestUnitOfWork<'a>
-    where
-        'a: 'p,
-    {
-        fn players(&self) -> Arc<dyn PlayerRepository + 'p> {
-            Arc::new(PostgresPlayerRepository::new(self.tx.clone()))
-        }
-
-        fn villages(&self) -> Arc<dyn VillageRepository + 'p> {
-            Arc::new(PostgresVillageRepository::new(self.tx.clone()))
-        }
-
-        fn armies(&self) -> Arc<dyn ArmyRepository + 'p> {
-            Arc::new(PostgresArmyRepository::new(self.tx.clone()))
-        }
-
-        fn jobs(&self) -> Arc<dyn JobRepository + 'p> {
-            Arc::new(PostgresJobRepository::new(self.tx.clone()))
-        }
-
-        fn reports(&self) -> Arc<dyn ReportRepository + 'p> {
-            Arc::new(PostgresReportRepository::new(self.tx.clone()))
-        }
-
-        fn map(&self) -> Arc<dyn MapRepository + 'p> {
-            Arc::new(PostgresMapRepository::new(self.tx.clone()))
-        }
-
-        fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'p> {
-            Arc::new(PostgresMarketplaceRepository::new(self.tx.clone()))
-        }
-
-        fn heroes(&self) -> Arc<dyn HeroRepository + 'p> {
-            Arc::new(PostgresHeroRepository::new(self.tx.clone()))
-        }
-
-        fn users(&self) -> Arc<dyn UserRepository + 'p> {
-            Arc::new(PostgresUserRepository::new(self.tx.clone()))
-        }
-
-        async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
-            Ok(())
-        }
-
-        async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
-            Ok(())
+    impl Drop for IsolatedSchemaHandle {
+        fn drop(&mut self) {
+            let root_url = self.root_url.clone();
+            let schema_name = self.schema_name.clone();
+            std::thread::spawn(move || {
+                if let Ok(rt) = tokio::runtime::Runtime::new() {
+                    rt.block_on(async move {
+                        if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&root_url).await {
+                            let query = format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema_name);
+                            let _ = sqlx::query(&query).execute(&pool).await;
+                        }
+                    });
+                }
+            });
         }
     }
 
     #[derive(Clone)]
-    pub struct TestUnitOfWorkProvider<'a> {
-        tx: Arc<Mutex<Transaction<'a, Postgres>>>,
+    pub struct TestUnitOfWorkProvider {
+        inner: PostgresUnitOfWorkProvider,
+        #[allow(dead_code)]
+        schema_handle: Arc<IsolatedSchemaHandle>,
     }
 
-    impl<'a> TestUnitOfWorkProvider<'a> {
-        pub fn new(tx: Arc<Mutex<Transaction<'a, Postgres>>>) -> Self {
-            Self { tx }
+    impl TestUnitOfWorkProvider {
+        fn new(pool: PgPool, schema_handle: Arc<IsolatedSchemaHandle>) -> Self {
+            Self {
+                inner: PostgresUnitOfWorkProvider::new(pool),
+                schema_handle,
+            }
         }
     }
 
     #[async_trait]
-    impl<'a> UnitOfWorkProvider for TestUnitOfWorkProvider<'a> {
-        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError>
-        where
-            'a: 'p,
-        {
-            let test_uow: TestUnitOfWork<'a> = TestUnitOfWork::<'a> {
-                tx: self.tx.clone(),
-            };
-
-            Ok(Box::new(test_uow))
+    impl UnitOfWorkProvider for TestUnitOfWorkProvider {
+        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+            self.inner.tx().await
         }
+    }
+
+    fn append_search_path(url: &str, schema_name: &str) -> String {
+        let separator = if url.contains('?') { '&' } else { '?' };
+        format!("{url}{separator}options=-csearch_path%3D{schema_name}%2Cpublic")
+    }
+
+    async fn create_isolated_test_pool() -> Result<(PgPool, Arc<IsolatedSchemaHandle>)> {
+        dotenvy::dotenv().ok();
+        let root_url = env::var("TEST_DATABASE_URL")
+            .map_err(|_| ApplicationError::Unknown("TEST_DATABASE_URL must be set".to_string()))?;
+        let schema_name = format!("test_{}", Uuid::new_v4().simple());
+
+        let root_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&root_url)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        sqlx::query(r#"CREATE EXTENSION IF NOT EXISTS "uuid-ossp""#)
+            .execute(&root_pool)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        let create_query = format!("CREATE SCHEMA \"{}\"", schema_name);
+        sqlx::query(&create_query)
+            .execute(&root_pool)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        let isolated_url = append_search_path(&root_url, &schema_name);
+        let isolated_pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&isolated_url)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        sqlx::migrate!("../migrations")
+            .run(&isolated_pool)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        let handle = Arc::new(IsolatedSchemaHandle {
+            root_url,
+            schema_name,
+        });
+
+        Ok((isolated_pool, handle))
     }
 
     #[allow(dead_code)]
@@ -139,11 +147,9 @@ pub mod tests {
         Arc<Config>,
     )> {
         let config = Arc::new(Config::from_env());
-        let pool = establish_test_connection_pool().await.unwrap();
-        let master_tx = pool.begin().await.unwrap();
-        let master_tx_arc = Arc::new(Mutex::new(master_tx));
+        let (pool, schema_handle) = create_isolated_test_pool().await?;
         let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(master_tx_arc.clone()));
+            Arc::new(TestUnitOfWorkProvider::new(pool.clone(), schema_handle));
 
         if world_map {
             bootstrap_world_map(&pool, config.world_size).await?;
@@ -161,14 +167,46 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<Arc<dyn UnitOfWorkProvider>> {
-        let (app_bus, _, uow_provider, config) = setup_app(true).await?;
-        let app = Arc::new(app_bus);
-        let db_pool = establish_test_connection_pool().await.unwrap();
-        let state = AppState::new(app, db_pool, &config);
-        tokio::spawn(WebRouter::serve(state.clone(), 8088));
+    pub async fn setup_web_app() -> Result<(Arc<dyn UnitOfWorkProvider>, String)> {
+        let (pool, schema_handle) = create_isolated_test_pool().await?;
+        let config = Arc::new(Config::from_env());
+        bootstrap_world_map(&pool, config.world_size).await?;
+        let uow_provider: Arc<dyn UnitOfWorkProvider> =
+            Arc::new(TestUnitOfWorkProvider::new(pool.clone(), schema_handle));
 
-        Ok(uow_provider)
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let port = listener
+            .local_addr()
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?
+            .port();
+        drop(listener);
+
+        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
+        let app = Arc::new(app_bus);
+        let state = AppState::new(app, pool, &config);
+        tokio::spawn(WebRouter::serve(state.clone(), port));
+
+        let base_url = format!("http://127.0.0.1:{port}");
+        let client = reqwest::Client::new();
+        let health_url = format!("{base_url}/health");
+        let mut ready = false;
+        for _ in 0..40 {
+            if let Ok(response) = client.get(&health_url).send().await
+                && response.status() == StatusCode::OK
+            {
+                ready = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        if !ready {
+            return Err(ApplicationError::Unknown(
+                "Web test app did not become ready".to_string(),
+            ));
+        }
+
+        Ok((uow_provider, base_url))
     }
 
     #[allow(dead_code)]
@@ -189,9 +227,14 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn login_tokens(client: &Client, email: &str, password: &str) -> AuthTokens {
+    pub async fn login_tokens(
+        client: &Client,
+        base_url: &str,
+        email: &str,
+        password: &str,
+    ) -> AuthTokens {
         let response = client
-            .post("http://localhost:8088/api/v1/auth/token/login")
+            .post(format!("{base_url}/api/v1/auth/token/login"))
             .header("content-type", "application/json")
             .body(
                 serde_json::json!({

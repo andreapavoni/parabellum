@@ -295,7 +295,6 @@ pub mod tests {
 
         {
             let uow_update = uow_provider.tx().await?;
-            let village_repo = uow_update.villages();
 
             let granary =
                 Building::new(BuildingName::Granary, config.speed).at_level(1, config.speed)?;
@@ -306,7 +305,10 @@ pub mod tests {
             defender_village.add_building_at_slot(warehouse, 20)?;
             defender_village.store_resources(&ResourceGroup::new(800, 800, 800, 800));
 
-            village_repo.save(&defender_village).await?;
+            {
+                let village_repo = uow_update.villages();
+                village_repo.save(&defender_village).await?;
+            }
             uow_update.commit().await?;
         };
 

@@ -11,14 +11,14 @@ use crate::test_utils::tests::{
 
 #[tokio::test]
 async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, Some(1)).await;
 
     let (player, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
 
     let res = client
-        .post("http://localhost:8088/api/v1/auth/token/login")
+        .post(format!("{base_url}/api/v1/auth/token/login"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -40,14 +40,14 @@ async fn test_login_player_happy_path() -> Result<(), ApplicationError> {
 
 #[tokio::test]
 async fn test_login_player_wrong_password() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, Some(1)).await;
 
     let (_, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
 
     let res = client
-        .post("http://localhost:8088/api/v1/auth/token/login")
+        .post(format!("{base_url}/api/v1/auth/token/login"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -69,7 +69,7 @@ async fn test_login_player_wrong_password() -> Result<(), ApplicationError> {
 
 #[tokio::test]
 async fn test_logout_success() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
 
     let (_, _, _, _, user) = setup_player_party(
         uow_provider.clone(),
@@ -81,10 +81,10 @@ async fn test_logout_success() -> Result<(), ApplicationError> {
     .await?;
 
     let client = setup_http_client(None, None).await;
-    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
+    let tokens = login_tokens(&client, &base_url, &user.email, "parabellum!").await;
 
     let res = client
-        .post("http://localhost:8088/api/v1/auth/token/logout")
+        .post(format!("{base_url}/api/v1/auth/token/logout"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -102,15 +102,15 @@ async fn test_logout_success() -> Result<(), ApplicationError> {
 
 #[tokio::test]
 async fn test_refresh_rotates_and_old_refresh_is_rejected() -> Result<(), ApplicationError> {
-    let uow_provider = setup_web_app().await?;
+    let (uow_provider, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
     let (_, _, _, _, user) =
         setup_player_party(uow_provider, None, Tribe::Roman, TroopSet::default(), false).await?;
 
-    let tokens = login_tokens(&client, &user.email, "parabellum!").await;
+    let tokens = login_tokens(&client, &base_url, &user.email, "parabellum!").await;
 
     let rotate = client
-        .post("http://localhost:8088/api/v1/auth/refresh")
+        .post(format!("{base_url}/api/v1/auth/refresh"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({
@@ -129,7 +129,7 @@ async fn test_refresh_rotates_and_old_refresh_is_rejected() -> Result<(), Applic
     assert_ne!(rotated_refresh, tokens.refresh_token);
 
     let old_reuse = client
-        .post("http://localhost:8088/api/v1/auth/refresh")
+        .post(format!("{base_url}/api/v1/auth/refresh"))
         .header("content-type", "application/json")
         .body(
             serde_json::json!({

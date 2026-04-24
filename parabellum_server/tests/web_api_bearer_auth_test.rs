@@ -8,11 +8,11 @@ use crate::test_utils::tests::{setup_http_client, setup_web_app};
 
 #[tokio::test]
 async fn test_protected_endpoint_requires_bearer_token() -> Result<(), ApplicationError> {
-    setup_web_app().await?;
+    let (_, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
 
     let response = client
-        .get("http://localhost:8088/api/v1/village")
+        .get(format!("{base_url}/api/v1/village"))
         .send()
         .await
         .unwrap();
@@ -26,11 +26,11 @@ async fn test_protected_endpoint_requires_bearer_token() -> Result<(), Applicati
 
 #[tokio::test]
 async fn test_protected_endpoint_rejects_invalid_bearer_token() -> Result<(), ApplicationError> {
-    setup_web_app().await?;
+    let (_, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
 
     let response = client
-        .get("http://localhost:8088/api/v1/village")
+        .get(format!("{base_url}/api/v1/village"))
         .bearer_auth("invalid-token")
         .send()
         .await
