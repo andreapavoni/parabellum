@@ -1,5 +1,5 @@
 use crate::{
-    command_handlers::helpers::calculate_merchants_needed,
+    command_handlers::helpers::{calculate_merchants_needed, validate_marketplace_exchange_rules},
     config::Config,
     cqrs::{CommandHandler, commands::AcceptMarketplaceOffer},
     jobs::{Job, JobPayload, tasks::MerchantGoingTask},
@@ -45,6 +45,7 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
         if offer.village_id == command.village_id {
             return Err(ApplicationError::Game(GameError::InvalidMarketplaceOffer));
         }
+        validate_marketplace_exchange_rules(&offer.offer_resources, &offer.seek_resources)?;
 
         // Load both villages
         let mut acceptor_village = village_repo.get_by_id(command.village_id).await?;
@@ -364,6 +365,36 @@ mod tests {
             ApplicationError::Game(GameError::BuildingRequirementsNotMet { .. })
         ));
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_accept_invalid_offer_shape_fails() -> Result<()> {
+        let config = Arc::new(Config::from_env());
+        let (mock_uow, offerer_player, offerer_village, acceptor_player, acceptor_village, _offer) =
+            setup_test_villages(&config).await?;
+
+        let invalid_offer = MarketplaceOffer::new(
+            offerer_player.id,
+            offerer_village.id,
+            ResourceGroup(700, 300, 0, 0), // mixed side
+            ResourceGroup(0, 0, 1000, 0),
+            2,
+        );
+        mock_uow.marketplace().create(&invalid_offer).await?;
+
+        let handler = AcceptMarketplaceOfferCommandHandler::new();
+        let command = AcceptMarketplaceOffer {
+            player_id: acceptor_player.id,
+            village_id: acceptor_village.id,
+            offer_id: invalid_offer.id,
+        };
+
+        let result = handler.handle(command, &mock_uow, &config).await;
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Game(GameError::InvalidMarketplaceOffer))
+        ));
         Ok(())
     }
 }

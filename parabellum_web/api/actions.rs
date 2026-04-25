@@ -1,3 +1,10 @@
+//! Mutation handlers for game actions.
+//!
+//! This module contains command-style endpoints (build, train, send troops/resources,
+//! marketplace actions, research, reinforce/recall, and village founding).
+//! Handlers stay orchestration-only: validate request shape, resolve authenticated user,
+//! invoke `parabellum_app` command handlers, and map errors to API codes.
+
 use axum::{
     Json,
     extract::{Path, State},
@@ -42,12 +49,14 @@ const RALLY_POINT_SLOT: u8 = 39;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Generic success response for command endpoints.
 pub struct ActionResponse {
     pub success: bool,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for building creation on an empty slot.
 pub struct AddBuildingRequest {
     pub slot_id: u8,
     pub building_name: BuildingName,
@@ -55,12 +64,14 @@ pub struct AddBuildingRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for upgrading a building by slot.
 pub struct UpgradeBuildingRequest {
     pub slot_id: u8,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for unit training command.
 pub struct TrainUnitsRequest {
     pub slot_id: u8,
     pub unit_idx: u8,
@@ -70,6 +81,7 @@ pub struct TrainUnitsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for academy research.
 pub struct ResearchAcademyRequest {
     pub slot_id: u8,
     pub unit_name: UnitName,
@@ -77,6 +89,7 @@ pub struct ResearchAcademyRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for smithy upgrade research.
 pub struct ResearchSmithyRequest {
     pub slot_id: u8,
     pub unit_name: UnitName,
@@ -84,6 +97,7 @@ pub struct ResearchSmithyRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for direct resource transfer via marketplace.
 pub struct SendResourcesRequest {
     pub slot_id: u8,
     pub target_x: i32,
@@ -96,6 +110,7 @@ pub struct SendResourcesRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for marketplace offer creation.
 pub struct CreateOfferRequest {
     pub slot_id: u8,
     pub offer_lumber: u32,
@@ -110,6 +125,7 @@ pub struct CreateOfferRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Common payload for marketplace offer accept/cancel actions.
 pub struct OfferActionRequest {
     pub slot_id: u8,
 }
@@ -131,6 +147,7 @@ pub enum ScoutingTargetKind {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for troop movement commands.
 pub struct SendTroopsRequest {
     pub slot_id: u8,
     pub target_x: i32,
@@ -143,6 +160,7 @@ pub struct SendTroopsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for recalling deployed units.
 pub struct RecallTroopsRequest {
     pub army_id: Uuid,
     pub units: Vec<i32>,
@@ -150,6 +168,7 @@ pub struct RecallTroopsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for releasing reinforcements from a source village.
 pub struct ReleaseReinforcementsRequest {
     pub source_village_id: u32,
     pub units: Vec<i32>,
@@ -157,12 +176,14 @@ pub struct ReleaseReinforcementsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Payload for settler village founding movement.
 pub struct FoundVillageRequest {
     pub target_x: i32,
     pub target_y: i32,
     pub units: Vec<i32>,
 }
 
+/// Starts a building construction job on an empty slot.
 pub async fn add_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -188,6 +209,7 @@ pub async fn add_building(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Queues a building upgrade for the target slot.
 pub async fn upgrade_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -212,6 +234,7 @@ pub async fn upgrade_building(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Queues unit training in a valid training/expansion building slot.
 pub async fn train_units(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -250,6 +273,7 @@ pub async fn train_units(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Queues academy research for a unit.
 pub async fn research_academy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -274,6 +298,7 @@ pub async fn research_academy(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Queues smithy research for a unit.
 pub async fn research_smithy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -298,6 +323,7 @@ pub async fn research_smithy(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Sends resources from current village to coordinates-derived target village.
 pub async fn send_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -330,6 +356,7 @@ pub async fn send_resources(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Creates a marketplace offer from current village.
 pub async fn create_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -365,6 +392,7 @@ pub async fn create_marketplace_offer(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Accepts an existing marketplace offer.
 pub async fn accept_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -391,6 +419,7 @@ pub async fn accept_marketplace_offer(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Cancels one of current village marketplace offers.
 pub async fn cancel_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -417,6 +446,7 @@ pub async fn cancel_marketplace_offer(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Sends troops as attack/raid/reinforcement or scouting movement.
 pub async fn send_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -527,6 +557,7 @@ pub async fn send_troops(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Recalls units from a deployed army.
 pub async fn recall_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -552,6 +583,7 @@ pub async fn recall_troops(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Releases reinforcements back to their origin village.
 pub async fn release_reinforcements(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -577,6 +609,7 @@ pub async fn release_reinforcements(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Sends settlers to found a new village.
 pub async fn found_village(
     State(state): State<AppState>,
     headers: HeaderMap,

@@ -1,3 +1,10 @@
+//! Read-oriented game and profile handlers.
+//!
+//! These handlers expose canonical API data used by the SPA:
+//! - current user context (`/me/*`)
+//! - village resource/overview snapshots (`/villages/{id}/*`)
+//! - map, reports, stats and player profile reads
+
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -25,15 +32,16 @@ use parabellum_app::{
     repository::MapRegionTile,
 };
 use parabellum_game::models::map::MapFieldTopology;
+use parabellum_game::models::village::Village;
 use parabellum_types::map::{Position, ValleyTopology};
 
 use crate::{
     api::{
         dto::{
-            BootstrapResponse, LeaderboardEntryDto, PaginationDto, PlayerProfileResponse,
+            LeaderboardEntryDto, MeContextResponse, PaginationDto, PlayerProfileResponse,
             PlayerVillageDto, ReportDetailResponse, ReportListItemDto, ReportsResponse,
-            StatsResponse, player_summary, resources_page_response, village_list,
-            village_page_response, village_summary,
+            StatsResponse, player_summary, session_user, village_list, village_overview_response,
+            village_resources_response, village_summary,
         },
         errors::ApiError,
     },
@@ -47,18 +55,21 @@ const LEADERBOARD_PAGE_SIZE: i64 = 20;
 const MAP_REGION_RADIUS: i32 = 7;
 
 #[derive(Debug, Deserialize)]
+/// Pagination query for leaderboard endpoint.
 pub struct StatsQuery {
     pub page: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Request payload to switch current village.
 pub struct SwitchVillageRequest {
     pub village_id: u32,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Response for village switch operation.
 pub struct SwitchVillageResponse {
     pub village_id: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,7 +78,17 @@ pub struct SwitchVillageResponse {
     pub expires_in: Option<i64>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+/// Session endpoint response for authenticated clients.
+pub struct MeSessionResponse {
+    pub authenticated: bool,
+    pub user: crate::api::dto::SessionUserDto,
+    pub current_village_id: u32,
+}
+
 #[derive(Debug, Deserialize)]
+/// Query params for map region retrieval.
 pub struct MapRegionQuery {
     pub x: Option<i32>,
     pub y: Option<i32>,
@@ -75,6 +96,7 @@ pub struct MapRegionQuery {
 }
 
 #[derive(Debug, Serialize)]
+/// Response for map region endpoint.
 pub struct MapRegionResponse {
     pub center: MapPoint,
     pub radius: i32,
@@ -82,12 +104,14 @@ pub struct MapRegionResponse {
 }
 
 #[derive(Debug, Serialize)]
+/// 2D point on world map.
 pub struct MapPoint {
     pub x: i32,
     pub y: i32,
 }
 
 #[derive(Debug, Serialize)]
+/// Tile data returned by map region endpoint.
 pub struct MapTileResponse {
     pub x: i32,
     pub y: i32,
@@ -113,6 +137,7 @@ pub struct MapTileResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Runtime tile category.
 pub enum TileType {
     Village,
     Valley,
@@ -121,6 +146,7 @@ pub enum TileType {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Detailed payload for a specific map field.
 pub struct MapFieldDetailResponse {
     pub id: u32,
     pub x: i32,
@@ -143,6 +169,7 @@ pub struct MapFieldDetailResponse {
 }
 
 #[derive(Debug, Serialize)]
+/// Valley resource distribution for valley/oasis map payloads.
 pub struct ValleyDistribution {
     pub lumber: u8,
     pub clay: u8,
@@ -194,40 +221,60 @@ impl From<MapRegionTile> for MapTileResponse {
     }
 }
 
-pub async fn bootstrap(
+/// Returns current authenticated session user and active village id.
+pub async fn me_session(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
+    Ok(Json(MeSessionResponse {
+        authenticated: true,
+        user: session_user(&user),
+        current_village_id: user.village.id,
+    }))
+}
 
-    Ok(Json(BootstrapResponse {
+/// Returns authenticated user context for SPA shell state.
+pub async fn me_context(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    Ok(Json(MeContextResponse {
         server_time: Utc::now().timestamp(),
         world_size: state.world_size,
         server_speed: state.server_speed,
         player: player_summary(&user),
-        village: village_summary(&user.village),
+        current_village: village_summary(&user.village),
         villages: village_list(&user),
     }))
 }
 
-pub async fn village(
+/// Returns village overview (building slots + queue) for owned village.
+pub async fn village_overview(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Path(village_id): Path<u32>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-    let queues = village_queues_or_empty(&state, user.village.id).await;
-    Ok(Json(village_page_response(&user, &queues)))
+    let village = owned_village_by_id(&state, &user, village_id).await?;
+    let queues = village_queues_or_empty(&state, village.id).await;
+    Ok(Json(village_overview_response(&village, &queues)))
 }
 
-pub async fn resources(
+/// Returns village resource fields and queue for owned village.
+pub async fn village_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Path(village_id): Path<u32>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-    let queues = village_queues_or_empty(&state, user.village.id).await;
-    Ok(Json(resources_page_response(&user, &queues)))
+    let village = owned_village_by_id(&state, &user, village_id).await?;
+    let queues = village_queues_or_empty(&state, village.id).await;
+    Ok(Json(village_resources_response(&village, &queues)))
 }
 
+/// Switches current village and rotates access token context when bearer is present.
 pub async fn switch_village(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -281,6 +328,7 @@ pub async fn switch_village(
     Ok(Json(response))
 }
 
+/// Returns paginated leaderboard data.
 pub async fn stats(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -347,6 +395,7 @@ pub async fn stats(
     }))
 }
 
+/// Returns profile summary for a specific player.
 pub async fn player_profile(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -386,6 +435,7 @@ pub async fn player_profile(
     }))
 }
 
+/// Returns recent reports for current player.
 pub async fn reports(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -409,6 +459,7 @@ pub async fn reports(
     }))
 }
 
+/// Returns full report payload and marks report as read.
 pub async fn report_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -448,6 +499,7 @@ pub async fn report_detail(
     }))
 }
 
+/// Returns wrapped map region around requested/default center.
 pub async fn map_region(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -480,6 +532,7 @@ pub async fn map_region(
     }))
 }
 
+/// Returns details for one map field.
 pub async fn map_field(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -595,4 +648,25 @@ fn map_report_summary(report: parabellum_app::cqrs::queries::ReportView) -> Repo
         created_at: report.created_at.timestamp(),
         is_read: report.read_at.is_some(),
     }
+}
+
+async fn owned_village_by_id(
+    state: &AppState,
+    user: &CurrentUser,
+    village_id: u32,
+) -> Result<Village, ApiError> {
+    if !user.villages.iter().any(|v| v.id == village_id) {
+        return Err(ApiError::not_found(
+            "Village not available for the current player",
+        ));
+    }
+
+    state
+        .app_bus
+        .query(
+            GetVillageById { id: village_id },
+            GetVillageByIdHandler::new(),
+        )
+        .await
+        .map_err(|_| ApiError::not_found("Village not found"))
 }

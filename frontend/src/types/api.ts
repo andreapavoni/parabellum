@@ -56,7 +56,7 @@ export type VillageListItem = {
   isCurrent: boolean;
 };
 
-export type BootstrapResponse = {
+export type MeContextResponse = {
   serverTime: number;
   worldSize: number;
   serverSpeed: number;
@@ -65,7 +65,7 @@ export type BootstrapResponse = {
     username: string;
     tribe: string;
   };
-  village: VillageSummary;
+  currentVillage: VillageSummary;
   villages: VillageListItem[];
 };
 
@@ -91,15 +91,14 @@ export type ResourceSlot = {
   inQueue?: boolean;
 };
 
-export type VillagePageResponse = {
+export type VillageOverviewResponse = {
   serverTime: number;
   village: VillageSummary;
-  villages: VillageListItem[];
   buildingSlots: BuildingSlot[];
   buildingQueue: BuildingQueueItem[];
 };
 
-export type ResourcesPageResponse = {
+export type VillageResourcesResponse = {
   serverTime: number;
   village: VillageSummary;
   resourceSlots: ResourceSlot[];

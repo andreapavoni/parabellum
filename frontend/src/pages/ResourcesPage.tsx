@@ -1,4 +1,4 @@
-import type { ResourcesPageResponse } from "@/types/api";
+import type { VillageResourcesResponse } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
 
@@ -6,7 +6,7 @@ export function ResourcesPage({
   data,
   onQueueElapsed,
 }: {
-  data: ResourcesPageResponse;
+  data: VillageResourcesResponse;
   onQueueElapsed?: () => void;
 }) {
   const production = data.village.productionPerHour;

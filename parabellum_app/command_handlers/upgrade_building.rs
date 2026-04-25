@@ -7,6 +7,7 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
+use crate::jobs::tasks::AddBuildingTask;
 use crate::{
     command_handlers::helpers::{
         completion_time_for_slot, enforce_queue_capacity, highest_target_level_for_slot,
@@ -16,7 +17,6 @@ use crate::{
     jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
     uow::UnitOfWork,
 };
-use crate::jobs::tasks::AddBuildingTask;
 
 pub struct UpgradeBuildingCommandHandler {}
 
@@ -72,7 +72,8 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
                 .unwrap_or(vb.building.level);
             (vb.building.name.clone(), pending, vb.building.clone())
         } else if let Some((name, level)) = queued_slot {
-            let template = parabellum_game::models::buildings::Building::new(name.clone(), config.speed);
+            let template =
+                parabellum_game::models::buildings::Building::new(name.clone(), config.speed);
             (name, level, template)
         } else {
             return Err(GameError::EmptySlot {
@@ -116,7 +117,10 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
     }
 }
 
-fn highest_slot_queue_state(jobs: &[Job], slot_id: u8) -> Option<(parabellum_types::buildings::BuildingName, u8)> {
+fn highest_slot_queue_state(
+    jobs: &[Job],
+    slot_id: u8,
+) -> Option<(parabellum_types::buildings::BuildingName, u8)> {
     jobs.iter()
         .filter_map(|job| match job.task.task_type.as_str() {
             "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())

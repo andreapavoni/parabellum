@@ -15,6 +15,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use parabellum_app::config::Config;
@@ -22,6 +23,7 @@ use parabellum_app::config::Config;
 use crate::session::CurrentUser;
 
 const ACCESS_TOKEN_CLOCK_SKEW_SECS: i64 = 30;
+static REFRESH_SESSION_SCHEMA_READY: OnceCell<()> = OnceCell::const_new();
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthTokenError {
@@ -179,7 +181,7 @@ impl AuthTokenService {
         user_agent: Option<&str>,
         ip: Option<IpAddr>,
     ) -> Result<(RefreshSession, String), AuthTokenError> {
-        ensure_refresh_session_schema(pool).await?;
+        ensure_refresh_session_schema_once(pool).await?;
         let token = generate_refresh_token();
         let token_hash = hash_refresh_token(&token);
         let expires_at = Utc::now() + Duration::seconds(self.refresh_ttl_secs);
@@ -225,7 +227,7 @@ impl AuthTokenService {
         user_agent: Option<&str>,
         ip: Option<IpAddr>,
     ) -> Result<(RefreshSession, String), AuthTokenError> {
-        ensure_refresh_session_schema(pool).await?;
+        ensure_refresh_session_schema_once(pool).await?;
         let old_hash = hash_refresh_token(refresh_token);
         let row =
             sqlx::query_as::<_, (Uuid, Uuid, Uuid, i32, DateTime<Utc>, Option<DateTime<Utc>>)>(
@@ -445,6 +447,10 @@ impl AuthTokenService {
             refresh_session_id,
         })
     }
+
+    pub async fn ensure_refresh_schema(&self, pool: &PgPool) -> Result<(), AuthTokenError> {
+        ensure_refresh_session_schema_once(pool).await
+    }
 }
 
 async fn ensure_refresh_session_schema(pool: &PgPool) -> Result<(), AuthTokenError> {
@@ -497,6 +503,16 @@ async fn ensure_refresh_session_schema(pool: &PgPool) -> Result<(), AuthTokenErr
     .await
     .map_err(|e| AuthTokenError::Database(e.to_string()))?;
 
+    Ok(())
+}
+
+async fn ensure_refresh_session_schema_once(pool: &PgPool) -> Result<(), AuthTokenError> {
+    REFRESH_SESSION_SCHEMA_READY
+        .get_or_try_init(|| async {
+            ensure_refresh_session_schema(pool).await?;
+            Ok(())
+        })
+        .await?;
     Ok(())
 }
 

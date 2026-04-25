@@ -1,11 +1,11 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { BootstrapResponse, SessionResponse, VillageListItem } from "@/types/api";
+import type { MeContextResponse, SessionResponse, VillageListItem } from "@/types/api";
 import { Link } from "./Link";
 
 type LayoutProps = {
   session: SessionResponse;
-  bootstrap: BootstrapResponse | null;
+  meContext: MeContextResponse | null;
   onLogout: () => void;
   onSwitchVillage: (villageId: number) => void;
   active: string;
@@ -24,12 +24,12 @@ type LiveResources = {
 };
 
 export function Layout(props: LayoutProps) {
-  const [serverTime, setServerTime] = useState(props.bootstrap?.serverTime ?? Date.now() / 1000);
+  const [serverTime, setServerTime] = useState(props.meContext?.serverTime ?? Date.now() / 1000);
   const [liveResources, setLiveResources] = useState<LiveResources | null>(null);
 
   useEffect(() => {
-    setServerTime(props.bootstrap?.serverTime ?? Date.now() / 1000);
-  }, [props.bootstrap?.serverTime]);
+    setServerTime(props.meContext?.serverTime ?? Date.now() / 1000);
+  }, [props.meContext?.serverTime]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -39,7 +39,7 @@ export function Layout(props: LayoutProps) {
   }, []);
 
   useEffect(() => {
-    const village = props.bootstrap?.village;
+    const village = props.meContext?.currentVillage;
     if (!village) {
       setLiveResources(null);
       return;
@@ -66,7 +66,7 @@ export function Layout(props: LayoutProps) {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [props.bootstrap?.village]);
+  }, [props.meContext?.currentVillage]);
 
   const serverClock = useMemo(() => {
     const date = new Date(serverTime * 1000);
@@ -75,9 +75,9 @@ export function Layout(props: LayoutProps) {
       .join(":");
   }, [serverTime]);
 
-  const village = props.bootstrap?.village;
-  const villages = props.bootstrap?.villages ?? [];
-  const player = props.bootstrap?.player;
+  const village = props.meContext?.currentVillage;
+  const villages = props.meContext?.villages ?? [];
+  const player = props.meContext?.player;
   const isGuestHome = !player && props.active === "home";
   const showVillageSwitcher = Boolean(player) && props.active === "village" && villages.length > 0;
 

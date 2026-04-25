@@ -1,4 +1,4 @@
-import type { VillagePageResponse } from "@/types/api";
+import type { VillageOverviewResponse } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { VillageMap } from "@/components/VillageMap";
 
@@ -6,7 +6,7 @@ export function VillagePage({
   data,
   onQueueElapsed,
 }: {
-  data: VillagePageResponse;
+  data: VillageOverviewResponse;
   onQueueElapsed?: () => void;
 }) {
   return (

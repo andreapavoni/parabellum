@@ -1,28 +1,16 @@
-# `parabellum_web::api` Notes
+# `parabellum_web::api`
 
-This module contains all JSON handlers exposed under `/api/v1`.
+Documentation is now maintained primarily as Rust doc comments in source:
 
-## Handler groups
+- module docs: [mod.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/mod.rs)
+- auth handlers: [auth.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/auth.rs)
+- game/read handlers: [game.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/game.rs)
+- mutation handlers: [actions.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/actions.rs)
+- building handlers: [buildings.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/buildings.rs)
+- payload contracts: [dto.rs](/Users/andrea/Code/Apps/parabellum/parabellum_web/api/dto.rs)
 
-- `auth.rs`: login/register/refresh/logout/session for bearer auth.
-- `game.rs`: read-oriented endpoints used to bootstrap and navigate SPA views.
-- `buildings.rs`: building-specific detail payloads.
-- `actions.rs`: mutating commands (build, train, troops, marketplace, research).
+Open with rustdoc:
 
-## Shared support
-
-- `dto.rs`: maps app/domain models into stable API payloads.
-- `errors.rs`: normalized API error envelope with stable `code`.
-- `helpers.rs`: bearer extraction + authenticated-user resolver.
-
-## Conventions
-
-- Keep handlers orchestration-only. No game rules here.
-- Use `camelCase` wire fields.
-- Map errors into explicit API codes (`unauthorized`, `token_expired`, `validation_error`, ...).
-- Prefer endpoint-specific request/response structs over generic maps.
-- Return canonical values, not rendered strings:
-  - `createdAt` unix timestamps instead of preformatted datetime strings
-  - `timeRemainingSecs`/`timeSeconds` instead of preformatted `HH:MM:SS`
-  - report payload raw data; summaries/titles are rendered by frontend
-  - unit/building fields carry enum keys (e.g. `MainBuilding`, `Legionnaire`) and frontend resolves labels/i18n
+```sh
+cargo doc -p parabellum_web --no-deps --open
+```

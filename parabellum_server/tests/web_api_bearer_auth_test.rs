@@ -12,7 +12,7 @@ async fn test_protected_endpoint_requires_bearer_token() -> Result<(), Applicati
     let client = setup_http_client(None, None).await;
 
     let response = client
-        .get(format!("{base_url}/api/v1/village"))
+        .get(format!("{base_url}/api/v1/me/context"))
         .send()
         .await
         .unwrap();
@@ -30,7 +30,7 @@ async fn test_protected_endpoint_rejects_invalid_bearer_token() -> Result<(), Ap
     let client = setup_http_client(None, None).await;
 
     let response = client
-        .get(format!("{base_url}/api/v1/village"))
+        .get(format!("{base_url}/api/v1/me/context"))
         .bearer_auth("invalid-token")
         .send()
         .await

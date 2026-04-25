@@ -1,5 +1,6 @@
 import type { BuildingSlot } from "@/types/api";
 import { buildingLabel } from "@/lib/labels";
+import { navigate, shouldUseClientNavigation } from "@/lib/router";
 
 const buildingPositions = [
   [26, 220, 260],
@@ -43,6 +44,24 @@ function slotClasses(slot?: BuildingSlot, empty = false) {
   return classes;
 }
 
+function onMapLinkClick(event: MouseEvent, href: string) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  if (!shouldUseClientNavigation(href)) {
+    return;
+  }
+  event.preventDefault();
+  navigate(href);
+}
+
 export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
   const wallSlot = slots.find((slot) => slot.slotId === 40);
   const mainBuilding = slots.find((slot) => slot.slotId === 19);
@@ -52,7 +71,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
     <div class="village-svg-container">
       <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
         {wallSlot ? (
-          <a href={buildingHref(40, wallSlot)}>
+          <a href={buildingHref(40, wallSlot)} onClick={(event) => onMapLinkClick(event, buildingHref(40, wallSlot))}>
             <circle
               class={wallSlot.level === 0 ? "village-wall-ring village-wall-empty" : "village-wall-ring"}
               cx="500"
@@ -67,7 +86,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
         ) : null}
 
         {rallyPoint ? (
-          <a href={buildingHref(39, rallyPoint)}>
+          <a href={buildingHref(39, rallyPoint)} onClick={(event) => onMapLinkClick(event, buildingHref(39, rallyPoint))}>
             <path
               class="village-radar-zone"
               d="M 535 778 A 280 280 0 0 0 765 605 L 588 541 A 120 120 0 0 1 512 618 Z"
@@ -85,7 +104,11 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
           const slot = slots.find((item) => item.slotId === slotId);
           const isEmpty = !slot?.buildingName;
           return (
-            <a href={buildingHref(slotId, slot)} key={slotId}>
+            <a
+              href={buildingHref(slotId, slot)}
+              key={slotId}
+              onClick={(event) => onMapLinkClick(event, buildingHref(slotId, slot))}
+            >
               <g class="village-node-group">
                 <circle
                   class={slotClasses(slot, isEmpty)}
@@ -114,7 +137,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
         })}
 
         {mainBuilding ? (
-          <a href={buildingHref(19, mainBuilding)}>
+          <a href={buildingHref(19, mainBuilding)} onClick={(event) => onMapLinkClick(event, buildingHref(19, mainBuilding))}>
             <g id="village-main-node">
               <circle cx="500" cy="520" r="90" fill="none" stroke="white" stroke-width="5" opacity="0.8" />
               <circle cx="500" cy="520" r="85" fill="#EDF4E1" />

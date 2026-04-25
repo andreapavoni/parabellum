@@ -1,3 +1,15 @@
+//! Authentication and token lifecycle handlers.
+//!
+//! Endpoints in this module:
+//! - `POST /api/v1/auth/token/login`
+//! - `POST /api/v1/auth/token/register`
+//! - `POST /api/v1/auth/refresh`
+//! - `POST /api/v1/auth/token/logout`
+//!
+//! Contract notes:
+//! - Access tokens are short-lived JWTs.
+//! - Refresh tokens are opaque, rotated on refresh, and persisted hashed.
+
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
@@ -26,10 +38,11 @@ use crate::{
     session::current_user_by_ids,
 };
 
-use super::{authenticated_user, bearer_token};
+use super::bearer_token;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Login payload for token-based authentication.
 pub struct TokenLoginRequest {
     pub email: String,
     pub password: String,
@@ -37,6 +50,7 @@ pub struct TokenLoginRequest {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+/// Registration payload.
 pub struct TokenRegisterRequest {
     pub username: String,
     pub email: String,
@@ -47,12 +61,14 @@ pub struct TokenRegisterRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Refresh request with current refresh token.
 pub struct TokenRefreshRequest {
     pub refresh_token: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Logout request. Optionally revokes all sessions for the user.
 pub struct TokenLogoutRequest {
     pub refresh_token: String,
     #[serde(default)]
@@ -61,12 +77,14 @@ pub struct TokenLogoutRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Logout response payload.
 pub struct LogoutResponse {
     pub success: bool,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Token response returned by login/register/refresh.
 pub struct TokenAuthResponse {
     pub access_token: String,
     pub expires_in: i64,
@@ -75,16 +93,7 @@ pub struct TokenAuthResponse {
     pub current_village_id: u32,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenSessionResponse {
-    pub authenticated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<SessionUserDto>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub current_village_id: Option<u32>,
-}
-
+/// Authenticates user credentials and returns access+refresh token pair.
 pub async fn token_login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -126,6 +135,7 @@ pub async fn token_login(
     Ok(Json(token_response(pair, &current)))
 }
 
+/// Registers a new user/player and immediately returns tokens.
 pub async fn token_register(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -179,6 +189,7 @@ pub async fn token_register(
     Ok(Json(token_response(pair, &current)))
 }
 
+/// Rotates refresh token and returns a fresh token pair.
 pub async fn token_refresh(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -208,6 +219,7 @@ pub async fn token_refresh(
     Ok(Json(token_response(pair, &current)))
 }
 
+/// Revokes the provided refresh token (and optionally all user sessions).
 pub async fn token_logout(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -234,18 +246,6 @@ pub async fn token_logout(
     }
 
     Ok(Json(LogoutResponse { success: true }))
-}
-
-pub async fn token_session(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = authenticated_user(&state, &headers).await?;
-    Ok(Json(TokenSessionResponse {
-        authenticated: true,
-        user: Some(session_user(&user)),
-        current_village_id: Some(user.village.id),
-    }))
 }
 
 fn map_auth_error(error: ApplicationError) -> ApiError {

@@ -1,3 +1,9 @@
+//! Building detail read endpoint and related DTOs.
+//!
+//! This module serves `GET /api/v1/buildings/{slot_id}` with a rich, canonical payload
+//! describing the target slot plus endpoint-specific sections (training, expansion,
+//! academy, smithy, marketplace, rally point).
+
 use std::collections::{HashMap, HashSet};
 
 use axum::{
@@ -49,6 +55,7 @@ use super::authenticated_user;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Response payload for `GET /api/v1/buildings/{slot_id}`.
 pub struct BuildingPageResponse {
     pub server_time: i64,
     pub village: crate::api::dto::VillageSummaryDto,
@@ -58,6 +65,7 @@ pub struct BuildingPageResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Shared building detail envelope; optional sections depend on building type.
 pub struct BuildingDetailDto {
     pub slot_id: u8,
     pub village_id: u32,
@@ -93,6 +101,7 @@ pub struct BuildingDetailDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Runtime category for the selected slot/building.
 pub enum BuildingTypeDto {
     Empty,
     Generic,
@@ -250,6 +259,7 @@ pub struct RequirementDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Marketplace section payload in building detail response.
 pub struct MarketplaceDetailDto {
     pub available_merchants: u8,
     pub total_merchants: u8,
@@ -304,6 +314,7 @@ pub struct MerchantMovementDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Rally point section payload in building detail response.
 pub struct RallyPointDetailDto {
     pub cards: Vec<RallyCardDto>,
     pub sendable_units: Vec<RallySendableUnitDto>,
@@ -372,6 +383,7 @@ pub struct PositionDto {
     pub y: i32,
 }
 
+/// Returns building detail payload for one slot in current authenticated village.
 pub async fn building_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -584,7 +596,8 @@ pub async fn building_detail(
                     .map(|army| army.units().get(settler_idx))
                     .sum();
                 let max_settlers_trainable = if available_slots > 0 {
-                    (available_slots as u32 * 3).saturating_sub(settlers_at_home + settlers_deployed)
+                    (available_slots as u32 * 3)
+                        .saturating_sub(settlers_at_home + settlers_deployed)
                 } else {
                     0
                 };
@@ -989,7 +1002,8 @@ pub async fn building_detail(
             } else {
                 template.at_level(next_level, state.server_speed).ok()
             };
-            let (next_upkeep, time_secs, cost, next_value) = if let Some(ref upgraded) = next_building
+            let (next_upkeep, time_secs, cost, next_value) = if let Some(ref upgraded) =
+                next_building
             {
                 let computed = upgraded.cost();
                 (

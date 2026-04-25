@@ -1,3 +1,9 @@
+//! API DTOs and mapping helpers.
+//!
+//! All payloads in this module are wire-level contracts.
+//! They intentionally expose canonical values (ids, enum keys, unix timestamps, numeric durations)
+//! and avoid UI-formatted strings.
+
 use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
@@ -37,6 +43,7 @@ fn building_queue_to_views(
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Public user identity for authenticated session payloads.
 pub struct SessionUserDto {
     pub user_id: Uuid,
     pub player_id: Uuid,
@@ -47,6 +54,7 @@ pub struct SessionUserDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Canonical resource amount tuple.
 pub struct ResourceAmountsDto {
     pub lumber: u32,
     pub clay: u32,
@@ -56,6 +64,7 @@ pub struct ResourceAmountsDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Per-hour production snapshot.
 pub struct ProductionAmountsDto {
     pub lumber: u32,
     pub clay: u32,
@@ -65,6 +74,7 @@ pub struct ProductionAmountsDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Village summary used across multiple endpoints.
 pub struct VillageSummaryDto {
     pub id: u32,
     pub name: String,
@@ -79,6 +89,7 @@ pub struct VillageSummaryDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Village list item for current player context.
 pub struct VillageListItemDto {
     pub id: u32,
     pub name: String,
@@ -89,6 +100,7 @@ pub struct VillageListItemDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Village building slot summary (village center slots).
 pub struct BuildingSlotDto {
     pub slot_id: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -100,6 +112,7 @@ pub struct BuildingSlotDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Resource field slot summary (slots 1..=18).
 pub struct ResourceSlotDto {
     pub slot_id: u8,
     pub building_name: String,
@@ -110,6 +123,7 @@ pub struct ResourceSlotDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Building queue entry with computed remaining time.
 pub struct BuildingQueueItemDto {
     pub slot_id: u8,
     pub building_name: String,
@@ -120,6 +134,7 @@ pub struct BuildingQueueItemDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Lightweight player summary for `/me/context`.
 pub struct PlayerSummaryDto {
     pub id: Uuid,
     pub username: String,
@@ -128,28 +143,30 @@ pub struct PlayerSummaryDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BootstrapResponse {
+/// Response payload for `GET /api/v1/me/context`.
+pub struct MeContextResponse {
     pub server_time: i64,
     pub world_size: i32,
     pub server_speed: i8,
     pub player: PlayerSummaryDto,
-    pub village: VillageSummaryDto,
+    pub current_village: VillageSummaryDto,
     pub villages: Vec<VillageListItemDto>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VillagePageResponse {
+/// Response payload for `GET /api/v1/villages/{id}/overview`.
+pub struct VillageOverviewResponse {
     pub server_time: i64,
     pub village: VillageSummaryDto,
-    pub villages: Vec<VillageListItemDto>,
     pub building_slots: Vec<BuildingSlotDto>,
     pub building_queue: Vec<BuildingQueueItemDto>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ResourcesPageResponse {
+/// Response payload for `GET /api/v1/villages/{id}/resources`.
+pub struct VillageResourcesResponse {
     pub server_time: i64,
     pub village: VillageSummaryDto,
     pub resource_slots: Vec<ResourceSlotDto>,
@@ -158,6 +175,7 @@ pub struct ResourcesPageResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Leaderboard row.
 pub struct LeaderboardEntryDto {
     pub player_id: String,
     pub rank: i64,
@@ -169,6 +187,7 @@ pub struct LeaderboardEntryDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Leaderboard pagination metadata.
 pub struct PaginationDto {
     pub page: i64,
     pub per_page: i64,
@@ -178,6 +197,7 @@ pub struct PaginationDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Leaderboard response payload.
 pub struct StatsResponse {
     pub server_time: i64,
     pub entries: Vec<LeaderboardEntryDto>,
@@ -186,6 +206,7 @@ pub struct StatsResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Player village summary used in player profile.
 pub struct PlayerVillageDto {
     pub village_id: u32,
     pub name: String,
@@ -196,6 +217,7 @@ pub struct PlayerVillageDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Player profile response payload.
 pub struct PlayerProfileResponse {
     pub server_time: i64,
     pub player_id: Uuid,
@@ -205,6 +227,7 @@ pub struct PlayerProfileResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Report item returned by reports list endpoint.
 pub struct ReportListItemDto {
     pub id: Uuid,
     pub report_type: String,
@@ -215,6 +238,7 @@ pub struct ReportListItemDto {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Reports list response payload.
 pub struct ReportsResponse {
     pub server_time: i64,
     pub reports: Vec<ReportListItemDto>,
@@ -222,6 +246,7 @@ pub struct ReportsResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// Generic report detail response payload.
 pub struct ReportDetailResponse<T>
 where
     T: Serialize,
@@ -233,6 +258,7 @@ where
     pub payload: T,
 }
 
+/// Maps domain village state into API summary DTO.
 pub fn village_summary(village: &Village) -> VillageSummaryDto {
     let resources = village.stored_resources();
     VillageSummaryDto {
@@ -258,6 +284,7 @@ pub fn village_summary(village: &Village) -> VillageSummaryDto {
     }
 }
 
+/// Maps current user villages into list payload.
 pub fn village_list(user: &CurrentUser) -> Vec<VillageListItemDto> {
     user.villages
         .iter()
@@ -271,6 +298,7 @@ pub fn village_list(user: &CurrentUser) -> Vec<VillageListItemDto> {
         .collect()
 }
 
+/// Builds player summary from current user context.
 pub fn player_summary(user: &CurrentUser) -> PlayerSummaryDto {
     PlayerSummaryDto {
         id: user.player.id,
@@ -279,6 +307,7 @@ pub fn player_summary(user: &CurrentUser) -> PlayerSummaryDto {
     }
 }
 
+/// Builds authenticated session user payload.
 pub fn session_user(user: &CurrentUser) -> SessionUserDto {
     SessionUserDto {
         user_id: user.account.id,
@@ -303,16 +332,12 @@ fn building_queue_items(queue_views: &[BuildingQueueItemView]) -> Vec<BuildingQu
 }
 
 fn building_slots(
-    user: &CurrentUser,
+    village: &Village,
     queue_views: &[BuildingQueueItemView],
 ) -> Vec<BuildingSlotDto> {
     (19..=40)
         .map(|slot_id| {
-            let building = user
-                .village
-                .buildings()
-                .iter()
-                .find(|vb| vb.slot_id == slot_id);
+            let building = village.buildings().iter().find(|vb| vb.slot_id == slot_id);
 
             let in_queue = queue_views
                 .iter()
@@ -330,10 +355,10 @@ fn building_slots(
 }
 
 fn resource_slots(
-    user: &CurrentUser,
+    village: &Village,
     queue_views: &[BuildingQueueItemView],
 ) -> Vec<ResourceSlotDto> {
-    user.village
+    village
         .resource_fields()
         .into_iter()
         .map(|slot| {
@@ -352,29 +377,28 @@ fn resource_slots(
         .collect()
 }
 
-pub fn village_page_response(
-    user: &CurrentUser,
+pub fn village_overview_response(
+    village: &Village,
     queues: &parabellum_app::cqrs::queries::VillageQueues,
-) -> VillagePageResponse {
+) -> VillageOverviewResponse {
     let queue_views = building_queue_to_views(&queues.building);
-    VillagePageResponse {
+    VillageOverviewResponse {
         server_time: Utc::now().timestamp(),
-        village: village_summary(&user.village),
-        villages: village_list(user),
-        building_slots: building_slots(user, &queue_views),
+        village: village_summary(village),
+        building_slots: building_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
     }
 }
 
-pub fn resources_page_response(
-    user: &CurrentUser,
+pub fn village_resources_response(
+    village: &Village,
     queues: &parabellum_app::cqrs::queries::VillageQueues,
-) -> ResourcesPageResponse {
+) -> VillageResourcesResponse {
     let queue_views = building_queue_to_views(&queues.building);
-    ResourcesPageResponse {
+    VillageResourcesResponse {
         server_time: Utc::now().timestamp(),
-        village: village_summary(&user.village),
-        resource_slots: resource_slots(user, &queue_views),
+        village: village_summary(village),
+        resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
     }
 }

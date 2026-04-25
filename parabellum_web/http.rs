@@ -1,3 +1,12 @@
+//! HTTP router composition for `parabellum_web`.
+//!
+//! The router has three responsibilities:
+//! - serve SPA static assets (`/assets`, `/static`)
+//! - expose JSON API under `/api/v1/*`
+//! - provide lightweight liveness endpoint (`/health`)
+//!
+//! API route handlers live in `crate::api::*` modules.
+
 use axum::{
     Router,
     response::IntoResponse,
@@ -18,11 +27,11 @@ use crate::{
             research_academy, research_smithy, send_resources, send_troops, train_units,
             upgrade_building,
         },
-        auth::{token_login, token_logout, token_refresh, token_register, token_session},
+        auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
         game::{
-            bootstrap, map_field, map_region, player_profile, report_detail, reports, resources,
-            stats, switch_village, village,
+            map_field, map_region, me_context, me_session, player_profile, report_detail, reports,
+            stats, switch_village, village_overview, village_resources,
         },
     },
     auth_tokens::AuthTokenService,
@@ -30,6 +39,7 @@ use crate::{
 };
 
 #[derive(Clone)]
+/// Shared Axum application state.
 pub struct AppState {
     pub app_bus: Arc<AppBus>,
     pub db_pool: PgPool,
@@ -39,6 +49,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Builds a new `AppState` from app bus, db pool and runtime config.
     pub fn new(app_bus: Arc<AppBus>, db_pool: PgPool, config: &Config) -> AppState {
         let token_service = Arc::new(AuthTokenService::new(config));
 
@@ -55,22 +66,29 @@ impl AppState {
 pub struct WebRouter {}
 
 impl WebRouter {
+    /// Starts the HTTP server and blocks until shutdown/error.
     pub async fn serve(state: AppState, port: u16) -> Result<(), ApplicationError> {
         // Set default locale. We initialize with user locale later
         rust_i18n::set_locale("en-EN");
         // rust_i18n::set_locale("it-IT");
+
+        state
+            .token_service
+            .ensure_refresh_schema(&state.db_pool)
+            .await
+            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
 
         let api_routes = Router::new()
             .route("/auth/token/login", post(token_login))
             .route("/auth/token/register", post(token_register))
             .route("/auth/refresh", post(token_refresh))
             .route("/auth/token/logout", post(token_logout))
-            .route("/auth/token/session", get(token_session))
-            .route("/bootstrap", get(bootstrap))
-            .route("/village", get(village))
+            .route("/me/session", get(me_session))
+            .route("/me/context", get(me_context))
+            .route("/villages/{id}/overview", get(village_overview))
+            .route("/villages/{id}/resources", get(village_resources))
             .route("/buildings/{slot_id}", get(building_detail))
-            .route("/village/current", post(switch_village))
-            .route("/resources", get(resources))
+            .route("/me/village/current", post(switch_village))
             .route("/buildings/add", post(add_building))
             .route("/buildings/upgrade", post(upgrade_building))
             .route("/army/train", post(train_units))

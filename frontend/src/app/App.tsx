@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { isProtectedRoute, navigate, parseRoute } from "@/lib/router";
-import type { BootstrapResponse, SessionResponse } from "@/types/api";
+import type { SessionResponse, VillageSummary } from "@/types/api";
 import { Layout } from "@/components/Layout";
 import { Loading } from "@/components/Loading";
 import { HomePage } from "@/pages/HomePage";
@@ -16,15 +16,16 @@ import { MapPage } from "@/pages/MapPage";
 import { MapFieldPage } from "@/pages/MapFieldPage";
 import { BuildingPage } from "@/pages/BuildingPage";
 import { usePageData } from "@/hooks/usePageData";
+import { useAppStore } from "@/state/appStore";
 
 const emptySession: SessionResponse = {
   authenticated: false,
 };
 
 export function App() {
+  const { session, setSession, meContext, setMeContext, updateCurrentVillage, clearAuthState } =
+    useAppStore();
   const [route, setRoute] = useState(() => parseRoute(window.location));
-  const [session, setSession] = useState<SessionResponse>(emptySession);
-  const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [booting, setBooting] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -41,16 +42,36 @@ export function App() {
   }, [reloadKey]);
 
   async function refreshSession() {
+    if (!api.hasAccessToken() && api.hasRefreshToken()) {
+      try {
+        const next = await api.tokenRefresh();
+        const refreshed: SessionResponse = {
+          authenticated: true,
+          user: next.user,
+          currentVillageId: next.currentVillageId,
+        };
+        setSession(refreshed);
+        return refreshed;
+      } catch {
+        setSession(emptySession);
+        return emptySession;
+      }
+    }
+
     try {
       const current = await api.tokenSession();
       setSession(current);
       return current;
     } catch {
       try {
-        await api.tokenRefresh();
-        const current = await api.tokenSession();
-        setSession(current);
-        return current;
+        const next = await api.tokenRefresh();
+        const refreshed: SessionResponse = {
+          authenticated: true,
+          user: next.user,
+          currentVillageId: next.currentVillageId,
+        };
+        setSession(refreshed);
+        return refreshed;
       } catch {
         setSession(emptySession);
         return emptySession;
@@ -58,9 +79,9 @@ export function App() {
     }
   }
 
-  async function refreshBootstrap() {
-    const data = await api.bootstrap();
-    setBootstrap(data);
+  async function refreshMeContext() {
+    const data = await api.meContext();
+    setMeContext(data);
     return data;
   }
 
@@ -71,9 +92,9 @@ export function App() {
       .then(async (current) => {
         if (!alive) return;
         if (current.authenticated) {
-          await refreshBootstrap();
+          await refreshMeContext();
         } else {
-          setBootstrap(null);
+          setMeContext(null);
         }
       })
       .catch((error: Error) => {
@@ -102,19 +123,10 @@ export function App() {
   }, [booting, route, session.authenticated]);
 
   const page = useMemo(() => {
-    const syncVillageFromPage = (
-      village: BootstrapResponse["village"],
-      villages?: BootstrapResponse["villages"],
-    ) => {
-      setBootstrap((current) =>
-        current
-          ? {
-              ...current,
-              village,
-              villages: villages ?? current.villages,
-            }
-          : current,
-      );
+    const activeVillageId = session.currentVillageId ?? meContext?.currentVillage.id;
+
+    const syncVillageFromPage = (village: VillageSummary) => {
+      updateCurrentVillage(village);
     };
 
     const refreshFromQueueElapsed = async () => {
@@ -123,7 +135,7 @@ export function App() {
       }
       queueRefreshInFlightRef.current = true;
       try {
-        await Promise.all([refreshSession(), refreshBootstrap()]);
+        await Promise.all([refreshSession(), refreshMeContext()]);
         setReloadKey((value) => value + 1);
       } finally {
         queueRefreshInFlightRef.current = false;
@@ -131,22 +143,26 @@ export function App() {
     };
 
     const runMutation = async () => {
-      await Promise.all([refreshSession(), refreshBootstrap()]);
+      await Promise.all([refreshSession(), refreshMeContext()]);
       setReloadKey((value) => value + 1);
     };
 
     switch (route.name) {
       case "village":
+        if (!activeVillageId) return <Loading label="Loading village..." />;
         return (
           <ProtectedVillage
+            villageId={activeVillageId}
             reloadKey={reloadKey}
             onVillageLoaded={syncVillageFromPage}
             onQueueElapsed={refreshFromQueueElapsed}
           />
         );
       case "resources":
+        if (!activeVillageId) return <Loading label="Loading resources..." />;
         return (
           <ProtectedResources
+            villageId={activeVillageId}
             reloadKey={reloadKey}
             onVillageLoaded={syncVillageFromPage}
             onQueueElapsed={refreshFromQueueElapsed}
@@ -171,12 +187,12 @@ export function App() {
       case "map":
         return (
           <ProtectedMap
-            worldSize={bootstrap?.worldSize ?? 100}
+            worldSize={meContext?.worldSize ?? 100}
             centerX={route.x}
             centerY={route.y}
-            homeVillageId={bootstrap?.village.id}
-            homeX={bootstrap?.village.x}
-            homeY={bootstrap?.village.y}
+            homeVillageId={meContext?.currentVillage.id}
+            homeX={meContext?.currentVillage.x}
+            homeY={meContext?.currentVillage.y}
           />
         );
       case "mapField":
@@ -194,7 +210,7 @@ export function App() {
                   user: next.user,
                   currentVillageId: next.currentVillageId,
                 });
-                await refreshBootstrap();
+                await refreshMeContext();
                 navigate("/village", true);
               } catch (error) {
                 setAuthError((error as Error).message);
@@ -216,7 +232,7 @@ export function App() {
                   user: next.user,
                   currentVillageId: next.currentVillageId,
                 });
-                await refreshBootstrap();
+                await refreshMeContext();
                 navigate("/village", true);
               } catch (error) {
                 setAuthError((error as Error).message);
@@ -230,7 +246,7 @@ export function App() {
       default:
         return <div class="mx-auto max-w-4xl px-4 py-10 text-sm text-gray-500">Page not found.</div>;
     }
-  }, [route, bootstrap?.worldSize, authError, reloadKey]);
+  }, [route, meContext?.worldSize, meContext?.currentVillage.id, session.currentVillageId, authError, reloadKey]);
 
   if (booting) {
     return <Loading label="Booting application..." />;
@@ -239,7 +255,7 @@ export function App() {
   return (
     <Layout
       session={session}
-      bootstrap={bootstrap}
+      meContext={meContext}
       active={
         route.name === "report"
           ? "reports"
@@ -251,14 +267,13 @@ export function App() {
       }
       onLogout={async () => {
         await api.tokenLogout();
-        setSession(emptySession);
-        setBootstrap(null);
+        clearAuthState();
         setReloadKey((value) => value + 1);
         navigate("/login", true);
       }}
       onSwitchVillage={async (villageId) => {
         await api.switchVillage({ villageId });
-        await Promise.all([refreshSession(), refreshBootstrap()]);
+        await Promise.all([refreshSession(), refreshMeContext()]);
         setReloadKey((value) => value + 1);
       }}
     >
@@ -268,21 +283,23 @@ export function App() {
 }
 
 function ProtectedVillage({
+  villageId,
   reloadKey,
   onVillageLoaded,
   onQueueElapsed,
 }: {
+  villageId: number;
   reloadKey: number;
-  onVillageLoaded?: (
-    village: BootstrapResponse["village"],
-    villages?: BootstrapResponse["villages"],
-  ) => void;
+  onVillageLoaded?: (village: VillageSummary) => void;
   onQueueElapsed?: () => void;
 }) {
-  const { data, error, loading } = usePageData(() => api.village(), [reloadKey]);
+  const { data, error, loading } = usePageData(
+    () => api.villageOverview(villageId),
+    [villageId, reloadKey],
+  );
   useEffect(() => {
     if (!data || !onVillageLoaded) return;
-    onVillageLoaded(data.village, data.villages);
+    onVillageLoaded(data.village);
   }, [data, onVillageLoaded]);
   if (loading) return <Loading label="Loading village..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load village."} />;
@@ -290,18 +307,20 @@ function ProtectedVillage({
 }
 
 function ProtectedResources({
+  villageId,
   reloadKey,
   onVillageLoaded,
   onQueueElapsed,
 }: {
+  villageId: number;
   reloadKey: number;
-  onVillageLoaded?: (
-    village: BootstrapResponse["village"],
-    villages?: BootstrapResponse["villages"],
-  ) => void;
+  onVillageLoaded?: (village: VillageSummary) => void;
   onQueueElapsed?: () => void;
 }) {
-  const { data, error, loading } = usePageData(() => api.resources(), [reloadKey]);
+  const { data, error, loading } = usePageData(
+    () => api.villageResources(villageId),
+    [villageId, reloadKey],
+  );
   useEffect(() => {
     if (!data || !onVillageLoaded) return;
     onVillageLoaded(data.village);

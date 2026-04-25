@@ -18,10 +18,7 @@ pub mod tests {
         jobs::worker::JobWorker,
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
-    use parabellum_db::{
-        bootstrap_world_map,
-        uow::PostgresUnitOfWorkProvider,
-    };
+    use parabellum_db::{bootstrap_world_map, uow::PostgresUnitOfWorkProvider};
     use parabellum_game::{
         models::{army::Army, hero::Hero, village::Village},
         test_utils::{
@@ -56,8 +53,13 @@ pub mod tests {
             std::thread::spawn(move || {
                 if let Ok(rt) = tokio::runtime::Runtime::new() {
                     rt.block_on(async move {
-                        if let Ok(pool) = PgPoolOptions::new().max_connections(1).connect(&root_url).await {
-                            let query = format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema_name);
+                        if let Ok(pool) = PgPoolOptions::new()
+                            .max_connections(1)
+                            .connect(&root_url)
+                            .await
+                        {
+                            let query =
+                                format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema_name);
                             let _ = sqlx::query(&query).execute(&pool).await;
                         }
                     });

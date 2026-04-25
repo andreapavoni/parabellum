@@ -1,16 +1,16 @@
 import type {
   BuildingPageResponse,
-  BootstrapResponse,
   MapFieldDetailResponse,
   MapRegionResponse,
+  MeContextResponse,
   PlayerProfileResponse,
   ReportDetailResponse,
   ReportsResponse,
-  ResourcesPageResponse,
   SessionResponse,
   StatsResponse,
   TokenAuthResponse,
-  VillagePageResponse,
+  VillageOverviewResponse,
+  VillageResourcesResponse,
 } from "@/types/api";
 
 type RawMapTile = {
@@ -158,7 +158,9 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
 }
 
 export const api = {
-  tokenSession: () => request<SessionResponse>("/auth/token/session", {}, false),
+  hasAccessToken: () => Boolean(accessToken),
+  hasRefreshToken: () => Boolean(refreshToken),
+  tokenSession: () => request<SessionResponse>("/me/session", {}, false),
   tokenLogin: (payload: { email: string; password: string }) =>
     request<TokenAuthResponse>("/auth/token/login", {
       method: "POST",
@@ -210,18 +212,20 @@ export const api = {
     );
     clearTokens();
   },
-  bootstrap: () => request<BootstrapResponse>("/bootstrap"),
-  village: () => request<VillagePageResponse>("/village"),
+  meContext: () => request<MeContextResponse>("/me/context"),
+  villageOverview: (villageId: number) =>
+    request<VillageOverviewResponse>(`/villages/${villageId}/overview`),
   building: (slotId: number) => request<BuildingPageResponse>(`/buildings/${slotId}`),
   switchVillage: (payload: { villageId: number }) =>
-    request<{ villageId: number; accessToken?: string; expiresIn?: number }>("/village/current", {
+    request<{ villageId: number; accessToken?: string; expiresIn?: number }>("/me/village/current", {
       method: "POST",
       body: JSON.stringify(payload),
     }).then((res) => {
       if (res.accessToken) updateAccessToken(res.accessToken);
       return res;
     }),
-  resources: () => request<ResourcesPageResponse>("/resources"),
+  villageResources: (villageId: number) =>
+    request<VillageResourcesResponse>(`/villages/${villageId}/resources`),
   stats: (page = 1) => request<StatsResponse>(`/stats?page=${page}`),
   player: (playerId: string) => request<PlayerProfileResponse>(`/players/${playerId}`),
   reports: () => request<ReportsResponse>("/reports"),

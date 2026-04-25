@@ -1,5 +1,6 @@
 import type { ResourceSlot } from "@/types/api";
 import { buildingLabel } from "@/lib/labels";
+import { navigate, shouldUseClientNavigation } from "@/lib/router";
 
 const hexPositions = [
   [1, 279, 190],
@@ -37,6 +38,24 @@ function hexColor(buildingName: string) {
   }
 }
 
+function onMapLinkClick(event: MouseEvent, href: string) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  if (!shouldUseClientNavigation(href)) {
+    return;
+  }
+  event.preventDefault();
+  navigate(href);
+}
+
 export function ResourceFieldsMap({ slots }: { slots: ResourceSlot[] }) {
   return (
     <div class="resource-fields-svg-container">
@@ -57,7 +76,11 @@ export function ResourceFieldsMap({ slots }: { slots: ResourceSlot[] }) {
           const hasConstruction = slot.inQueue !== undefined;
           const isProcessing = Boolean(slot.inQueue);
           return (
-            <a href={`/app/build/${slotId}`} key={slotId}>
+            <a
+              href={`/app/build/${slotId}`}
+              key={slotId}
+              onClick={(event) => onMapLinkClick(event, `/app/build/${slotId}`)}
+            >
               <g
                 class={
                   hasConstruction
@@ -79,7 +102,7 @@ export function ResourceFieldsMap({ slots }: { slots: ResourceSlot[] }) {
             </a>
           );
         })}
-        <a href="/village">
+        <a href="/village" onClick={(event) => onMapLinkClick(event, "/village")}>
           <g class="resource-city-center" transform="translate(400, 400)">
             <circle cx="0" cy="0" r="68" fill="white" />
             <circle class="resource-main-circle" cx="0" cy="0" r="62" fill="#5c192d" />

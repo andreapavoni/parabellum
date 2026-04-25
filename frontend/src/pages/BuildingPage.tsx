@@ -49,6 +49,45 @@ function formatResourceSummary(resources: ResourceAmounts) {
   return `🌲 ${resources.lumber} 🧱 ${resources.clay} ⛏️ ${resources.iron} 🌾 ${resources.crop}`;
 }
 
+type ResourceKey = "lumber" | "clay" | "iron" | "crop";
+
+const RESOURCE_KEYS: ResourceKey[] = ["lumber", "clay", "iron", "crop"];
+const RESOURCE_LABELS: Record<ResourceKey, string> = {
+  lumber: "Lumber",
+  clay: "Clay",
+  iron: "Iron",
+  crop: "Crop",
+};
+
+function nonZeroResourceKeys(resources: ResourceAmounts): ResourceKey[] {
+  return RESOURCE_KEYS.filter((key) => resources[key] > 0);
+}
+
+function formatSingleResourceSummary(resources: ResourceAmounts) {
+  const keys = nonZeroResourceKeys(resources);
+  if (keys.length !== 1) {
+    return formatResourceSummary(resources);
+  }
+
+  const key = keys[0];
+  const value = resources[key];
+  const icon = key === "lumber" ? "🌲" : key === "clay" ? "🧱" : key === "iron" ? "⛏️" : "🌾";
+  return `${icon} ${value}`;
+}
+
+function isValidMarketplaceOfferShape(offerResources: ResourceAmounts, seekResources: ResourceAmounts): boolean {
+  const offerKeys = nonZeroResourceKeys(offerResources);
+  const seekKeys = nonZeroResourceKeys(seekResources);
+  if (offerKeys.length !== 1 || seekKeys.length !== 1) return false;
+  if (offerKeys[0] === seekKeys[0]) return false;
+  const offerTotal = offerResources.lumber + offerResources.clay + offerResources.iron + offerResources.crop;
+  const seekTotal = seekResources.lumber + seekResources.clay + seekResources.iron + seekResources.crop;
+  if (offerTotal <= 0 || seekTotal <= 0) return false;
+  const maxSide = Math.max(offerTotal, seekTotal);
+  const minSide = Math.min(offerTotal, seekTotal);
+  return maxSide <= minSide * 3;
+}
+
 function ResourceCost({ cost }: { cost: ResourceAmounts }) {
   return (
     <div class="flex gap-3 text-sm">
@@ -495,14 +534,10 @@ function MarketplaceSection({
     crop: 0,
   });
   const [offer, setOffer] = useState({
-    offerLumber: 0,
-    offerClay: 0,
-    offerIron: 0,
-    offerCrop: 0,
-    seekLumber: 0,
-    seekClay: 0,
-    seekIron: 0,
-    seekCrop: 0,
+    offerResource: "lumber" as ResourceKey,
+    offerAmount: 0,
+    seekResource: "clay" as ResourceKey,
+    seekAmount: 0,
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -573,44 +608,79 @@ function MarketplaceSection({
       <div class="border rounded-md p-4 bg-white space-y-4">
         <div>
           <div class="text-sm text-gray-500 uppercase">Create offer</div>
-          <p class="text-sm text-gray-500">Define what you offer and what you seek.</p>
+          <p class="text-sm text-gray-500">
+            One resource type per side. Offer and seek resources must be different. Ratio must stay
+            between 1:3 and 3:1.
+          </p>
         </div>
-        <div class="space-y-2">
-          <div class="text-sm font-semibold text-gray-700">Offering</div>
-          <div class="grid gap-3 sm:grid-cols-4">
-            {(["offerLumber", "offerClay", "offerIron", "offerCrop"] as const).map((key) => (
-              <label key={key} class="text-sm text-gray-600">
-                {key.replace("offer", "")}
-                <input
-                  type="number"
-                  min="0"
-                  value={offer[key]}
-                  onInput={(e) =>
-                    setOffer((v) => ({ ...v, [key]: Math.max(0, Number((e.target as HTMLInputElement).value || "0")) }))
-                  }
-                  class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
-                />
-              </label>
-            ))}
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="space-y-2">
+            <div class="text-sm font-semibold text-gray-700">Offering</div>
+            <label class="text-sm text-gray-600 block">
+              Resource
+              <select
+                value={offer.offerResource}
+                onChange={(e) =>
+                  setOffer((v) => ({ ...v, offerResource: (e.target as HTMLSelectElement).value as ResourceKey }))
+                }
+                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+              >
+                {RESOURCE_KEYS.map((key) => (
+                  <option value={key} key={key}>
+                    {RESOURCE_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="text-sm text-gray-600 block">
+              Amount
+              <input
+                type="number"
+                min="0"
+                value={offer.offerAmount}
+                onInput={(e) =>
+                  setOffer((v) => ({
+                    ...v,
+                    offerAmount: Math.max(0, Number((e.target as HTMLInputElement).value || "0")),
+                  }))
+                }
+                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+              />
+            </label>
           </div>
-        </div>
-        <div class="space-y-2">
-          <div class="text-sm font-semibold text-gray-700">Seeking</div>
-          <div class="grid gap-3 sm:grid-cols-4">
-            {(["seekLumber", "seekClay", "seekIron", "seekCrop"] as const).map((key) => (
-              <label key={key} class="text-sm text-gray-600">
-                {key.replace("seek", "")}
-                <input
-                  type="number"
-                  min="0"
-                  value={offer[key]}
-                  onInput={(e) =>
-                    setOffer((v) => ({ ...v, [key]: Math.max(0, Number((e.target as HTMLInputElement).value || "0")) }))
-                  }
-                  class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
-                />
-              </label>
-            ))}
+          <div class="space-y-2">
+            <div class="text-sm font-semibold text-gray-700">Seeking</div>
+            <label class="text-sm text-gray-600 block">
+              Resource
+              <select
+                value={offer.seekResource}
+                onChange={(e) =>
+                  setOffer((v) => ({ ...v, seekResource: (e.target as HTMLSelectElement).value as ResourceKey }))
+                }
+                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+              >
+                {RESOURCE_KEYS.map((key) => (
+                  <option value={key} key={key}>
+                    {RESOURCE_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="text-sm text-gray-600 block">
+              Amount
+              <input
+                type="number"
+                min="0"
+                value={offer.seekAmount}
+                onInput={(e) =>
+                  setOffer((v) => ({
+                    ...v,
+                    seekAmount: Math.max(0, Number((e.target as HTMLInputElement).value || "0")),
+                  }))
+                }
+                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+              />
+            </label>
           </div>
         </div>
         <button
@@ -619,7 +689,29 @@ function MarketplaceSection({
           onClick={async () => {
             setError(null);
             try {
-              await api.createMarketplaceOffer({ slotId: detail.slotId, ...offer });
+              if (offer.offerAmount <= 0 || offer.seekAmount <= 0) {
+                throw new Error("Offer and seek amounts must be greater than zero.");
+              }
+              if (offer.offerResource === offer.seekResource) {
+                throw new Error("Offer and seek resources must be different.");
+              }
+              const maxSide = Math.max(offer.offerAmount, offer.seekAmount);
+              const minSide = Math.min(offer.offerAmount, offer.seekAmount);
+              if (maxSide > minSide * 3) {
+                throw new Error("Offer ratio must stay between 1:3 and 3:1.");
+              }
+
+              await api.createMarketplaceOffer({
+                slotId: detail.slotId,
+                offerLumber: offer.offerResource === "lumber" ? offer.offerAmount : 0,
+                offerClay: offer.offerResource === "clay" ? offer.offerAmount : 0,
+                offerIron: offer.offerResource === "iron" ? offer.offerAmount : 0,
+                offerCrop: offer.offerResource === "crop" ? offer.offerAmount : 0,
+                seekLumber: offer.seekResource === "lumber" ? offer.seekAmount : 0,
+                seekClay: offer.seekResource === "clay" ? offer.seekAmount : 0,
+                seekIron: offer.seekResource === "iron" ? offer.seekAmount : 0,
+                seekCrop: offer.seekResource === "crop" ? offer.seekAmount : 0,
+              });
               await onMutate();
             } catch (err) {
               setError((err as Error).message);
@@ -634,7 +726,7 @@ function MarketplaceSection({
         await api.cancelMarketplaceOffer({ offerId: offer.offerId, slotId: detail.slotId });
         await onMutate();
       }} />
-      <OffersTable title="Global marketplace" offers={detail.marketplace.globalOffers} actionLabel="Accept" onAction={async (offer) => {
+      <OffersTable title="Global marketplace" offers={detail.marketplace.globalOffers} actionLabel="Accept" enforceTradeRules onAction={async (offer) => {
         await api.acceptMarketplaceOffer({ offerId: offer.offerId, slotId: detail.slotId });
         await onMutate();
       }} />
@@ -690,11 +782,13 @@ function OffersTable({
   title,
   offers,
   actionLabel,
+  enforceTradeRules,
   onAction,
 }: {
   title: string;
   offers: MarketplaceOffer[];
   actionLabel: string;
+  enforceTradeRules?: boolean;
   onAction: (offer: MarketplaceOffer) => Promise<void>;
 }) {
   return (
@@ -719,22 +813,33 @@ function OffersTable({
               {offers.map((offer) => (
                 <tr key={offer.offerId} class="border-b last:border-b-0">
                   <td class="py-2 pr-4">{offer.villageName} ({offer.position.x}|{offer.position.y})</td>
-                  <td class="py-2 pr-4">{formatResourceSummary(offer.offerResources)}</td>
-                  <td class="py-2 pr-4">{formatResourceSummary(offer.seekResources)}</td>
+                  <td class="py-2 pr-4">{formatSingleResourceSummary(offer.offerResources)}</td>
+                  <td class="py-2 pr-4">{formatSingleResourceSummary(offer.seekResources)}</td>
                   <td class="py-2 pr-4">{offer.merchantsRequired}</td>
                   <td class="py-2 pr-4 text-gray-600">{formatRelativeTime(offer.createdAt)}</td>
                   <td class="py-2">
+                    {(() => {
+                      const invalidTrade =
+                        Boolean(enforceTradeRules) &&
+                        !isValidMarketplaceOfferShape(offer.offerResources, offer.seekResources);
+                      return (
                     <button
                       type="button"
                       class={
-                        actionLabel === "Cancel"
+                        invalidTrade
+                          ? "bg-gray-400 text-white text-xs font-semibold px-3 py-1.5 rounded cursor-not-allowed"
+                          : actionLabel === "Cancel"
                           ? "bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded"
                           : "bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded"
                       }
+                      disabled={invalidTrade}
+                      title={invalidTrade ? "Invalid offer rules (single-resource and ratio constraints)." : undefined}
                       onClick={() => onAction(offer)}
                     >
                       {actionLabel}
                     </button>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

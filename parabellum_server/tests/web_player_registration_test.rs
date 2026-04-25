@@ -120,7 +120,7 @@ async fn test_register_authenticated_player() -> Result<(), ApplicationError> {
     let tokens = login_tokens(&client, &base_url, &user.email, "parabellum!").await;
 
     let res = client
-        .get(format!("{base_url}/api/v1/auth/token/session"))
+        .get(format!("{base_url}/api/v1/me/session"))
         .bearer_auth(tokens.access_token)
         .send()
         .await
