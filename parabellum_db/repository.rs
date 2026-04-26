@@ -5,6 +5,7 @@ mod map_repository;
 mod marketplace_repository;
 mod player_repository;
 mod report_repository;
+mod toasty_job_repository;
 mod user_repository;
 mod village_repository;
 
@@ -15,5 +16,6 @@ pub use map_repository::{PostgresMapRepository, bootstrap_world_map};
 pub use marketplace_repository::PostgresMarketplaceRepository;
 pub use player_repository::PostgresPlayerRepository;
 pub use report_repository::PostgresReportRepository;
+pub use toasty_job_repository::ToastyJobRepository;
 pub use user_repository::PostgresUserRepository;
 pub use village_repository::PostgresVillageRepository;
