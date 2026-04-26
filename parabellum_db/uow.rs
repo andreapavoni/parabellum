@@ -1,14 +1,16 @@
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use parabellum_app::{
     repository::*,
     uow::{UnitOfWork, UnitOfWorkProvider},
 };
-use parabellum_types::errors::{ApplicationError, DbError};
+use parabellum_types::errors::ApplicationError;
 
-use crate::repository::*;
+use crate::{
+    persistence::{SharedTx, begin_transaction, commit_transaction, rollback_transaction},
+    repository::*,
+};
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWorkProvider {
@@ -24,22 +26,14 @@ impl PostgresUnitOfWorkProvider {
 #[async_trait::async_trait]
 impl UnitOfWorkProvider for PostgresUnitOfWorkProvider {
     async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
-        let tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        // Transaction must be 'static to be stored in Arc.
-        let tx_arc = Arc::new(Mutex::new(tx));
-
+        let tx_arc = begin_transaction(&self.pool).await?;
         Ok(Box::new(PostgresUnitOfWork { tx: tx_arc }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWork<'a> {
-    tx: Arc<Mutex<Transaction<'a, Postgres>>>,
+    tx: SharedTx<'a>,
 }
 
 #[async_trait::async_trait]
@@ -81,31 +75,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
     }
 
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
-        // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
-        // If this fails, it means there are other references to the Arc,
-        // the transaction cannot be committed (logical error) and will rollback on Drop.
-        if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex
-                .into_inner()
-                .commit()
-                .await
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        } else {
-            return Err(ApplicationError::Db(DbError::Transaction(
-                "transaction still has multiple owners".to_string(),
-            )));
-        }
-        Ok(())
+        commit_transaction(self.tx).await
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
-        if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex
-                .into_inner()
-                .rollback()
-                .await
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        }
-        Ok(())
+        rollback_transaction(self.tx).await
     }
 }
