@@ -2,6 +2,7 @@ use std::env;
 
 use parabellum_types::errors::DbError;
 
+use crate::toasty_models::report::{ReportDbRow, ReportReadDbRow};
 use crate::toasty_models::{
     job::JobRecord, player::PlayerRecord, user::UserRecord, village_stats::VillageStatsRecord,
 };
@@ -24,6 +25,8 @@ async fn init_toasty_db(database_env: &'static str) -> Result<toasty::Db, DbErro
     builder.models(toasty::models!(
         JobRecord,
         PlayerRecord,
+        ReportDbRow,
+        ReportReadDbRow,
         UserRecord,
         VillageStatsRecord
     ));
