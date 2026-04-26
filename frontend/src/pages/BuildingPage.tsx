@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { buildingLabel, unitLabel } from "@/lib/labels";
 import type {
@@ -17,6 +17,46 @@ function formatDuration(totalSeconds: number) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return [hours, minutes, seconds].map((value) => value.toString().padStart(2, "0")).join(":");
+}
+
+function LiveCountdown({
+  seconds,
+  onElapsed,
+}: {
+  seconds: number;
+  onElapsed?: () => void;
+}) {
+  const [remaining, setRemaining] = useState(seconds);
+  const startedFromPositiveRef = useRef(seconds > 0);
+  const notifiedRef = useRef(seconds <= 0);
+
+  useEffect(() => {
+    setRemaining(seconds);
+    startedFromPositiveRef.current = seconds > 0;
+    notifiedRef.current = seconds <= 0;
+  }, [seconds]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRemaining((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (
+      !onElapsed ||
+      notifiedRef.current ||
+      remaining > 0 ||
+      !startedFromPositiveRef.current
+    ) {
+      return;
+    }
+    notifiedRef.current = true;
+    onElapsed();
+  }, [remaining, onElapsed]);
+
+  return <span class="font-mono">{formatDuration(remaining)}</span>;
 }
 
 function formatRelativeTime(timestamp: number) {
@@ -1211,11 +1251,18 @@ export function BuildingPage({
                       <span>
                         {job.quantity} × {unitLabel(job.unitName)}
                       </span>
-                      <span class="text-xs text-gray-500">Training time {job.timePerUnit}s</span>
+                      <span class="text-xs text-gray-500">
+                        Training time {formatDuration(job.timePerUnit)}
+                      </span>
                     </div>
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Remaining</span>
-                      <span class="font-mono">{formatDuration(job.timeRemainingSecs)}</span>
+                      <LiveCountdown
+                        seconds={job.timeRemainingSecs}
+                        onElapsed={() => {
+                          void onMutate();
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1239,7 +1286,12 @@ export function BuildingPage({
                     </div>
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Time remaining</span>
-                      <span class="font-mono">{formatDuration(job.timeRemainingSecs)}</span>
+                      <LiveCountdown
+                        seconds={job.timeRemainingSecs}
+                        onElapsed={() => {
+                          void onMutate();
+                        }}
+                      />
                     </div>
                   </div>
                 ))}

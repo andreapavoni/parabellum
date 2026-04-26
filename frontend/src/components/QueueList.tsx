@@ -13,10 +13,12 @@ function formatDuration(totalSeconds: number) {
 function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
   const [remaining, setRemaining] = useState(seconds);
   const notifiedRef = useRef(false);
+  const startedFromPositiveRef = useRef(seconds > 0);
 
   useEffect(() => {
     setRemaining(seconds);
-    notifiedRef.current = false;
+    startedFromPositiveRef.current = seconds > 0;
+    notifiedRef.current = seconds <= 0;
   }, [seconds]);
 
   useEffect(() => {
@@ -27,7 +29,12 @@ function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () =>
   }, []);
 
   useEffect(() => {
-    if (!onElapsed || notifiedRef.current || remaining > 0) {
+    if (
+      !onElapsed ||
+      notifiedRef.current ||
+      remaining > 0 ||
+      !startedFromPositiveRef.current
+    ) {
       return;
     }
     notifiedRef.current = true;
