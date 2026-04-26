@@ -237,3 +237,62 @@ fn chrono_utc_to_jiff(value: chrono::DateTime<chrono::Utc>) -> Result<jiff::Time
             )))
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Duration, Utc};
+
+    use crate::{establish_test_connection_pool, toasty_db::establish_test_toasty_db};
+
+    #[tokio::test]
+    async fn toasty_job_repo_add_get_and_list_by_player_id() -> Result<(), ApplicationError> {
+        let pool = establish_test_connection_pool()
+            .await
+            .map_err(ApplicationError::Db)?;
+        let mut toasty_db = establish_test_toasty_db()
+            .await
+            .map_err(ApplicationError::Db)?;
+
+        let seed: Option<(i32, Uuid)> = sqlx::query_as(
+            r#"
+            SELECT v.id, v.player_id
+            FROM villages v
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let Some(seed) = seed else {
+            return Ok(());
+        };
+
+        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
+        let tx = Arc::new(Mutex::new(tx));
+        let repo = ToastyJobRepository::new(tx.clone());
+
+        let payload = parabellum_app::jobs::JobPayload::new(
+            "ToastyTestTask",
+            serde_json::json!({ "kind": "smoke", "value": 1 }),
+        );
+        let job = Job::with_deadline(
+            seed.1,
+            seed.0,
+            payload,
+            Utc::now() + Duration::minutes(5),
+        );
+
+        repo.add(&job).await?;
+        let loaded = repo.get_by_id(job.id).await?;
+        let listed = repo.list_by_player_id(seed.1).await?;
+
+        assert_eq!(loaded.id, job.id);
+        assert!(listed.iter().any(|j| j.id == job.id));
+
+        drop(repo);
+        drop(tx); // rollback on drop
+
+        Ok(())
+    }
+}
