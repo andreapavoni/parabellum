@@ -85,9 +85,25 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
 
     async fn list_village_targeting_movements(
         &self,
-        _village_id: i32,
+        village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        Err(unsupported("list_village_targeting_movements"))
+        let mut tx_guard = self.tx.lock().await;
+        let rows = toasty::query!(
+            JobRecord filter .status == "Pending" or .status == "Processing"
+        )
+        .exec(&mut *tx_guard)
+        .await
+        .map_err(map_toasty_error)?;
+
+        let mut rows: Vec<_> = rows
+            .into_iter()
+            .filter(|row| row_targets_village(row, village_id))
+            .collect();
+        rows.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
+
+        rows.into_iter()
+            .map(Job::try_from)
+            .collect::<Result<Vec<_>, _>>()
     }
 
     async fn list_village_building_queue(
@@ -174,8 +190,36 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
-        Err(unsupported("find_and_lock_due_jobs"))
+    async fn find_and_lock_due_jobs(&self, limit: i64) -> Result<Vec<Job>, ApplicationError> {
+        let now = jiff::Timestamp::now();
+        let limit = usize::try_from(limit).unwrap_or(0);
+        if limit == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut tx_guard = self.tx.lock().await;
+        let mut rows = toasty::query!(
+            JobRecord filter .status == "Pending" and .completed_at <= #now
+        )
+        .exec(&mut *tx_guard)
+        .await
+        .map_err(map_toasty_error)?;
+
+        rows.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
+        rows.truncate(limit);
+
+        for row in &mut rows {
+            row.update()
+                .status("Processing")
+                .exec(&mut *tx_guard)
+                .await
+                .map_err(map_toasty_error)?;
+            row.status = "Processing".to_string();
+        }
+
+        rows.into_iter()
+            .map(Job::try_from)
+            .collect::<Result<Vec<_>, _>>()
     }
 
     async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError> {
@@ -222,12 +266,6 @@ fn map_toasty_error(err: toasty::Error) -> ApplicationError {
     ApplicationError::Db(DbError::Transaction(err.to_string()))
 }
 
-fn unsupported(method: &str) -> ApplicationError {
-    ApplicationError::Db(DbError::Transaction(format!(
-        "toasty adapter method not implemented yet: {method}"
-    )))
-}
-
 fn chrono_utc_to_jiff(value: chrono::DateTime<chrono::Utc>) -> Result<jiff::Timestamp, ApplicationError> {
     jiff::Timestamp::from_second(value.timestamp())
         .and_then(|ts| ts.checked_add(jiff::SignedDuration::new(0, value.timestamp_subsec_nanos() as i32)))
@@ -236,6 +274,25 @@ fn chrono_utc_to_jiff(value: chrono::DateTime<chrono::Utc>) -> Result<jiff::Time
                 "could not convert chrono datetime to jiff timestamp: {err}"
             )))
         })
+}
+
+fn row_targets_village(row: &JobRecord, village_id: i32) -> bool {
+    let task_type = row.task.task_type.as_str();
+    let data = &row.task.data;
+
+    match task_type {
+        "Attack" | "Scout" => json_i32(data, "target_village_id") == Some(village_id),
+        "Reinforcement" => json_i32(data, "village_id") == Some(village_id),
+        "MerchantGoing" => json_i32(data, "destination_village_id") == Some(village_id),
+        _ => false,
+    }
+}
+
+fn json_i32(value: &serde_json::Value, key: &str) -> Option<i32> {
+    value
+        .get(key)
+        .and_then(|v| v.as_i64())
+        .and_then(|n| i32::try_from(n).ok())
 }
 
 #[cfg(test)]
