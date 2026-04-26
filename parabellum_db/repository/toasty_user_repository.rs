@@ -71,7 +71,10 @@ fn map_toasty_error(err: toasty::Error) -> ApplicationError {
 mod tests {
     use super::*;
 
-    use crate::toasty_db::establish_test_toasty_db;
+    use crate::{
+        establish_test_connection_pool, repository::PostgresUserRepository,
+        toasty_db::establish_test_toasty_db,
+    };
 
     #[tokio::test]
     async fn toasty_user_repo_save_and_get() -> Result<(), ApplicationError> {
@@ -95,6 +98,60 @@ mod tests {
 
         drop(repo);
         drop(tx); // rollback on drop
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn toasty_and_sqlx_user_get_by_email_parity() -> Result<(), ApplicationError> {
+        let pool = establish_test_connection_pool()
+            .await
+            .map_err(ApplicationError::Db)?;
+
+        let unique = Uuid::new_v4();
+        let email = format!("toasty-sqlx-user-{unique}@example.test");
+        let password_hash = format!("hash-{unique}");
+        let user_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(&email)
+        .bind(&password_hash)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let sqlx_tx = pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let sqlx_tx = Arc::new(Mutex::new(sqlx_tx));
+        let sqlx_repo = PostgresUserRepository::new(sqlx_tx.clone());
+
+        let mut toasty_db = establish_test_toasty_db()
+            .await
+            .map_err(ApplicationError::Db)?;
+        let toasty_tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
+        let toasty_tx = Arc::new(Mutex::new(toasty_tx));
+        let toasty_repo = ToastyUserRepository::new(toasty_tx.clone());
+
+        let from_sqlx = sqlx_repo.get_by_email(&email).await?;
+        let from_toasty = toasty_repo.get_by_email(&email).await?;
+
+        assert_eq!(from_sqlx.id, user_id);
+        assert_eq!(from_sqlx.id, from_toasty.id);
+        assert_eq!(from_sqlx.email, from_toasty.email);
+        assert_eq!(from_sqlx.password_hash(), from_toasty.password_hash());
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        drop(toasty_repo);
+        drop(toasty_tx); // rollback on drop
+        drop(sqlx_repo);
+        drop(sqlx_tx); // rollback on drop
 
         Ok(())
     }

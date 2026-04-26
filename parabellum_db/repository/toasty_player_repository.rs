@@ -199,10 +199,15 @@ fn map_toasty_error(err: toasty::Error) -> ApplicationError {
 mod tests {
     use super::*;
 
-    use parabellum_app::repository::UserRepository;
+    use parabellum_app::repository::{PlayerRepository, UserRepository};
     use parabellum_types::tribe::Tribe;
 
-    use crate::{repository::ToastyUserRepository, toasty_db::establish_test_toasty_db};
+    use crate::{
+        establish_test_connection_pool,
+        mapping::tribe_to_db_code,
+        repository::{PostgresPlayerRepository, ToastyUserRepository},
+        toasty_db::establish_test_toasty_db,
+    };
 
     #[tokio::test]
     async fn toasty_player_repo_save_get_and_leaderboard() -> Result<(), ApplicationError> {
@@ -250,6 +255,85 @@ mod tests {
         drop(player_repo);
         drop(user_repo);
         drop(tx); // rollback on drop
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn toasty_and_sqlx_player_get_by_id_parity() -> Result<(), ApplicationError> {
+        let pool = establish_test_connection_pool()
+            .await
+            .map_err(ApplicationError::Db)?;
+
+        let unique = Uuid::new_v4();
+        let email = format!("toasty-sqlx-player-{unique}@example.test");
+        let password_hash = format!("hash-{unique}");
+        let user_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(&email)
+        .bind(&password_hash)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let player_id = Uuid::new_v4();
+        let username = format!("toasty-sqlx-player-{unique}");
+        let tribe = tribe_to_db_code(&Tribe::Gaul);
+        sqlx::query(
+            "INSERT INTO players (id, username, tribe, user_id, culture_points) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(player_id)
+        .bind(&username)
+        .bind(tribe)
+        .bind(user_id)
+        .bind(42_i32)
+        .execute(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let sqlx_tx = pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let sqlx_tx = Arc::new(Mutex::new(sqlx_tx));
+        let sqlx_repo = PostgresPlayerRepository::new(sqlx_tx.clone());
+
+        let mut toasty_db = establish_test_toasty_db()
+            .await
+            .map_err(ApplicationError::Db)?;
+        let toasty_tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
+        let toasty_tx = Arc::new(Mutex::new(toasty_tx));
+        let toasty_repo = ToastyPlayerRepository::new(toasty_tx.clone());
+
+        let from_sqlx = sqlx_repo.get_by_id(player_id).await?;
+        let from_toasty = toasty_repo.get_by_id(player_id).await?;
+
+        assert_eq!(from_sqlx.id, from_toasty.id);
+        assert_eq!(from_sqlx.username, from_toasty.username);
+        assert_eq!(from_sqlx.tribe, from_toasty.tribe);
+        assert_eq!(from_sqlx.user_id, from_toasty.user_id);
+        assert_eq!(from_sqlx.culture_points, from_toasty.culture_points);
+
+        let from_sqlx_by_user = sqlx_repo.get_by_user_id(user_id).await?;
+        let from_toasty_by_user = toasty_repo.get_by_user_id(user_id).await?;
+        assert_eq!(from_sqlx_by_user.id, from_toasty_by_user.id);
+
+        sqlx::query("DELETE FROM players WHERE id = $1")
+            .bind(player_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        drop(toasty_repo);
+        drop(toasty_tx); // rollback on drop
+        drop(sqlx_repo);
+        drop(sqlx_tx); // rollback on drop
 
         Ok(())
     }
