@@ -1,28 +1,35 @@
+FROM oven/bun:1.2.20 AS bun
+
 # Build stage
-FROM rust:1.91.1-slim-trixie as builder
+FROM rust:1.91.1-slim-trixie AS builder
 WORKDIR /app
-COPY . .
+
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=bun /usr/local/bin/bunx /usr/local/bin/bunx
 
 ENV SQLX_OFFLINE=true
+ENV SKIP_FRONTEND=
 
-RUN curl -fsSL https://bun.com/install | bash
-
-RUN cargo build --release
+COPY . .
+RUN bun install --frozen-lockfile
+RUN cargo build --release --locked
 
 # Runtime stage
 FROM bitnami/minideb:trixie
 
 RUN apt-get update && \
-    apt-get install -y ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m parabellum
-RUN mkdir -p /app/logs && chown -R parabellum:parabellum /app
+RUN useradd -m -u 10001 parabellum
+WORKDIR /app
+RUN mkdir -p /app/logs /app/frontend/assets /app/frontend/static && \
+    chown -R parabellum:parabellum /app
 USER parabellum
 
-WORKDIR /app
 COPY --from=builder /app/target/release/parabellum /app/parabellum
 COPY --from=builder /app/frontend/assets /app/frontend/assets
+COPY --from=builder /app/frontend/static /app/frontend/static
 
 ENV PORT=8080
 EXPOSE 8080

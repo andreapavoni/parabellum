@@ -14,6 +14,7 @@ use parabellum_game::models::{army::Army, village::Village};
 use parabellum_types::{
     Result,
     army::TroopSet,
+    common::ResourceGroup,
     errors::{AppError, ApplicationError, GameError},
     tribe::Tribe,
 };
@@ -169,4 +170,59 @@ pub fn calculate_merchants_needed(tribe: &Tribe, resources_total: u32) -> Result
     } else {
         Ok(merchants)
     }
+}
+
+fn non_zero_resource_index(resources: &ResourceGroup) -> Option<usize> {
+    let values = [
+        resources.lumber(),
+        resources.clay(),
+        resources.iron(),
+        resources.crop(),
+    ];
+    let mut idx = None;
+    for (i, value) in values.iter().enumerate() {
+        if *value > 0 {
+            if idx.is_some() {
+                return None;
+            }
+            idx = Some(i);
+        }
+    }
+    idx
+}
+
+/// Marketplace offer rules:
+/// - exactly one resource type on each side
+/// - resource types must be different
+/// - quantity ratio must be between 1:3 and 3:1
+pub fn validate_marketplace_exchange_rules(
+    offer_resources: &ResourceGroup,
+    seek_resources: &ResourceGroup,
+) -> Result<(), GameError> {
+    if offer_resources.total() == 0 || seek_resources.total() == 0 {
+        return Err(GameError::InvalidMarketplaceOffer);
+    }
+
+    let offer_idx =
+        non_zero_resource_index(offer_resources).ok_or(GameError::InvalidMarketplaceOffer)?;
+    let seek_idx =
+        non_zero_resource_index(seek_resources).ok_or(GameError::InvalidMarketplaceOffer)?;
+
+    if offer_idx == seek_idx {
+        return Err(GameError::InvalidMarketplaceOffer);
+    }
+
+    let offer_total = offer_resources.total() as u64;
+    let seek_total = seek_resources.total() as u64;
+    let (max_side, min_side) = if offer_total >= seek_total {
+        (offer_total, seek_total)
+    } else {
+        (seek_total, offer_total)
+    };
+
+    if min_side == 0 || max_side > min_side.saturating_mul(3) {
+        return Err(GameError::InvalidMarketplaceOffer);
+    }
+
+    Ok(())
 }

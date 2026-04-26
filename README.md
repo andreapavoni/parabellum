@@ -33,6 +33,7 @@ Want to get the server running locally? Here’s how.
 **Prerequisites:**
 * Rust (>= 1.85)
 * Postgres 16.x
+* Bun 1.x
 * (optional, but much easier for deploy) Docker & Docker Compose
 * `sqlx-cli` (run `cargo install sqlx-cli --no-default-features --features postgres`)
 
@@ -62,23 +63,44 @@ Want to get the server running locally? Here’s how.
     ./setup_db.sh
     ```
 
-5. **(optional) Run app in docker:**
+5.  **(optional) Seed game data:**
+    ```sh
+    # Uses seed/game.json by default
+    cargo run -p parabellum_server --bin seed_game
+    ```
+    You can also pass a custom data file:
+    ```sh
+    cargo run -p parabellum_server --bin seed_game -- --file seed/dev.json
+    ```
+    The seeder is a standalone tool: it executes the provided file and fails on conflicts (for example, existing user/email).
+
+6.  **Install frontend dependencies:**
+    ```sh
+    bun install
+    ```
+
+7. **(optional) Run app in docker:**
    ```sh
    docker-compose up -d app
    ```
 
-6.  **(optional) Run tests:**
+8.  **(optional) Run tests:**
     ```sh
-    cargo test --release -- --test-threads=1
+    cargo test --release --
     ```
-    _Note: use 1 thread only, to avoid issues in tests setup that weren't solved yet._
 
-7.  **Run the server:**
+9.  **Run the server:**
     ```sh
     cargo run --release
     ```
 
   From now, you can go to `http://localhost:8080` and see the progress.
+
+The frontend is now a `Preact + Vite` SPA served by the Rust app, backed by JSON endpoints under `/api/v1`. Cargo builds the frontend bundle automatically through `parabellum_web/build.rs`; for standalone frontend verification you can also run:
+
+```sh
+bun run build:release
+```
 
 ---
 
@@ -183,7 +205,7 @@ The project is structured as a Cargo workspace with several distinct crates:
 ### Infrastructure
 These packages provide the necessary tools to make the system working. They provide data persistence, communication interfaces, and they can be changed or added independently.
 
-* `parabellum_web`: The Web UI. All the HTTP communication and web templates can be found here.
+* `parabellum_web`: The web delivery layer. It serves the JSON API, bearer-token auth endpoints (`/api/v1/auth/token/*` + `/api/v1/auth/refresh`), and the SPA shell/assets.
 * `parabellum_db`: The database layer. This provides the concrete implementation of the database repositories (using `sqlx` and Postgres).
 
 ### Domain
@@ -193,6 +215,12 @@ These packages define the whole game engine. There aren't infrastructure details
 * `parabellum_game`: The core domain layer. This crate knows *nothing* about databases or web servers. It contains the pure game rules, models (Village, Army, Building), and logic (e.g., `battle.rs`).
 * `parabellum_core`: A shared crate for common code.
 * `parabellum_types`: Shared, simple data structures that are used by all other crates to avoid circular dependencies.
+
+## Developer Documentation
+
+- Web/API crate guide: [`parabellum_web/README.md`](parabellum_web/README.md)
+- API module notes: [`parabellum_web/api/README.md`](parabellum_web/api/README.md)
+- API test roadmap: [`parabellum_server/tests/API_TESTING_PLAN.md`](parabellum_server/tests/API_TESTING_PLAN.md)
 
 ---
 

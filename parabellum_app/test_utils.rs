@@ -2,7 +2,7 @@
 #[cfg(not(tarpaulin_include))]
 pub mod tests {
     use async_trait::async_trait;
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
     use serde_json;
     use std::{
         collections::HashMap,
@@ -116,7 +116,17 @@ pub mod tests {
         }
 
         async fn find_and_lock_due_jobs(&self, _limit: i64) -> Result<Vec<Job>, ApplicationError> {
-            Ok(self.added_jobs.lock().unwrap().clone())
+            let now = Utc::now();
+            let mut jobs = self.added_jobs.lock().unwrap();
+            let mut due = Vec::new();
+            for job in jobs.iter_mut() {
+                if matches!(job.status, crate::jobs::JobStatus::Pending) && job.completed_at <= now
+                {
+                    job.status = crate::jobs::JobStatus::Processing;
+                    due.push(job.clone());
+                }
+            }
+            Ok(due)
         }
 
         async fn list_village_building_queue(
@@ -175,7 +185,26 @@ pub mod tests {
                 .collect())
         }
 
-        async fn mark_as_completed(&self, _job_id: Uuid) -> Result<(), ApplicationError> {
+        async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError> {
+            let mut jobs = self.added_jobs.lock().unwrap();
+            if let Some(job) = jobs.iter_mut().find(|j| j.id == job_id) {
+                job.status = crate::jobs::JobStatus::Completed;
+            }
+            Ok(())
+        }
+
+        async fn reschedule(
+            &self,
+            job_id: Uuid,
+            task: &crate::jobs::JobPayload,
+            completed_at: DateTime<Utc>,
+        ) -> Result<(), ApplicationError> {
+            let mut jobs = self.added_jobs.lock().unwrap();
+            if let Some(job) = jobs.iter_mut().find(|j| j.id == job_id) {
+                job.task = task.clone();
+                job.completed_at = completed_at;
+                job.status = crate::jobs::JobStatus::Pending;
+            }
             Ok(())
         }
 

@@ -1,19 +1,54 @@
 use chrono::Utc;
 use parabellum_app::cqrs::queries::{
-    BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TrainingQueueItem,
-    TroopMovementType, VillageTroopMovements,
+    BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
+    VillageTroopMovements,
 };
 use parabellum_app::jobs::JobStatus;
 use parabellum_app::repository::VillageInfo;
 use parabellum_game::models::village::Village;
 use parabellum_types::{
-    army::UnitName, buildings::BuildingName, common::ResourceGroup, map::Position,
+    army::TroopSet, buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
 };
 use rust_i18n::t;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::components::{ArmyAction, ArmyCardData, ArmyCategory, MovementKind};
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MovementKind {
+    Attack,
+    Raid,
+    Reinforcement,
+    Return,
+    FoundVillage,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArmyCategory {
+    Stationed,
+    Reinforcement,
+    Deployed,
+    Incoming,
+    Outgoing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArmyAction {
+    Recall { army_id: String },
+    Release { army_id: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArmyCardData {
+    pub village_id: u32,
+    pub village_name: Option<String>,
+    pub position: Option<Position>,
+    pub units: TroopSet,
+    pub tribe: Tribe,
+    pub category: ArmyCategory,
+    pub movement_kind: Option<MovementKind>,
+    pub arrival_time: Option<u32>,
+    pub action_button: Option<ArmyAction>,
+}
 
 #[derive(Debug, Clone)]
 pub struct BuildingQueueItemView {
@@ -25,17 +60,6 @@ pub struct BuildingQueueItemView {
     pub time_remaining: String,
     pub time_seconds: u32,
     pub queue_class: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct UnitTrainingQueueItemView {
-    pub job_id: Uuid,
-    pub slot_id: u8,
-    pub unit_name: String,
-    pub quantity: i32,
-    pub time_per_unit: i32,
-    pub time_remaining: String,
-    pub time_seconds: u32,
 }
 
 /// Formats a duration in seconds to HH:MM:SS.
@@ -66,92 +90,6 @@ pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueue
             }
         })
         .collect()
-}
-
-/// Converts unit training jobs into view models with countdown timers.
-pub fn training_queue_to_views(items: &[TrainingQueueItem]) -> Vec<UnitTrainingQueueItemView> {
-    let now = Utc::now();
-    items
-        .iter()
-        .map(|item| {
-            let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
-            UnitTrainingQueueItemView {
-                job_id: item.job_id,
-                slot_id: item.slot_id,
-                unit_name: unit_display_name(&item.unit),
-                quantity: item.quantity,
-                time_per_unit: item.time_per_unit,
-                time_remaining: format_duration(remaining),
-                time_seconds: remaining,
-            }
-        })
-        .collect()
-}
-
-/// Returns the localized display name for a unit.
-pub fn unit_display_name(unit: &UnitName) -> String {
-    let name = match unit {
-        UnitName::Legionnaire => t!("game.units.romans.legionnaire"),
-        UnitName::Praetorian => t!("game.units.romans.praetorian"),
-        UnitName::Imperian => t!("game.units.romans.imperian"),
-        UnitName::EquitesLegati => t!("game.units.romans.equites_legati"),
-        UnitName::EquitesImperatoris => t!("game.units.romans.equites_imperatoris"),
-        UnitName::EquitesCaesaris => t!("game.units.romans.equites_caesaris"),
-        UnitName::BatteringRam => t!("game.units.romans.battering_ram"),
-        UnitName::FireCatapult => t!("game.units.romans.fire_catapult"),
-        UnitName::Senator => t!("game.units.romans.senator"),
-        UnitName::Settler => t!("game.units.romans.settler"),
-        UnitName::Maceman => t!("game.units.teutons.maceman"),
-        UnitName::Spearman => t!("game.units.teutons.spearman"),
-        UnitName::Axeman => t!("game.units.teutons.axeman"),
-        UnitName::Scout => t!("game.units.teutons.scout"),
-        UnitName::Paladin => t!("game.units.teutons.paladin"),
-        UnitName::TeutonicKnight => t!("game.units.teutons.teutonic_knight"),
-        UnitName::Ram => t!("game.units.teutons.ram"),
-        UnitName::Catapult => t!("game.units.teutons.catapult"),
-        UnitName::Chief => t!("game.units.teutons.chief"),
-        UnitName::Phalanx => t!("game.units.gauls.phalanx"),
-        UnitName::Swordsman => t!("game.units.gauls.swordsman"),
-        UnitName::Pathfinder => t!("game.units.gauls.pathfinder"),
-        UnitName::TheutatesThunder => t!("game.units.gauls.theutates_thunder"),
-        UnitName::Druidrider => t!("game.units.gauls.druidrider"),
-        UnitName::Haeduan => t!("game.units.gauls.haeduan"),
-        UnitName::Trebuchet => t!("game.units.gauls.trebuchet"),
-        UnitName::Chieftain => t!("game.units.gauls.chieftain"),
-        UnitName::Rat => t!("game.units.nature.rat"),
-        UnitName::Spider => t!("game.units.nature.spider"),
-        UnitName::Serpent => t!("game.units.nature.snake"),
-        UnitName::Bat => t!("game.units.nature.bat"),
-        UnitName::WildBoar => t!("game.units.nature.wild_boar"),
-        UnitName::Wolf => t!("game.units.nature.wolf"),
-        UnitName::Bear => t!("game.units.nature.bear"),
-        UnitName::Crocodile => t!("game.units.nature.crocodile"),
-        UnitName::Tiger => t!("game.units.nature.tiger"),
-        UnitName::Elephant => t!("game.units.nature.elephant"),
-        UnitName::Pikeman => t!("game.units.natars.pikeman"),
-        UnitName::ThornedWarrior => t!("game.units.natars.thorned_warrior"),
-        UnitName::Guardsman => t!("game.units.natars.guardsman"),
-        UnitName::BirdsOfPrey => t!("game.units.natars.birds_of_prey"),
-        UnitName::Axerider => t!("game.units.natars.axerider"),
-        UnitName::NatarianKnight => t!("game.units.natars.natarian_knight"),
-        UnitName::Warelephant => t!("game.units.natars.warelephant"),
-        UnitName::Ballista => t!("game.units.natars.ballista"),
-        UnitName::NatarianEmperor => t!("game.units.natars.natarian_emperor"),
-        // _ => return format!("{:?}", unit),
-    };
-
-    name.to_string()
-}
-
-/// Formats a resource group into a short inline summary.
-pub fn format_resource_summary(resources: &ResourceGroup) -> String {
-    format!(
-        "🌲 {} 🧱 {} ⛏️ {} 🌾 {}",
-        resources.lumber(),
-        resources.clay(),
-        resources.iron(),
-        resources.crop()
-    )
 }
 
 /// Prepares all army cards for the Rally Point page from domain data.
@@ -365,7 +303,7 @@ pub struct MarketplaceOfferView {
     pub offer_resources: ResourceGroup,
     pub seek_resources: ResourceGroup,
     pub merchants_required: u8,
-    pub created_at_text: String,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -389,33 +327,6 @@ pub struct MerchantMovementView {
     pub time_remaining_secs: u32,
 }
 
-/// Formats a trade offer as "Offering → Seeking" with resource emojis
-pub fn format_trade_offer(offer: &ResourceGroup, seek: &ResourceGroup) -> String {
-    let offer_parts: Vec<String> = [
-        (offer.lumber(), "🌲"),
-        (offer.clay(), "🧱"),
-        (offer.iron(), "⛏️"),
-        (offer.crop(), "🌾"),
-    ]
-    .iter()
-    .filter(|(amount, _)| *amount > 0)
-    .map(|(amount, emoji)| format!("{} {}", amount, emoji))
-    .collect();
-
-    let seek_parts: Vec<String> = [
-        (seek.lumber(), "🌲"),
-        (seek.clay(), "🧱"),
-        (seek.iron(), "⛏️"),
-        (seek.crop(), "🌾"),
-    ]
-    .iter()
-    .filter(|(amount, _)| *amount > 0)
-    .map(|(amount, emoji)| format!("{} {}", amount, emoji))
-    .collect();
-
-    format!("{} → {}", offer_parts.join(" "), seek_parts.join(" "))
-}
-
 /// Converts MarketplaceData into view models for own offers
 pub fn prepare_own_offers(marketplace_data: &MarketplaceData) -> Vec<MarketplaceOfferView> {
     marketplace_data
@@ -435,7 +346,7 @@ pub fn prepare_own_offers(marketplace_data: &MarketplaceData) -> Vec<Marketplace
                 offer_resources: offer.offer_resources.clone(),
                 seek_resources: offer.seek_resources.clone(),
                 merchants_required: offer.merchants_required,
-                created_at_text: format_relative_time(offer.created_at),
+                created_at: offer.created_at.timestamp(),
             }
         })
         .collect()
@@ -460,7 +371,7 @@ pub fn prepare_global_offers(marketplace_data: &MarketplaceData) -> Vec<Marketpl
                 offer_resources: offer.offer_resources.clone(),
                 seek_resources: offer.seek_resources.clone(),
                 merchants_required: offer.merchants_required,
-                created_at_text: format_relative_time(offer.created_at),
+                created_at: offer.created_at.timestamp(),
             }
         })
         .collect()
@@ -498,23 +409,4 @@ pub fn prepare_merchant_movements(
             }
         })
         .collect()
-}
-
-/// Formats a timestamp as a relative time string (e.g., "5 minutes ago")
-fn format_relative_time(timestamp: chrono::DateTime<chrono::Utc>) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(timestamp);
-
-    if duration.num_seconds() < 60 {
-        "just now".to_string()
-    } else if duration.num_minutes() < 60 {
-        let mins = duration.num_minutes();
-        format!("{} minute{} ago", mins, if mins == 1 { "" } else { "s" })
-    } else if duration.num_hours() < 24 {
-        let hours = duration.num_hours();
-        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
-    } else {
-        let days = duration.num_days();
-        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
-    }
 }

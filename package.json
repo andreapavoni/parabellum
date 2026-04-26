@@ -1,22 +1,25 @@
 {
   "name": "parabellum",
-  "module": "frontend/src/index.ts",
+  "module": "frontend/src/main.tsx",
   "type": "module",
   "private": true,
   "scripts": {
     "build:css": "bunx @tailwindcss/cli -i frontend/src/css/tailwind.css -o frontend/assets/tailwind.css",
-    "build:js": "bun build frontend/src/index.ts --outdir frontend/assets",
-    "build:dev": "bun run build:css && bun run build:js --sourcemap=linked",
-    "build:release": "bun run build:css --minify && bun run build:js --minify"
+    "dev": "vite",
+    "build:js": "vite build",
+    "build:dev": "bun run build:css && vite build --mode development",
+    "build:release": "bun run build:css --minify && vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "@preact/preset-vite": "^2.10.2",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.17",
+    "preact": "^10.26.9",
     "tailwindcss": "^4.1.17"
   }
 }

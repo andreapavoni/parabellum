@@ -89,6 +89,7 @@ impl JobHandler for AttackJobHandler {
             hero_repo.save(&hero).await?;
         }
 
+        let attacker_has_survivors = atk_army.immensity() > 0;
         army_repo.save_or_remove(&atk_army).await?;
 
         // Save or remove defender's home army
@@ -114,35 +115,39 @@ impl JobHandler for AttackJobHandler {
 
         village_repo.save(&def_village).await?;
 
-        let return_travel_time = atk_village.position.calculate_travel_time_secs(
-            def_village.position.clone(),
-            atk_army.speed(),
-            ctx.config.world_size as i32,
-            ctx.config.speed as u8,
-        ) as i64;
+        if attacker_has_survivors {
+            let return_travel_time = atk_village.position.calculate_travel_time_secs(
+                def_village.position.clone(),
+                atk_army.speed(),
+                ctx.config.world_size as i32,
+                ctx.config.speed as u8,
+            ) as i64;
 
-        let player_id = atk_village.player_id;
-        let village_id = atk_village.id as i32;
-        let defender_village_id = def_village.id as i32;
+            let player_id = atk_village.player_id;
+            let village_id = atk_village.id as i32;
+            let defender_village_id = def_village.id as i32;
 
-        let return_payload = ArmyReturnTask {
-            army_id: atk_army.id,
-            resources: bounty.clone(),
-            destination_player_id: player_id,
-            destination_village_id: village_id,
-            from_village_id: defender_village_id,
-        };
+            let return_payload = ArmyReturnTask {
+                army_id: atk_army.id,
+                resources: bounty.clone(),
+                destination_player_id: player_id,
+                destination_village_id: village_id,
+                from_village_id: defender_village_id,
+            };
 
-        let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
-        let return_job = Job::new(player_id, village_id, return_travel_time, job_payload);
+            let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
+            let return_job = Job::new(player_id, village_id, return_travel_time, job_payload);
 
-        ctx.uow.jobs().add(&return_job).await?;
+            ctx.uow.jobs().add(&return_job).await?;
 
-        info!(
-            return_job_id = %return_job.id,
-            arrival_at = %return_job.completed_at,
-            "Army return job planned."
-        );
+            info!(
+                return_job_id = %return_job.id,
+                arrival_at = %return_job.completed_at,
+                "Army return job planned."
+            );
+        } else {
+            info!("Attacker army wiped out, skipping return job.");
+        }
 
         let success = report
             .defender
@@ -203,16 +208,16 @@ impl JobHandler for AttackJobHandler {
         };
 
         // TODO: add reinforcements owners in audiences
-        let audiences = vec![
-            ReportAudience {
-                player_id: atk_village.player_id,
-                read_at: None,
-            },
-            ReportAudience {
+        let mut audiences = vec![ReportAudience {
+            player_id: atk_village.player_id,
+            read_at: None,
+        }];
+        if def_village.player_id != atk_village.player_id {
+            audiences.push(ReportAudience {
                 player_id: def_village.player_id,
                 read_at: None,
-            },
-        ];
+            });
+        }
 
         report_repo.add(&new_report, &audiences).await?;
 
@@ -249,7 +254,9 @@ mod tests {
         let config = Arc::new(Config {
             world_size: 100,
             speed: 1,
-            auth_cookie_secret: "test-secret".to_string(),
+            access_token_ttl_secs: 900,
+            refresh_token_ttl_secs: 2_592_000,
+            token_signing_key: "test-signing-key".to_string(),
         });
 
         let attacker_player = player_factory(PlayerFactoryOptions {

@@ -268,6 +268,83 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn test_attack_no_return_job_when_attacker_is_wiped() -> Result<()> {
+        let (app, worker, uow_provider, _) = setup_app(false).await?;
+        let units_to_send = TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+        let (attacker_player, attacker_village, attacker_army, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                units_to_send.clone(),
+                false,
+            )
+            .await?
+        };
+
+        let (_, defender_village, _, _, _) = {
+            setup_player_party(
+                uow_provider.clone(),
+                None,
+                Tribe::Roman,
+                TroopSet::new([200, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                false,
+            )
+            .await?
+        };
+
+        app.execute(
+            AttackVillage {
+                player_id: attacker_player.id,
+                village_id: attacker_village.id,
+                army_id: attacker_army.id,
+                units: units_to_send,
+                target_village_id: defender_village.id,
+                catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                hero_id: None,
+                attack_type: AttackType::Normal,
+            },
+            AttackVillageCommandHandler::new(),
+        )
+        .await?;
+
+        let (attack_job, deployed_army_id) = {
+            let uow = uow_provider.tx().await?;
+            let jobs = uow.jobs().list_by_player_id(attacker_player.id).await?;
+            assert_eq!(jobs.len(), 1, "Expected one pending attack job");
+            let attack_job = jobs[0].clone();
+            let task: AttackTask = serde_json::from_value(attack_job.task.data.clone())?;
+            uow.rollback().await?;
+            (attack_job, task.army_id)
+        };
+
+        worker.process_jobs(&vec![attack_job.clone()]).await?;
+
+        {
+            let uow = uow_provider.tx().await?;
+            let pending_jobs = uow.jobs().list_by_player_id(attacker_player.id).await?;
+            assert_eq!(
+                pending_jobs.len(),
+                0,
+                "No return job should be scheduled when attacker is wiped"
+            );
+
+            let processed_job = uow.jobs().get_by_id(attack_job.id).await?;
+            assert_eq!(processed_job.status, JobStatus::Completed);
+
+            assert!(
+                uow.armies().get_by_id(deployed_army_id).await.is_err(),
+                "Wiped deployed army must be removed"
+            );
+
+            uow.rollback().await?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_attack_with_catapult_damage_and_bounty() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
@@ -295,7 +372,6 @@ pub mod tests {
 
         {
             let uow_update = uow_provider.tx().await?;
-            let village_repo = uow_update.villages();
 
             let granary =
                 Building::new(BuildingName::Granary, config.speed).at_level(1, config.speed)?;
@@ -306,7 +382,10 @@ pub mod tests {
             defender_village.add_building_at_slot(warehouse, 20)?;
             defender_village.store_resources(&ResourceGroup::new(800, 800, 800, 800));
 
-            village_repo.save(&defender_village).await?;
+            {
+                let village_repo = uow_update.villages();
+                village_repo.save(&defender_village).await?;
+            }
             uow_update.commit().await?;
         };
 

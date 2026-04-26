@@ -1,0 +1,76 @@
+{
+  "user": {
+    "username": "pavonz",
+    "email": "pavonz@example.com",
+    "password": "pavonz",
+    "tribe": "Roman",
+    "quadrant": "NorthEast"
+  },
+  "resourceFieldsTargetLevel": 10,
+  "buildings": [
+    {
+      "slotId": 19,
+      "name": "MainBuilding"
+    },
+    {
+      "slotId": 20,
+      "name": "IronFoundry"
+    },
+    {
+      "slotId": 21,
+      "name": "Sawmill"
+    },
+    {
+      "slotId": 22,
+      "name": "Brickyard"
+    },
+    {
+      "slotId": 23,
+      "name": "GrainMill"
+    },
+    {
+      "slotId": 24,
+      "name": "Bakery"
+    },
+    {
+      "slotId": 39,
+      "name": "RallyPoint"
+    },
+    {
+      "slotId": 25,
+      "name": "Marketplace"
+    },
+    {
+      "slotId": 26,
+      "name": "Barracks"
+    },
+    {
+      "slotId": 27,
+      "name": "Academy"
+    },
+    {
+      "slotId": 28,
+      "name": "Smithy"
+    },
+    {
+      "slotId": 29,
+      "name": "Warehouse"
+    },
+    {
+      "slotId": 30,
+      "name": "Granary"
+    },
+    {
+      "slotId": 31,
+      "name": "Residence"
+    },
+    {
+      "slotId": 32,
+      "name": "Stable"
+    },
+    {
+      "slotId": 33,
+      "name": "Workshop"
+    }
+  ]
+}

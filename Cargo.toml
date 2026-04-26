@@ -65,4 +65,6 @@ dotenvy = "0.15"
 password-hash = { version = "0.5", features = ["std"] }
 argon2 = { version = "0.5", features = ["std"] }
 axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
-axum-extra = { version = "0.12", features = ["cached", "cookie", "cookie-signed", "handler", "middleware", "multipart", "query", "routing", "with-rejection"] }
+jsonwebtoken = "9"
+base64 = "0.22"
+sha2 = "0.10"

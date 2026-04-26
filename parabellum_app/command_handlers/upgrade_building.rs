@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use parabellum_game::models::buildings::get_building_data;
 use parabellum_types::{
     Result,
     errors::{ApplicationError, GameError},
     tribe::Tribe,
 };
 
+use crate::jobs::tasks::AddBuildingTask;
 use crate::{
     command_handlers::helpers::{
         completion_time_for_slot, enforce_queue_capacity, highest_target_level_for_slot,
@@ -43,12 +45,6 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         let mut village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
 
-        let vb = village
-            .get_building_by_slot_id(command.slot_id)
-            .ok_or(GameError::EmptySlot {
-                slot_id: command.slot_id,
-            })?;
-
         let active_jobs = job_repo
             .list_active_jobs_by_village(command.village_id as i32)
             .await?;
@@ -68,10 +64,31 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
-        let pending_level = highest_target_level_for_slot(&building_jobs, command.slot_id)
-            .unwrap_or(vb.building.level);
+        let vb = village.get_building_by_slot_id(command.slot_id);
+        let queued_slot = highest_slot_queue_state(&building_jobs, command.slot_id);
+
+        let (building_name, pending_level, template_building) = if let Some(vb) = vb {
+            let pending = highest_target_level_for_slot(&building_jobs, command.slot_id)
+                .unwrap_or(vb.building.level);
+            (vb.building.name.clone(), pending, vb.building.clone())
+        } else if let Some((name, level)) = queued_slot {
+            let template =
+                parabellum_game::models::buildings::Building::new(name.clone(), config.speed);
+            (name, level, template)
+        } else {
+            return Err(GameError::EmptySlot {
+                slot_id: command.slot_id,
+            }
+            .into());
+        };
+
+        let max_level = get_building_data(&building_name)?.rules.max_level;
+        if pending_level >= max_level {
+            return Err(GameError::BuildingMaxLevelReached.into());
+        }
+
         let next_level = pending_level + 1;
-        let next_level_building = vb.building.at_level(next_level, config.speed)?;
+        let next_level_building = template_building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
         let build_time_secs =
             next_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
@@ -98,6 +115,27 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
 
         Ok(())
     }
+}
+
+fn highest_slot_queue_state(
+    jobs: &[Job],
+    slot_id: u8,
+) -> Option<(parabellum_types::buildings::BuildingName, u8)> {
+    jobs.iter()
+        .filter_map(|job| match job.task.task_type.as_str() {
+            "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
+                .ok()
+                .filter(|payload| payload.slot_id == slot_id)
+                .map(|payload| (payload.name, 1)),
+            "BuildingUpgrade" => {
+                serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+                    .ok()
+                    .filter(|payload| payload.slot_id == slot_id)
+                    .map(|payload| (payload.building_name, payload.level))
+            }
+            _ => None,
+        })
+        .max_by_key(|(_, level)| *level)
 }
 
 #[cfg(test)]

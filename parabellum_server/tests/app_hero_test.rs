@@ -31,7 +31,6 @@ pub mod tests {
 
         let village2 = {
             let uow_setup = uow_provider.tx().await?;
-            let village_repo = uow_setup.villages();
 
             let mut village2 = village_factory(VillageFactoryOptions {
                 player: Some(player.clone()),
@@ -42,7 +41,10 @@ pub mod tests {
             let mansion =
                 Building::new(BuildingName::HeroMansion, config.speed).at_level(1, config.speed)?;
             village2.add_building_at_slot(mansion, 20)?;
-            village_repo.save(&village2).await?;
+            {
+                let village_repo = uow_setup.villages();
+                village_repo.save(&village2).await?;
+            }
 
             uow_setup.commit().await?;
             village2
@@ -256,8 +258,6 @@ pub mod tests {
 
         let (player_id, village_id, hero_id) = {
             let uow = uow_provider.tx().await?;
-            let village_repo = uow.villages();
-            let hero_repo = uow.heroes();
 
             let granary = Building::new(BuildingName::Granary, config.speed).at_level(20, 1)?;
             let warehouse = Building::new(BuildingName::Warehouse, 1).at_level(20, 1)?;
@@ -265,7 +265,10 @@ pub mod tests {
             village.add_building_at_slot(granary, 21)?;
             village.add_building_at_slot(warehouse, 20)?;
             village.store_resources(&ResourceGroup(100_000, 100_000, 100_000, 100_000));
-            village_repo.save(&village).await?;
+            {
+                let village_repo = uow.villages();
+                village_repo.save(&village).await?;
+            }
 
             hero.level = 8;
             hero.experience = 10_000;
@@ -275,7 +278,10 @@ pub mod tests {
             hero.regeneration_points = 3;
             hero.resources_points = 5;
             hero.health = 100;
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
 
             uow.commit().await?;
             (player.id, village.id, hero.id)
@@ -283,13 +289,18 @@ pub mod tests {
 
         {
             let uow = uow_provider.tx().await?;
-            let hero_repo = uow.heroes();
 
-            let mut hero = hero_repo.get_by_id(hero_id).await?;
+            let mut hero = {
+                let hero_repo = uow.heroes();
+                hero_repo.get_by_id(hero_id).await?
+            };
             hero.apply_battle_damage(0.95);
             assert!(!hero.is_alive());
 
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
             uow.commit().await?;
         }
 
@@ -353,11 +364,8 @@ pub mod tests {
     async fn test_resurrect_new_hero() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let uow = uow_provider.tx().await?;
-        let village_repo = uow.villages();
-        let hero_repo = uow.heroes();
-
         let (player_id, village_id, hero_id) = {
+            let uow = uow_provider.tx().await?;
             let (player, mut village, _, some_hero, _) = setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -376,7 +384,10 @@ pub mod tests {
             village.add_building_at_slot(warehouse, 20)?;
 
             village.store_resources(&ResourceGroup(100_000, 100_000, 100_000, 100_000));
-            village_repo.save(&village).await?;
+            {
+                let village_repo = uow.villages();
+                village_repo.save(&village).await?;
+            }
 
             hero.level = 5;
             hero.strength_points = 25;
@@ -385,7 +396,10 @@ pub mod tests {
             hero.regeneration_points = 0;
             hero.resources_points = 0;
             hero.health = 0;
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
 
             uow.commit().await?;
             (player.id, village.id, hero.id)
@@ -449,11 +463,8 @@ pub mod tests {
     async fn test_hero_xp_levelup_and_revival() -> Result<()> {
         let (app, worker, uow_provider, config) = setup_app(false).await?;
 
-        let uow = uow_provider.tx().await?;
-        let village_repo = uow.villages();
-        let hero_repo = uow.heroes();
-
         let (player_id, village_id, hero_id) = {
+            let uow = uow_provider.tx().await?;
             let (player, mut village, _, some_hero, _) = setup_player_party(
                 uow_provider.clone(),
                 None,
@@ -472,13 +483,19 @@ pub mod tests {
             village.add_building_at_slot(warehouse, 20)?;
 
             village.store_resources(&ResourceGroup(100_000, 100_000, 100_000, 100_000));
-            village_repo.save(&village).await?;
+            {
+                let village_repo = uow.villages();
+                village_repo.save(&village).await?;
+            }
 
             // lv0, xp0, HP at  (così verifichiamo l'heal on level-up)
             hero.level = 0;
             hero.experience = 0;
             hero.health = 40;
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
 
             uow.commit().await?;
             (player.id, village.id, hero.id)
@@ -487,9 +504,11 @@ pub mod tests {
         // 2) Battle with enough XP to level-up hero (T3: threshold lv1 = 100 XP)
         {
             let uow = uow_provider.tx().await?;
-            let hero_repo = uow.heroes();
 
-            let mut hero = hero_repo.get_by_id(hero_id).await?;
+            let mut hero = {
+                let hero_repo = uow.heroes();
+                hero_repo.get_by_id(hero_id).await?
+            };
             assert_eq!(hero.level, 0);
             assert_eq!(hero.health, 40);
 
@@ -502,23 +521,31 @@ pub mod tests {
             let xp_after = hero.experience;
             assert!(xp_after >= 150);
 
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
             uow.commit().await?;
         }
 
         // 3) Next battle with >= 90% losses → hero dies
         {
             let uow = uow_provider.tx().await?;
-            let hero_repo = uow.heroes();
 
-            let mut hero = hero_repo.get_by_id(hero_id).await?;
+            let mut hero = {
+                let hero_repo = uow.heroes();
+                hero_repo.get_by_id(hero_id).await?
+            };
             assert!(hero.is_alive());
 
             hero.apply_battle_damage(0.95);
             assert!(!hero.is_alive());
             assert_eq!(hero.health, 0);
 
-            hero_repo.save(&hero).await?;
+            {
+                let hero_repo = uow.heroes();
+                hero_repo.save(&hero).await?;
+            }
             uow.commit().await?;
         }
 

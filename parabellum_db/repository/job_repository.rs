@@ -253,6 +253,30 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         Ok(())
     }
 
+    async fn reschedule(
+        &self,
+        job_id: Uuid,
+        task: &parabellum_app::jobs::JobPayload,
+        completed_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), ApplicationError> {
+        let mut tx_guard = self.tx.lock().await;
+        sqlx::query(
+            r#"
+            UPDATE jobs
+            SET task = $2, completed_at = $3, status = 'Pending', updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(job_id)
+        .bind(Json(task))
+        .bind(completed_at)
+        .execute(&mut *tx_guard.as_mut())
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(())
+    }
+
     async fn mark_as_failed(
         &self,
         job_id: Uuid,

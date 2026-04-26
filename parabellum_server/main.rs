@@ -17,14 +17,15 @@ use logs::setup_logging;
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
     setup_logging();
-    let (config, app_bus, worker) = setup_app().await?;
-    let state = AppState::new(app_bus, &config);
+    let (config, app_bus, worker, db_pool) = setup_app().await?;
+    let state = AppState::new(app_bus, db_pool, &config);
 
     worker.run();
     WebRouter::serve(state, 8080).await
 }
 
-async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), ApplicationError> {
+async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>, PgPool), ApplicationError>
+{
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
 
@@ -35,7 +36,7 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), Appli
 
     setup_world_map(&db_pool, &config).await?;
 
-    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool));
+    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool.clone()));
     let app_bus = Arc::new(AppBus::new(config.clone(), uow_provider.clone()));
     let app_registry = Arc::new(AppJobRegistry::new());
     let worker = Arc::new(JobWorker::new(
@@ -44,7 +45,7 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>), Appli
         config.clone(),
     ));
 
-    Ok((config, app_bus, worker))
+    Ok((config, app_bus, worker, db_pool))
 }
 
 async fn setup_world_map(pool: &PgPool, config: &Config) -> Result<(), ApplicationError> {
