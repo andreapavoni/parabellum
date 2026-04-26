@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::toasty_time::{chrono_to_jiff_utc, jiff_to_chrono_utc};
 use parabellum_app::jobs::{Job, JobPayload, JobStatus};
 use parabellum_types::errors::{ApplicationError, DbError};
 
@@ -53,9 +53,9 @@ impl TryFrom<&Job> for JobRecord {
             village_id: job.village_id,
             task: job.task.clone(),
             status: format_job_status(&job.status).to_string(),
-            completed_at: chrono_utc_to_jiff(job.completed_at)?,
-            created_at: chrono_utc_to_jiff(job.created_at)?,
-            updated_at: chrono_utc_to_jiff(job.updated_at)?,
+            completed_at: chrono_to_jiff_utc(job.completed_at)?,
+            created_at: chrono_to_jiff_utc(job.created_at)?,
+            updated_at: chrono_to_jiff_utc(job.updated_at)?,
         })
     }
 }
@@ -81,41 +81,10 @@ fn format_job_status(status: &JobStatus) -> &'static str {
     }
 }
 
-fn chrono_utc_to_jiff(value: DateTime<Utc>) -> Result<jiff::Timestamp, ApplicationError> {
-    jiff::Timestamp::from_second(value.timestamp())
-        .and_then(|ts| ts.checked_add(value.timestamp_subsec_nanos().nanoseconds()))
-        .map_err(|err| {
-            ApplicationError::Db(DbError::Transaction(format!(
-                "could not convert chrono datetime to jiff timestamp: {err}"
-            )))
-        })
-}
-
-fn jiff_to_chrono_utc(value: jiff::Timestamp) -> Result<DateTime<Utc>, ApplicationError> {
-    let nanos_i128 = value.as_nanosecond();
-    let nanos_i64 = i64::try_from(nanos_i128).map_err(|_| {
-        ApplicationError::Db(DbError::Transaction(
-            "jiff timestamp is outside chrono nanosecond range".to_string(),
-        ))
-    })?;
-
-    Ok(DateTime::<Utc>::from_timestamp_nanos(nanos_i64))
-}
-
-trait NanosecondsExt {
-    fn nanoseconds(self) -> jiff::SignedDuration;
-}
-
-impl NanosecondsExt for u32 {
-    fn nanoseconds(self) -> jiff::SignedDuration {
-        jiff::SignedDuration::new(0, self as i32)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
+    use chrono::{Duration, Utc};
     use uuid::Uuid;
 
     #[test]

@@ -9,9 +9,8 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::toasty_models::report::{
-    ReportDbRow, ReportReadDbRow, chrono_to_jiff, jiff_to_chrono_utc, to_report_record,
-};
+use crate::toasty_models::report::{ReportDbRow, ReportReadDbRow, to_report_record};
+use crate::toasty_time::{chrono_to_jiff_utc, jiff_to_chrono_utc};
 
 pub struct ToastyReportRepository<'a> {
     tx: Arc<Mutex<toasty::Transaction<'a>>>,
@@ -51,7 +50,7 @@ impl<'a> ReportRepository for ToastyReportRepository<'a> {
             toasty::create!(ReportReadDbRow {
                 report_id,
                 player_id: audience.player_id,
-                read_at: audience.read_at.map(chrono_to_jiff).transpose()?,
+                read_at: audience.read_at.map(chrono_to_jiff_utc).transpose()?,
             })
             .exec(&mut *tx_guard)
             .await

@@ -1,10 +1,8 @@
 use uuid::Uuid;
 
+use crate::toasty_time::jiff_to_chrono_utc;
 use parabellum_app::repository::{ReportAudience, ReportRecord};
-use parabellum_types::{
-    errors::{ApplicationError, DbError},
-    reports::ReportPayload,
-};
+use parabellum_types::{errors::ApplicationError, reports::ReportPayload};
 
 #[derive(Debug, Clone, toasty::Model)]
 #[table = "reports"]
@@ -50,36 +48,4 @@ pub fn to_report_record(
         created_at: jiff_to_chrono_utc(report.created_at)?,
         read_at: audience.read_at,
     })
-}
-
-pub fn chrono_to_jiff(
-    value: chrono::DateTime<chrono::Utc>,
-) -> Result<jiff::Timestamp, ApplicationError> {
-    jiff::Timestamp::from_second(value.timestamp())
-        .and_then(|ts| {
-            ts.checked_add(jiff::SignedDuration::new(
-                0,
-                value.timestamp_subsec_nanos() as i32,
-            ))
-        })
-        .map_err(|err| {
-            ApplicationError::Db(DbError::Transaction(format!(
-                "could not convert chrono datetime to jiff timestamp: {err}"
-            )))
-        })
-}
-
-pub fn jiff_to_chrono_utc(
-    value: jiff::Timestamp,
-) -> Result<chrono::DateTime<chrono::Utc>, ApplicationError> {
-    let nanos_i128 = value.as_nanosecond();
-    let nanos_i64 = i64::try_from(nanos_i128).map_err(|_| {
-        ApplicationError::Db(DbError::Transaction(
-            "jiff timestamp is outside chrono nanosecond range".to_string(),
-        ))
-    })?;
-
-    Ok(chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(
-        nanos_i64,
-    ))
 }

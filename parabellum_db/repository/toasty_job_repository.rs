@@ -9,6 +9,7 @@ use parabellum_types::{
 };
 
 use crate::toasty_models::job::JobRecord;
+use crate::toasty_time::chrono_to_jiff_utc;
 
 pub struct ToastyJobRepository<'a> {
     tx: Arc<Mutex<toasty::Transaction<'a>>>,
@@ -248,7 +249,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
             .map_err(map_toasty_error)?;
         row.update()
             .task(task.clone())
-            .completed_at(chrono_utc_to_jiff(completed_at)?)
+            .completed_at(chrono_to_jiff_utc(completed_at)?)
             .status("Pending")
             .exec(&mut *tx_guard)
             .await
@@ -276,23 +277,6 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
 
 fn map_toasty_error(err: toasty::Error) -> ApplicationError {
     ApplicationError::Db(DbError::Transaction(err.to_string()))
-}
-
-fn chrono_utc_to_jiff(
-    value: chrono::DateTime<chrono::Utc>,
-) -> Result<jiff::Timestamp, ApplicationError> {
-    jiff::Timestamp::from_second(value.timestamp())
-        .and_then(|ts| {
-            ts.checked_add(jiff::SignedDuration::new(
-                0,
-                value.timestamp_subsec_nanos() as i32,
-            ))
-        })
-        .map_err(|err| {
-            ApplicationError::Db(DbError::Transaction(format!(
-                "could not convert chrono datetime to jiff timestamp: {err}"
-            )))
-        })
 }
 
 fn row_targets_village(row: &JobRecord, village_id: i32) -> bool {
