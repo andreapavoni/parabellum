@@ -117,6 +117,9 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             if unit.role == parabellum_types::army::UnitRole::Settler {
                 let player = uow.players().get_by_id(command.player_id).await?;
                 let village_count = player_villages.len() as u32;
+                let villages_culture_points: u32 =
+                    player_villages.iter().map(|v| v.culture_points).sum();
+                let current_culture_points = villages_culture_points.max(player.culture_points);
 
                 // Calculate potential slots in use after training
                 let slots_in_use = child_count
@@ -138,11 +141,11 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
                     (village_count + slots_in_use) as usize,
                 );
 
-                if (player.culture_points as u32) < required_cp {
+                if current_culture_points < required_cp {
                     return Err(ApplicationError::Game(
                         GameError::InsufficientCulturePoints {
                             required: required_cp,
-                            current: player.culture_points as u32,
+                            current: current_culture_points,
                         },
                     ));
                 }

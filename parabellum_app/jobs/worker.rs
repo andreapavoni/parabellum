@@ -109,12 +109,15 @@ impl JobWorker {
             match task_result {
                 Ok(_) => {
                     let current_job = context.uow.jobs().get_by_id(job_id).await?;
-                    let was_rescheduled = matches!(current_job.status, crate::jobs::JobStatus::Pending)
-                        && (current_job.completed_at != job.completed_at
-                            || current_job.task.task_type != job.task.task_type
-                            || current_job.task.data != job.task.data);
+                    let was_rescheduled =
+                        matches!(current_job.status, crate::jobs::JobStatus::Pending)
+                            && (current_job.updated_at > job.updated_at
+                                || current_job.completed_at != job.completed_at
+                                || current_job.task.task_type != job.task.task_type
+                                || current_job.task.data != job.task.data);
                     if matches!(current_job.status, crate::jobs::JobStatus::Processing)
-                        || (matches!(current_job.status, crate::jobs::JobStatus::Pending) && !was_rescheduled)
+                        || (matches!(current_job.status, crate::jobs::JobStatus::Pending)
+                            && !was_rescheduled)
                     {
                         context.uow.jobs().mark_as_completed(job_id).await?;
                     }

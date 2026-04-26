@@ -63,22 +63,33 @@ Want to get the server running locally? Here’s how.
     ./setup_db.sh
     ```
 
-5.  **Install frontend dependencies:**
+5.  **(optional) Seed game data:**
+    ```sh
+    # Uses seed/game.json by default
+    cargo run -p parabellum_server --bin seed_game
+    ```
+    You can also pass a custom data file:
+    ```sh
+    cargo run -p parabellum_server --bin seed_game -- --file seed/dev.json
+    ```
+    The seeder is a standalone tool: it executes the provided file and fails on conflicts (for example, existing user/email).
+
+6.  **Install frontend dependencies:**
     ```sh
     bun install
     ```
 
-6. **(optional) Run app in docker:**
+7. **(optional) Run app in docker:**
    ```sh
    docker-compose up -d app
    ```
 
-7.  **(optional) Run tests:**
+8.  **(optional) Run tests:**
     ```sh
     cargo test --release --
     ```
 
-8.  **Run the server:**
+9.  **Run the server:**
     ```sh
     cargo run --release
     ```

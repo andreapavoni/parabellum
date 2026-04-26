@@ -8,7 +8,7 @@ use crate::{
         QueryHandler,
         queries::{CulturePointsInfo, GetCulturePointsInfo},
     },
-    repository::PlayerRepository,
+    repository::{PlayerRepository, VillageRepository},
     uow::UnitOfWork,
 };
 
@@ -29,14 +29,21 @@ impl QueryHandler<GetCulturePointsInfo> for GetCulturePointsInfoQueryHandler {
         _config: &Arc<Config>,
     ) -> Result<CulturePointsInfo, ApplicationError> {
         let player_repo: Arc<dyn PlayerRepository + '_> = uow.players();
+        let village_repo: Arc<dyn VillageRepository + '_> = uow.villages();
 
-        let player = player_repo.get_by_id(query.player_id).await?;
+        // Compute a live account CP snapshot from villages, so elapsed-time accumulation
+        // is reflected even when player.culture_points hasn't been persisted yet.
+        let villages = village_repo.list_by_player_id(query.player_id).await?;
+        let account_culture_points = villages
+            .iter()
+            .map(|village| village.culture_points)
+            .sum::<u32>();
         let account_cpp = player_repo
             .get_total_culture_points_production(query.player_id)
             .await?;
 
         Ok(CulturePointsInfo {
-            account_culture_points: player.culture_points,
+            account_culture_points,
             account_culture_points_production: account_cpp,
         })
     }

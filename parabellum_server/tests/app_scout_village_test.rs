@@ -480,6 +480,13 @@ pub mod tests {
         {
             let uow = uow_provider.tx().await?;
 
+            let pending_jobs = uow.jobs().list_by_player_id(scout_player.id).await?;
+            assert_eq!(
+                pending_jobs.len(),
+                0,
+                "No return job should be planned when all scouts are dead"
+            );
+
             let reports = uow.reports().list_for_player(scout_player.id, 100).await?;
             assert_eq!(reports.len(), 1, "Should have 1 battle report");
 

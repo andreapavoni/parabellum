@@ -163,6 +163,7 @@ impl JobHandler for ScoutJobHandler {
         // If scouts were detected, defender also gets a report
         if let Some(ref scouting) = battle_report.scouting
             && scouting.was_detected
+            && defender_village.player_id != attacker_village.player_id
         {
             audiences.push(ReportAudience {
                 player_id: defender_village.player_id,
@@ -173,38 +174,43 @@ impl JobHandler for ScoutJobHandler {
         ctx.uow.reports().add(&new_report, &audiences).await?;
 
         attacker_army.update_units(&battle_report.attacker.survivors);
-        ctx.uow.armies().save(&attacker_army).await?;
+        let attacker_has_survivors = attacker_army.immensity() > 0;
+        ctx.uow.armies().save_or_remove(&attacker_army).await?;
 
-        let return_travel_time = attacker_village.position.calculate_travel_time_secs(
-            defender_village.position,
-            attacker_army.speed(),
-            ctx.config.world_size as i32,
-            ctx.config.speed as u8,
-        ) as i64;
+        if attacker_has_survivors {
+            let return_travel_time = attacker_village.position.calculate_travel_time_secs(
+                defender_village.position,
+                attacker_army.speed(),
+                ctx.config.world_size as i32,
+                ctx.config.speed as u8,
+            ) as i64;
 
-        let return_payload = ArmyReturnTask {
-            army_id: attacker_army.id,
-            resources: ResourceGroup::new(0, 0, 0, 0),
-            destination_player_id: attacker_village.player_id,
-            destination_village_id: attacker_village.id as i32,
-            from_village_id: defender_village.id as i32,
-        };
+            let return_payload = ArmyReturnTask {
+                army_id: attacker_army.id,
+                resources: ResourceGroup::new(0, 0, 0, 0),
+                destination_player_id: attacker_village.player_id,
+                destination_village_id: attacker_village.id as i32,
+                from_village_id: defender_village.id as i32,
+            };
 
-        let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
-        let return_job = Job::new(
-            attacker_village.player_id,
-            attacker_village.id as i32,
-            return_travel_time,
-            job_payload,
-        );
+            let job_payload = JobPayload::new("ArmyReturn", serde_json::to_value(&return_payload)?);
+            let return_job = Job::new(
+                attacker_village.player_id,
+                attacker_village.id as i32,
+                return_travel_time,
+                job_payload,
+            );
 
-        ctx.uow.jobs().add(&return_job).await?;
+            ctx.uow.jobs().add(&return_job).await?;
 
-        info!(
-            return_job_id = %return_job.id,
-            arrival_at = %return_job.completed_at,
-            "Scout army return job planned."
-        );
+            info!(
+                return_job_id = %return_job.id,
+                arrival_at = %return_job.completed_at,
+                "Scout army return job planned."
+            );
+        } else {
+            info!("Scout army wiped out, skipping return job.");
+        }
 
         Ok(())
     }

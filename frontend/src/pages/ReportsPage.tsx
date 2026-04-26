@@ -20,12 +20,53 @@ function readNumber(record: Record<string, unknown>, key: string, fallback = 0) 
   return Number.isFinite(value) ? value : fallback;
 }
 
-function formatResourceSummary(resources: Record<string, unknown>) {
-  const lumber = readNumber(resources, "lumber");
-  const clay = readNumber(resources, "clay");
-  const iron = readNumber(resources, "iron");
-  const crop = readNumber(resources, "crop");
+function parseResourceGroup(resources: unknown) {
+  if (Array.isArray(resources)) {
+    return {
+      lumber: Number(resources[0] ?? 0) || 0,
+      clay: Number(resources[1] ?? 0) || 0,
+      iron: Number(resources[2] ?? 0) || 0,
+      crop: Number(resources[3] ?? 0) || 0,
+    };
+  }
+
+  const record = asRecord(resources) ?? {};
+  return {
+    lumber: readNumber(record, "lumber"),
+    clay: readNumber(record, "clay"),
+    iron: readNumber(record, "iron"),
+    crop: readNumber(record, "crop"),
+  };
+}
+
+function formatResourceSummary(resources: unknown) {
+  const { lumber, clay, iron, crop } = parseResourceGroup(resources);
   return `🌲 ${lumber} 🧱 ${clay} ⛏️ ${iron} 🌾 ${crop}`;
+}
+
+function normalizeScoutingTarget(target: unknown): "resources" | "defenses" | "unknown" {
+  const value = String(target ?? "").toLowerCase();
+  if (value === "resources") return "resources";
+  if (value === "defenses") return "defenses";
+  return "unknown";
+}
+
+function parseScoutingResources(targetReport: unknown): unknown {
+  const record = asRecord(targetReport);
+  if (record && Array.isArray(record.Resources)) {
+    return record.Resources;
+  }
+  return targetReport;
+}
+
+function parseScoutingDefenses(targetReport: unknown): Record<string, unknown> {
+  const record = asRecord(targetReport);
+  if (record) {
+    const nested = asRecord(record.Defenses);
+    if (nested) return nested;
+    return record;
+  }
+  return {};
 }
 
 function sumTroops(units: unknown): number {
@@ -86,9 +127,8 @@ function reportText(report: ReportsResponse["reports"][number]) {
     const attackerPos = payload.attacker_position as Record<string, unknown> | undefined;
     const defenderPos = payload.defender_position as Record<string, unknown> | undefined;
     const success = Boolean(payload.success);
-    const bounty = (payload.bounty as Record<string, unknown> | undefined) ?? {};
-    const bountyTotal =
-      Number(bounty.lumber ?? 0) + Number(bounty.clay ?? 0) + Number(bounty.iron ?? 0) + Number(bounty.crop ?? 0);
+    const bounty = parseResourceGroup(payload.bounty);
+    const bountyTotal = bounty.lumber + bounty.clay + bounty.iron + bounty.crop;
     const attacker = payload.attacker as Record<string, unknown> | undefined;
     const losses = attacker?.losses;
     const totalLosses = sumTroops(losses);
@@ -209,7 +249,7 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
   const success = Boolean(payload.success);
   const resultClass = success ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700";
 
-  const bounty = asRecord(payload.bounty) ?? {};
+  const bounty = parseResourceGroup(payload.bounty);
   const attacker = asRecord(payload.attacker);
   const defender = asRecord(payload.defender);
   const reinforcements = Array.isArray(payload.reinforcements) ? payload.reinforcements : [];
@@ -221,6 +261,8 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
   const attackerLosses = troopArray(attacker?.losses);
   const defenderBefore = troopArray(defender?.army_before);
   const defenderLosses = troopArray(defender?.losses);
+  const scoutingTargetReport = scouting?.target_report;
+  const scoutingTarget = normalizeScoutingTarget(scouting?.target);
 
   return (
     <div class="space-y-4">
@@ -279,9 +321,25 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
           <p class="text-sm text-gray-700 mb-2">
             {Boolean(scouting.was_detected) ? "Scouts were detected" : "Scouts were not detected"}
           </p>
-          <pre class="overflow-auto rounded bg-white p-3 text-xs text-gray-700">
-            {JSON.stringify(scouting.target_report, null, 2)}
-          </pre>
+          {scoutingTarget === "resources" ? (
+            <div class="rounded bg-white p-3 text-sm text-gray-700">
+              <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed resources</p>
+              <p class="font-mono">{formatResourceSummary(parseScoutingResources(scoutingTargetReport))}</p>
+            </div>
+          ) : null}
+          {scoutingTarget === "defenses" ? (
+            <div class="rounded bg-white p-3 text-sm text-gray-700 space-y-1">
+              <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed defenses</p>
+              <p>Wall: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "wall", 0)}</p>
+              <p>Palace: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "palace", 0)}</p>
+              <p>Residence: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "residence", 0)}</p>
+            </div>
+          ) : null}
+          {scoutingTarget === "unknown" ? (
+            <pre class="overflow-auto rounded bg-white p-3 text-xs text-gray-700">
+              {JSON.stringify(scouting.target_report, null, 2)}
+            </pre>
+          ) : null}
         </div>
       ) : null}
 

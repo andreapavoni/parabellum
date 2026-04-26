@@ -1,6 +1,7 @@
 import type { VillageResourcesResponse } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
+import { unitLabel } from "@/lib/labels";
 
 export function ResourcesPage({
   data,
@@ -28,6 +29,19 @@ export function ResourcesPage({
           <ProductionRow label="⛏️ Iron" value={production.iron} />
           <ProductionRow label="🌾 Crop" value={production.crop} />
         </div>
+        <h3 class="font-bold mt-6 mb-3 text-sm">Current Troops</h3>
+        {data.currentTroops.length === 0 ? (
+          <div class="text-xs text-gray-500 border-b border-gray-100 pb-2">No troops stationed.</div>
+        ) : (
+          <div class="text-xs space-y-2">
+            {data.currentTroops.map((troop) => (
+              <div class="flex justify-between border-b border-gray-100 pb-2" key={troop.unitName}>
+                <span>{unitLabel(troop.unitName)}</span>
+                <span class="font-bold text-gray-900">{troop.count}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

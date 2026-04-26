@@ -143,7 +143,7 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                     )
                     .await?
                     {
-                        incoming.push(movement);
+                        incoming.push(mask_hostile_incoming_units(movement));
                     }
                 }
                 "Reinforcement" => {
@@ -161,18 +161,7 @@ impl QueryHandler<GetVillageTroopMovements> for GetVillageTroopMovementsHandler 
                     }
                 }
                 "Scout" => {
-                    if let Some(movement) = scout_movement(
-                        job,
-                        TroopMovementDirection::Incoming,
-                        &village_repo,
-                        &army_repo,
-                        &mut village_cache,
-                        &mut army_cache,
-                    )
-                    .await?
-                    {
-                        incoming.push(movement);
-                    }
+                    // Defender should not see incoming scout movements in RallyPoint.
                 }
                 _ => {}
             }
@@ -426,4 +415,14 @@ fn build_movement(
         units,
         tribe,
     }
+}
+
+fn mask_hostile_incoming_units(mut movement: TroopMovement) -> TroopMovement {
+    if matches!(
+        movement.movement_type,
+        TroopMovementType::Attack | TroopMovementType::Raid
+    ) {
+        movement.units = TroopSet::default();
+    }
+    movement
 }

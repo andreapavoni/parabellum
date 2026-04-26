@@ -103,6 +103,10 @@ export type VillageResourcesResponse = {
   village: VillageSummary;
   resourceSlots: ResourceSlot[];
   buildingQueue: BuildingQueueItem[];
+  currentTroops: {
+    unitName: string;
+    count: number;
+  }[];
 };
 
 export type LeaderboardEntry = {

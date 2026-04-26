@@ -399,7 +399,7 @@ impl Battle {
 
                 let (palace, residence): (Option<u8>, Option<u8>) =
                     match self.defender_village.get_palace_or_residence() {
-                        Some((b, BuildingName::Palace)) => (None, Some(b.level)),
+                        Some((b, BuildingName::Palace)) => (Some(b.level), None),
                         Some((b, BuildingName::Residence)) => (None, Some(b.level)),
                         _ => (None, None),
                     };

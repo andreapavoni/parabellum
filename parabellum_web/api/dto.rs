@@ -171,6 +171,15 @@ pub struct VillageResourcesResponse {
     pub village: VillageSummaryDto,
     pub resource_slots: Vec<ResourceSlotDto>,
     pub building_queue: Vec<BuildingQueueItemDto>,
+    pub current_troops: Vec<CurrentTroopDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+/// Stationed home-army troop entry for resources page.
+pub struct CurrentTroopDto {
+    pub unit_name: String,
+    pub count: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -377,6 +386,35 @@ fn resource_slots(
         .collect()
 }
 
+fn current_troops(village: &Village) -> Vec<CurrentTroopDto> {
+    let Some(army) = village.army() else {
+        return vec![];
+    };
+
+    army.units()
+        .units()
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, count)| {
+            if *count == 0 {
+                return None;
+            }
+
+            let unit_name = army
+                .tribe
+                .units()
+                .get(idx)
+                .map(|unit| format!("{:?}", unit.name))
+                .unwrap_or_else(|| format!("Unit{}", idx + 1));
+
+            Some(CurrentTroopDto {
+                unit_name,
+                count: *count,
+            })
+        })
+        .collect()
+}
+
 pub fn village_overview_response(
     village: &Village,
     queues: &parabellum_app::cqrs::queries::VillageQueues,
@@ -400,5 +438,6 @@ pub fn village_resources_response(
         village: village_summary(village),
         resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
+        current_troops: current_troops(village),
     }
 }

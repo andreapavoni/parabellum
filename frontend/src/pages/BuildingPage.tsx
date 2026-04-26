@@ -827,7 +827,14 @@ function MarketplaceSection({
                       <td class="py-2 pr-4">{origin} → {destination}</td>
                       <td class="py-2 pr-4">{formatResourceSummary(movement.resources)}</td>
                       <td class="py-2 pr-4">{movement.merchantsUsed}</td>
-                      <td class="py-2 font-mono text-gray-600">{formatDuration(movement.timeRemainingSecs)}</td>
+                      <td class="py-2 font-mono text-gray-600">
+                        <LiveCountdown
+                          seconds={movement.timeRemainingSecs}
+                          onElapsed={() => {
+                            void onMutate();
+                          }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -927,9 +934,10 @@ function RallyPointSection({
   const initialTargetY = Number(query.get("target_y") ?? "0") || 0;
   const [targetX, setTargetX] = useState(initialTargetX);
   const [targetY, setTargetY] = useState(initialTargetY);
-  const [movement, setMovement] = useState<"attack" | "raid" | "reinforcement" | "found_village">(
+  const [movement, setMovement] = useState<"attack" | "raid" | "scout" | "reinforcement" | "found_village">(
     "attack",
   );
+  const [scoutingTarget, setScoutingTarget] = useState<"resources" | "defenses">("resources");
   const [units, setUnits] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -939,6 +947,14 @@ function RallyPointSection({
     const arr = Array.from({ length: 10 }, (_, idx) => units[idx] ?? 0);
     return arr;
   };
+
+  const isScoutUnitName = (name: string) =>
+    name === "Scout" || name === "Pathfinder" || name === "EquitesLegati";
+
+  const selectedNonScoutUnits = detail.rallyPoint.sendableUnits.filter((unit) => {
+    const selected = units[unit.unitIdx] ?? 0;
+    return selected > 0 && !isScoutUnitName(unit.name);
+  });
 
   const fullUnitsFromCard = (card: RallyCard) => card.units.map((value) => Number(value ?? 0));
 
@@ -963,7 +979,17 @@ function RallyPointSection({
                           ) : null}
                         </div>
                         {card.position ? <p class="text-sm text-gray-600 mt-1">({card.position.x}, {card.position.y})</p> : null}
-                        {card.arrivalTime ? <p class="text-sm text-gray-500 mt-1 font-mono">⏱️ {formatDuration(card.arrivalTime)}</p> : null}
+                        {card.arrivalTime ? (
+                          <p class="text-sm text-gray-500 mt-1 font-mono">
+                            ⏱️{" "}
+                            <LiveCountdown
+                              seconds={card.arrivalTime}
+                              onElapsed={() => {
+                                void onMutate();
+                              }}
+                            />
+                          </p>
+                        ) : null}
                       </div>
                       <span class="text-xs px-2 py-1 rounded font-medium whitespace-nowrap bg-gray-100 text-gray-800">{card.category}</span>
                     </div>
@@ -1033,9 +1059,10 @@ function RallyPointSection({
           </label>
           <label class="text-sm text-gray-600">
             Movement type
-            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "reinforcement" | "found_village")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "scout" | "reinforcement" | "found_village")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
               <option value="attack">Attack</option>
               <option value="raid">Raid</option>
+              <option value="scout">Scout</option>
               <option value="reinforcement">Reinforcement</option>
               <option value="found_village">Found village</option>
             </select>
@@ -1045,6 +1072,23 @@ function RallyPointSection({
           <p class="text-xs text-gray-500">
             Select settlers and send them to an empty valley to found a new village.
           </p>
+        ) : null}
+        {movement === "scout" ? (
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="text-sm text-gray-600">
+              Scouting target
+              <select
+                value={scoutingTarget}
+                onChange={(e) =>
+                  setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
+                }
+                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+              >
+                <option value="resources">Resources + troops</option>
+                <option value="defenses">Residence/Palace + Walls + troops</option>
+              </select>
+            </label>
+          </div>
         ) : null}
         <div class="space-y-2">
           <div class="text-sm text-gray-500 uppercase">Select units</div>
@@ -1087,6 +1131,18 @@ function RallyPointSection({
                   targetY,
                   units: toUnitsArray(),
                 });
+              } else if (movement === "scout") {
+                if (selectedNonScoutUnits.length > 0) {
+                  throw new Error("Only scout units can be sent with Scout movement.");
+                }
+                await api.sendTroops({
+                  slotId: detail.slotId,
+                  targetX,
+                  targetY,
+                  movement: "attack",
+                  scoutingTarget,
+                  units: toUnitsArray(),
+                });
               } else {
                 await api.sendTroops({
                   slotId: detail.slotId,
@@ -1102,7 +1158,7 @@ function RallyPointSection({
             }
           }}
         >
-          {movement === "found_village" ? "Found village" : "Send troops"}
+          {movement === "found_village" ? "Found village" : movement === "scout" ? "Send scouts" : "Send troops"}
         </button>
         {error ? <div class="text-sm text-red-600">{error}</div> : null}
       </div>

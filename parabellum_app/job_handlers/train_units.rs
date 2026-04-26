@@ -55,6 +55,27 @@ impl JobHandler for TrainUnitsJobHandler {
         let newly_completed = (elapsed_units - trained_so_far).max(0);
         let units_to_train = newly_completed.min(quantity_remaining).max(0);
         if units_to_train == 0 {
+            let computed_next_due =
+                started_at + Duration::seconds(((trained_so_far as i64) + 1) * time_per_unit);
+            let next_due = computed_next_due
+                .max(job.completed_at + Duration::seconds(1))
+                .max(Utc::now() + Duration::seconds(1));
+            let next_payload = TrainUnitsTask {
+                quantity_remaining,
+                started_at: Some(started_at),
+                ..self.payload.clone()
+            };
+            let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&next_payload)?);
+            ctx.uow
+                .jobs()
+                .reschedule(job.id, &job_payload, next_due)
+                .await?;
+            info!(
+                job_id = %job.id,
+                quantity_remaining,
+                next_due = %next_due,
+                "Rescheduled training job without progress"
+            );
             return Ok(());
         }
 
@@ -214,6 +235,65 @@ mod tests {
         let final_village = context.uow.villages().get_by_id(village_id).await?;
         let army = final_village.army().expect("Village should have an army");
         assert_eq!(army.units().get(0), 1, "Should have trained the last unit");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_train_units_job_handler_reschedules_when_no_unit_completed() -> Result<()> {
+        let player = player_factory(PlayerFactoryOptions {
+            tribe: Some(Tribe::Roman),
+            ..Default::default()
+        });
+        let village = village_factory(VillageFactoryOptions {
+            player: Some(player.clone()),
+            ..Default::default()
+        });
+        let village_id = village.id;
+        let player_id = player.id;
+        let mock_uow: Box<dyn UnitOfWork<'static> + 'static> = Box::new(MockUnitOfWork::new());
+        mock_uow.villages().save(&village).await?;
+
+        let config = Arc::new(Config::from_env());
+        let started_at = Utc::now() + Duration::seconds(120);
+        let payload = TrainUnitsTask {
+            slot_id: 20,
+            unit: UnitName::Legionnaire,
+            quantity: 6,
+            time_per_unit: 100,
+            quantity_remaining: 6,
+            started_at: Some(started_at),
+        };
+        let job_payload = JobPayload::new("TrainUnits", json!(payload.clone()));
+        let due_job = Job::with_deadline(
+            player_id,
+            village_id as i32,
+            job_payload,
+            Utc::now() - Duration::seconds(1),
+        );
+        mock_uow.jobs().add(&due_job).await?;
+
+        let handler = TrainUnitsJobHandler::new(payload);
+        let context = JobHandlerContext {
+            uow: mock_uow,
+            config,
+        };
+        handler.handle(&context, &due_job).await?;
+
+        let updated_village = context.uow.villages().get_by_id(village_id).await?;
+        assert!(
+            updated_village.army().is_none(),
+            "No unit should be trained yet when none completed"
+        );
+
+        let jobs = context.uow.jobs().list_by_player_id(player_id).await?;
+        assert_eq!(jobs.len(), 1);
+        let rescheduled = &jobs[0];
+        assert_eq!(rescheduled.id, due_job.id);
+        assert!(
+            rescheduled.completed_at > due_job.completed_at,
+            "No-progress reschedule must move deadline forward"
+        );
+
         Ok(())
     }
 }
