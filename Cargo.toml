@@ -68,4 +68,5 @@ axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
 jsonwebtoken = "9"
 base64 = "0.22"
 sha2 = "0.10"
-toasty = { version = "0.4", features = ["postgresql"] }
+toasty = { version = "0.4", features = ["postgresql", "serde", "jiff"] }
+jiff = "0.2"
