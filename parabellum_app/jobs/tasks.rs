@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use parabellum_types::battle::AttackType;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::{
@@ -48,6 +49,24 @@ pub struct TrainUnitsTask {
     pub unit: UnitName,
     pub quantity: i32,
     pub time_per_unit: i32,
+    #[serde(default)]
+    pub quantity_remaining: i32,
+    #[serde(default)]
+    pub started_at: Option<DateTime<Utc>>,
+}
+
+impl TrainUnitsTask {
+    pub fn effective_quantity_remaining(&self) -> i32 {
+        if self.quantity_remaining > 0 {
+            self.quantity_remaining
+        } else {
+            self.quantity.max(0)
+        }
+    }
+
+    pub fn effective_started_at(&self, fallback: DateTime<Utc>) -> DateTime<Utc> {
+        self.started_at.unwrap_or(fallback)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

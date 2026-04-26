@@ -108,7 +108,10 @@ impl JobWorker {
 
             match task_result {
                 Ok(_) => {
-                    context.uow.jobs().mark_as_completed(job_id).await?;
+                    let current_job = context.uow.jobs().get_by_id(job_id).await?;
+                    if matches!(current_job.status, crate::jobs::JobStatus::Processing) {
+                        context.uow.jobs().mark_as_completed(job_id).await?;
+                    }
                     context.uow.commit().await?;
                     info!(job_id = %job.id, "Job completed successfully");
                 }

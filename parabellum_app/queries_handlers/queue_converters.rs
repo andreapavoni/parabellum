@@ -38,11 +38,15 @@ pub fn training_queue_item_from_job(job: &Job) -> Option<TrainingQueueItem> {
     }
 
     let payload: TrainUnitsTask = serde_json::from_value(job.task.data.clone()).ok()?;
+    let quantity = payload.effective_quantity_remaining();
+    if quantity <= 0 {
+        return None;
+    }
     Some(TrainingQueueItem {
         job_id: job.id,
         slot_id: payload.slot_id,
         unit: payload.unit,
-        quantity: payload.quantity,
+        quantity,
         time_per_unit: payload.time_per_unit,
         status: job.status.clone(),
         finishes_at: job.completed_at,

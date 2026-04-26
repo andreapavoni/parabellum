@@ -170,12 +170,16 @@ impl CommandHandler<TrainUnits> for TrainUnitsCommandHandler {
             unit: unit_name,
             quantity: command.quantity,
             time_per_unit: time_per_unit as i32,
+            quantity_remaining: command.quantity,
+            started_at: None,
         };
-
+        let slot_start_at = Self::slot_start_deadline(slot_id, &training_jobs);
+        let payload = TrainUnitsTask {
+            started_at: Some(slot_start_at),
+            ..payload
+        };
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
-
-        let first_completion =
-            Self::initial_completion_deadline(slot_id, time_per_unit, &training_jobs);
+        let first_completion = slot_start_at + Duration::seconds(time_per_unit as i64);
 
         let new_job = Job::with_deadline(
             command.player_id,
@@ -228,9 +232,9 @@ impl TrainUnitsCommandHandler {
                 let is_settler = payload.unit == parabellum_types::army::UnitName::Settler;
 
                 if is_chief {
-                    Some((payload.quantity as u32, 0))
+                    Some((payload.effective_quantity_remaining() as u32, 0))
                 } else if is_settler {
-                    Some((0, payload.quantity as u32))
+                    Some((0, payload.effective_quantity_remaining() as u32))
                 } else {
                     None
                 }
@@ -243,11 +247,7 @@ impl TrainUnitsCommandHandler {
         (chiefs_total, settlers_total)
     }
 
-    fn initial_completion_deadline(
-        slot_id: u8,
-        time_per_unit: u32,
-        jobs: &[Job],
-    ) -> chrono::DateTime<Utc> {
+    fn slot_start_deadline(slot_id: u8, jobs: &[Job]) -> chrono::DateTime<Utc> {
         let mut slot_free_at = Utc::now();
 
         let mut slot_jobs = jobs
@@ -261,28 +261,28 @@ impl TrainUnitsCommandHandler {
                     return None;
                 }
 
-                Some((job.completed_at, payload.quantity, payload.time_per_unit))
+                let remaining = payload.effective_quantity_remaining();
+                Some((job.completed_at, remaining, payload.time_per_unit))
             })
             .collect::<Vec<_>>();
 
         slot_jobs.sort_by_key(|(completed_at, ..)| *completed_at);
 
-        for (completed_at, quantity, per_unit_time) in slot_jobs {
+        for (completed_at, remaining, per_unit_time) in slot_jobs {
             if completed_at > slot_free_at {
                 slot_free_at = completed_at;
             }
 
-            let remaining = quantity.saturating_sub(1) as i64;
-            if remaining > 0 {
-                slot_free_at += Duration::seconds(remaining * per_unit_time as i64);
+            let extra_units = remaining.saturating_sub(1) as i64;
+            if extra_units > 0 {
+                slot_free_at += Duration::seconds(extra_units * per_unit_time as i64);
             }
         }
 
         if slot_free_at < Utc::now() {
             slot_free_at = Utc::now();
         }
-
-        slot_free_at + Duration::seconds(time_per_unit as i64)
+        slot_free_at
     }
 }
 
@@ -588,6 +588,8 @@ mod tests {
             unit: UnitName::Legionnaire,
             quantity: 1,
             time_per_unit: 30,
+            quantity_remaining: 1,
+            started_at: Some(Utc::now()),
         };
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&base_payload)?);
         let first_job = Job::new(player.id, village_id as i32, 30, job_payload.clone());
@@ -637,6 +639,8 @@ mod tests {
             unit: UnitName::Legionnaire,
             quantity: 1,
             time_per_unit: 30,
+            quantity_remaining: 1,
+            started_at: Some(Utc::now()),
         };
         let job_payload = JobPayload::new("TrainUnits", serde_json::to_value(&payload)?);
         let existing_job = Job::new(player.id, village_id as i32, 30, job_payload.clone());

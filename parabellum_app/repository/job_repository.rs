@@ -1,8 +1,10 @@
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use parabellum_types::errors::ApplicationError;
 
 use crate::jobs::Job;
+use crate::jobs::JobPayload;
 
 #[async_trait::async_trait]
 pub trait JobRepository: Send + Sync {
@@ -58,6 +60,14 @@ pub trait JobRepository: Send + Sync {
 
     /// Set job status to "Completed".
     async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError>;
+
+    /// Reschedules an in-flight job by replacing payload/deadline and setting it back to Pending.
+    async fn reschedule(
+        &self,
+        job_id: Uuid,
+        task: &JobPayload,
+        completed_at: DateTime<Utc>,
+    ) -> Result<(), ApplicationError>;
 
     /// Set job status to "Failed", possibly with an error message.
     async fn mark_as_failed(

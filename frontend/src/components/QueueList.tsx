@@ -11,14 +11,20 @@ function formatDuration(totalSeconds: number) {
 }
 
 function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
+  const ZERO_RETRY_MAX = 5;
+  const ZERO_RETRY_DELAY_MS = 1200;
   const [remaining, setRemaining] = useState(seconds);
   const notifiedRef = useRef(false);
   const startedFromPositiveRef = useRef(seconds > 0);
+  const zeroRetryCountRef = useRef(0);
 
   useEffect(() => {
     setRemaining(seconds);
     startedFromPositiveRef.current = seconds > 0;
     notifiedRef.current = seconds <= 0;
+    if (seconds > 0) {
+      zeroRetryCountRef.current = 0;
+    }
   }, [seconds]);
 
   useEffect(() => {
@@ -39,6 +45,24 @@ function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () =>
     }
     notifiedRef.current = true;
     onElapsed();
+  }, [remaining, onElapsed]);
+
+  useEffect(() => {
+    if (
+      !onElapsed ||
+      remaining > 0 ||
+      startedFromPositiveRef.current ||
+      zeroRetryCountRef.current >= ZERO_RETRY_MAX
+    ) {
+      return;
+    }
+
+    const retryTimer = window.setTimeout(() => {
+      zeroRetryCountRef.current += 1;
+      onElapsed();
+    }, ZERO_RETRY_DELAY_MS);
+
+    return () => window.clearTimeout(retryTimer);
   }, [remaining, onElapsed]);
 
   return <span class="font-semibold text-gray-800">{formatDuration(remaining)}</span>;
