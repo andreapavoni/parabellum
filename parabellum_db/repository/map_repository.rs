@@ -14,7 +14,7 @@ use parabellum_types::{
     map::Position,
 };
 
-use crate::models as db_models;
+use crate::{mapping::tribe_from_db_code, models as db_models};
 
 #[derive(Clone)]
 pub struct PostgresMapRepository<'a> {
@@ -127,15 +127,19 @@ impl<'a> MapRepository for PostgresMapRepository<'a> {
                     position: record.position,
                     topology: record.topology,
                 };
-                MapRegionTile {
+                Ok(MapRegionTile {
                     field: MapField::from(db_field),
                     village_name: record.village_name,
                     village_population: record.village_population,
                     player_name: record.player_name,
-                    tribe: record.tribe.map(|t| t.into()),
-                }
+                    tribe: record
+                        .tribe
+                        .map(tribe_from_db_code)
+                        .transpose()
+                        .map_err(ApplicationError::Db)?,
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
 
         Ok(fields)
     }
@@ -153,7 +157,7 @@ struct DbMapFieldWithOwner {
     village_name: Option<String>,
     village_population: Option<i32>,
     player_name: Option<String>,
-    tribe: Option<db_models::Tribe>,
+    tribe: Option<i64>,
 }
 
 fn build_region_ids(center_x: i32, center_y: i32, radius: i32, world_size: i32) -> Vec<i32> {

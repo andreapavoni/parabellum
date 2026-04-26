@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, tribe AS \"tribe: _\", user_id, culture_points FROM players WHERE 3=3 AND id = $1",
+  "query": "SELECT id, username, tribe, user_id, culture_points FROM players WHERE  2=2 AND id = $1",
   "describe": {
     "columns": [
       {
@@ -15,21 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "tribe: _",
-        "type_info": {
-          "Custom": {
-            "name": "tribe",
-            "kind": {
-              "Enum": [
-                "Roman",
-                "Gaul",
-                "Teuton",
-                "Natar",
-                "Nature"
-              ]
-            }
-          }
-        }
+        "name": "tribe",
+        "type_info": "Int8"
       },
       {
         "ordinal": 3,
@@ -55,5 +42,5 @@
       false
     ]
   },
-  "hash": "b377677a4adbc9eab813208eb0afa3444a465e4dc9c9adb918d71551be2e5c0f"
+  "hash": "bbb1463022a5745cd29ffc99db1b7ab154e4950ccf11dac551528430298f33ae"
 }

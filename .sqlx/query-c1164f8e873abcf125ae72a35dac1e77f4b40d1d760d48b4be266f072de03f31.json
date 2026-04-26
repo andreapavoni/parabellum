@@ -7,20 +7,7 @@
       "Left": [
         "Uuid",
         "Varchar",
-        {
-          "Custom": {
-            "name": "tribe",
-            "kind": {
-              "Enum": [
-                "Roman",
-                "Gaul",
-                "Teuton",
-                "Natar",
-                "Nature"
-              ]
-            }
-          }
-        },
+        "Int8",
         "Uuid",
         "Int4"
       ]

@@ -2,7 +2,9 @@ use std::env;
 
 use parabellum_types::errors::DbError;
 
-use crate::toasty_models::job::JobRecord;
+use crate::toasty_models::{
+    job::JobRecord, player::PlayerRecord, user::UserRecord, village_stats::VillageStatsRecord,
+};
 
 pub async fn establish_toasty_db() -> Result<toasty::Db, DbError> {
     init_toasty_db("DATABASE_URL").await
@@ -19,7 +21,12 @@ async fn init_toasty_db(database_env: &'static str) -> Result<toasty::Db, DbErro
         env::var(database_env).unwrap_or_else(|_| panic!("{} must be set", database_env));
 
     let mut builder = toasty::Db::builder();
-    builder.models(toasty::models!(JobRecord));
+    builder.models(toasty::models!(
+        JobRecord,
+        PlayerRecord,
+        UserRecord,
+        VillageStatsRecord
+    ));
 
     builder
         .connect(&database_url)

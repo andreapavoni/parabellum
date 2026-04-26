@@ -38,7 +38,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
 
         let db_player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE  2=2 AND id = $1"#,
+            r#"SELECT id, username, tribe, user_id, culture_points FROM players WHERE  2=2 AND id = $1"#,
             db_village.player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
@@ -133,7 +133,7 @@ impl<'a> VillageRepository for PostgresVillageRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let db_player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE 3=3 AND id = $1"#,
+            r#"SELECT id, username, tribe, user_id, culture_points FROM players WHERE 3=3 AND id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())

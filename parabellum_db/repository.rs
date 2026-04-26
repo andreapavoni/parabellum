@@ -6,6 +6,8 @@ mod marketplace_repository;
 mod player_repository;
 mod report_repository;
 mod toasty_job_repository;
+mod toasty_player_repository;
+mod toasty_user_repository;
 mod user_repository;
 mod village_repository;
 
@@ -17,5 +19,7 @@ pub use marketplace_repository::PostgresMarketplaceRepository;
 pub use player_repository::PostgresPlayerRepository;
 pub use report_repository::PostgresReportRepository;
 pub use toasty_job_repository::ToastyJobRepository;
+pub use toasty_player_repository::ToastyPlayerRepository;
+pub use toasty_user_repository::ToastyUserRepository;
 pub use user_repository::PostgresUserRepository;
 pub use village_repository::PostgresVillageRepository;

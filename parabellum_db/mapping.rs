@@ -20,7 +20,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
 
     fn try_from(agg: VillageAggregate) -> Result<Self, Self::Error> {
         let db_village = agg.village;
-        let tribe: Tribe = agg.player.tribe.into();
+        let tribe = tribe_from_db_code(agg.player.tribe)?;
 
         let mut home_army: Option<game_models::army::Army> = None;
         let mut reinforcements = Vec::new();
@@ -119,12 +119,36 @@ impl From<Tribe> for db_models::Tribe {
     }
 }
 
+pub fn tribe_to_db_code(game_tribe: &Tribe) -> i64 {
+    match game_tribe {
+        Tribe::Roman => 1,
+        Tribe::Gaul => 2,
+        Tribe::Teuton => 3,
+        Tribe::Natar => 4,
+        Tribe::Nature => 5,
+    }
+}
+
+pub fn tribe_from_db_code(db_tribe: i64) -> Result<Tribe, DbError> {
+    match db_tribe {
+        1 => Ok(Tribe::Roman),
+        2 => Ok(Tribe::Gaul),
+        3 => Ok(Tribe::Teuton),
+        4 => Ok(Tribe::Natar),
+        5 => Ok(Tribe::Nature),
+        _ => Err(DbError::Transaction(format!(
+            "invalid players.tribe code: {db_tribe}"
+        ))),
+    }
+}
+
 impl From<db_models::Player> for Player {
     fn from(player: db_models::Player) -> Self {
+        let tribe = tribe_from_db_code(player.tribe).unwrap_or(Tribe::Roman);
         Player {
             id: player.id,
             username: player.username,
-            tribe: player.tribe.into(),
+            tribe,
             user_id: player.user_id,
             culture_points: player.culture_points as u32,
         }

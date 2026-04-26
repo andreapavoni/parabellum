@@ -45,8 +45,9 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
 
     async fn get_by_id(&self, job_id: Uuid) -> Result<Job, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let record =
-            JobRecord::get_by_id(&mut *tx_guard, job_id).await.map_err(map_toasty_error)?;
+        let record = JobRecord::get_by_id(&mut *tx_guard, job_id)
+            .await
+            .map_err(map_toasty_error)?;
         Job::try_from(record)
     }
 
@@ -224,9 +225,14 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
 
     async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let mut row =
-            JobRecord::get_by_id(&mut *tx_guard, job_id).await.map_err(map_toasty_error)?;
-        row.update().status("Completed").exec(&mut *tx_guard).await.map_err(map_toasty_error)?;
+        let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
+            .await
+            .map_err(map_toasty_error)?;
+        row.update()
+            .status("Completed")
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
         Ok(())
     }
 
@@ -237,8 +243,9 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         completed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let mut row =
-            JobRecord::get_by_id(&mut *tx_guard, job_id).await.map_err(map_toasty_error)?;
+        let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
+            .await
+            .map_err(map_toasty_error)?;
         row.update()
             .task(task.clone())
             .completed_at(chrono_utc_to_jiff(completed_at)?)
@@ -255,9 +262,14 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         _error_message: &str,
     ) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let mut row =
-            JobRecord::get_by_id(&mut *tx_guard, job_id).await.map_err(map_toasty_error)?;
-        row.update().status("Failed").exec(&mut *tx_guard).await.map_err(map_toasty_error)?;
+        let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
+            .await
+            .map_err(map_toasty_error)?;
+        row.update()
+            .status("Failed")
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
         Ok(())
     }
 }
@@ -266,9 +278,16 @@ fn map_toasty_error(err: toasty::Error) -> ApplicationError {
     ApplicationError::Db(DbError::Transaction(err.to_string()))
 }
 
-fn chrono_utc_to_jiff(value: chrono::DateTime<chrono::Utc>) -> Result<jiff::Timestamp, ApplicationError> {
+fn chrono_utc_to_jiff(
+    value: chrono::DateTime<chrono::Utc>,
+) -> Result<jiff::Timestamp, ApplicationError> {
     jiff::Timestamp::from_second(value.timestamp())
-        .and_then(|ts| ts.checked_add(jiff::SignedDuration::new(0, value.timestamp_subsec_nanos() as i32)))
+        .and_then(|ts| {
+            ts.checked_add(jiff::SignedDuration::new(
+                0,
+                value.timestamp_subsec_nanos() as i32,
+            ))
+        })
         .map_err(|err| {
             ApplicationError::Db(DbError::Transaction(format!(
                 "could not convert chrono datetime to jiff timestamp: {err}"
@@ -333,12 +352,7 @@ mod tests {
             "ToastyTestTask",
             serde_json::json!({ "kind": "smoke", "value": 1 }),
         );
-        let job = Job::with_deadline(
-            seed.1,
-            seed.0,
-            payload,
-            Utc::now() + Duration::minutes(5),
-        );
+        let job = Job::with_deadline(seed.1, seed.0, payload, Utc::now() + Duration::minutes(5));
 
         repo.add(&job).await?;
         let loaded = repo.get_by_id(job.id).await?;

@@ -10,7 +10,10 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::models::{self as db_models};
+use crate::{
+    mapping::{tribe_from_db_code, tribe_to_db_code},
+    models::{self as db_models},
+};
 
 /// Implements PlayerRepository and operates on transactions.
 #[derive(Clone)]
@@ -27,7 +30,7 @@ impl<'a> PostgresPlayerRepository<'a> {
 #[async_trait::async_trait]
 impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
     async fn save(&self, player: &Player) -> Result<(), ApplicationError> {
-        let tribe: db_models::Tribe = player.tribe.clone().into();
+        let tribe = tribe_to_db_code(&player.tribe);
         let mut tx_guard = self.tx.lock().await;
 
         sqlx::query!(
@@ -42,7 +45,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
               "#,
             player.id,
             player.username,
-            tribe as _,
+            tribe,
             player.user_id,
             player.culture_points as i32,
         )
@@ -57,28 +60,40 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE id = $1"#,
+            r#"SELECT id, username, tribe, user_id, culture_points FROM players WHERE id = $1"#,
             player_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
 
-        Ok(player.into())
+        Ok(Player {
+            id: player.id,
+            username: player.username,
+            tribe: tribe_from_db_code(player.tribe).map_err(ApplicationError::Db)?,
+            user_id: player.user_id,
+            culture_points: player.culture_points as u32,
+        })
     }
 
     async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
         let player = sqlx::query_as!(
             db_models::Player,
-            r#"SELECT id, username, tribe AS "tribe: _", user_id, culture_points FROM players WHERE user_id = $1"#,
+            r#"SELECT id, username, tribe, user_id, culture_points FROM players WHERE user_id = $1"#,
             user_id
         )
         .fetch_one(&mut *tx_guard.as_mut())
         .await
         .map_err(|_| ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))?;
 
-        Ok(player.into())
+        Ok(Player {
+            id: player.id,
+            username: player.username,
+            tribe: tribe_from_db_code(player.tribe).map_err(ApplicationError::Db)?,
+            user_id: player.user_id,
+            culture_points: player.culture_points as u32,
+        })
     }
 
     async fn leaderboard_page(
@@ -100,7 +115,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
         struct LeaderboardRow {
             player_id: Uuid,
             username: String,
-            tribe: db_models::Tribe,
+            tribe: i64,
             village_count: i64,
             population: i64,
         }
@@ -111,7 +126,7 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
             SELECT
                 p.id as player_id,
                 p.username,
-                p.tribe as "tribe: _",
+                p.tribe as "tribe!: i64",
                 COUNT(v.id) as "village_count!: i64",
                 COALESCE(SUM(v.population), 0) as "population!: i64"
             FROM players p
@@ -129,14 +144,16 @@ impl<'a> PlayerRepository for PostgresPlayerRepository<'a> {
 
         let entries = rows
             .into_iter()
-            .map(|row| PlayerLeaderboardEntry {
-                player_id: row.player_id,
-                username: row.username,
-                village_count: row.village_count,
-                population: row.population,
-                tribe: row.tribe.into(),
+            .map(|row| {
+                Ok(PlayerLeaderboardEntry {
+                    player_id: row.player_id,
+                    username: row.username,
+                    village_count: row.village_count,
+                    population: row.population,
+                    tribe: tribe_from_db_code(row.tribe).map_err(ApplicationError::Db)?,
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
 
         Ok((entries, total_players))
     }

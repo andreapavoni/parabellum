@@ -17,7 +17,7 @@ pub enum Tribe {
 pub struct Player {
     pub id: Uuid,
     pub username: String,
-    pub tribe: Tribe,
+    pub tribe: i64,
     pub user_id: Uuid,
     pub culture_points: i32,
 }
