@@ -11,7 +11,7 @@ use parabellum_types::{
 use crate::{
     command_handlers::helpers::{completion_time_for_slot, enforce_queue_capacity},
     config::Config,
-    cqrs_es::building_queue::{BuildingQueueAggregate, execute_add_command},
+    cqrs_es::building_queue::execute_add_via_cqrs,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
     uow::UnitOfWork,
@@ -62,8 +62,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
-        let queue = BuildingQueueAggregate::from_building_jobs(&building_jobs);
-        execute_add_command(&queue, cmd.slot_id, cmd.name.clone())
+        execute_add_via_cqrs(&building_jobs, cmd.village_id, cmd.slot_id, cmd.name.clone())
             .await
             .map_err(|_| AppError::QueueItemAlreadyQueued {
                 queue: "building",

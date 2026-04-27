@@ -13,7 +13,7 @@ use crate::{
     },
     config::Config,
     cqrs_es::building_queue::{
-        BuildingQueueAggregate, next_upgrade_target_level, queued_slot_state,
+        next_upgrade_target_level_via_cqrs, queued_slot_state,
     },
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
@@ -89,10 +89,14 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             return Err(GameError::BuildingMaxLevelReached.into());
         }
 
-        let queue = BuildingQueueAggregate::from_building_jobs(&building_jobs);
-        let queue_target = next_upgrade_target_level(&queue, command.slot_id, building_name.clone())
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let queue_target = next_upgrade_target_level_via_cqrs(
+            &building_jobs,
+            command.village_id,
+            command.slot_id,
+            building_name.clone(),
+        )
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let next_level = pending_level.max(queue_target.saturating_sub(1)) + 1;
         let next_level_building = template_building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();

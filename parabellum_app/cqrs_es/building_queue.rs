@@ -146,6 +146,100 @@ pub async fn next_upgrade_target_level(
     Ok(*target_level)
 }
 
+pub async fn execute_add_via_cqrs(
+    jobs: &[Job],
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<(), CqrsError> {
+    use mini_cqrs_es::Cqrs;
+
+    let aggregate_id = Uuid::from_u128(village_id as u128);
+    let event_store = seeded_event_store(jobs, aggregate_id).await?;
+    let cqrs = build_building_queue_cqrs(event_store);
+    let command = QueueAddBuildingCommand { slot_id, name };
+    let _ = cqrs.execute(aggregate_id, &command).await?;
+    Ok(())
+}
+
+pub async fn next_upgrade_target_level_via_cqrs(
+    jobs: &[Job],
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<u8, CqrsError> {
+    use mini_cqrs_es::Cqrs;
+
+    let aggregate_id = Uuid::from_u128(village_id as u128);
+    let event_store = seeded_event_store(jobs, aggregate_id).await?;
+    let cqrs = build_building_queue_cqrs(event_store.clone());
+    let command = QueueUpgradeBuildingCommand { slot_id, name };
+    let _ = cqrs.execute(aggregate_id, &command).await?;
+
+    let (events, _) = event_store.load_events(aggregate_id).await?;
+    let Some(last_event) = events.last() else {
+        return Err(CqrsError::new(
+            "upgrade command did not produce queue events".to_string(),
+        ));
+    };
+    let payload = last_event.get_payload::<BuildingQueueEvent>()?;
+    let BuildingQueueEvent::BuildingUpgraded { target_level, .. } = payload else {
+        return Err(CqrsError::new(
+            "last queue event is not BuildingUpgraded".to_string(),
+        ));
+    };
+    Ok(target_level)
+}
+
+async fn seeded_event_store(
+    jobs: &[Job],
+    aggregate_id: Uuid,
+) -> Result<InMemoryBuildingQueueEventStore, CqrsError> {
+    let event_store = InMemoryBuildingQueueEventStore::new();
+    let events = events_from_jobs(jobs, aggregate_id)?;
+    if !events.is_empty() {
+        event_store.save_events(aggregate_id, &events, 0).await?;
+    }
+    Ok(event_store)
+}
+
+fn events_from_jobs(jobs: &[Job], aggregate_id: Uuid) -> Result<Vec<Event>, CqrsError> {
+    let mut building_jobs: Vec<_> = jobs
+        .iter()
+        .filter(|job| matches!(job.task.task_type.as_str(), "AddBuilding" | "BuildingUpgrade"))
+        .collect();
+    building_jobs.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
+
+    let mut version: u64 = 0;
+    let mut events = Vec::with_capacity(building_jobs.len());
+    for job in building_jobs {
+        let payload = match job.task.task_type.as_str() {
+            "AddBuilding" => {
+                let add = serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
+                    .map_err(|e| CqrsError::new(e.to_string()))?;
+                BuildingQueueEvent::BuildingAdded {
+                    slot_id: add.slot_id,
+                    name: add.name,
+                    target_level: 1,
+                }
+            }
+            "BuildingUpgrade" => {
+                let up = serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+                    .map_err(|e| CqrsError::new(e.to_string()))?;
+                BuildingQueueEvent::BuildingUpgraded {
+                    slot_id: up.slot_id,
+                    name: up.building_name,
+                    target_level: up.level,
+                }
+            }
+            _ => continue,
+        };
+        version = version.saturating_add(1);
+        events.push(Event::new(aggregate_id, payload, version)?);
+    }
+    Ok(events)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BuildingQueueEvent {
     BuildingAdded {
