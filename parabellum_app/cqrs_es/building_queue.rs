@@ -132,6 +132,10 @@ impl BuildingQueueAggregate {
         let level = self.queued_level_for_slot(slot_id)?;
         Some((name, level))
     }
+
+    pub fn queued_building_names(&self) -> Vec<BuildingName> {
+        self.queued_names_by_slot.values().cloned().collect()
+    }
 }
 
 pub async fn execute_add_command(

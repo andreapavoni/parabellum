@@ -14,9 +14,9 @@ use crate::{
         enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::queue_add_event_via_cqrs,
+    cqrs_es::building_queue::{BuildingQueueAggregate, queue_add_event_via_cqrs},
     cqrs::{CommandHandler, commands::AddBuilding},
-    jobs::{Job, tasks::AddBuildingTask},
+    jobs::Job,
     uow::UnitOfWork,
 };
 
@@ -56,6 +56,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             2
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
+        let queue_aggregate = BuildingQueueAggregate::from_building_jobs(&building_jobs);
 
         let queue_event =
             queue_add_event_via_cqrs(&building_jobs, cmd.village_id, cmd.slot_id, cmd.name.clone())
@@ -64,7 +65,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
                 queue: "building",
                 item: format!("slot {}", cmd.slot_id),
             })?;
-        ensure_queue_allows_building(&cmd.name, &building_jobs)?;
+        ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
 
         let build_time_secs =
             village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
@@ -88,25 +89,18 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
     }
 }
 
-fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Result<(), GameError> {
-    if jobs.is_empty() {
+fn ensure_queue_allows_building(
+    candidate: &BuildingName,
+    queue_aggregate: &BuildingQueueAggregate,
+) -> Result<(), GameError> {
+    let queued_names = queue_aggregate.queued_building_names();
+    if queued_names.is_empty() {
         return Ok(());
     }
 
     let candidate_data = get_building_data(candidate)?;
 
-    for job in jobs {
-        if job.task.task_type != "AddBuilding" {
-            continue;
-        }
-
-        let Some(payload) = serde_json::from_value::<AddBuildingTask>(job.task.data.clone()).ok()
-        else {
-            continue;
-        };
-
-        let queued_name = payload.name;
-
+    for queued_name in queued_names {
         if queued_name == *candidate && !candidate_data.rules.allow_multiple {
             return Err(GameError::NoMultipleBuildingConstraint(candidate.clone()));
         }
