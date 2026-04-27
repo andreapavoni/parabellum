@@ -5,7 +5,7 @@ use std::{
 
 use mini_cqrs_es::{Event, EventConsumer, Query, Uuid};
 
-use crate::cqrs_es::building_queue::BuildingQueueEvent;
+use crate::cqrs_es::village::VillageEvent;
 
 #[derive(Clone, Default)]
 pub struct BuildingQueueReadModel {
@@ -33,7 +33,7 @@ impl BuildingQueueReadModel {
 
 impl EventConsumer for BuildingQueueReadModel {
     async fn process(&self, event: &Event) {
-        let Ok(payload) = event.get_payload::<BuildingQueueEvent>() else {
+        let Ok(payload) = event.get_payload::<VillageEvent>() else {
             return;
         };
         let Ok(mut guard) = self.inner.write() else {
@@ -41,19 +41,19 @@ impl EventConsumer for BuildingQueueReadModel {
         };
         let by_slot = guard.entry(event.aggregate_id).or_default();
         match payload {
-            BuildingQueueEvent::BuildingConstructionQueued {
+            VillageEvent::BuildingConstructionQueued {
                 slot_id,
                 target_level,
                 ..
             }
-            | BuildingQueueEvent::BuildingUpgradeQueued {
+            | VillageEvent::BuildingUpgradeQueued {
                 slot_id,
                 target_level,
                 ..
             } => {
                 by_slot.insert(slot_id, target_level);
             }
-            BuildingQueueEvent::BuildingDowngradeQueued {
+            VillageEvent::BuildingDowngradeQueued {
                 slot_id,
                 target_level,
                 ..
@@ -91,7 +91,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingUpgradeQueued {
+            VillageEvent::BuildingUpgradeQueued {
                 slot_id: 19,
                 name: BuildingName::MainBuilding,
                 target_level: 3,
@@ -111,7 +111,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingConstructionQueued {
+            VillageEvent::BuildingConstructionQueued {
                 slot_id: 22,
                 name: BuildingName::Barracks,
                 target_level: 1,
@@ -138,7 +138,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingDowngradeQueued {
+            VillageEvent::BuildingDowngradeQueued {
                 slot_id: 10,
                 name: BuildingName::MainBuilding,
                 target_level: 0,

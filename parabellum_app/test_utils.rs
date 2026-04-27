@@ -739,7 +739,7 @@ pub mod tests {
         marketplace: Arc<MockMarketplaceRepository>,
         heroes: Arc<MockHeroRepository>,
         users: Arc<MockUserRepository>,
-        cqrs_store: Arc<crate::cqrs_es::building_queue::InMemoryBuildingQueueEventStore>,
+        cqrs_store: Arc<crate::cqrs_es::village::InMemoryVillageEventStore>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -769,7 +769,7 @@ pub mod tests {
                 heroes: Arc::new(MockHeroRepository::default()),
                 users: Arc::new(MockUserRepository::default()),
                 cqrs_store: Arc::new(
-                    crate::cqrs_es::building_queue::InMemoryBuildingQueueEventStore::new(),
+                    crate::cqrs_es::village::InMemoryVillageEventStore::new(),
                 ),
                 committed: Arc::new(Mutex::new(false)),
                 rolled_back: Arc::new(Mutex::new(false)),

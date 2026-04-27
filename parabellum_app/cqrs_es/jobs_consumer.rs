@@ -8,7 +8,7 @@ use crate::{
     command_handlers::helpers::{
         build_scheduled_building_queue_job, building_queue_plan_from_event,
     },
-    cqrs_es::building_queue::BuildingQueueEvent,
+    cqrs_es::village::VillageEvent,
     jobs::Job,
     repository::JobRepository,
 };
@@ -22,7 +22,7 @@ pub struct BuildingJobsConsumer<'a> {
 }
 
 impl<'a> BuildingJobsConsumer<'a> {
-    pub async fn consume(&self, event: &BuildingQueueEvent) -> Result<Job, ApplicationError> {
+    pub async fn consume(&self, event: &VillageEvent) -> Result<Job, ApplicationError> {
         let Some(plan) = building_queue_plan_from_event(self.village_id, event) else {
             return Err(ApplicationError::Unknown(
                 "failed to build job plan from building queue event".to_string(),

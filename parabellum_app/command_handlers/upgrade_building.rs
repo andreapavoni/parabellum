@@ -13,8 +13,8 @@ use crate::{
         enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::{
-        load_village_building_queue_aggregate, queue_upgrade_event_via_cqrs,
+    cqrs_es::village::{
+        load_village_aggregate, queue_building_upgrade_event,
     },
     cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::UpgradeBuilding},
@@ -61,8 +61,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
-        let queue_aggregate =
-            load_village_building_queue_aggregate(&event_store, command.village_id)
+        let queue_aggregate = load_village_aggregate(&event_store, command.village_id)
                 .await
                 .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let vb = village.get_building_by_slot_id(command.slot_id);
@@ -89,7 +88,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             return Err(GameError::BuildingMaxLevelReached.into());
         }
 
-        let queue_event = queue_upgrade_event_via_cqrs(
+        let queue_event = queue_building_upgrade_event(
             event_store,
             command.village_id,
             command.slot_id,
@@ -153,7 +152,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        cqrs_es::building_queue::queue_upgrade_event_via_cqrs,
+        cqrs_es::village::queue_building_upgrade_event,
         cqrs::commands::UpgradeBuilding,
         jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
         test_utils::tests::MockUnitOfWork,
@@ -203,7 +202,7 @@ mod tests {
         );
         mock_uow.jobs().add(&existing_job).await?;
         let event_store = mock_uow.cqrs_event_store();
-        let _ = queue_upgrade_event_via_cqrs(
+        let _ = queue_building_upgrade_event(
             event_store.clone(),
             village_id,
             slot_id,

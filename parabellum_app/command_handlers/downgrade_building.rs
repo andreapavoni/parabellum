@@ -11,7 +11,7 @@ use crate::{
         BuildingQueueJobPlan, building_queue_jobs, building_queue_plan_from_event,
     },
     config::Config,
-    cqrs_es::building_queue::queue_downgrade_event_via_cqrs,
+    cqrs_es::village::queue_building_downgrade_event,
     cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
     uow::UnitOfWork,
@@ -74,7 +74,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
                 vb.building.name,
             )));
         }
-        let queue_event = queue_downgrade_event_via_cqrs(
+        let queue_event = queue_building_downgrade_event(
             event_store,
             command.village_id,
             command.slot_id,

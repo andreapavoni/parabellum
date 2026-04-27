@@ -13,8 +13,8 @@ use crate::{
         building_queue_jobs, enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::{
-        VillageAggregate, load_village_building_queue_aggregate, queue_add_event_via_cqrs,
+    cqrs_es::village::{
+        VillageAggregate, load_village_aggregate, queue_building_construction_event,
     },
     cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::AddBuilding},
@@ -59,12 +59,12 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             2
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
-        let queue_aggregate = load_village_building_queue_aggregate(&event_store, cmd.village_id)
+        let queue_aggregate = load_village_aggregate(&event_store, cmd.village_id)
             .await
             .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
 
-        let queue_event = queue_add_event_via_cqrs(
+        let queue_event = queue_building_construction_event(
             event_store,
             cmd.village_id,
             cmd.slot_id,
@@ -150,7 +150,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        cqrs_es::building_queue::queue_add_event_via_cqrs,
+        cqrs_es::village::queue_building_construction_event,
         jobs::{JobPayload, tasks::AddBuildingTask},
         test_utils::tests::{MockUnitOfWork, set_village_resources},
     };
@@ -273,7 +273,7 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
-        let _ = queue_add_event_via_cqrs(
+        let _ = queue_building_construction_event(
             mock_uow.cqrs_event_store(),
             village_id,
             22,
@@ -320,7 +320,7 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
-        let _ = queue_add_event_via_cqrs(
+        let _ = queue_building_construction_event(
             mock_uow.cqrs_event_store(),
             village_id,
             22,
