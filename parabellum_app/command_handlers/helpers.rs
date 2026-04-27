@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::{
     jobs::{
-        Job,
-        tasks::{AddBuildingTask, BuildingUpgradeTask},
+        Job, JobPayload,
+        tasks::{AddBuildingTask, BuildingDowngradeTask, BuildingUpgradeTask},
     },
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
@@ -71,6 +71,54 @@ pub fn completion_time_for_queue(jobs: &[Job], duration_secs: i64) -> DateTime<U
     start_time
         .checked_add_signed(Duration::seconds(duration_secs))
         .unwrap_or(start_time)
+}
+
+pub enum BuildingQueueJobPlan {
+    Add(AddBuildingTask),
+    Upgrade(BuildingUpgradeTask),
+    Downgrade(BuildingDowngradeTask),
+}
+
+impl BuildingQueueJobPlan {
+    fn slot_id(&self) -> u8 {
+        match self {
+            Self::Add(task) => task.slot_id,
+            Self::Upgrade(task) => task.slot_id,
+            Self::Downgrade(task) => task.slot_id,
+        }
+    }
+
+    fn job_payload(&self) -> Result<JobPayload, ApplicationError> {
+        match self {
+            Self::Add(task) => Ok(JobPayload::new("AddBuilding", serde_json::to_value(task)?)),
+            Self::Upgrade(task) => Ok(JobPayload::new(
+                "BuildingUpgrade",
+                serde_json::to_value(task)?,
+            )),
+            Self::Downgrade(task) => Ok(JobPayload::new(
+                "BuildingDowngrade",
+                serde_json::to_value(task)?,
+            )),
+        }
+    }
+}
+
+pub fn build_scheduled_building_queue_job(
+    player_id: Uuid,
+    village_id: i32,
+    existing_building_jobs: &[Job],
+    duration_secs: i64,
+    plan: BuildingQueueJobPlan,
+) -> Result<Job, ApplicationError> {
+    let completion_time =
+        completion_time_for_slot(existing_building_jobs, plan.slot_id(), duration_secs);
+    let payload = plan.job_payload()?;
+    Ok(Job::with_deadline(
+        player_id,
+        village_id,
+        payload,
+        completion_time,
+    ))
 }
 
 pub fn enforce_queue_capacity(queue_name: &'static str, jobs: &[Job], limit: usize) -> Result<()> {

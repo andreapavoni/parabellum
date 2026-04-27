@@ -7,10 +7,13 @@ use parabellum_types::{
 };
 
 use crate::{
+    command_handlers::helpers::{
+        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
+    },
     config::Config,
     cqrs_es::building_queue::next_downgrade_target_level_via_cqrs,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
-    jobs::{Job, JobPayload, tasks::BuildingDowngradeTask},
+    jobs::tasks::BuildingDowngradeTask,
     uow::UnitOfWork,
 };
 
@@ -40,6 +43,10 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
         let job_repo = uow.jobs();
         let village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
+            .await?;
+        let building_jobs = building_queue_jobs(active_jobs);
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -84,13 +91,13 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
             level: target_level,
         };
 
-        let job_payload = JobPayload::new("BuildingDowngrade", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
+        let new_job = build_scheduled_building_queue_job(
             command.player_id,
             command.village_id as i32,
+            &building_jobs,
             build_time_secs,
-            job_payload,
-        );
+            BuildingQueueJobPlan::Downgrade(payload),
+        )?;
         job_repo.add(&new_job).await?;
 
         Ok(())

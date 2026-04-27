@@ -9,11 +9,14 @@ use parabellum_types::{
 };
 
 use crate::{
-    command_handlers::helpers::{building_queue_jobs, completion_time_for_slot, enforce_queue_capacity},
+    command_handlers::helpers::{
+        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
+        enforce_queue_capacity,
+    },
     config::Config,
     cqrs_es::building_queue::execute_add_via_cqrs,
     cqrs::{CommandHandler, commands::AddBuilding},
-    jobs::{Job, JobPayload, tasks::AddBuildingTask},
+    jobs::{Job, tasks::AddBuildingTask},
     uow::UnitOfWork,
 };
 
@@ -71,15 +74,13 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             slot_id: cmd.slot_id,
             name: cmd.name,
         };
-        let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
-        let completion_time =
-            completion_time_for_slot(&building_jobs, cmd.slot_id, build_time_secs as i64);
-        let new_job = Job::with_deadline(
+        let new_job = build_scheduled_building_queue_job(
             cmd.player_id,
             cmd.village_id as i32,
-            job_payload,
-            completion_time,
-        );
+            &building_jobs,
+            build_time_secs as i64,
+            BuildingQueueJobPlan::Add(payload),
+        )?;
         job_repo.add(&new_job).await?;
 
         Ok(())
@@ -150,7 +151,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        jobs::tasks::AddBuildingTask,
+        jobs::{JobPayload, tasks::AddBuildingTask},
         test_utils::tests::{MockUnitOfWork, set_village_resources},
     };
     use std::sync::Arc;

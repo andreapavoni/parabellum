@@ -9,12 +9,13 @@ use parabellum_types::{
 
 use crate::{
     command_handlers::helpers::{
-        building_queue_jobs, completion_time_for_slot, enforce_queue_capacity,
+        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
+        enforce_queue_capacity,
     },
     config::Config,
     cqrs_es::building_queue::{BuildingQueueAggregate, next_upgrade_target_level_via_cqrs},
     cqrs::{CommandHandler, commands::UpgradeBuilding},
-    jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
+    jobs::{Job, tasks::BuildingUpgradeTask},
     uow::UnitOfWork,
 };
 
@@ -104,15 +105,13 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             level: next_level,
         };
 
-        let job_payload = JobPayload::new("BuildingUpgrade", serde_json::to_value(&payload)?);
-        let completion_time =
-            completion_time_for_slot(&building_jobs, command.slot_id, build_time_secs);
-        let new_job = Job::with_deadline(
+        let new_job = build_scheduled_building_queue_job(
             command.player_id,
             command.village_id as i32,
-            job_payload,
-            completion_time,
-        );
+            &building_jobs,
+            build_time_secs,
+            BuildingQueueJobPlan::Upgrade(payload),
+        )?;
         job_repo.add(&new_job).await?;
 
         Ok(())
