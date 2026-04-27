@@ -40,25 +40,17 @@ impl<'a> UserRepository for ToastyUserRepository<'a> {
 
     async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let mut rows = toasty::query!(UserRecord filter .email == #email)
-            .exec(&mut *tx_guard)
+        let row = UserRecord::get_by_email(&mut *tx_guard, email)
             .await
-            .map_err(map_toasty_error)?;
-        let row = rows
-            .pop()
-            .ok_or_else(|| ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string())))?;
+            .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string())))?;
         Ok(row.into())
     }
 
     async fn get_by_id(&self, user_id: Uuid) -> Result<User, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let mut rows = toasty::query!(UserRecord filter .id == #user_id)
-            .exec(&mut *tx_guard)
+        let row = UserRecord::get_by_id(&mut *tx_guard, user_id)
             .await
-            .map_err(map_toasty_error)?;
-        let row = rows
-            .pop()
-            .ok_or_else(|| ApplicationError::Db(DbError::UserByIdNotFound(user_id)))?;
+            .map_err(|_| ApplicationError::Db(DbError::UserByIdNotFound(user_id)))?;
         Ok(row.into())
     }
 }

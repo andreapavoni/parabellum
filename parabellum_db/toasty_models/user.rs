@@ -8,7 +8,7 @@ pub struct UserRecord {
     #[key]
     pub id: Uuid,
 
-    #[index]
+    #[unique]
     pub email: String,
 
     pub password_hash: String,

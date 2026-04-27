@@ -66,10 +66,11 @@ impl<'a> ReportRepository for ToastyReportRepository<'a> {
         limit: i64,
     ) -> Result<Vec<ReportRecord>, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let reads = toasty::query!(ReportReadDbRow filter .player_id == #player_id)
+        let reads = ReportReadDbRow::filter_by_player_id(player_id)
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
+
         if reads.is_empty() || limit <= 0 {
             return Ok(vec![]);
         }
