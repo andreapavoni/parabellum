@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use parabellum_app::{
     repository::*,
@@ -80,5 +81,79 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
 
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
         rollback_transaction(self.tx).await
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToastyUnitOfWorkProvider {
+    db: Arc<Mutex<toasty::Db>>,
+}
+
+impl ToastyUnitOfWorkProvider {
+    pub fn new(db: toasty::Db) -> Self {
+        Self {
+            db: Arc::new(Mutex::new(db)),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl UnitOfWorkProvider for ToastyUnitOfWorkProvider {
+    async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+        Ok(Box::new(ToastyUnitOfWork {
+            db: self.db.clone(),
+        }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToastyUnitOfWork {
+    db: Arc<Mutex<toasty::Db>>,
+}
+
+#[async_trait::async_trait]
+impl<'a> UnitOfWork<'a> for ToastyUnitOfWork {
+    fn players(&self) -> Arc<dyn PlayerRepository + 'a> {
+        Arc::new(ToastyPlayerRepository::new(self.db.clone()))
+    }
+
+    fn villages(&self) -> Arc<dyn VillageRepository + 'a> {
+        Arc::new(ToastyVillageRepository::new(self.db.clone()))
+    }
+
+    fn armies(&self) -> Arc<dyn ArmyRepository + 'a> {
+        Arc::new(ToastyArmyRepository::new(self.db.clone()))
+    }
+
+    fn jobs(&self) -> Arc<dyn JobRepository + 'a> {
+        Arc::new(ToastyJobRepository::new(self.db.clone()))
+    }
+
+    fn reports(&self) -> Arc<dyn ReportRepository + 'a> {
+        Arc::new(ToastyReportRepository::new(self.db.clone()))
+    }
+
+    fn map(&self) -> Arc<dyn MapRepository + 'a> {
+        Arc::new(ToastyMapRepository::new(self.db.clone()))
+    }
+
+    fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a> {
+        Arc::new(ToastyMarketplaceRepository::new(self.db.clone()))
+    }
+
+    fn heroes(&self) -> Arc<dyn HeroRepository + 'a> {
+        Arc::new(ToastyHeroRepository::new(self.db.clone()))
+    }
+
+    fn users(&self) -> Arc<dyn UserRepository + 'a> {
+        Arc::new(ToastyUserRepository::new(self.db.clone()))
+    }
+
+    async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
+        Ok(())
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
+        Ok(())
     }
 }

@@ -2,7 +2,8 @@ use std::{fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
 use parabellum_app::{auth::hash_password, config::Config, uow::UnitOfWorkProvider};
 use parabellum_db::{
-    bootstrap_world_map, establish_connection_pool, uow::PostgresUnitOfWorkProvider,
+    bootstrap_world_map, establish_connection_pool, toasty_db::establish_toasty_db,
+    uow::ToastyUnitOfWorkProvider,
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
@@ -89,7 +90,8 @@ async fn main() -> Result<(), ApplicationError> {
         .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
     setup_world_map(&db_pool, &config).await?;
 
-    let uow_provider = Arc::new(PostgresUnitOfWorkProvider::new(db_pool.clone()));
+    let toasty_db = establish_toasty_db().await?;
+    let uow_provider = Arc::new(ToastyUnitOfWorkProvider::new(toasty_db));
     let uow = uow_provider.tx().await?;
     let result = seed_game(&uow, &seed, &config).await;
     match result {

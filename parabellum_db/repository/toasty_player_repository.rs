@@ -12,22 +12,22 @@ use parabellum_types::{
 
 use crate::toasty_models::{player::PlayerRecord, village::VillageDbRow};
 
-pub struct ToastyPlayerRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyPlayerRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyPlayerRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyPlayerRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
+impl PlayerRepository for ToastyPlayerRepository {
     async fn save(&self, player: &Player) -> Result<(), ApplicationError> {
         let record = PlayerRecord::try_from(player)?;
         let player_id = record.id;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let mut rows = toasty::query!(PlayerRecord filter .id == #player_id)
             .exec(&mut *tx_guard)
@@ -61,7 +61,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
     }
 
     async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(PlayerRecord filter .id == #player_id)
             .exec(&mut *tx_guard)
             .await
@@ -73,7 +73,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
     }
 
     async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(PlayerRecord filter .user_id == #user_id)
             .exec(&mut *tx_guard)
             .await
@@ -89,7 +89,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
         offset: i64,
         limit: i64,
     ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let players = PlayerRecord::all()
             .exec(&mut *tx_guard)
             .await
@@ -140,7 +140,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
     }
 
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
             .exec(&mut *tx_guard)
             .await
@@ -172,7 +172,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
         &self,
         player_id: Uuid,
     ) -> Result<u32, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
             .exec(&mut *tx_guard)
             .await
@@ -211,14 +211,14 @@ mod tests {
 
     #[tokio::test]
     async fn toasty_player_repo_save_get_and_leaderboard() -> Result<(), ApplicationError> {
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
 
-        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let tx = Arc::new(Mutex::new(tx));
-        let user_repo = ToastyUserRepository::new(tx.clone());
-        let player_repo = ToastyPlayerRepository::new(tx.clone());
+        let user_repo = ToastyUserRepository::new(toasty_db.clone());
+        let player_repo = ToastyPlayerRepository::new(toasty_db.clone());
 
         let unique = Uuid::new_v4();
         let email = format!("toasty-player-{unique}@example.test");
@@ -254,7 +254,7 @@ mod tests {
 
         drop(player_repo);
         drop(user_repo);
-        drop(tx); // rollback on drop
+        drop(toasty_db);
 
         Ok(())
     }
@@ -299,12 +299,12 @@ mod tests {
         let sqlx_tx = Arc::new(Mutex::new(sqlx_tx));
         let sqlx_repo = PostgresPlayerRepository::new(sqlx_tx.clone());
 
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
-        let toasty_tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let toasty_tx = Arc::new(Mutex::new(toasty_tx));
-        let toasty_repo = ToastyPlayerRepository::new(toasty_tx.clone());
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let toasty_repo = ToastyPlayerRepository::new(toasty_db.clone());
 
         let from_sqlx = sqlx_repo.get_by_id(player_id).await?;
         let from_toasty = toasty_repo.get_by_id(player_id).await?;
@@ -331,7 +331,7 @@ mod tests {
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         drop(toasty_repo);
-        drop(toasty_tx); // rollback on drop
+        drop(toasty_db);
         drop(sqlx_repo);
         drop(sqlx_tx); // rollback on drop
 

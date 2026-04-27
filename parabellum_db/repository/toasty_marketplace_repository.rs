@@ -12,21 +12,21 @@ use parabellum_types::{
 
 use crate::toasty_models::marketplace::MarketplaceOfferDbRow;
 
-pub struct ToastyMarketplaceRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyMarketplaceRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyMarketplaceRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyMarketplaceRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> MarketplaceRepository for ToastyMarketplaceRepository<'a> {
+impl MarketplaceRepository for ToastyMarketplaceRepository {
     async fn create(&self, offer: &MarketplaceOffer) -> Result<(), ApplicationError> {
         let record = MarketplaceOfferDbRow::try_from(offer)?;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         toasty::create!(MarketplaceOfferDbRow {
             id: record.id,
@@ -45,7 +45,7 @@ impl<'a> MarketplaceRepository for ToastyMarketplaceRepository<'a> {
     }
 
     async fn get_by_id(&self, offer_id: Uuid) -> Result<MarketplaceOffer, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = MarketplaceOfferDbRow::get_by_id(&mut *tx_guard, offer_id)
             .await
             .map_err(map_toasty_error)?;
@@ -56,7 +56,7 @@ impl<'a> MarketplaceRepository for ToastyMarketplaceRepository<'a> {
         &self,
         village_id: u32,
     ) -> Result<Vec<MarketplaceOffer>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows =
             toasty::query!(MarketplaceOfferDbRow filter .village_id == #(village_id as i32))
                 .exec(&mut *tx_guard)
@@ -71,7 +71,7 @@ impl<'a> MarketplaceRepository for ToastyMarketplaceRepository<'a> {
     }
 
     async fn list_all(&self) -> Result<Vec<MarketplaceOffer>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = MarketplaceOfferDbRow::all()
             .exec(&mut *tx_guard)
             .await
@@ -84,7 +84,7 @@ impl<'a> MarketplaceRepository for ToastyMarketplaceRepository<'a> {
     }
 
     async fn delete(&self, offer_id: Uuid) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = MarketplaceOfferDbRow::get_by_id(&mut *tx_guard, offer_id)
             .await
             .map_err(map_toasty_error)?;
@@ -120,12 +120,12 @@ mod tests {
             return Ok(());
         };
 
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
-        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let tx = Arc::new(Mutex::new(tx));
-        let repo = ToastyMarketplaceRepository::new(tx.clone());
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let repo = ToastyMarketplaceRepository::new(toasty_db.clone());
 
         let offer = MarketplaceOffer::new(
             player_id,
@@ -150,7 +150,7 @@ mod tests {
         assert!(!after_delete.iter().any(|o| o.id == offer.id));
 
         drop(repo);
-        drop(tx); // rollback on drop
+        drop(toasty_db);
         Ok(())
     }
 }

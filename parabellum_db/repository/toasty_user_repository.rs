@@ -11,20 +11,20 @@ use parabellum_types::{
 
 use crate::toasty_models::user::UserRecord;
 
-pub struct ToastyUserRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyUserRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyUserRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyUserRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> UserRepository for ToastyUserRepository<'a> {
+impl UserRepository for ToastyUserRepository {
     async fn save(&self, email: String, password_hash: String) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         toasty::create!(UserRecord {
             id: Uuid::new_v4(),
             email,
@@ -39,7 +39,7 @@ impl<'a> UserRepository for ToastyUserRepository<'a> {
     }
 
     async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = UserRecord::get_by_email(&mut *tx_guard, email)
             .await
             .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string())))?;
@@ -47,7 +47,7 @@ impl<'a> UserRepository for ToastyUserRepository<'a> {
     }
 
     async fn get_by_id(&self, user_id: Uuid) -> Result<User, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = UserRecord::get_by_id(&mut *tx_guard, user_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::UserByIdNotFound(user_id)))?;
@@ -70,13 +70,12 @@ mod tests {
 
     #[tokio::test]
     async fn toasty_user_repo_save_and_get() -> Result<(), ApplicationError> {
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
-
-        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let tx = Arc::new(Mutex::new(tx));
-        let repo = ToastyUserRepository::new(tx.clone());
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let repo = ToastyUserRepository::new(toasty_db.clone());
 
         let unique = Uuid::new_v4();
         let email = format!("toasty-user-{unique}@example.test");
@@ -89,7 +88,7 @@ mod tests {
         assert_eq!(loaded.password_hash(), &format!("hash-{unique}"));
 
         drop(repo);
-        drop(tx); // rollback on drop
+        drop(toasty_db);
 
         Ok(())
     }
@@ -119,12 +118,12 @@ mod tests {
         let sqlx_tx = Arc::new(Mutex::new(sqlx_tx));
         let sqlx_repo = PostgresUserRepository::new(sqlx_tx.clone());
 
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
-        let toasty_tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let toasty_tx = Arc::new(Mutex::new(toasty_tx));
-        let toasty_repo = ToastyUserRepository::new(toasty_tx.clone());
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let toasty_repo = ToastyUserRepository::new(toasty_db.clone());
 
         let from_sqlx = sqlx_repo.get_by_email(&email).await?;
         let from_toasty = toasty_repo.get_by_email(&email).await?;
@@ -141,7 +140,7 @@ mod tests {
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         drop(toasty_repo);
-        drop(toasty_tx); // rollback on drop
+        drop(toasty_db);
         drop(sqlx_repo);
         drop(sqlx_tx); // rollback on drop
 

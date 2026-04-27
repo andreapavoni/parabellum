@@ -11,21 +11,21 @@ use parabellum_types::{
 use crate::toasty_models::job::JobRecord;
 use crate::toasty_time::chrono_to_jiff_utc;
 
-pub struct ToastyJobRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyJobRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyJobRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyJobRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> JobRepository for ToastyJobRepository<'a> {
+impl JobRepository for ToastyJobRepository {
     async fn add(&self, job: &Job) -> Result<(), ApplicationError> {
         let record = JobRecord::try_from(job)?;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         toasty::create!(JobRecord {
             id: record.id,
@@ -45,7 +45,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
     }
 
     async fn get_by_id(&self, job_id: Uuid) -> Result<Job, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let record = JobRecord::get_by_id(&mut *tx_guard, job_id)
             .await
             .map_err(map_toasty_error)?;
@@ -53,7 +53,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
     }
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .player_id == #player_id)
             .exec(&mut *tx_guard)
             .await
@@ -71,7 +71,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
             .exec(&mut *tx_guard)
             .await
@@ -89,7 +89,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let rows = toasty::query!(
             JobRecord filter .status == "Pending" or .status == "Processing"
         )
@@ -112,7 +112,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
             .exec(&mut *tx_guard)
             .await
@@ -133,7 +133,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
             .exec(&mut *tx_guard)
             .await
@@ -154,7 +154,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
             .exec(&mut *tx_guard)
             .await
@@ -175,7 +175,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         &self,
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
             .exec(&mut *tx_guard)
             .await
@@ -199,7 +199,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
             return Ok(vec![]);
         }
 
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(
             JobRecord filter .status == "Pending" and .completed_at <= #now
         )
@@ -225,7 +225,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
     }
 
     async fn mark_as_completed(&self, job_id: Uuid) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
             .await
             .map_err(map_toasty_error)?;
@@ -243,7 +243,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         task: &parabellum_app::jobs::JobPayload,
         completed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
             .await
             .map_err(map_toasty_error)?;
@@ -262,7 +262,7 @@ impl<'a> JobRepository for ToastyJobRepository<'a> {
         job_id: Uuid,
         _error_message: &str,
     ) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut row = JobRecord::get_by_id(&mut *tx_guard, job_id)
             .await
             .map_err(map_toasty_error)?;
@@ -310,9 +310,11 @@ mod tests {
         let pool = establish_test_connection_pool()
             .await
             .map_err(ApplicationError::Db)?;
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
 
         let seed: Option<(i32, Uuid)> = sqlx::query_as(
             r#"
@@ -328,9 +330,7 @@ mod tests {
             return Ok(());
         };
 
-        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let tx = Arc::new(Mutex::new(tx));
-        let repo = ToastyJobRepository::new(tx.clone());
+        let repo = ToastyJobRepository::new(toasty_db.clone());
 
         let payload = parabellum_app::jobs::JobPayload::new(
             "ToastyTestTask",
@@ -346,7 +346,7 @@ mod tests {
         assert!(listed.iter().any(|j| j.id == job.id));
 
         drop(repo);
-        drop(tx); // rollback on drop
+        drop(toasty_db);
 
         Ok(())
     }

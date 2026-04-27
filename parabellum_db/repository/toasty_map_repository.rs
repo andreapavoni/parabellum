@@ -18,23 +18,23 @@ use crate::{
     toasty_models::{map_field::MapFieldDbRow, player::PlayerRecord, village::VillageDbRow},
 };
 
-pub struct ToastyMapRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyMapRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyMapRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyMapRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> MapRepository for ToastyMapRepository<'a> {
+impl MapRepository for ToastyMapRepository {
     async fn find_unoccupied_valley(
         &self,
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let rows = MapFieldDbRow::all()
             .exec(&mut *tx_guard)
             .await
@@ -78,7 +78,7 @@ impl<'a> MapRepository for ToastyMapRepository<'a> {
     }
 
     async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = MapFieldDbRow::get_by_id(&mut *tx_guard, id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::MapFieldNotFound(id as u32)))?;
@@ -97,7 +97,7 @@ impl<'a> MapRepository for ToastyMapRepository<'a> {
             return Ok(Vec::new());
         }
 
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let fields = MapFieldDbRow::all()
             .exec(&mut *tx_guard)
             .await

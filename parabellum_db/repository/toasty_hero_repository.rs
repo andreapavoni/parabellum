@@ -15,22 +15,22 @@ use crate::{
     toasty_models::hero::HeroDbRow,
 };
 
-pub struct ToastyHeroRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyHeroRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyHeroRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyHeroRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> HeroRepository for ToastyHeroRepository<'a> {
+impl HeroRepository for ToastyHeroRepository {
     async fn save(&self, hero: &Hero) -> Result<(), ApplicationError> {
         let record = HeroDbRow::try_from(hero)?;
         let hero_id = record.id;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let mut rows = toasty::query!(HeroDbRow filter .id == #hero_id)
             .exec(&mut *tx_guard)
@@ -80,7 +80,7 @@ impl<'a> HeroRepository for ToastyHeroRepository<'a> {
     }
 
     async fn get_by_id(&self, hero_id: Uuid) -> Result<Hero, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = HeroDbRow::get_by_id(&mut *tx_guard, hero_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::HeroNotFound(hero_id)))?;

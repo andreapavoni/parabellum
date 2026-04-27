@@ -12,25 +12,25 @@ use parabellum_types::{
 use crate::toasty_models::report::{ReportDbRow, ReportReadDbRow, to_report_record};
 use crate::toasty_time::{chrono_to_jiff_utc, jiff_to_chrono_utc};
 
-pub struct ToastyReportRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyReportRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyReportRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyReportRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> ReportRepository for ToastyReportRepository<'a> {
+impl ReportRepository for ToastyReportRepository {
     async fn add(
         &self,
         report: &NewReport,
         audiences: &[ReportAudience],
     ) -> Result<(), ApplicationError> {
         let report_id = Uuid::new_v4();
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         toasty::create!(ReportDbRow {
             id: report_id,
@@ -65,7 +65,7 @@ impl<'a> ReportRepository for ToastyReportRepository<'a> {
         player_id: Uuid,
         limit: i64,
     ) -> Result<Vec<ReportRecord>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let reads = ReportReadDbRow::filter_by_player_id(player_id)
             .exec(&mut *tx_guard)
             .await
@@ -114,7 +114,7 @@ impl<'a> ReportRepository for ToastyReportRepository<'a> {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<Option<ReportRecord>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut reads = toasty::query!(
             ReportReadDbRow filter .report_id == #report_id and .player_id == #player_id
         )
@@ -137,7 +137,7 @@ impl<'a> ReportRepository for ToastyReportRepository<'a> {
     }
 
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut reads = toasty::query!(
             ReportReadDbRow filter .report_id == #report_id and .player_id == #player_id
         )
@@ -182,12 +182,12 @@ mod tests {
             return Ok(());
         };
 
-        let mut toasty_db = establish_test_toasty_db()
-            .await
-            .map_err(ApplicationError::Db)?;
-        let tx = toasty_db.transaction().await.map_err(map_toasty_error)?;
-        let tx = Arc::new(Mutex::new(tx));
-        let repo = ToastyReportRepository::new(tx.clone());
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let repo = ToastyReportRepository::new(toasty_db.clone());
 
         let report = NewReport {
             report_type: "Battle".to_string(),
@@ -238,7 +238,7 @@ mod tests {
         assert!(after_read.read_at.is_some());
 
         drop(repo);
-        drop(tx); // rollback on drop
+        drop(toasty_db);
         Ok(())
     }
 }

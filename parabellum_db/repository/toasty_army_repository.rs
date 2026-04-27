@@ -17,20 +17,20 @@ use crate::{
     },
 };
 
-pub struct ToastyArmyRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyArmyRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyArmyRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyArmyRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
+impl ArmyRepository for ToastyArmyRepository {
     async fn get_by_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let row = ArmyDbRow::get_by_id(&mut *tx_guard, army_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?;
@@ -38,7 +38,7 @@ impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
     }
 
     async fn get_by_hero_id(&self, hero_id: Uuid) -> Result<Army, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut rows = toasty::query!(ArmyDbRow filter .hero_id == #(Some(hero_id)))
             .exec(&mut *tx_guard)
             .await
@@ -50,7 +50,7 @@ impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
     }
 
     async fn set_hero(&self, army_id: Uuid, hero_id: Option<Uuid>) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut row = ArmyDbRow::get_by_id(&mut *tx_guard, army_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::ArmyNotFound(army_id)))?;
@@ -65,7 +65,7 @@ impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
     async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
         let record = ArmyDbRow::try_from(army)?;
         let army_id = record.id;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let mut rows = toasty::query!(ArmyDbRow filter .id == #army_id)
             .exec(&mut *tx_guard)
@@ -105,7 +105,7 @@ impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
     }
 
     async fn remove(&self, army_id: Uuid) -> Result<(), ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         if let Ok(row) = ArmyDbRow::get_by_id(&mut *tx_guard, army_id).await {
             row.delete()
                 .exec(&mut *tx_guard)
@@ -117,7 +117,7 @@ impl<'a> ArmyRepository for ToastyArmyRepository<'a> {
 }
 
 async fn to_game_army(
-    tx: &mut toasty::Transaction<'_>,
+    tx: &mut toasty::Db,
     row: ArmyDbRow,
 ) -> Result<Army, ApplicationError> {
     let hero_row = match row.hero_id {

@@ -24,21 +24,21 @@ use crate::{
     },
 };
 
-pub struct ToastyVillageRepository<'a> {
-    tx: Arc<Mutex<toasty::Transaction<'a>>>,
+pub struct ToastyVillageRepository {
+    db: Arc<Mutex<toasty::Db>>,
 }
 
-impl<'a> ToastyVillageRepository<'a> {
-    pub fn new(tx: Arc<Mutex<toasty::Transaction<'a>>>) -> Self {
-        Self { tx }
+impl ToastyVillageRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a> VillageRepository for ToastyVillageRepository<'a> {
+impl VillageRepository for ToastyVillageRepository {
     async fn get_by_id(&self, village_id_u32: u32) -> Result<Village, ApplicationError> {
         let village_id = village_id_u32 as i32;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let village = VillageDbRow::get_by_id(&mut *tx_guard, village_id)
             .await
@@ -71,7 +71,7 @@ impl<'a> VillageRepository for ToastyVillageRepository<'a> {
     }
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Village>, ApplicationError> {
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let player = PlayerRecord::get_by_id(&mut *tx_guard, player_id)
             .await
@@ -118,7 +118,7 @@ impl<'a> VillageRepository for ToastyVillageRepository<'a> {
     async fn save(&self, village: &Village) -> Result<(), ApplicationError> {
         let record = VillageDbRow::try_from(village)?;
         let village_id = record.id;
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
 
         let mut rows = toasty::query!(VillageDbRow filter .id == #village_id)
             .exec(&mut *tx_guard)
@@ -197,7 +197,7 @@ impl<'a> VillageRepository for ToastyVillageRepository<'a> {
             return Ok(HashMap::new());
         }
 
-        let mut tx_guard = self.tx.lock().await;
+        let mut tx_guard = self.db.lock().await;
         let mut result = HashMap::new();
         for village_id in village_ids {
             let Ok(village) = VillageDbRow::get_by_id(&mut *tx_guard, *village_id as i32).await else {
@@ -224,7 +224,7 @@ impl<'a> VillageRepository for ToastyVillageRepository<'a> {
 }
 
 async fn load_armies_for_village(
-    tx: &mut toasty::Transaction<'_>,
+    tx: &mut toasty::Db,
     village_id: i32,
 ) -> Result<Vec<db_models::Army>, ApplicationError> {
     let mut rows = ArmyDbRow::filter_by_village_id(village_id)
@@ -257,7 +257,7 @@ async fn load_armies_for_village(
 }
 
 async fn busy_merchants(
-    tx: &mut toasty::Transaction<'_>,
+    tx: &mut toasty::Db,
     village_id: i32,
 ) -> Result<u8, ApplicationError> {
     let jobs = JobRecord::filter_by_village_id(village_id)
