@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
+    cqrs_es::building_queue::BuildingQueueAggregate,
     jobs::{
         Job,
         tasks::{AddBuildingTask, BuildingUpgradeTask},
@@ -51,27 +52,9 @@ fn slot_ready_time(jobs: &[Job], slot_id: u8) -> DateTime<Utc> {
     }
 }
 
-fn job_target_level(job: &Job) -> Option<u8> {
-    match job.task.task_type.as_str() {
-        "AddBuilding" => Some(1),
-        "BuildingUpgrade" => serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-            .ok()
-            .map(|payload| payload.level),
-        _ => None,
-    }
-}
-
 pub fn highest_target_level_for_slot(jobs: &[Job], slot_id: u8) -> Option<u8> {
-    jobs.iter()
-        .filter_map(|job| {
-            let job_slot = job_slot_id(job)?;
-            if job_slot == slot_id {
-                job_target_level(job)
-            } else {
-                None
-            }
-        })
-        .max()
+    let aggregate = BuildingQueueAggregate::from_building_jobs(jobs);
+    aggregate.queued_level_for_slot(slot_id)
 }
 
 pub fn completion_time_for_slot(jobs: &[Job], slot_id: u8, duration_secs: i64) -> DateTime<Utc> {
