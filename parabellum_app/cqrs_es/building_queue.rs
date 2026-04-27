@@ -11,6 +11,10 @@ use mini_cqrs_es::{
 use serde::{Deserialize, Serialize};
 
 use parabellum_types::buildings::BuildingName;
+use crate::jobs::{
+    Job,
+    tasks::{AddBuildingTask, BuildingUpgradeTask},
+};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BuildingQueueAggregate {
@@ -61,6 +65,85 @@ impl Aggregate for BuildingQueueAggregate {
     fn set_version(&mut self, version: u64) {
         self.version = version;
     }
+}
+
+impl BuildingQueueAggregate {
+    pub fn from_building_jobs(jobs: &[Job]) -> Self {
+        let mut aggregate = Self::default();
+        for job in jobs {
+            match job.task.task_type.as_str() {
+                "AddBuilding" => {
+                    let Ok(payload) = serde_json::from_value::<AddBuildingTask>(job.task.data.clone()) else {
+                        continue;
+                    };
+                    aggregate
+                        .queued_levels_by_slot
+                        .entry(payload.slot_id)
+                        .and_modify(|level| *level = (*level).max(1))
+                        .or_insert(1);
+                }
+                "BuildingUpgrade" => {
+                    let Ok(payload) =
+                        serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+                    else {
+                        continue;
+                    };
+                    aggregate
+                        .queued_levels_by_slot
+                        .entry(payload.slot_id)
+                        .and_modify(|level| *level = (*level).max(payload.level))
+                        .or_insert(payload.level);
+                }
+                _ => {}
+            }
+        }
+        aggregate
+    }
+
+    pub fn queued_level_for_slot(&self, slot_id: u8) -> Option<u8> {
+        self.queued_levels_by_slot.get(&slot_id).copied()
+    }
+}
+
+pub fn queued_slot_state(jobs: &[Job], slot_id: u8) -> Option<(BuildingName, u8)> {
+    jobs.iter()
+        .filter_map(|job| match job.task.task_type.as_str() {
+            "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
+                .ok()
+                .filter(|payload| payload.slot_id == slot_id)
+                .map(|payload| (payload.name, 1)),
+            "BuildingUpgrade" => {
+                serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
+                    .ok()
+                    .filter(|payload| payload.slot_id == slot_id)
+                    .map(|payload| (payload.building_name, payload.level))
+            }
+            _ => None,
+        })
+        .max_by_key(|(_, level)| *level)
+}
+
+pub async fn execute_add_command(
+    aggregate: &BuildingQueueAggregate,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<(), CqrsError> {
+    let command = QueueAddBuildingCommand { slot_id, name };
+    let _ = command.handle(aggregate).await?;
+    Ok(())
+}
+
+pub async fn next_upgrade_target_level(
+    aggregate: &BuildingQueueAggregate,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<u8, CqrsError> {
+    let command = QueueUpgradeBuildingCommand { slot_id, name };
+    let events = command.handle(aggregate).await?;
+    let Some(BuildingQueueEvent::BuildingUpgraded { target_level, .. }) = events.first() else {
+        return Err(CqrsError::new("upgrade command emitted no event".to_string()));
+    };
+    Ok(*target_level)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

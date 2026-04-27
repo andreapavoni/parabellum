@@ -1,11 +1,17 @@
 use std::sync::Arc;
 
 use parabellum_game::models::buildings::get_building_data;
-use parabellum_types::{Result, buildings::BuildingName, errors::GameError, tribe::Tribe};
+use parabellum_types::{
+    Result,
+    buildings::BuildingName,
+    errors::{AppError, GameError},
+    tribe::Tribe,
+};
 
 use crate::{
     command_handlers::helpers::{completion_time_for_slot, enforce_queue_capacity},
     config::Config,
+    cqrs_es::building_queue::{BuildingQueueAggregate, execute_add_command},
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, JobPayload, tasks::AddBuildingTask},
     uow::UnitOfWork,
@@ -55,6 +61,14 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             2
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
+
+        let queue = BuildingQueueAggregate::from_building_jobs(&building_jobs);
+        execute_add_command(&queue, cmd.slot_id, cmd.name.clone())
+            .await
+            .map_err(|_| AppError::QueueItemAlreadyQueued {
+                queue: "building",
+                item: format!("slot {}", cmd.slot_id),
+            })?;
         ensure_queue_allows_building(&cmd.name, &building_jobs)?;
 
         let build_time_secs =
