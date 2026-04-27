@@ -10,7 +10,10 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::models::{self as db_models, Tribe};
+use crate::{
+    mapping::tribe_to_db_code,
+    models::{self as db_models},
+};
 
 #[derive(Clone)]
 pub struct PostgresHeroRepository<'a> {
@@ -27,7 +30,7 @@ impl<'a> PostgresHeroRepository<'a> {
 impl<'a> HeroRepository for PostgresHeroRepository<'a> {
     async fn save(&self, hero: &Hero) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let db_tribe: Tribe = hero.tribe.clone().into();
+        let db_tribe = tribe_to_db_code(&hero.tribe);
 
         sqlx::query!(
             r#"
@@ -51,7 +54,7 @@ impl<'a> HeroRepository for PostgresHeroRepository<'a> {
             hero.id,
             hero.village_id as i32,
             hero.player_id,
-            db_tribe as _,
+            db_tribe,
             hero.level as i16,
             hero.health as i16,
             hero.experience as i32,
@@ -74,7 +77,7 @@ impl<'a> HeroRepository for PostgresHeroRepository<'a> {
         let db_hero = sqlx::query_as!(
             db_models::Hero,
             r#"
-            SELECT id, player_id, village_id, tribe as "tribe: _", level, health, experience, resource_focus,
+            SELECT id, player_id, village_id, tribe, level, health, experience, resource_focus,
                    strength_points, regeneration_points, off_bonus_points, def_bonus_points, resources_points, unassigned_points
             FROM heroes
             WHERE id = $1

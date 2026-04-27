@@ -3,16 +3,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[sqlx(type_name = "tribe", rename_all = "PascalCase")]
-pub enum Tribe {
-    Roman,
-    Gaul,
-    Teuton,
-    Natar,
-    Nature,
-}
-
 #[derive(Debug, FromRow, Clone)]
 pub struct Player {
     pub id: Uuid,
@@ -56,7 +46,7 @@ pub struct Army {
     pub village_id: i32,
     pub player_id: Uuid,
     pub current_map_field_id: Option<i32>,
-    pub tribe: Tribe,
+    pub tribe: i64,
     pub units: serde_json::Value,
     pub smithy: serde_json::Value,
     pub hero_id: Option<Uuid>,
@@ -107,7 +97,7 @@ pub struct Hero {
     pub id: Uuid,
     pub player_id: Uuid,
     pub village_id: i32,
-    pub tribe: Tribe,
+    pub tribe: i64,
     pub level: i16,
     pub health: i16,
     pub experience: i32,

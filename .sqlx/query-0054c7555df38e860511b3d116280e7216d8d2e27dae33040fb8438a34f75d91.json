@@ -8,20 +8,7 @@
         "Uuid",
         "Int4",
         "Uuid",
-        {
-          "Custom": {
-            "name": "tribe",
-            "kind": {
-              "Enum": [
-                "Roman",
-                "Gaul",
-                "Teuton",
-                "Natar",
-                "Nature"
-              ]
-            }
-          }
-        },
+        "Int8",
         "Int2",
         "Int2",
         "Int4",

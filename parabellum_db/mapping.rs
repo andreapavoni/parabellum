@@ -95,30 +95,6 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
     }
 }
 
-impl From<db_models::Tribe> for Tribe {
-    fn from(db_tribe: db_models::Tribe) -> Self {
-        match db_tribe {
-            db_models::Tribe::Roman => Tribe::Roman,
-            db_models::Tribe::Gaul => Tribe::Gaul,
-            db_models::Tribe::Teuton => Tribe::Teuton,
-            db_models::Tribe::Natar => Tribe::Natar,
-            db_models::Tribe::Nature => Tribe::Nature,
-        }
-    }
-}
-
-impl From<Tribe> for db_models::Tribe {
-    fn from(game_tribe: Tribe) -> Self {
-        match game_tribe {
-            Tribe::Roman => db_models::Tribe::Roman,
-            Tribe::Gaul => db_models::Tribe::Gaul,
-            Tribe::Teuton => db_models::Tribe::Teuton,
-            Tribe::Natar => db_models::Tribe::Natar,
-            Tribe::Nature => db_models::Tribe::Nature,
-        }
-    }
-}
-
 pub fn tribe_to_db_code(game_tribe: &Tribe) -> i64 {
     match game_tribe {
         Tribe::Roman => 1,
@@ -170,7 +146,7 @@ impl From<db_models::Army> for game_models::army::Army {
                     Some(id),
                     army.village_id as u32,
                     army.player_id,
-                    army.tribe.into(),
+                    tribe_from_db_code(army.tribe).unwrap_or(Tribe::Roman),
                     army.hero_unassigned_points.map(|p| p as u16),
                 );
 
@@ -193,7 +169,7 @@ impl From<db_models::Army> for game_models::army::Army {
             army.village_id as u32,
             army.current_map_field_id.map(|id| id as u32),
             army.player_id,
-            army.tribe.into(),
+            tribe_from_db_code(army.tribe).unwrap_or(Tribe::Roman),
             &(serde_json::from_value(army.units).unwrap_or_default()),
             &(serde_json::from_value(army.smithy).unwrap_or_default()),
             hero,
@@ -253,7 +229,7 @@ impl From<db_models::Hero> for game_models::hero::Hero {
             id: db_hero.id,
             player_id: db_hero.player_id,
             village_id: db_hero.village_id as u32,
-            tribe: db_hero.tribe.into(),
+            tribe: tribe_from_db_code(db_hero.tribe).unwrap_or(Tribe::Roman),
             level: db_hero.level as u16,
             health: db_hero.health as u16,
             experience: db_hero.experience as u32,

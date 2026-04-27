@@ -11,20 +11,7 @@
         "Uuid",
         "Jsonb",
         "Jsonb",
-        {
-          "Custom": {
-            "name": "tribe",
-            "kind": {
-              "Enum": [
-                "Roman",
-                "Gaul",
-                "Teuton",
-                "Natar",
-                "Nature"
-              ]
-            }
-          }
-        },
+        "Int8",
         "Uuid"
       ]
     },

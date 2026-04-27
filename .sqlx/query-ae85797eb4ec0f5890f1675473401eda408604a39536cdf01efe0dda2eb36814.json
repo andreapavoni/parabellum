@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, player_id, village_id, tribe as \"tribe: _\", level, health, experience, resource_focus,\n                   strength_points, regeneration_points, off_bonus_points, def_bonus_points, resources_points, unassigned_points\n            FROM heroes\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, player_id, village_id, tribe, level, health, experience, resource_focus,\n                   strength_points, regeneration_points, off_bonus_points, def_bonus_points, resources_points, unassigned_points\n            FROM heroes\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -20,21 +20,8 @@
       },
       {
         "ordinal": 3,
-        "name": "tribe: _",
-        "type_info": {
-          "Custom": {
-            "name": "tribe",
-            "kind": {
-              "Enum": [
-                "Roman",
-                "Gaul",
-                "Teuton",
-                "Natar",
-                "Nature"
-              ]
-            }
-          }
-        }
+        "name": "tribe",
+        "type_info": "Int8"
       },
       {
         "ordinal": 4,
@@ -109,5 +96,5 @@
       false
     ]
   },
-  "hash": "a4bf672972d7661cca2f16ac51e21499ecffc72aa7ae471c94f23489e61e33e5"
+  "hash": "ae85797eb4ec0f5890f1675473401eda408604a39536cdf01efe0dda2eb36814"
 }
