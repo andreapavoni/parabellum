@@ -10,14 +10,13 @@ use parabellum_types::{
 
 use crate::{
     command_handlers::helpers::{
-        build_scheduled_building_queue_job, building_queue_jobs, building_queue_plan_from_event,
-        enforce_queue_capacity,
+        building_queue_jobs, enforce_queue_capacity,
     },
     config::Config,
     cqrs_es::building_queue::{
-        VillageBuildingQueueAggregate, load_village_building_queue_aggregate,
-        queue_add_event_via_cqrs,
+        VillageAggregate, load_village_building_queue_aggregate, queue_add_event_via_cqrs,
     },
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::Job,
     uow::UnitOfWork,
@@ -63,6 +62,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         let queue_aggregate = load_village_building_queue_aggregate(&event_store, cmd.village_id)
             .await
             .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
 
         let queue_event = queue_add_event_via_cqrs(
             event_store,
@@ -75,25 +75,19 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             queue: "building",
             item: format!("slot {}", cmd.slot_id),
         })?;
-        ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
 
         let build_time_secs =
             village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
         villages_repo.save(&village).await?;
 
-        let Some(plan) = building_queue_plan_from_event(village.id as i32, &queue_event) else {
-            return Err(ApplicationError::Unknown(
-                "failed to build job plan from queue add event".to_string(),
-            ));
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: cmd.player_id,
+            village_id: village.id as i32,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs as i64,
         };
-        let new_job = build_scheduled_building_queue_job(
-            cmd.player_id,
-            cmd.village_id as i32,
-            &building_jobs,
-            build_time_secs as i64,
-            plan,
-        )?;
-        job_repo.add(&new_job).await?;
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }
@@ -101,7 +95,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
 
 fn ensure_queue_allows_building(
     candidate: &BuildingName,
-    queue_aggregate: &VillageBuildingQueueAggregate,
+    queue_aggregate: &VillageAggregate,
 ) -> Result<(), GameError> {
     let queued_names = queue_aggregate.queued_building_names();
     if queued_names.is_empty() {

@@ -9,13 +9,14 @@ use parabellum_types::{
 
 use crate::{
     command_handlers::helpers::{
-        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
-        building_queue_plan_from_event, enforce_queue_capacity,
+        BuildingQueueJobPlan, building_queue_jobs, building_queue_plan_from_event,
+        enforce_queue_capacity,
     },
     config::Config,
     cqrs_es::building_queue::{
         load_village_building_queue_aggregate, queue_upgrade_event_via_cqrs,
     },
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::Job,
     uow::UnitOfWork,
@@ -93,6 +94,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             command.village_id,
             command.slot_id,
             building_name.clone(),
+            pending_level,
         )
         .await
         .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
@@ -108,9 +110,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
                 "queue upgrade produced unexpected job plan variant".to_string(),
             ));
         };
-        let queue_target = upgrade_plan.level;
-        let next_level = pending_level.max(queue_target.saturating_sub(1)) + 1;
-        upgrade_plan.level = next_level;
+        let next_level = upgrade_plan.level;
         let next_level_building = template_building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
         let build_time_secs =
@@ -119,14 +119,14 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         village.deduct_resources(&cost.resources)?;
         village_repo.save(&village).await?;
 
-        let new_job = build_scheduled_building_queue_job(
-            command.player_id,
-            command.village_id as i32,
-            &building_jobs,
-            build_time_secs,
-            plan,
-        )?;
-        job_repo.add(&new_job).await?;
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: command.player_id,
+            village_id: command.village_id as i32,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs,
+        };
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }
@@ -208,17 +208,10 @@ mod tests {
             village_id,
             slot_id,
             BuildingName::MainBuilding,
+            1,
         )
         .await
         .expect("first queued upgrade event should be seeded");
-        let _ = queue_upgrade_event_via_cqrs(
-            event_store,
-            village_id,
-            slot_id,
-            BuildingName::MainBuilding,
-        )
-        .await
-        .expect("second queued upgrade event should be seeded");
 
         let handler = UpgradeBuildingCommandHandler::new();
         let command = UpgradeBuilding {

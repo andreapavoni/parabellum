@@ -8,11 +8,11 @@ use parabellum_types::{
 
 use crate::{
     command_handlers::helpers::{
-        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
-        building_queue_plan_from_event,
+        BuildingQueueJobPlan, building_queue_jobs, building_queue_plan_from_event,
     },
     config::Config,
     cqrs_es::building_queue::queue_downgrade_event_via_cqrs,
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
     uow::UnitOfWork,
 };
@@ -101,14 +101,14 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
         let build_time_secs =
             target_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
-        let new_job = build_scheduled_building_queue_job(
-            command.player_id,
-            command.village_id as i32,
-            &building_jobs,
-            build_time_secs,
-            plan,
-        )?;
-        job_repo.add(&new_job).await?;
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: command.player_id,
+            village_id: command.village_id as i32,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs,
+        };
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }

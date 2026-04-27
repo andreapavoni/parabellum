@@ -10,19 +10,20 @@ use mini_cqrs_es::{
 };
 use serde::{Deserialize, Serialize};
 
+use parabellum_game::models::buildings::get_building_data;
 use parabellum_types::buildings::BuildingName;
 use crate::cqrs_es::building_queue_read_model::BuildingQueueReadModel;
 use crate::repository::CqrsEventStoreRepository;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct VillageBuildingQueueAggregate {
+pub struct VillageAggregate {
     aggregate_id: Uuid,
     version: u64,
     queued_names_by_slot: HashMap<u8, BuildingName>,
     queued_levels_by_slot: HashMap<u8, u8>,
 }
 
-impl Aggregate for VillageBuildingQueueAggregate {
+impl Aggregate for VillageAggregate {
     type Event = BuildingQueueEvent;
 
     async fn apply(&mut self, event: &Self::Event) {
@@ -75,7 +76,7 @@ impl Aggregate for VillageBuildingQueueAggregate {
     }
 }
 
-impl VillageBuildingQueueAggregate {
+impl VillageAggregate {
     pub fn queued_level_for_slot(&self, slot_id: u8) -> Option<u8> {
         self.queued_levels_by_slot.get(&slot_id).copied()
     }
@@ -95,8 +96,54 @@ impl VillageBuildingQueueAggregate {
     }
 }
 
+fn ensure_queue_allows_building(
+    candidate: &BuildingName,
+    queued_names: &[BuildingName],
+) -> Result<(), CqrsError> {
+    if queued_names.is_empty() {
+        return Ok(());
+    }
+
+    let candidate_data = get_building_data(candidate).map_err(|e| CqrsError::new(e.to_string()))?;
+
+    for queued_name in queued_names {
+        if *queued_name == *candidate && !candidate_data.rules.allow_multiple {
+            return Err(CqrsError::new(format!(
+                "building {:?} cannot be queued multiple times",
+                candidate
+            )));
+        }
+
+        if candidate_data
+            .rules
+            .conflicts
+            .iter()
+            .any(|conflict| conflict.0 == *queued_name)
+        {
+            return Err(CqrsError::new(format!(
+                "building {:?} conflicts with queued {:?}",
+                candidate, queued_name
+            )));
+        }
+
+        if let Ok(queued_data) = get_building_data(queued_name)
+            && queued_data
+                .rules
+                .conflicts
+                .iter()
+                .any(|conflict| conflict.0 == *candidate)
+        {
+            return Err(CqrsError::new(format!(
+                "building {:?} conflicts with queued {:?}",
+                candidate, queued_name
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub async fn execute_add_command(
-    aggregate: &VillageBuildingQueueAggregate,
+    aggregate: &VillageAggregate,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<(), CqrsError> {
@@ -106,11 +153,16 @@ pub async fn execute_add_command(
 }
 
 pub async fn next_upgrade_target_level(
-    aggregate: &VillageBuildingQueueAggregate,
+    aggregate: &VillageAggregate,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<u8, CqrsError> {
-    let command = QueueUpgradeBuildingCommand { slot_id, name };
+    let current_level = aggregate.queued_level_for_slot(slot_id).unwrap_or(0);
+    let command = QueueUpgradeBuildingCommand {
+        slot_id,
+        name,
+        current_level,
+    };
     let events = command.handle(aggregate).await?;
     let Some(BuildingQueueEvent::BuildingUpgradeQueued { target_level, .. }) = events.first() else {
         return Err(CqrsError::new("upgrade command emitted no event".to_string()));
@@ -135,10 +187,10 @@ pub fn village_stream_id(village_id: u32) -> Uuid {
 pub async fn load_village_building_queue_aggregate(
     event_store: &Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
-) -> Result<VillageBuildingQueueAggregate, CqrsError> {
+) -> Result<VillageAggregate, CqrsError> {
     let aggregate_id = village_stream_id(village_id);
     let (events, version) = event_store.load_events(aggregate_id).await?;
-    let mut aggregate = VillageBuildingQueueAggregate::default();
+    let mut aggregate = VillageAggregate::default();
     aggregate.set_aggregate_id(aggregate_id);
     if !events.is_empty() {
         aggregate.apply_events(&events).await?;
@@ -181,8 +233,11 @@ pub async fn next_upgrade_target_level_via_cqrs(
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
+    current_level: u8,
 ) -> Result<u8, CqrsError> {
-    let event = queue_upgrade_event_via_cqrs(event_store, village_id, slot_id, name).await?;
+    let event =
+        queue_upgrade_event_via_cqrs(event_store, village_id, slot_id, name, current_level)
+            .await?;
     let BuildingQueueEvent::BuildingUpgradeQueued { target_level, .. } = event else {
         return Err(CqrsError::new(
             "queue upgrade command did not emit BuildingUpgradeQueued".to_string(),
@@ -196,6 +251,7 @@ pub async fn queue_upgrade_event_via_cqrs(
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
+    current_level: u8,
 ) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
@@ -206,6 +262,7 @@ pub async fn queue_upgrade_event_via_cqrs(
     let command = QueueUpgradeBuildingCommand {
         slot_id,
         name: name.clone(),
+        current_level,
     };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
@@ -420,7 +477,7 @@ pub struct QueueAddBuildingCommand {
 }
 
 impl Command for QueueAddBuildingCommand {
-    type Aggregate = VillageBuildingQueueAggregate;
+    type Aggregate = VillageAggregate;
 
     async fn handle(
         &self,
@@ -432,6 +489,8 @@ impl Command for QueueAddBuildingCommand {
                 self.slot_id
             )));
         }
+        let queued_names = aggregate.queued_building_names();
+        ensure_queue_allows_building(&self.name, &queued_names)?;
 
         Ok(vec![BuildingQueueEvent::BuildingConstructionQueued {
             slot_id: self.slot_id,
@@ -445,10 +504,11 @@ impl Command for QueueAddBuildingCommand {
 pub struct QueueUpgradeBuildingCommand {
     pub slot_id: u8,
     pub name: BuildingName,
+    pub current_level: u8,
 }
 
 impl Command for QueueUpgradeBuildingCommand {
-    type Aggregate = VillageBuildingQueueAggregate;
+    type Aggregate = VillageAggregate;
 
     async fn handle(
         &self,
@@ -458,7 +518,7 @@ impl Command for QueueUpgradeBuildingCommand {
             .queued_levels_by_slot
             .get(&self.slot_id)
             .copied()
-            .unwrap_or(0);
+            .unwrap_or(self.current_level);
         let target_level = current_level.saturating_add(1);
 
         Ok(vec![BuildingQueueEvent::BuildingUpgradeQueued {
@@ -477,19 +537,24 @@ pub struct QueueDowngradeBuildingCommand {
 }
 
 impl Command for QueueDowngradeBuildingCommand {
-    type Aggregate = VillageBuildingQueueAggregate;
+    type Aggregate = VillageAggregate;
 
     async fn handle(
         &self,
-        _aggregate: &Self::Aggregate,
+        aggregate: &Self::Aggregate,
     ) -> Result<Vec<<Self::Aggregate as Aggregate>::Event>, CqrsError> {
-        if self.current_level == 0 {
+        let current_level = aggregate
+            .queued_levels_by_slot
+            .get(&self.slot_id)
+            .copied()
+            .unwrap_or(self.current_level);
+        if current_level == 0 {
             return Err(CqrsError::new(format!(
                 "slot {} has no queued level to downgrade",
                 self.slot_id
             )));
         }
-        let target_level = self.current_level.saturating_sub(1);
+        let target_level = current_level.saturating_sub(1);
 
         Ok(vec![BuildingQueueEvent::BuildingDowngradeQueued {
             slot_id: self.slot_id,
@@ -507,7 +572,7 @@ mod tests {
 
     #[tokio::test]
     async fn queue_add_building_emits_event_and_updates_aggregate() {
-        let mut aggregate = VillageBuildingQueueAggregate::default();
+        let mut aggregate = VillageAggregate::default();
         aggregate.set_aggregate_id(Uuid::new_v4());
 
         let command = QueueAddBuildingCommand {
@@ -526,7 +591,7 @@ mod tests {
 
     #[tokio::test]
     async fn queue_downgrade_requires_existing_level() {
-        let aggregate = VillageBuildingQueueAggregate::default();
+        let aggregate = VillageAggregate::default();
         let command = QueueDowngradeBuildingCommand {
             slot_id: 19,
             name: BuildingName::MainBuilding,
@@ -553,6 +618,7 @@ mod tests {
         let upgrade = QueueUpgradeBuildingCommand {
             slot_id: 19,
             name: BuildingName::MainBuilding,
+            current_level: 0,
         };
         cqrs.execute(aggregate_id, &upgrade)
             .await
@@ -564,7 +630,7 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(version, 2);
 
-        let mut replayed = VillageBuildingQueueAggregate::default();
+        let mut replayed = VillageAggregate::default();
         replayed.set_aggregate_id(aggregate_id);
         replayed
             .apply_events(&events)
