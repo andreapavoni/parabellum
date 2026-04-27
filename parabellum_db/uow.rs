@@ -82,6 +82,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
         rollback_transaction(self.tx).await
     }
+
+    fn is_transactional(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -155,5 +159,9 @@ impl<'a> UnitOfWork<'a> for ToastyUnitOfWork {
 
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
         Ok(())
+    }
+
+    fn is_transactional(&self) -> bool {
+        false
     }
 }

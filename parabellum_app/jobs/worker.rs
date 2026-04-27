@@ -53,8 +53,11 @@ impl JobWorker {
     /// Process due jobs.
     pub async fn process_due_jobs(&self) -> Result<()> {
         let uow = self.uow_provider.tx().await?;
+        let transactional = uow.is_transactional();
         let mut due_jobs = uow.jobs().find_and_lock_due_jobs(10).await?;
-        uow.commit().await?;
+        if transactional {
+            uow.commit().await?;
+        }
         due_jobs.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
         if !due_jobs.is_empty() {
             info!(count = due_jobs.len(), "Processing due jobs");
@@ -71,6 +74,7 @@ impl JobWorker {
                 uow,
                 config: self.config.clone(),
             };
+            let transactional = context.uow.is_transactional();
             let job_id = job.id;
             let job_type = job.task.task_type.clone();
 
@@ -94,13 +98,18 @@ impl JobWorker {
                     // This error could be due to deserialization
                     // or an unregistered task_type.
                     // Mark the job as failed and continue.
-                    context.uow.rollback().await?;
+                    if transactional {
+                        context.uow.rollback().await?;
+                    }
                     let uow_fail = self.uow_provider.tx().await?;
+                    let fail_transactional = uow_fail.is_transactional();
                     uow_fail
                         .jobs()
                         .mark_as_failed(job_id, &e.to_string())
                         .await?;
-                    uow_fail.commit().await?;
+                    if fail_transactional {
+                        uow_fail.commit().await?;
+                    }
                     continue; // Go to the next job
                 }
             };
@@ -121,19 +130,26 @@ impl JobWorker {
                     {
                         context.uow.jobs().mark_as_completed(job_id).await?;
                     }
-                    context.uow.commit().await?;
+                    if transactional {
+                        context.uow.commit().await?;
+                    }
                     info!(job_id = %job.id, "Job completed successfully");
                 }
                 Err(e) => {
                     error!(job_id = %job.id, error = ?e.to_string(), "Job failed");
-                    context.uow.rollback().await?;
+                    if transactional {
+                        context.uow.rollback().await?;
+                    }
 
                     let uow_fail = self.uow_provider.tx().await?;
+                    let fail_transactional = uow_fail.is_transactional();
                     uow_fail
                         .jobs()
                         .mark_as_failed(job_id, &e.to_string())
                         .await?;
-                    uow_fail.commit().await?;
+                    if fail_transactional {
+                        uow_fail.commit().await?;
+                    }
                 }
             }
         }
