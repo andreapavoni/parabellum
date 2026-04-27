@@ -1,7 +1,7 @@
 # mini_cqrs_es Migration Plan (`parabellum_app` + `parabellum_db`)
 
 ## Goal
-Move from the current command/query handler + repository style to a true CQRS/ES architecture using `mini_cqrs_es`, with incremental rollout and no service freeze.
+Move from command-handler + repository orchestration to domain-centric CQRS/ES with `mini_cqrs_es`, where commands execute on real domain aggregates and side effects are driven by event consumers.
 
 ## Why This Matters Here
 Current architecture has CQRS-style naming but not event sourcing:
@@ -26,6 +26,7 @@ Design implication: integrate behind local traits and keep a controlled migratio
    - Domain aggregates implement `mini_cqrs_es::Aggregate`.
    - Commands implement `mini_cqrs_es::Command` and emit domain events.
    - Event store persists immutable streams with optimistic concurrency.
+   - Aggregate boundaries follow domain ownership (e.g. `VillageAggregate` owns building queue semantics), not helper-only technical aggregates.
 
 2. **Read side**
    - Projections/read models updated by event consumers.
@@ -33,12 +34,17 @@ Design implication: integrate behind local traits and keep a controlled migratio
 
 3. **Side effects**
    - Job scheduling and external actions become event consumers (or orchestrated process managers), not ad-hoc inline writes.
+   - Example target flow:
+     - `AddBuilding` command on `VillageAggregate`
+     - emits `BuildingConstructionStarted` (or equivalent domain event)
+     - `JobsConsumer` handles event and enqueues `AddBuilding` job
+     - read-model consumers update query projections.
 
 ## Migration Strategy
-Hybrid mode with vertical slices:
-- keep existing API routes and payloads;
-- migrate one bounded behavior at a time to event-sourced commands;
-- run old and new command paths in parallel by feature flag/routing switch.
+Hard-switch vertical slices with behavior parity:
+- keep existing API contracts;
+- migrate one bounded behavior at a time;
+- avoid long-lived dual-write logic for the same invariant.
 
 ## Phased Plan
 
@@ -69,14 +75,15 @@ Exit criteria:
 
 ---
 
-### Phase 2 — First Real Vertical Slice (Recommended: Building Queue)
+### Phase 2 — First Real Vertical Slice (Building Queue on Village Aggregate)
 Scope:
 - Migrate one command family end-to-end:
   - `AddBuilding` / `UpgradeBuilding` / `DowngradeBuilding`
 
 Deliverables:
-- New commands emit events (instead of direct repo writes).
-- Consumers update read model tables and schedule jobs.
+- Commands run on `VillageAggregate` (or a clearly nested aggregate state owned by village stream).
+- Commands emit domain events for queue/build start semantics.
+- Consumers update read-model tables and schedule jobs (`JobsConsumer`).
 - Existing API endpoints call new CQRS engine for this slice only.
 
 Exit criteria:
@@ -87,7 +94,7 @@ Exit criteria:
 
 ### Phase 3 — Job System Refactor to Event-Driven Side Effects
 Deliverables:
-- Convert job creation from inline command-handler writes to event consumers.
+- Convert job creation from inline command-handler writes to event consumers for migrated slices.
 - Define idempotency keys for consumer processing.
 - Make worker-safe retry semantics explicit.
 
@@ -103,7 +110,7 @@ Deliverables:
 - Add projection lag/consistency strategy (synchronous update or acceptable eventual consistency windows).
 
 Exit criteria:
-- Query handlers no longer need write-side UoW semantics.
+- Query handlers no longer need write-side UoW transactional semantics.
 
 ---
 
@@ -126,8 +133,8 @@ Exit criteria:
 
 ### Phase 6 — Decommission Legacy CQRS Layer
 Deliverables:
-- Retire `AppBus` generic command/query path (or keep as thin facade over new CQRS engine).
-- Remove legacy command handler trait machinery and direct write repositories where obsolete.
+- Retire `AppBus` UoW-centric orchestration (or keep as thin facade over CQRS command/query dispatch).
+- Remove legacy command handler trait machinery and inline side-effect writes where obsolete.
 - Keep compatibility adapters only if needed for remaining modules.
 
 Exit criteria:
@@ -161,3 +168,7 @@ Exit criteria:
 3. Migrate command families incrementally.
 
 This avoids implementing event store/projections directly on legacy repository internals that will be removed soon after.
+
+## Course-Correction Notes (Current)
+- `BuildingQueueAggregate` currently exists as a tactical migration slice helper.
+- Direction is to fold this behavior into `VillageAggregate` ownership (same village stream identity) and remove technical-only aggregate shape once village command flow is in place.

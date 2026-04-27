@@ -1,14 +1,14 @@
 # Toasty Migration Plan (`parabellum_app` + `parabellum_db`)
 
 ## Goal
-Replace the current `sqlx` + manual repository/UoW implementation with `toasty`-based persistence, while preserving behavior and enabling a later CQRS/ES migration.
+Hard-switch from `sqlx` + transaction-heavy UoW internals to `toasty` session-based persistence, preserving behavior while removing UoW transaction complexity and unlocking CQRS/ES-first command flows.
 
 ## Why This Matters Here
 - Today, `parabellum_app` depends on `UnitOfWork` and many repository traits.
 - `parabellum_db` implements those traits via `Arc<Mutex<Transaction>>` and manual SQL/mapping.
 - Complex read/write methods (example: village/job repositories) mix query shape, transaction concerns, and mapping logic.
 
-`toasty` should reduce boilerplate and centralize persistence model definitions, but we need an adapter-first migration to avoid a big-bang rewrite.
+`toasty` gives better model ergonomics (including embedded/json-like shapes) and reduces UoW-specific ceremony. This plan now assumes a hard switch on a dedicated branch.
 
 ## External Constraints (as of April 26, 2026)
 - `toasty` crate latest: `0.4.0` (published April 13, 2026).
@@ -19,14 +19,15 @@ Design implication: isolate `toasty` behind a thin local persistence boundary so
 ## Target State
 1. `parabellum_db` owns `toasty` models + persistence adapters.
 2. `parabellum_app` domain logic does not depend on `toasty` types.
-3. Transaction handling is simplified and explicit in application service boundaries.
+3. UoW commit/rollback choreography is minimized (or no-op for toasty sessions).
 4. Existing API behavior remains unchanged.
+5. Toasty embedded types are preferred over ad-hoc JSON plumbing where it improves model clarity.
 
 ## Migration Strategy
-Use a strangler approach with compatibility layers:
-- keep existing trait contracts initially;
-- migrate one repository family at a time to `toasty`;
-- remove UoW complexity only after enough repositories are migrated and tested.
+Hard switch with behavior parity:
+- prioritize toasty-backed runtime paths;
+- keep compatibility shims only where required by test/runtime constraints;
+- remove UoW transactional complexity early and avoid reintroducing it.
 
 ## Phased Plan
 
@@ -88,15 +89,15 @@ Exit criteria (per slice):
 
 ---
 
-### Phase 4 — Remove UoW Complexity (after most repos are migrated)
+### Phase 4 — Remove UoW Complexity (hard-switch priority)
 Deliverables:
-- Replace `UnitOfWork` internals with simplified transactional/session boundary.
-- Remove `Arc::try_unwrap` transaction ownership trap in commit/rollback path.
-- Keep `AppBus` command/query APIs stable (initially), but simplify internals.
+- Replace UoW internals with toasty session boundary (no transaction lifetime coupling).
+- Remove fragile transaction-ownership patterns (`Arc::try_unwrap`, explicit rollback-on-read paths).
+- Keep `AppBus` API stable while removing mandatory commit/rollback choreography for non-transactional sessions.
 
 Exit criteria:
-- Command/query execution still transactional where needed.
-- Commit/rollback no longer depend on fragile multi-owner runtime checks.
+- Runtime path no longer depends on explicit SQL transaction ownership checks.
+- UoW semantics are transitional and lightweight, ready to be replaced by CQRS/ES orchestration.
 
 ---
 
@@ -105,6 +106,7 @@ Deliverables:
 - Delete obsolete `sqlx` query-heavy repository code.
 - Reduce mapping duplication (`mapping.rs`) where `toasty` models can be mapped cleanly.
 - Refresh `test_utils` mocks only where contracts changed.
+- Replace raw JSON blobs with toasty embedded types where domain/value-object structure is known and stable.
 
 Exit criteria:
 - `parabellum_db` no longer exposes old repository internals.
