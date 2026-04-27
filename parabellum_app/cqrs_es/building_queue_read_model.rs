@@ -18,6 +18,11 @@ impl BuildingQueueReadModel {
     }
 
     pub fn queued_level_for_slot(&self, aggregate_id: Uuid, slot_id: u8) -> Option<u8> {
+        self.last_target_level_for_slot(aggregate_id, slot_id)
+            .filter(|level| *level > 0)
+    }
+
+    pub fn last_target_level_for_slot(&self, aggregate_id: Uuid, slot_id: u8) -> Option<u8> {
         self.inner
             .read()
             .ok()
@@ -53,11 +58,7 @@ impl EventConsumer for BuildingQueueReadModel {
                 target_level,
                 ..
             } => {
-                if target_level == 0 {
-                    by_slot.remove(&slot_id);
-                } else {
-                    by_slot.insert(slot_id, target_level);
-                }
+                by_slot.insert(slot_id, target_level);
             }
         }
     }
@@ -128,5 +129,26 @@ mod tests {
 
         let level = query.apply().await;
         assert_eq!(level, Some(1));
+    }
+
+    #[tokio::test]
+    async fn downgrade_to_zero_keeps_last_target_and_clears_queue_state() {
+        let model = BuildingQueueReadModel::new();
+        let aggregate_id = Uuid::new_v4();
+
+        let event = Event::new(
+            aggregate_id,
+            BuildingQueueEvent::BuildingDowngraded {
+                slot_id: 10,
+                name: BuildingName::MainBuilding,
+                target_level: 0,
+            },
+            1,
+        )
+        .expect("event creation");
+        model.process(&event).await;
+
+        assert_eq!(model.last_target_level_for_slot(aggregate_id, 10), Some(0));
+        assert_eq!(model.queued_level_for_slot(aggregate_id, 10), None);
     }
 }

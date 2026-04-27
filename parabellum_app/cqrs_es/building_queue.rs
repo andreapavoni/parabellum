@@ -11,6 +11,7 @@ use mini_cqrs_es::{
 use serde::{Deserialize, Serialize};
 
 use parabellum_types::buildings::BuildingName;
+use crate::cqrs_es::building_queue_read_model::BuildingQueueReadModel;
 use crate::jobs::{
     Job,
     tasks::{AddBuildingTask, BuildingUpgradeTask},
@@ -156,9 +157,15 @@ pub async fn execute_add_via_cqrs(
 
     let aggregate_id = Uuid::from_u128(village_id as u128);
     let event_store = seeded_event_store(jobs, aggregate_id).await?;
-    let cqrs = build_building_queue_cqrs(event_store);
+    let read_model = BuildingQueueReadModel::new();
+    let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueAddBuildingCommand { slot_id, name };
     let _ = cqrs.execute(aggregate_id, &command).await?;
+    if read_model.queued_level_for_slot(aggregate_id, slot_id).is_none() {
+        return Err(CqrsError::new(
+            "projection not updated after add command".to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -172,20 +179,14 @@ pub async fn next_upgrade_target_level_via_cqrs(
 
     let aggregate_id = Uuid::from_u128(village_id as u128);
     let event_store = seeded_event_store(jobs, aggregate_id).await?;
-    let cqrs = build_building_queue_cqrs(event_store.clone());
+    let read_model = BuildingQueueReadModel::new();
+    let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueUpgradeBuildingCommand { slot_id, name };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
-    let (events, _) = event_store.load_events(aggregate_id).await?;
-    let Some(last_event) = events.last() else {
+    let Some(target_level) = read_model.last_target_level_for_slot(aggregate_id, slot_id) else {
         return Err(CqrsError::new(
-            "upgrade command did not produce queue events".to_string(),
-        ));
-    };
-    let payload = last_event.get_payload::<BuildingQueueEvent>()?;
-    let BuildingQueueEvent::BuildingUpgraded { target_level, .. } = payload else {
-        return Err(CqrsError::new(
-            "last queue event is not BuildingUpgraded".to_string(),
+            "projection not updated after upgrade command".to_string(),
         ));
     };
     Ok(target_level)
@@ -214,20 +215,14 @@ pub async fn next_downgrade_target_level_via_cqrs(
         event_store.save_events(aggregate_id, &[seed_event], 0).await?;
     }
 
-    let cqrs = build_building_queue_cqrs(event_store.clone());
+    let read_model = BuildingQueueReadModel::new();
+    let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueDowngradeBuildingCommand { slot_id, name };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
-    let (events, _) = event_store.load_events(aggregate_id).await?;
-    let Some(last_event) = events.last() else {
+    let Some(target_level) = read_model.last_target_level_for_slot(aggregate_id, slot_id) else {
         return Err(CqrsError::new(
-            "downgrade command did not produce queue events".to_string(),
-        ));
-    };
-    let payload = last_event.get_payload::<BuildingQueueEvent>()?;
-    let BuildingQueueEvent::BuildingDowngraded { target_level, .. } = payload else {
-        return Err(CqrsError::new(
-            "last queue event is not BuildingDowngraded".to_string(),
+            "projection not updated after downgrade command".to_string(),
         ));
     };
     Ok(target_level)
@@ -362,8 +357,16 @@ pub fn build_building_queue_cqrs(
     event_store: InMemoryBuildingQueueEventStore,
 ) -> SimpleCqrs<InMemoryBuildingQueueEventStore, SimpleAggregateManager<InMemoryBuildingQueueEventStore>>
 {
+    build_building_queue_cqrs_with_projection(event_store, BuildingQueueReadModel::new())
+}
+
+pub fn build_building_queue_cqrs_with_projection(
+    event_store: InMemoryBuildingQueueEventStore,
+    read_model: BuildingQueueReadModel,
+) -> SimpleCqrs<InMemoryBuildingQueueEventStore, SimpleAggregateManager<InMemoryBuildingQueueEventStore>>
+{
     let aggregate_manager = SimpleAggregateManager::new(event_store.clone());
-    let consumers = EventConsumers::new();
+    let consumers = EventConsumers::new().with(read_model);
     SimpleCqrs::new(aggregate_manager, event_store, consumers)
 }
 
