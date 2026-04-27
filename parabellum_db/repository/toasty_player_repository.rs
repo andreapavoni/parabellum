@@ -10,7 +10,7 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::toasty_models::{player::PlayerRecord, village_stats::VillageStatsRecord};
+use crate::toasty_models::{player::PlayerRecord, village::VillageDbRow};
 
 pub struct ToastyPlayerRepository<'a> {
     tx: Arc<Mutex<toasty::Transaction<'a>>>,
@@ -94,7 +94,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
-        let villages = VillageStatsRecord::all()
+        let villages = VillageDbRow::all()
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
@@ -141,7 +141,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
 
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let villages = toasty::query!(VillageStatsRecord filter .player_id == #player_id)
+        let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
@@ -173,7 +173,7 @@ impl<'a> PlayerRepository for ToastyPlayerRepository<'a> {
         player_id: Uuid,
     ) -> Result<u32, ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let villages = toasty::query!(VillageStatsRecord filter .player_id == #player_id)
+        let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;

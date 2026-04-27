@@ -4,8 +4,8 @@ use parabellum_types::errors::DbError;
 
 use crate::toasty_models::report::{ReportDbRow, ReportReadDbRow};
 use crate::toasty_models::{
-    job::JobRecord, marketplace::MarketplaceOfferDbRow, player::PlayerRecord, user::UserRecord,
-    village_stats::VillageStatsRecord,
+    army::ArmyDbRow, hero::HeroDbRow, job::JobRecord, map_field::MapFieldDbRow,
+    marketplace::MarketplaceOfferDbRow, player::PlayerRecord, user::UserRecord, village::VillageDbRow,
 };
 
 pub async fn establish_toasty_db() -> Result<toasty::Db, DbError> {
@@ -24,13 +24,16 @@ async fn init_toasty_db(database_env: &'static str) -> Result<toasty::Db, DbErro
 
     let mut builder = toasty::Db::builder();
     builder.models(toasty::models!(
+        ArmyDbRow,
+        HeroDbRow,
         JobRecord,
+        MapFieldDbRow,
         MarketplaceOfferDbRow,
         PlayerRecord,
         ReportDbRow,
         ReportReadDbRow,
         UserRecord,
-        VillageStatsRecord
+        VillageDbRow
     ));
 
     builder
