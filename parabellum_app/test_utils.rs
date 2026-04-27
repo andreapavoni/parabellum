@@ -29,10 +29,10 @@ pub mod tests {
             tasks::{AttackTask, ReinforcementTask},
         },
         repository::{
-            ArmyRepository, HeroRepository, JobRepository, MapRegionTile, MapRepository,
-            MarketplaceRepository, NewReport, PlayerLeaderboardEntry, PlayerRepository,
-            ReportAudience, ReportRecord, ReportRepository, UserRepository, VillageInfo,
-            VillageRepository,
+            ArmyRepository, CqrsEventStoreRepository, HeroRepository, JobRepository, MapRegionTile,
+            MapRepository, MarketplaceRepository, NewReport, PlayerLeaderboardEntry,
+            PlayerRepository, ReportAudience, ReportRecord, ReportRepository, UserRepository,
+            VillageInfo, VillageRepository,
         },
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
@@ -739,6 +739,7 @@ pub mod tests {
         marketplace: Arc<MockMarketplaceRepository>,
         heroes: Arc<MockHeroRepository>,
         users: Arc<MockUserRepository>,
+        cqrs_store: Arc<crate::cqrs_es::building_queue::InMemoryBuildingQueueEventStore>,
 
         // Flags to check if commit/rollback was called
         committed: Arc<Mutex<bool>>,
@@ -767,6 +768,9 @@ pub mod tests {
                 marketplace: Arc::new(MockMarketplaceRepository::default()),
                 heroes: Arc::new(MockHeroRepository::default()),
                 users: Arc::new(MockUserRepository::default()),
+                cqrs_store: Arc::new(
+                    crate::cqrs_es::building_queue::InMemoryBuildingQueueEventStore::new(),
+                ),
                 committed: Arc::new(Mutex::new(false)),
                 rolled_back: Arc::new(Mutex::new(false)),
             }
@@ -804,6 +808,10 @@ pub mod tests {
 
         fn users(&self) -> Arc<dyn UserRepository + 'a> {
             self.users.clone()
+        }
+
+        fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository> {
+            self.cqrs_store.clone()
         }
 
         async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

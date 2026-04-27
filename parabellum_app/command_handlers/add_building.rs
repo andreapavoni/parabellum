@@ -14,7 +14,10 @@ use crate::{
         enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::{BuildingQueueAggregate, queue_add_event_via_cqrs},
+    cqrs_es::building_queue::{
+        VillageBuildingQueueAggregate, load_village_building_queue_aggregate,
+        queue_add_event_via_cqrs,
+    },
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::Job,
     uow::UnitOfWork,
@@ -44,6 +47,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
     ) -> Result<()> {
         let villages_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
 
         let mut village = villages_repo.get_by_id(cmd.village_id).await?;
         let active_jobs = job_repo
@@ -56,15 +60,21 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             2
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
-        let queue_aggregate = BuildingQueueAggregate::from_building_jobs(&building_jobs);
-
-        let queue_event =
-            queue_add_event_via_cqrs(&building_jobs, cmd.village_id, cmd.slot_id, cmd.name.clone())
+        let queue_aggregate = load_village_building_queue_aggregate(&event_store, cmd.village_id)
             .await
-            .map_err(|_| AppError::QueueItemAlreadyQueued {
-                queue: "building",
-                item: format!("slot {}", cmd.slot_id),
-            })?;
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+
+        let queue_event = queue_add_event_via_cqrs(
+            event_store,
+            cmd.village_id,
+            cmd.slot_id,
+            cmd.name.clone(),
+        )
+        .await
+        .map_err(|_| AppError::QueueItemAlreadyQueued {
+            queue: "building",
+            item: format!("slot {}", cmd.slot_id),
+        })?;
         ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
 
         let build_time_secs =
@@ -91,7 +101,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
 
 fn ensure_queue_allows_building(
     candidate: &BuildingName,
-    queue_aggregate: &BuildingQueueAggregate,
+    queue_aggregate: &VillageBuildingQueueAggregate,
 ) -> Result<(), GameError> {
     let queued_names = queue_aggregate.queued_building_names();
     if queued_names.is_empty() {
@@ -146,6 +156,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        cqrs_es::building_queue::queue_add_event_via_cqrs,
         jobs::{JobPayload, tasks::AddBuildingTask},
         test_utils::tests::{MockUnitOfWork, set_village_resources},
     };
@@ -268,6 +279,14 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
+        let _ = queue_add_event_via_cqrs(
+            mock_uow.cqrs_event_store(),
+            village_id,
+            22,
+            BuildingName::Palace,
+        )
+        .await
+        .expect("queue event should be seeded");
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
@@ -307,6 +326,14 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
+        let _ = queue_add_event_via_cqrs(
+            mock_uow.cqrs_event_store(),
+            village_id,
+            22,
+            BuildingName::Palace,
+        )
+        .await
+        .expect("queue event should be seeded");
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {

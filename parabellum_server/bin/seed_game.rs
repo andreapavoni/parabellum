@@ -91,7 +91,7 @@ async fn main() -> Result<(), ApplicationError> {
     setup_world_map(&db_pool, &config).await?;
 
     let toasty_db = establish_toasty_db().await?;
-    let uow_provider = Arc::new(ToastyUnitOfWorkProvider::new(toasty_db));
+    let uow_provider = Arc::new(ToastyUnitOfWorkProvider::new(toasty_db, db_pool.clone()));
     let uow = uow_provider.tx().await?;
     let result = seed_game(&uow, &seed, &config).await;
     match result {

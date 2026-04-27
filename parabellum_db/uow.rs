@@ -9,6 +9,7 @@ use parabellum_app::{
 use parabellum_types::errors::ApplicationError;
 
 use crate::{
+    cqrs_event_store::PostgresEventStore,
     persistence::{SharedTx, begin_transaction, commit_transaction, rollback_transaction},
     repository::*,
 };
@@ -28,13 +29,17 @@ impl PostgresUnitOfWorkProvider {
 impl UnitOfWorkProvider for PostgresUnitOfWorkProvider {
     async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
         let tx_arc = begin_transaction(&self.pool).await?;
-        Ok(Box::new(PostgresUnitOfWork { tx: tx_arc }))
+        Ok(Box::new(PostgresUnitOfWork {
+            tx: tx_arc,
+            pool: self.pool.clone(),
+        }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWork<'a> {
     tx: SharedTx<'a>,
+    pool: PgPool,
 }
 
 #[async_trait::async_trait]
@@ -75,6 +80,10 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresUserRepository::new(self.tx.clone()))
     }
 
+    fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository> {
+        Arc::new(PostgresEventStore::new(self.pool.clone()))
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         commit_transaction(self.tx).await
     }
@@ -91,12 +100,14 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
 #[derive(Debug, Clone)]
 pub struct ToastyUnitOfWorkProvider {
     db: Arc<Mutex<toasty::Db>>,
+    pool: PgPool,
 }
 
 impl ToastyUnitOfWorkProvider {
-    pub fn new(db: toasty::Db) -> Self {
+    pub fn new(db: toasty::Db, pool: PgPool) -> Self {
         Self {
             db: Arc::new(Mutex::new(db)),
+            pool,
         }
     }
 }
@@ -106,6 +117,7 @@ impl UnitOfWorkProvider for ToastyUnitOfWorkProvider {
     async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
         Ok(Box::new(ToastyUnitOfWork {
             db: self.db.clone(),
+            pool: self.pool.clone(),
         }))
     }
 }
@@ -113,6 +125,7 @@ impl UnitOfWorkProvider for ToastyUnitOfWorkProvider {
 #[derive(Debug, Clone)]
 pub struct ToastyUnitOfWork {
     db: Arc<Mutex<toasty::Db>>,
+    pool: PgPool,
 }
 
 #[async_trait::async_trait]
@@ -151,6 +164,10 @@ impl<'a> UnitOfWork<'a> for ToastyUnitOfWork {
 
     fn users(&self) -> Arc<dyn UserRepository + 'a> {
         Arc::new(ToastyUserRepository::new(self.db.clone()))
+    }
+
+    fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository> {
+        Arc::new(PostgresEventStore::new(self.pool.clone()))
     }
 
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {

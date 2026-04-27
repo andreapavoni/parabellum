@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{CqrsError, Event, EventPayload, EventStore, Uuid};
+use parabellum_app::repository::CqrsEventStoreRepository;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use std::fmt::{Display, Formatter};
@@ -133,6 +134,22 @@ impl EventStore for PostgresEventStore {
     }
 }
 
+#[async_trait::async_trait]
+impl CqrsEventStoreRepository for PostgresEventStore {
+    async fn save_events(
+        &self,
+        aggregate_id: Uuid,
+        events: &[Event],
+        expected_version: u64,
+    ) -> Result<(), CqrsError> {
+        <Self as EventStore>::save_events(self, aggregate_id, events, expected_version).await
+    }
+
+    async fn load_events(&self, aggregate_id: Uuid) -> Result<(Vec<Event>, u64), CqrsError> {
+        <Self as EventStore>::load_events(self, aggregate_id).await
+    }
+}
+
 fn map_store_decode_error(err: sqlx::Error) -> CqrsError {
     CqrsError::EventStore(err.to_string())
 }
@@ -191,15 +208,15 @@ mod tests {
             1,
         )?;
 
-        store.save_events(aggregate_id, &[event.clone()], 0).await?;
+        mini_cqrs_es::EventStore::save_events(&store, aggregate_id, &[event.clone()], 0).await?;
 
-        let (events, version) = store.load_events(aggregate_id).await?;
+        let (events, version) = mini_cqrs_es::EventStore::load_events(&store, aggregate_id).await?;
         assert_eq!(events.len(), 1);
         assert_eq!(version, 1);
         let payload = events[0].get_payload::<TestPayload>()?;
         assert_eq!(payload.value, "queued");
 
-        let conflict = store.save_events(aggregate_id, &[event], 0).await;
+        let conflict = mini_cqrs_es::EventStore::save_events(&store, aggregate_id, &[event], 0).await;
         assert!(matches!(conflict, Err(CqrsError::Conflict { .. })));
 
         Ok(())

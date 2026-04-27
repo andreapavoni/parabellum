@@ -1,4 +1,5 @@
 mod army_repository;
+mod cqrs_event_store_repository;
 mod hero_repository;
 mod job_repository;
 mod map_repository;
@@ -9,6 +10,7 @@ mod user_repository;
 mod village_repository;
 
 pub use army_repository::ArmyRepository;
+pub use cqrs_event_store_repository::CqrsEventStoreRepository;
 pub use hero_repository::HeroRepository;
 pub use job_repository::JobRepository;
 pub use map_repository::{MapRegionTile, MapRepository};

@@ -38,7 +38,7 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>, PgPool
     setup_world_map(&db_pool, &config).await?;
 
     let toasty_db = establish_toasty_db().await?;
-    let uow_provider = Arc::new(ToastyUnitOfWorkProvider::new(toasty_db));
+    let uow_provider = Arc::new(ToastyUnitOfWorkProvider::new(toasty_db, db_pool.clone()));
     let app_bus = Arc::new(AppBus::new(config.clone(), uow_provider.clone()));
     let app_registry = Arc::new(AppJobRegistry::new());
     let worker = Arc::new(JobWorker::new(

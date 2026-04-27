@@ -41,6 +41,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
     ) -> Result<()> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
         let village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
         let active_jobs = job_repo
@@ -74,6 +75,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
             )));
         }
         let queue_event = queue_downgrade_event_via_cqrs(
+            event_store,
             command.village_id,
             command.slot_id,
             vb.building.name.clone(),

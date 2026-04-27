@@ -85,14 +85,14 @@ pub fn building_queue_plan_from_event(
     event: &BuildingQueueEvent,
 ) -> Option<BuildingQueueJobPlan> {
     match event {
-        BuildingQueueEvent::BuildingAdded { slot_id, name, .. } => {
+        BuildingQueueEvent::BuildingConstructionQueued { slot_id, name, .. } => {
             Some(BuildingQueueJobPlan::Add(AddBuildingTask {
                 village_id,
                 slot_id: *slot_id,
                 name: name.clone(),
             }))
         }
-        BuildingQueueEvent::BuildingUpgraded {
+        BuildingQueueEvent::BuildingUpgradeQueued {
             slot_id,
             name,
             target_level,
@@ -101,7 +101,7 @@ pub fn building_queue_plan_from_event(
             building_name: name.clone(),
             level: *target_level,
         })),
-        BuildingQueueEvent::BuildingDowngraded {
+        BuildingQueueEvent::BuildingDowngradeQueued {
             slot_id,
             name,
             target_level,

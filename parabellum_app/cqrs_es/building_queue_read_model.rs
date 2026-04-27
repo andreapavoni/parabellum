@@ -41,19 +41,19 @@ impl EventConsumer for BuildingQueueReadModel {
         };
         let by_slot = guard.entry(event.aggregate_id).or_default();
         match payload {
-            BuildingQueueEvent::BuildingAdded {
+            BuildingQueueEvent::BuildingConstructionQueued {
                 slot_id,
                 target_level,
                 ..
             }
-            | BuildingQueueEvent::BuildingUpgraded {
+            | BuildingQueueEvent::BuildingUpgradeQueued {
                 slot_id,
                 target_level,
                 ..
             } => {
                 by_slot.insert(slot_id, target_level);
             }
-            BuildingQueueEvent::BuildingDowngraded {
+            BuildingQueueEvent::BuildingDowngradeQueued {
                 slot_id,
                 target_level,
                 ..
@@ -91,7 +91,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingUpgraded {
+            BuildingQueueEvent::BuildingUpgradeQueued {
                 slot_id: 19,
                 name: BuildingName::MainBuilding,
                 target_level: 3,
@@ -111,7 +111,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingAdded {
+            BuildingQueueEvent::BuildingConstructionQueued {
                 slot_id: 22,
                 name: BuildingName::Barracks,
                 target_level: 1,
@@ -138,7 +138,7 @@ mod tests {
 
         let event = Event::new(
             aggregate_id,
-            BuildingQueueEvent::BuildingDowngraded {
+            BuildingQueueEvent::BuildingDowngradeQueued {
                 slot_id: 10,
                 name: BuildingName::MainBuilding,
                 target_level: 0,

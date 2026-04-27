@@ -12,30 +12,27 @@ use serde::{Deserialize, Serialize};
 
 use parabellum_types::buildings::BuildingName;
 use crate::cqrs_es::building_queue_read_model::BuildingQueueReadModel;
-use crate::jobs::{
-    Job,
-    tasks::{AddBuildingTask, BuildingUpgradeTask},
-};
+use crate::repository::CqrsEventStoreRepository;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct BuildingQueueAggregate {
+pub struct VillageBuildingQueueAggregate {
     aggregate_id: Uuid,
     version: u64,
     queued_names_by_slot: HashMap<u8, BuildingName>,
     queued_levels_by_slot: HashMap<u8, u8>,
 }
 
-impl Aggregate for BuildingQueueAggregate {
+impl Aggregate for VillageBuildingQueueAggregate {
     type Event = BuildingQueueEvent;
 
     async fn apply(&mut self, event: &Self::Event) {
         match event {
-            BuildingQueueEvent::BuildingAdded {
+            BuildingQueueEvent::BuildingConstructionQueued {
                 slot_id,
                 name,
                 target_level,
             }
-            | BuildingQueueEvent::BuildingUpgraded {
+            | BuildingQueueEvent::BuildingUpgradeQueued {
                 slot_id,
                 name,
                 target_level,
@@ -44,7 +41,7 @@ impl Aggregate for BuildingQueueAggregate {
                 self.queued_names_by_slot.insert(*slot_id, name.clone());
                 self.queued_levels_by_slot.insert(*slot_id, *target_level);
             }
-            BuildingQueueEvent::BuildingDowngraded {
+            BuildingQueueEvent::BuildingDowngradeQueued {
                 slot_id,
                 name,
                 target_level,
@@ -78,47 +75,7 @@ impl Aggregate for BuildingQueueAggregate {
     }
 }
 
-impl BuildingQueueAggregate {
-    pub fn from_building_jobs(jobs: &[Job]) -> Self {
-        let mut aggregate = Self::default();
-        for job in jobs {
-            match job.task.task_type.as_str() {
-                "AddBuilding" => {
-                    let Ok(payload) = serde_json::from_value::<AddBuildingTask>(job.task.data.clone()) else {
-                        continue;
-                    };
-                    aggregate
-                        .queued_names_by_slot
-                        .entry(payload.slot_id)
-                        .or_insert(payload.name.clone());
-                    aggregate
-                        .queued_levels_by_slot
-                        .entry(payload.slot_id)
-                        .and_modify(|level| *level = (*level).max(1))
-                        .or_insert(1);
-                }
-                "BuildingUpgrade" => {
-                    let Ok(payload) =
-                        serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-                    else {
-                        continue;
-                    };
-                    aggregate
-                        .queued_names_by_slot
-                        .entry(payload.slot_id)
-                        .or_insert(payload.building_name.clone());
-                    aggregate
-                        .queued_levels_by_slot
-                        .entry(payload.slot_id)
-                        .and_modify(|level| *level = (*level).max(payload.level))
-                        .or_insert(payload.level);
-                }
-                _ => {}
-            }
-        }
-        aggregate
-    }
-
+impl VillageBuildingQueueAggregate {
     pub fn queued_level_for_slot(&self, slot_id: u8) -> Option<u8> {
         self.queued_levels_by_slot.get(&slot_id).copied()
     }
@@ -139,7 +96,7 @@ impl BuildingQueueAggregate {
 }
 
 pub async fn execute_add_command(
-    aggregate: &BuildingQueueAggregate,
+    aggregate: &VillageBuildingQueueAggregate,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<(), CqrsError> {
@@ -149,38 +106,57 @@ pub async fn execute_add_command(
 }
 
 pub async fn next_upgrade_target_level(
-    aggregate: &BuildingQueueAggregate,
+    aggregate: &VillageBuildingQueueAggregate,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<u8, CqrsError> {
     let command = QueueUpgradeBuildingCommand { slot_id, name };
     let events = command.handle(aggregate).await?;
-    let Some(BuildingQueueEvent::BuildingUpgraded { target_level, .. }) = events.first() else {
+    let Some(BuildingQueueEvent::BuildingUpgradeQueued { target_level, .. }) = events.first() else {
         return Err(CqrsError::new("upgrade command emitted no event".to_string()));
     };
     Ok(*target_level)
 }
 
 pub async fn execute_add_via_cqrs(
-    jobs: &[Job],
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<(), CqrsError> {
-    let _ = queue_add_event_via_cqrs(jobs, village_id, slot_id, name).await?;
+    let _ = queue_add_event_via_cqrs(event_store, village_id, slot_id, name).await?;
     Ok(())
 }
 
+pub fn village_stream_id(village_id: u32) -> Uuid {
+    Uuid::from_u128(village_id as u128)
+}
+
+pub async fn load_village_building_queue_aggregate(
+    event_store: &Arc<dyn CqrsEventStoreRepository>,
+    village_id: u32,
+) -> Result<VillageBuildingQueueAggregate, CqrsError> {
+    let aggregate_id = village_stream_id(village_id);
+    let (events, version) = event_store.load_events(aggregate_id).await?;
+    let mut aggregate = VillageBuildingQueueAggregate::default();
+    aggregate.set_aggregate_id(aggregate_id);
+    if !events.is_empty() {
+        aggregate.apply_events(&events).await?;
+    }
+    aggregate.set_version(version);
+    Ok(aggregate)
+}
+
 pub async fn queue_add_event_via_cqrs(
-    jobs: &[Job],
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
-    let aggregate_id = Uuid::from_u128(village_id as u128);
-    let event_store = seeded_event_store(jobs, aggregate_id).await?;
+    let aggregate_id = village_stream_id(village_id);
+    let event_store = SharedEventStore::new(event_store);
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueAddBuildingCommand {
@@ -193,7 +169,7 @@ pub async fn queue_add_event_via_cqrs(
             "projection not updated after add command".to_string(),
         ));
     };
-    Ok(BuildingQueueEvent::BuildingAdded {
+    Ok(BuildingQueueEvent::BuildingConstructionQueued {
         slot_id,
         name,
         target_level,
@@ -201,30 +177,30 @@ pub async fn queue_add_event_via_cqrs(
 }
 
 pub async fn next_upgrade_target_level_via_cqrs(
-    jobs: &[Job],
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<u8, CqrsError> {
-    let event = queue_upgrade_event_via_cqrs(jobs, village_id, slot_id, name).await?;
-    let BuildingQueueEvent::BuildingUpgraded { target_level, .. } = event else {
+    let event = queue_upgrade_event_via_cqrs(event_store, village_id, slot_id, name).await?;
+    let BuildingQueueEvent::BuildingUpgradeQueued { target_level, .. } = event else {
         return Err(CqrsError::new(
-            "queue upgrade command did not emit BuildingUpgraded".to_string(),
+            "queue upgrade command did not emit BuildingUpgradeQueued".to_string(),
         ));
     };
     Ok(target_level)
 }
 
 pub async fn queue_upgrade_event_via_cqrs(
-    jobs: &[Job],
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
 ) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
-    let aggregate_id = Uuid::from_u128(village_id as u128);
-    let event_store = seeded_event_store(jobs, aggregate_id).await?;
+    let aggregate_id = village_stream_id(village_id);
+    let event_store = SharedEventStore::new(event_store);
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueUpgradeBuildingCommand {
@@ -238,7 +214,7 @@ pub async fn queue_upgrade_event_via_cqrs(
             "projection not updated after upgrade command".to_string(),
         ));
     };
-    Ok(BuildingQueueEvent::BuildingUpgraded {
+    Ok(BuildingQueueEvent::BuildingUpgradeQueued {
         slot_id,
         name,
         target_level,
@@ -246,22 +222,25 @@ pub async fn queue_upgrade_event_via_cqrs(
 }
 
 pub async fn next_downgrade_target_level_via_cqrs(
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
     current_level: u8,
 ) -> Result<u8, CqrsError> {
     let event =
-        queue_downgrade_event_via_cqrs(village_id, slot_id, name, current_level).await?;
-    let BuildingQueueEvent::BuildingDowngraded { target_level, .. } = event else {
+        queue_downgrade_event_via_cqrs(event_store, village_id, slot_id, name, current_level)
+            .await?;
+    let BuildingQueueEvent::BuildingDowngradeQueued { target_level, .. } = event else {
         return Err(CqrsError::new(
-            "queue downgrade command did not emit BuildingDowngraded".to_string(),
+            "queue downgrade command did not emit BuildingDowngradeQueued".to_string(),
         ));
     };
     Ok(target_level)
 }
 
 pub async fn queue_downgrade_event_via_cqrs(
+    event_store: Arc<dyn CqrsEventStoreRepository>,
     village_id: u32,
     slot_id: u8,
     name: BuildingName,
@@ -269,26 +248,14 @@ pub async fn queue_downgrade_event_via_cqrs(
 ) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
-    let aggregate_id = Uuid::from_u128(village_id as u128);
-    let event_store = InMemoryBuildingQueueEventStore::new();
-    if current_level > 0 {
-        let seed_event = Event::new(
-            aggregate_id,
-            BuildingQueueEvent::BuildingUpgraded {
-                slot_id,
-                name: name.clone(),
-                target_level: current_level,
-            },
-            1,
-        )?;
-        event_store.save_events(aggregate_id, &[seed_event], 0).await?;
-    }
-
+    let aggregate_id = village_stream_id(village_id);
+    let event_store = SharedEventStore::new(event_store);
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
     let command = QueueDowngradeBuildingCommand {
         slot_id,
         name: name.clone(),
+        current_level,
     };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
@@ -297,75 +264,26 @@ pub async fn queue_downgrade_event_via_cqrs(
             "projection not updated after downgrade command".to_string(),
         ));
     };
-    Ok(BuildingQueueEvent::BuildingDowngraded {
+    Ok(BuildingQueueEvent::BuildingDowngradeQueued {
         slot_id,
         name,
         target_level,
     })
 }
 
-async fn seeded_event_store(
-    jobs: &[Job],
-    aggregate_id: Uuid,
-) -> Result<InMemoryBuildingQueueEventStore, CqrsError> {
-    let event_store = InMemoryBuildingQueueEventStore::new();
-    let events = events_from_jobs(jobs, aggregate_id)?;
-    if !events.is_empty() {
-        event_store.save_events(aggregate_id, &events, 0).await?;
-    }
-    Ok(event_store)
-}
-
-fn events_from_jobs(jobs: &[Job], aggregate_id: Uuid) -> Result<Vec<Event>, CqrsError> {
-    let mut building_jobs: Vec<_> = jobs
-        .iter()
-        .filter(|job| matches!(job.task.task_type.as_str(), "AddBuilding" | "BuildingUpgrade"))
-        .collect();
-    building_jobs.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
-
-    let mut version: u64 = 0;
-    let mut events = Vec::with_capacity(building_jobs.len());
-    for job in building_jobs {
-        let payload = match job.task.task_type.as_str() {
-            "AddBuilding" => {
-                let add = serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
-                    .map_err(|e| CqrsError::new(e.to_string()))?;
-                BuildingQueueEvent::BuildingAdded {
-                    slot_id: add.slot_id,
-                    name: add.name,
-                    target_level: 1,
-                }
-            }
-            "BuildingUpgrade" => {
-                let up = serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-                    .map_err(|e| CqrsError::new(e.to_string()))?;
-                BuildingQueueEvent::BuildingUpgraded {
-                    slot_id: up.slot_id,
-                    name: up.building_name,
-                    target_level: up.level,
-                }
-            }
-            _ => continue,
-        };
-        version = version.saturating_add(1);
-        events.push(Event::new(aggregate_id, payload, version)?);
-    }
-    Ok(events)
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BuildingQueueEvent {
-    BuildingAdded {
+    BuildingConstructionQueued {
         slot_id: u8,
         name: BuildingName,
         target_level: u8,
     },
-    BuildingUpgraded {
+    BuildingUpgradeQueued {
         slot_id: u8,
         name: BuildingName,
         target_level: u8,
     },
-    BuildingDowngraded {
+    BuildingDowngradeQueued {
         slot_id: u8,
         name: BuildingName,
         target_level: u8,
@@ -375,9 +293,9 @@ pub enum BuildingQueueEvent {
 impl Display for BuildingQueueEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BuildingQueueEvent::BuildingAdded { .. } => write!(f, "BuildingAdded"),
-            BuildingQueueEvent::BuildingUpgraded { .. } => write!(f, "BuildingUpgraded"),
-            BuildingQueueEvent::BuildingDowngraded { .. } => write!(f, "BuildingDowngraded"),
+            BuildingQueueEvent::BuildingConstructionQueued { .. } => write!(f, "BuildingConstructionQueued"),
+            BuildingQueueEvent::BuildingUpgradeQueued { .. } => write!(f, "BuildingUpgradeQueued"),
+            BuildingQueueEvent::BuildingDowngradeQueued { .. } => write!(f, "BuildingDowngradeQueued"),
         }
     }
 }
@@ -429,17 +347,66 @@ impl EventStore for InMemoryBuildingQueueEventStore {
     }
 }
 
+#[async_trait::async_trait]
+impl CqrsEventStoreRepository for InMemoryBuildingQueueEventStore {
+    async fn save_events(
+        &self,
+        aggregate_id: Uuid,
+        events: &[Event],
+        expected_version: u64,
+    ) -> Result<(), CqrsError> {
+        <Self as EventStore>::save_events(self, aggregate_id, events, expected_version).await
+    }
+
+    async fn load_events(&self, aggregate_id: Uuid) -> Result<(Vec<Event>, u64), CqrsError> {
+        <Self as EventStore>::load_events(self, aggregate_id).await
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedEventStore {
+    inner: Arc<dyn CqrsEventStoreRepository>,
+}
+
+impl SharedEventStore {
+    pub fn new(inner: Arc<dyn CqrsEventStoreRepository>) -> Self {
+        Self { inner }
+    }
+}
+
+impl EventStore for SharedEventStore {
+    async fn save_events(
+        &self,
+        aggregate_id: Uuid,
+        events: &[Event],
+        expected_version: u64,
+    ) -> Result<(), CqrsError> {
+        self.inner
+            .save_events(aggregate_id, events, expected_version)
+            .await
+    }
+
+    async fn load_events(&self, aggregate_id: Uuid) -> Result<(Vec<Event>, u64), CqrsError> {
+        self.inner.load_events(aggregate_id).await
+    }
+}
+
 pub fn build_building_queue_cqrs(
     event_store: InMemoryBuildingQueueEventStore,
-) -> SimpleCqrs<InMemoryBuildingQueueEventStore, SimpleAggregateManager<InMemoryBuildingQueueEventStore>>
+) -> SimpleCqrs<
+    InMemoryBuildingQueueEventStore,
+    SimpleAggregateManager<InMemoryBuildingQueueEventStore>,
+>
 {
     build_building_queue_cqrs_with_projection(event_store, BuildingQueueReadModel::new())
 }
 
-pub fn build_building_queue_cqrs_with_projection(
-    event_store: InMemoryBuildingQueueEventStore,
+pub fn build_building_queue_cqrs_with_projection<S>(
+    event_store: S,
     read_model: BuildingQueueReadModel,
-) -> SimpleCqrs<InMemoryBuildingQueueEventStore, SimpleAggregateManager<InMemoryBuildingQueueEventStore>>
+) -> SimpleCqrs<S, SimpleAggregateManager<S>>
+where
+    S: EventStore + Clone + Send + Sync + 'static,
 {
     let aggregate_manager = SimpleAggregateManager::new(event_store.clone());
     let consumers = EventConsumers::new().with(read_model);
@@ -453,7 +420,7 @@ pub struct QueueAddBuildingCommand {
 }
 
 impl Command for QueueAddBuildingCommand {
-    type Aggregate = BuildingQueueAggregate;
+    type Aggregate = VillageBuildingQueueAggregate;
 
     async fn handle(
         &self,
@@ -466,7 +433,7 @@ impl Command for QueueAddBuildingCommand {
             )));
         }
 
-        Ok(vec![BuildingQueueEvent::BuildingAdded {
+        Ok(vec![BuildingQueueEvent::BuildingConstructionQueued {
             slot_id: self.slot_id,
             name: self.name.clone(),
             target_level: 1,
@@ -481,7 +448,7 @@ pub struct QueueUpgradeBuildingCommand {
 }
 
 impl Command for QueueUpgradeBuildingCommand {
-    type Aggregate = BuildingQueueAggregate;
+    type Aggregate = VillageBuildingQueueAggregate;
 
     async fn handle(
         &self,
@@ -494,7 +461,7 @@ impl Command for QueueUpgradeBuildingCommand {
             .unwrap_or(0);
         let target_level = current_level.saturating_add(1);
 
-        Ok(vec![BuildingQueueEvent::BuildingUpgraded {
+        Ok(vec![BuildingQueueEvent::BuildingUpgradeQueued {
             slot_id: self.slot_id,
             name: self.name.clone(),
             target_level,
@@ -506,29 +473,25 @@ impl Command for QueueUpgradeBuildingCommand {
 pub struct QueueDowngradeBuildingCommand {
     pub slot_id: u8,
     pub name: BuildingName,
+    pub current_level: u8,
 }
 
 impl Command for QueueDowngradeBuildingCommand {
-    type Aggregate = BuildingQueueAggregate;
+    type Aggregate = VillageBuildingQueueAggregate;
 
     async fn handle(
         &self,
-        aggregate: &Self::Aggregate,
+        _aggregate: &Self::Aggregate,
     ) -> Result<Vec<<Self::Aggregate as Aggregate>::Event>, CqrsError> {
-        let current_level = aggregate
-            .queued_levels_by_slot
-            .get(&self.slot_id)
-            .copied()
-            .unwrap_or(0);
-        if current_level == 0 {
+        if self.current_level == 0 {
             return Err(CqrsError::new(format!(
                 "slot {} has no queued level to downgrade",
                 self.slot_id
             )));
         }
-        let target_level = current_level.saturating_sub(1);
+        let target_level = self.current_level.saturating_sub(1);
 
-        Ok(vec![BuildingQueueEvent::BuildingDowngraded {
+        Ok(vec![BuildingQueueEvent::BuildingDowngradeQueued {
             slot_id: self.slot_id,
             name: self.name.clone(),
             target_level,
@@ -544,7 +507,7 @@ mod tests {
 
     #[tokio::test]
     async fn queue_add_building_emits_event_and_updates_aggregate() {
-        let mut aggregate = BuildingQueueAggregate::default();
+        let mut aggregate = VillageBuildingQueueAggregate::default();
         aggregate.set_aggregate_id(Uuid::new_v4());
 
         let command = QueueAddBuildingCommand {
@@ -563,10 +526,11 @@ mod tests {
 
     #[tokio::test]
     async fn queue_downgrade_requires_existing_level() {
-        let aggregate = BuildingQueueAggregate::default();
+        let aggregate = VillageBuildingQueueAggregate::default();
         let command = QueueDowngradeBuildingCommand {
             slot_id: 19,
             name: BuildingName::MainBuilding,
+            current_level: 0,
         };
         let result = command.handle(&aggregate).await;
         assert!(result.is_err());
@@ -594,14 +558,13 @@ mod tests {
             .await
             .expect("upgrade should execute through cqrs");
 
-        let (events, version) = event_store
-            .load_events(aggregate_id)
+        let (events, version) = mini_cqrs_es::EventStore::load_events(&event_store, aggregate_id)
             .await
             .expect("events should be stored");
         assert_eq!(events.len(), 2);
         assert_eq!(version, 2);
 
-        let mut replayed = BuildingQueueAggregate::default();
+        let mut replayed = VillageBuildingQueueAggregate::default();
         replayed.set_aggregate_id(aggregate_id);
         replayed
             .apply_events(&events)
@@ -612,7 +575,10 @@ mod tests {
 
     #[tokio::test]
     async fn cqrs_downgrade_returns_n_minus_one() {
+        let event_store = Arc::new(InMemoryBuildingQueueEventStore::new())
+            as Arc<dyn CqrsEventStoreRepository>;
         let target = next_downgrade_target_level_via_cqrs(
+            event_store,
             99,
             19,
             BuildingName::MainBuilding,

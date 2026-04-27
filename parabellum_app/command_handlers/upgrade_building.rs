@@ -13,7 +13,9 @@ use crate::{
         building_queue_plan_from_event, enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::{BuildingQueueAggregate, queue_upgrade_event_via_cqrs},
+    cqrs_es::building_queue::{
+        load_village_building_queue_aggregate, queue_upgrade_event_via_cqrs,
+    },
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::Job,
     uow::UnitOfWork,
@@ -43,6 +45,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
     ) -> Result<(), ApplicationError> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
         let mut village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
 
@@ -57,7 +60,10 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
-        let queue_aggregate = BuildingQueueAggregate::from_building_jobs(&building_jobs);
+        let queue_aggregate =
+            load_village_building_queue_aggregate(&event_store, command.village_id)
+                .await
+                .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let vb = village.get_building_by_slot_id(command.slot_id);
         let queued_slot = queue_aggregate.queued_state_for_slot(command.slot_id);
 
@@ -83,7 +89,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         }
 
         let queue_event = queue_upgrade_event_via_cqrs(
-            &building_jobs,
+            event_store,
             command.village_id,
             command.slot_id,
             building_name.clone(),
@@ -147,6 +153,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
+        cqrs_es::building_queue::queue_upgrade_event_via_cqrs,
         cqrs::commands::UpgradeBuilding,
         jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
         test_utils::tests::MockUnitOfWork,
@@ -195,6 +202,23 @@ mod tests {
             Utc::now() + Duration::seconds(60),
         );
         mock_uow.jobs().add(&existing_job).await?;
+        let event_store = mock_uow.cqrs_event_store();
+        let _ = queue_upgrade_event_via_cqrs(
+            event_store.clone(),
+            village_id,
+            slot_id,
+            BuildingName::MainBuilding,
+        )
+        .await
+        .expect("first queued upgrade event should be seeded");
+        let _ = queue_upgrade_event_via_cqrs(
+            event_store,
+            village_id,
+            slot_id,
+            BuildingName::MainBuilding,
+        )
+        .await
+        .expect("second queued upgrade event should be seeded");
 
         let handler = UpgradeBuildingCommandHandler::new();
         let command = UpgradeBuilding {
