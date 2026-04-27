@@ -8,6 +8,7 @@ use parabellum_types::{
 
 use crate::{
     config::Config,
+    cqrs_es::building_queue::next_downgrade_target_level_via_cqrs,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
     jobs::{Job, JobPayload, tasks::BuildingDowngradeTask},
     uow::UnitOfWork,
@@ -65,7 +66,14 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
                 vb.building.name,
             )));
         }
-        let target_level = current_level - 1;
+        let target_level = next_downgrade_target_level_via_cqrs(
+            command.village_id,
+            command.slot_id,
+            vb.building.name.clone(),
+            current_level,
+        )
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let target_level_building = vb.building.at_level(target_level, config.speed)?;
         let build_time_secs =
             target_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;

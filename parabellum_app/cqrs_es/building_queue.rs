@@ -191,6 +191,48 @@ pub async fn next_upgrade_target_level_via_cqrs(
     Ok(target_level)
 }
 
+pub async fn next_downgrade_target_level_via_cqrs(
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+    current_level: u8,
+) -> Result<u8, CqrsError> {
+    use mini_cqrs_es::Cqrs;
+
+    let aggregate_id = Uuid::from_u128(village_id as u128);
+    let event_store = InMemoryBuildingQueueEventStore::new();
+    if current_level > 0 {
+        let seed_event = Event::new(
+            aggregate_id,
+            BuildingQueueEvent::BuildingUpgraded {
+                slot_id,
+                name: name.clone(),
+                target_level: current_level,
+            },
+            1,
+        )?;
+        event_store.save_events(aggregate_id, &[seed_event], 0).await?;
+    }
+
+    let cqrs = build_building_queue_cqrs(event_store.clone());
+    let command = QueueDowngradeBuildingCommand { slot_id, name };
+    let _ = cqrs.execute(aggregate_id, &command).await?;
+
+    let (events, _) = event_store.load_events(aggregate_id).await?;
+    let Some(last_event) = events.last() else {
+        return Err(CqrsError::new(
+            "downgrade command did not produce queue events".to_string(),
+        ));
+    };
+    let payload = last_event.get_payload::<BuildingQueueEvent>()?;
+    let BuildingQueueEvent::BuildingDowngraded { target_level, .. } = payload else {
+        return Err(CqrsError::new(
+            "last queue event is not BuildingDowngraded".to_string(),
+        ));
+    };
+    Ok(target_level)
+}
+
 async fn seeded_event_store(
     jobs: &[Job],
     aggregate_id: Uuid,
@@ -487,5 +529,18 @@ mod tests {
             .await
             .expect("replay should apply stored events");
         assert_eq!(replayed.queued_levels_by_slot.get(&19), Some(&2));
+    }
+
+    #[tokio::test]
+    async fn cqrs_downgrade_returns_n_minus_one() {
+        let target = next_downgrade_target_level_via_cqrs(
+            99,
+            19,
+            BuildingName::MainBuilding,
+            10,
+        )
+        .await
+        .expect("downgrade should calculate target");
+        assert_eq!(target, 9);
     }
 }
