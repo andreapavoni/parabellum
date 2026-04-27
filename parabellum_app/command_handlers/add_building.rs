@@ -4,17 +4,17 @@ use parabellum_game::models::buildings::get_building_data;
 use parabellum_types::{
     Result,
     buildings::BuildingName,
-    errors::{AppError, GameError},
+    errors::{AppError, ApplicationError, GameError},
     tribe::Tribe,
 };
 
 use crate::{
     command_handlers::helpers::{
-        BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
+        build_scheduled_building_queue_job, building_queue_jobs, building_queue_plan_from_event,
         enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::execute_add_via_cqrs,
+    cqrs_es::building_queue::queue_add_event_via_cqrs,
     cqrs::{CommandHandler, commands::AddBuilding},
     jobs::{Job, tasks::AddBuildingTask},
     uow::UnitOfWork,
@@ -57,7 +57,8 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
-        execute_add_via_cqrs(&building_jobs, cmd.village_id, cmd.slot_id, cmd.name.clone())
+        let queue_event =
+            queue_add_event_via_cqrs(&building_jobs, cmd.village_id, cmd.slot_id, cmd.name.clone())
             .await
             .map_err(|_| AppError::QueueItemAlreadyQueued {
                 queue: "building",
@@ -69,17 +70,17 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
             village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
         villages_repo.save(&village).await?;
 
-        let payload = AddBuildingTask {
-            village_id: village.id as i32,
-            slot_id: cmd.slot_id,
-            name: cmd.name,
+        let Some(plan) = building_queue_plan_from_event(village.id as i32, &queue_event) else {
+            return Err(ApplicationError::Unknown(
+                "failed to build job plan from queue add event".to_string(),
+            ));
         };
         let new_job = build_scheduled_building_queue_job(
             cmd.player_id,
             cmd.village_id as i32,
             &building_jobs,
             build_time_secs as i64,
-            BuildingQueueJobPlan::Add(payload),
+            plan,
         )?;
         job_repo.add(&new_job).await?;
 

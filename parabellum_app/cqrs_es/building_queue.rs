@@ -163,20 +163,37 @@ pub async fn execute_add_via_cqrs(
     slot_id: u8,
     name: BuildingName,
 ) -> Result<(), CqrsError> {
+    let _ = queue_add_event_via_cqrs(jobs, village_id, slot_id, name).await?;
+    Ok(())
+}
+
+pub async fn queue_add_event_via_cqrs(
+    jobs: &[Job],
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
     let aggregate_id = Uuid::from_u128(village_id as u128);
     let event_store = seeded_event_store(jobs, aggregate_id).await?;
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
-    let command = QueueAddBuildingCommand { slot_id, name };
+    let command = QueueAddBuildingCommand {
+        slot_id,
+        name: name.clone(),
+    };
     let _ = cqrs.execute(aggregate_id, &command).await?;
-    if read_model.queued_level_for_slot(aggregate_id, slot_id).is_none() {
+    let Some(target_level) = read_model.last_target_level_for_slot(aggregate_id, slot_id) else {
         return Err(CqrsError::new(
             "projection not updated after add command".to_string(),
         ));
-    }
-    Ok(())
+    };
+    Ok(BuildingQueueEvent::BuildingAdded {
+        slot_id,
+        name,
+        target_level,
+    })
 }
 
 pub async fn next_upgrade_target_level_via_cqrs(
@@ -185,13 +202,31 @@ pub async fn next_upgrade_target_level_via_cqrs(
     slot_id: u8,
     name: BuildingName,
 ) -> Result<u8, CqrsError> {
+    let event = queue_upgrade_event_via_cqrs(jobs, village_id, slot_id, name).await?;
+    let BuildingQueueEvent::BuildingUpgraded { target_level, .. } = event else {
+        return Err(CqrsError::new(
+            "queue upgrade command did not emit BuildingUpgraded".to_string(),
+        ));
+    };
+    Ok(target_level)
+}
+
+pub async fn queue_upgrade_event_via_cqrs(
+    jobs: &[Job],
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
     let aggregate_id = Uuid::from_u128(village_id as u128);
     let event_store = seeded_event_store(jobs, aggregate_id).await?;
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
-    let command = QueueUpgradeBuildingCommand { slot_id, name };
+    let command = QueueUpgradeBuildingCommand {
+        slot_id,
+        name: name.clone(),
+    };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
     let Some(target_level) = read_model.last_target_level_for_slot(aggregate_id, slot_id) else {
@@ -199,7 +234,11 @@ pub async fn next_upgrade_target_level_via_cqrs(
             "projection not updated after upgrade command".to_string(),
         ));
     };
-    Ok(target_level)
+    Ok(BuildingQueueEvent::BuildingUpgraded {
+        slot_id,
+        name,
+        target_level,
+    })
 }
 
 pub async fn next_downgrade_target_level_via_cqrs(
@@ -208,6 +247,22 @@ pub async fn next_downgrade_target_level_via_cqrs(
     name: BuildingName,
     current_level: u8,
 ) -> Result<u8, CqrsError> {
+    let event =
+        queue_downgrade_event_via_cqrs(village_id, slot_id, name, current_level).await?;
+    let BuildingQueueEvent::BuildingDowngraded { target_level, .. } = event else {
+        return Err(CqrsError::new(
+            "queue downgrade command did not emit BuildingDowngraded".to_string(),
+        ));
+    };
+    Ok(target_level)
+}
+
+pub async fn queue_downgrade_event_via_cqrs(
+    village_id: u32,
+    slot_id: u8,
+    name: BuildingName,
+    current_level: u8,
+) -> Result<BuildingQueueEvent, CqrsError> {
     use mini_cqrs_es::Cqrs;
 
     let aggregate_id = Uuid::from_u128(village_id as u128);
@@ -227,7 +282,10 @@ pub async fn next_downgrade_target_level_via_cqrs(
 
     let read_model = BuildingQueueReadModel::new();
     let cqrs = build_building_queue_cqrs_with_projection(event_store, read_model.clone());
-    let command = QueueDowngradeBuildingCommand { slot_id, name };
+    let command = QueueDowngradeBuildingCommand {
+        slot_id,
+        name: name.clone(),
+    };
     let _ = cqrs.execute(aggregate_id, &command).await?;
 
     let Some(target_level) = read_model.last_target_level_for_slot(aggregate_id, slot_id) else {
@@ -235,7 +293,11 @@ pub async fn next_downgrade_target_level_via_cqrs(
             "projection not updated after downgrade command".to_string(),
         ));
     };
-    Ok(target_level)
+    Ok(BuildingQueueEvent::BuildingDowngraded {
+        slot_id,
+        name,
+        target_level,
+    })
 }
 
 async fn seeded_event_store(

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
+    cqrs_es::building_queue::BuildingQueueEvent,
     jobs::{
         Job, JobPayload,
         tasks::{AddBuildingTask, BuildingDowngradeTask, BuildingUpgradeTask},
@@ -77,6 +78,39 @@ pub enum BuildingQueueJobPlan {
     Add(AddBuildingTask),
     Upgrade(BuildingUpgradeTask),
     Downgrade(BuildingDowngradeTask),
+}
+
+pub fn building_queue_plan_from_event(
+    village_id: i32,
+    event: &BuildingQueueEvent,
+) -> Option<BuildingQueueJobPlan> {
+    match event {
+        BuildingQueueEvent::BuildingAdded { slot_id, name, .. } => {
+            Some(BuildingQueueJobPlan::Add(AddBuildingTask {
+                village_id,
+                slot_id: *slot_id,
+                name: name.clone(),
+            }))
+        }
+        BuildingQueueEvent::BuildingUpgraded {
+            slot_id,
+            name,
+            target_level,
+        } => Some(BuildingQueueJobPlan::Upgrade(BuildingUpgradeTask {
+            slot_id: *slot_id,
+            building_name: name.clone(),
+            level: *target_level,
+        })),
+        BuildingQueueEvent::BuildingDowngraded {
+            slot_id,
+            name,
+            target_level,
+        } => Some(BuildingQueueJobPlan::Downgrade(BuildingDowngradeTask {
+            slot_id: *slot_id,
+            building_name: name.clone(),
+            level: *target_level,
+        })),
+    }
 }
 
 impl BuildingQueueJobPlan {

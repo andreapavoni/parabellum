@@ -9,11 +9,11 @@ use parabellum_types::{
 use crate::{
     command_handlers::helpers::{
         BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
+        building_queue_plan_from_event,
     },
     config::Config,
-    cqrs_es::building_queue::next_downgrade_target_level_via_cqrs,
+    cqrs_es::building_queue::queue_downgrade_event_via_cqrs,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
-    jobs::tasks::BuildingDowngradeTask,
     uow::UnitOfWork,
 };
 
@@ -73,7 +73,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
                 vb.building.name,
             )));
         }
-        let target_level = next_downgrade_target_level_via_cqrs(
+        let queue_event = queue_downgrade_event_via_cqrs(
             command.village_id,
             command.slot_id,
             vb.building.name.clone(),
@@ -81,22 +81,30 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
         )
         .await
         .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let Some(plan) = building_queue_plan_from_event(command.village_id as i32, &queue_event)
+        else {
+            return Err(ApplicationError::Unknown(
+                "failed to build job plan from queue downgrade event".to_string(),
+            ));
+        };
+        let target_level = match &plan {
+            BuildingQueueJobPlan::Downgrade(payload) => payload.level,
+            _ => {
+                return Err(ApplicationError::Unknown(
+                    "queue downgrade produced unexpected job plan variant".to_string(),
+                ));
+            }
+        };
         let target_level_building = vb.building.at_level(target_level, config.speed)?;
         let build_time_secs =
             target_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
-
-        let payload = BuildingDowngradeTask {
-            slot_id: command.slot_id,
-            building_name: vb.building.name.clone(),
-            level: target_level,
-        };
 
         let new_job = build_scheduled_building_queue_job(
             command.player_id,
             command.village_id as i32,
             &building_jobs,
             build_time_secs,
-            BuildingQueueJobPlan::Downgrade(payload),
+            plan,
         )?;
         job_repo.add(&new_job).await?;
 

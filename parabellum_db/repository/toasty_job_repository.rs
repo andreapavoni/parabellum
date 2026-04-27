@@ -54,13 +54,16 @@ impl JobRepository for ToastyJobRepository {
 
     async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<Job>, ApplicationError> {
         let mut tx_guard = self.db.lock().await;
-        let mut rows = toasty::query!(JobRecord filter .player_id == #player_id)
+        let rows = JobRecord::filter_by_player_id(player_id)
+            .filter(
+                JobRecord::fields()
+                    .status()
+                    .in_list(["Pending", "Processing"]),
+            )
+            .order_by(JobRecord::fields().completed_at().asc())
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
-
-        rows.retain(|row| row.status == "Pending" || row.status == "Processing");
-        rows.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
 
         rows.into_iter()
             .map(Job::try_from)
@@ -72,13 +75,16 @@ impl JobRepository for ToastyJobRepository {
         village_id: i32,
     ) -> Result<Vec<Job>, ApplicationError> {
         let mut tx_guard = self.db.lock().await;
-        let mut rows = toasty::query!(JobRecord filter .village_id == #village_id)
+        let rows = JobRecord::filter_by_village_id(village_id)
+            .filter(
+                JobRecord::fields()
+                    .status()
+                    .in_list(["Pending", "Processing"]),
+            )
+            .order_by(JobRecord::fields().completed_at().asc())
             .exec(&mut *tx_guard)
             .await
             .map_err(map_toasty_error)?;
-
-        rows.retain(|row| row.status == "Pending" || row.status == "Processing");
-        rows.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
 
         rows.into_iter()
             .map(Job::try_from)
@@ -93,15 +99,15 @@ impl JobRepository for ToastyJobRepository {
         let rows = toasty::query!(
             JobRecord filter .status == "Pending" or .status == "Processing"
         )
+        .order_by(JobRecord::fields().completed_at().asc())
         .exec(&mut *tx_guard)
         .await
         .map_err(map_toasty_error)?;
 
-        let mut rows: Vec<_> = rows
+        let rows: Vec<_> = rows
             .into_iter()
             .filter(|row| row_targets_village(row, village_id))
             .collect();
-        rows.sort_by(|a, b| a.completed_at.cmp(&b.completed_at));
 
         rows.into_iter()
             .map(Job::try_from)

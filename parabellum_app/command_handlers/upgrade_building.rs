@@ -10,12 +10,12 @@ use parabellum_types::{
 use crate::{
     command_handlers::helpers::{
         BuildingQueueJobPlan, build_scheduled_building_queue_job, building_queue_jobs,
-        enforce_queue_capacity,
+        building_queue_plan_from_event, enforce_queue_capacity,
     },
     config::Config,
-    cqrs_es::building_queue::{BuildingQueueAggregate, next_upgrade_target_level_via_cqrs},
+    cqrs_es::building_queue::{BuildingQueueAggregate, queue_upgrade_event_via_cqrs},
     cqrs::{CommandHandler, commands::UpgradeBuilding},
-    jobs::{Job, tasks::BuildingUpgradeTask},
+    jobs::Job,
     uow::UnitOfWork,
 };
 
@@ -82,7 +82,7 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             return Err(GameError::BuildingMaxLevelReached.into());
         }
 
-        let queue_target = next_upgrade_target_level_via_cqrs(
+        let queue_event = queue_upgrade_event_via_cqrs(
             &building_jobs,
             command.village_id,
             command.slot_id,
@@ -90,7 +90,21 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         )
         .await
         .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let Some(mut plan) =
+            building_queue_plan_from_event(command.village_id as i32, &queue_event)
+        else {
+            return Err(ApplicationError::Unknown(
+                "failed to build job plan from queue upgrade event".to_string(),
+            ));
+        };
+        let BuildingQueueJobPlan::Upgrade(upgrade_plan) = &mut plan else {
+            return Err(ApplicationError::Unknown(
+                "queue upgrade produced unexpected job plan variant".to_string(),
+            ));
+        };
+        let queue_target = upgrade_plan.level;
         let next_level = pending_level.max(queue_target.saturating_sub(1)) + 1;
+        upgrade_plan.level = next_level;
         let next_level_building = template_building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
         let build_time_secs =
@@ -99,18 +113,12 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         village.deduct_resources(&cost.resources)?;
         village_repo.save(&village).await?;
 
-        let payload = BuildingUpgradeTask {
-            slot_id: command.slot_id,
-            building_name: next_level_building.name.clone(),
-            level: next_level,
-        };
-
         let new_job = build_scheduled_building_queue_job(
             command.player_id,
             command.village_id as i32,
             &building_jobs,
             build_time_secs,
-            BuildingQueueJobPlan::Upgrade(payload),
+            plan,
         )?;
         job_repo.add(&new_job).await?;
 
