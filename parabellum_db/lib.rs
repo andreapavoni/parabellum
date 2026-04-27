@@ -1,3 +1,4 @@
+pub mod cqrs_event_store;
 pub mod mapping;
 pub mod persistence;
 pub mod toasty_db;

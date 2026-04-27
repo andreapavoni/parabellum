@@ -70,3 +70,4 @@ base64 = "0.22"
 sha2 = "0.10"
 toasty = { version = "0.4", features = ["postgresql", "serde", "jiff"] }
 jiff = "0.2"
+mini_cqrs_es = "0.9"

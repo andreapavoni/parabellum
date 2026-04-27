@@ -26,3 +26,4 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 toasty = { workspace = true }
 jiff = { workspace = true }
+mini_cqrs_es = { workspace = true }
