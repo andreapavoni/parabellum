@@ -1,6 +1,13 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    sync::{Arc, RwLock},
+};
 
-use mini_cqrs_es::{Aggregate, Command, CqrsError, EventPayload, Uuid};
+use mini_cqrs_es::{
+    Aggregate, Command, CqrsError, Event, EventConsumers, EventPayload, EventStore,
+    SimpleAggregateManager, SimpleCqrs, Uuid,
+};
 use serde::{Deserialize, Serialize};
 
 use parabellum_types::buildings::BuildingName;
@@ -86,6 +93,60 @@ impl Display for BuildingQueueEvent {
 }
 
 impl EventPayload for BuildingQueueEvent {}
+
+#[derive(Clone, Default)]
+pub struct InMemoryBuildingQueueEventStore {
+    events: Arc<RwLock<HashMap<Uuid, Vec<Event>>>>,
+}
+
+impl InMemoryBuildingQueueEventStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl EventStore for InMemoryBuildingQueueEventStore {
+    async fn save_events(
+        &self,
+        aggregate_id: Uuid,
+        events: &[Event],
+        expected_version: u64,
+    ) -> Result<(), CqrsError> {
+        let mut guard = self
+            .events
+            .write()
+            .map_err(|_| CqrsError::EventStore("event store lock poisoned".to_string()))?;
+        let stream = guard.entry(aggregate_id).or_default();
+        let actual_version = stream.last().map(|event| event.version).unwrap_or(0);
+        if actual_version != expected_version {
+            return Err(CqrsError::Conflict {
+                expected_version,
+                actual_version,
+            });
+        }
+        stream.extend_from_slice(events);
+        Ok(())
+    }
+
+    async fn load_events(&self, aggregate_id: Uuid) -> Result<(Vec<Event>, u64), CqrsError> {
+        let guard = self
+            .events
+            .read()
+            .map_err(|_| CqrsError::EventStore("event store lock poisoned".to_string()))?;
+        let stream = guard.get(&aggregate_id).cloned().unwrap_or_default();
+        let version = stream.last().map(|event| event.version).unwrap_or(0);
+        Ok((stream, version))
+    }
+}
+
+pub fn build_building_queue_cqrs(
+    event_store: InMemoryBuildingQueueEventStore,
+) -> SimpleCqrs<InMemoryBuildingQueueEventStore, SimpleAggregateManager<InMemoryBuildingQueueEventStore>>
+{
+    let aggregate_manager = SimpleAggregateManager::new(event_store.clone());
+    let consumers = EventConsumers::new();
+    SimpleCqrs::new(aggregate_manager, event_store, consumers)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueAddBuildingCommand {
@@ -180,6 +241,7 @@ impl Command for QueueDowngradeBuildingCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mini_cqrs_es::Cqrs;
     use parabellum_types::buildings::BuildingName;
 
     #[tokio::test]
@@ -210,5 +272,43 @@ mod tests {
         };
         let result = command.handle(&aggregate).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn cqrs_execute_persists_and_replays_building_queue_state() {
+        let event_store = InMemoryBuildingQueueEventStore::new();
+        let cqrs = build_building_queue_cqrs(event_store.clone());
+        let aggregate_id = Uuid::new_v4();
+
+        let add = QueueAddBuildingCommand {
+            slot_id: 19,
+            name: BuildingName::MainBuilding,
+        };
+        cqrs.execute(aggregate_id, &add)
+            .await
+            .expect("add should execute through cqrs");
+
+        let upgrade = QueueUpgradeBuildingCommand {
+            slot_id: 19,
+            name: BuildingName::MainBuilding,
+        };
+        cqrs.execute(aggregate_id, &upgrade)
+            .await
+            .expect("upgrade should execute through cqrs");
+
+        let (events, version) = event_store
+            .load_events(aggregate_id)
+            .await
+            .expect("events should be stored");
+        assert_eq!(events.len(), 2);
+        assert_eq!(version, 2);
+
+        let mut replayed = BuildingQueueAggregate::default();
+        replayed.set_aggregate_id(aggregate_id);
+        replayed
+            .apply_events(&events)
+            .await
+            .expect("replay should apply stored events");
+        assert_eq!(replayed.queued_levels_by_slot.get(&19), Some(&2));
     }
 }
