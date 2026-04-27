@@ -47,7 +47,7 @@ license = "MIT"
 edition = "2024"
 repository = "https://github.com/andreapavoni/parabellum"
 keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game"]
-rust-version = "1.85"
+rust-version = "1.95"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -68,3 +68,6 @@ axum = { version = "0.8", features = ["http2", "multipart", "macros"] }
 jsonwebtoken = "9"
 base64 = "0.22"
 sha2 = "0.10"
+toasty = { version = "0.4", features = ["postgresql", "serde", "jiff"] }
+jiff = "0.2"
+mini_cqrs_es = "0.9"

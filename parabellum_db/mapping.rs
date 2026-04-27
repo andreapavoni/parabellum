@@ -20,7 +20,7 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
 
     fn try_from(agg: VillageAggregate) -> Result<Self, Self::Error> {
         let db_village = agg.village;
-        let tribe: Tribe = agg.player.tribe.into();
+        let tribe = tribe_from_db_code(agg.player.tribe)?;
 
         let mut home_army: Option<game_models::army::Army> = None;
         let mut reinforcements = Vec::new();
@@ -95,36 +95,36 @@ impl TryFrom<VillageAggregate> for game_models::village::Village {
     }
 }
 
-impl From<db_models::Tribe> for Tribe {
-    fn from(db_tribe: db_models::Tribe) -> Self {
-        match db_tribe {
-            db_models::Tribe::Roman => Tribe::Roman,
-            db_models::Tribe::Gaul => Tribe::Gaul,
-            db_models::Tribe::Teuton => Tribe::Teuton,
-            db_models::Tribe::Natar => Tribe::Natar,
-            db_models::Tribe::Nature => Tribe::Nature,
-        }
+pub fn tribe_to_db_code(game_tribe: &Tribe) -> i64 {
+    match game_tribe {
+        Tribe::Roman => 1,
+        Tribe::Gaul => 2,
+        Tribe::Teuton => 3,
+        Tribe::Natar => 4,
+        Tribe::Nature => 5,
     }
 }
 
-impl From<Tribe> for db_models::Tribe {
-    fn from(game_tribe: Tribe) -> Self {
-        match game_tribe {
-            Tribe::Roman => db_models::Tribe::Roman,
-            Tribe::Gaul => db_models::Tribe::Gaul,
-            Tribe::Teuton => db_models::Tribe::Teuton,
-            Tribe::Natar => db_models::Tribe::Natar,
-            Tribe::Nature => db_models::Tribe::Nature,
-        }
+pub fn tribe_from_db_code(db_tribe: i64) -> Result<Tribe, DbError> {
+    match db_tribe {
+        1 => Ok(Tribe::Roman),
+        2 => Ok(Tribe::Gaul),
+        3 => Ok(Tribe::Teuton),
+        4 => Ok(Tribe::Natar),
+        5 => Ok(Tribe::Nature),
+        _ => Err(DbError::Transaction(format!(
+            "invalid players.tribe code: {db_tribe}"
+        ))),
     }
 }
 
 impl From<db_models::Player> for Player {
     fn from(player: db_models::Player) -> Self {
+        let tribe = tribe_from_db_code(player.tribe).unwrap_or(Tribe::Roman);
         Player {
             id: player.id,
             username: player.username,
-            tribe: player.tribe.into(),
+            tribe,
             user_id: player.user_id,
             culture_points: player.culture_points as u32,
         }
@@ -146,7 +146,7 @@ impl From<db_models::Army> for game_models::army::Army {
                     Some(id),
                     army.village_id as u32,
                     army.player_id,
-                    army.tribe.into(),
+                    tribe_from_db_code(army.tribe).unwrap_or(Tribe::Roman),
                     army.hero_unassigned_points.map(|p| p as u16),
                 );
 
@@ -169,7 +169,7 @@ impl From<db_models::Army> for game_models::army::Army {
             army.village_id as u32,
             army.current_map_field_id.map(|id| id as u32),
             army.player_id,
-            army.tribe.into(),
+            tribe_from_db_code(army.tribe).unwrap_or(Tribe::Roman),
             &(serde_json::from_value(army.units).unwrap_or_default()),
             &(serde_json::from_value(army.smithy).unwrap_or_default()),
             hero,
@@ -229,7 +229,7 @@ impl From<db_models::Hero> for game_models::hero::Hero {
             id: db_hero.id,
             player_id: db_hero.player_id,
             village_id: db_hero.village_id as u32,
-            tribe: db_hero.tribe.into(),
+            tribe: tribe_from_db_code(db_hero.tribe).unwrap_or(Tribe::Roman),
             level: db_hero.level as u16,
             health: db_hero.health as u16,
             experience: db_hero.experience as u32,

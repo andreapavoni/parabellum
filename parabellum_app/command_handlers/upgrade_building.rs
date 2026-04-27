@@ -7,14 +7,18 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::jobs::tasks::AddBuildingTask;
 use crate::{
     command_handlers::helpers::{
-        completion_time_for_slot, enforce_queue_capacity, highest_target_level_for_slot,
+        BuildingQueueJobPlan, building_queue_jobs, building_queue_plan_from_event,
+        enforce_queue_capacity,
     },
     config::Config,
+    cqrs_es::village::{
+        load_village_aggregate, queue_building_upgrade_event,
+    },
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::UpgradeBuilding},
-    jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
+    jobs::Job,
     uow::UnitOfWork,
 };
 
@@ -42,21 +46,14 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
     ) -> Result<(), ApplicationError> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
         let mut village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
 
         let active_jobs = job_repo
             .list_active_jobs_by_village(command.village_id as i32)
             .await?;
-        let building_jobs: Vec<Job> = active_jobs
-            .into_iter()
-            .filter(|job| {
-                matches!(
-                    job.task.task_type.as_str(),
-                    "AddBuilding" | "BuildingUpgrade"
-                )
-            })
-            .collect();
+        let building_jobs: Vec<Job> = building_queue_jobs(active_jobs);
         let building_limit = if matches!(village.tribe, Tribe::Roman) {
             3
         } else {
@@ -64,11 +61,15 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
+        let queue_aggregate = load_village_aggregate(&event_store, command.village_id)
+                .await
+                .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let vb = village.get_building_by_slot_id(command.slot_id);
-        let queued_slot = highest_slot_queue_state(&building_jobs, command.slot_id);
+        let queued_slot = queue_aggregate.queued_state_for_slot(command.slot_id);
 
         let (building_name, pending_level, template_building) = if let Some(vb) = vb {
-            let pending = highest_target_level_for_slot(&building_jobs, command.slot_id)
+            let pending = queue_aggregate
+                .queued_level_for_slot(command.slot_id)
                 .unwrap_or(vb.building.level);
             (vb.building.name.clone(), pending, vb.building.clone())
         } else if let Some((name, level)) = queued_slot {
@@ -87,7 +88,28 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
             return Err(GameError::BuildingMaxLevelReached.into());
         }
 
-        let next_level = pending_level + 1;
+        let queue_event = queue_building_upgrade_event(
+            event_store,
+            command.village_id,
+            command.slot_id,
+            building_name.clone(),
+            pending_level,
+        )
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let Some(mut plan) =
+            building_queue_plan_from_event(command.village_id as i32, &queue_event)
+        else {
+            return Err(ApplicationError::Unknown(
+                "failed to build job plan from queue upgrade event".to_string(),
+            ));
+        };
+        let BuildingQueueJobPlan::Upgrade(upgrade_plan) = &mut plan else {
+            return Err(ApplicationError::Unknown(
+                "queue upgrade produced unexpected job plan variant".to_string(),
+            ));
+        };
+        let next_level = upgrade_plan.level;
         let next_level_building = template_building.at_level(next_level, config.speed)?;
         let cost = next_level_building.cost();
         let build_time_secs =
@@ -96,46 +118,17 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         village.deduct_resources(&cost.resources)?;
         village_repo.save(&village).await?;
 
-        let payload = BuildingUpgradeTask {
-            slot_id: command.slot_id,
-            building_name: next_level_building.name.clone(),
-            level: next_level,
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: command.player_id,
+            village_id: command.village_id as i32,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs,
         };
-
-        let job_payload = JobPayload::new("BuildingUpgrade", serde_json::to_value(&payload)?);
-        let completion_time =
-            completion_time_for_slot(&building_jobs, command.slot_id, build_time_secs);
-        let new_job = Job::with_deadline(
-            command.player_id,
-            command.village_id as i32,
-            job_payload,
-            completion_time,
-        );
-        job_repo.add(&new_job).await?;
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }
-}
-
-fn highest_slot_queue_state(
-    jobs: &[Job],
-    slot_id: u8,
-) -> Option<(parabellum_types::buildings::BuildingName, u8)> {
-    jobs.iter()
-        .filter_map(|job| match job.task.task_type.as_str() {
-            "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
-                .ok()
-                .filter(|payload| payload.slot_id == slot_id)
-                .map(|payload| (payload.name, 1)),
-            "BuildingUpgrade" => {
-                serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-                    .ok()
-                    .filter(|payload| payload.slot_id == slot_id)
-                    .map(|payload| (payload.building_name, payload.level))
-            }
-            _ => None,
-        })
-        .max_by_key(|(_, level)| *level)
 }
 
 #[cfg(test)]
@@ -159,6 +152,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
+        cqrs_es::village::queue_building_upgrade_event,
         cqrs::commands::UpgradeBuilding,
         jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
         test_utils::tests::MockUnitOfWork,
@@ -207,6 +201,16 @@ mod tests {
             Utc::now() + Duration::seconds(60),
         );
         mock_uow.jobs().add(&existing_job).await?;
+        let event_store = mock_uow.cqrs_event_store();
+        let _ = queue_building_upgrade_event(
+            event_store.clone(),
+            village_id,
+            slot_id,
+            BuildingName::MainBuilding,
+            1,
+        )
+        .await
+        .expect("first queued upgrade event should be seeded");
 
         let handler = UpgradeBuildingCommandHandler::new();
         let command = UpgradeBuilding {

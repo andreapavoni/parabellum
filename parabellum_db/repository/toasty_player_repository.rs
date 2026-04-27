@@ -1,0 +1,340 @@
+use std::{collections::HashMap, sync::Arc};
+
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
+use parabellum_app::repository::{PlayerLeaderboardEntry, PlayerRepository};
+use parabellum_types::{
+    Result,
+    common::Player,
+    errors::{ApplicationError, DbError},
+};
+
+use crate::toasty_models::{player::PlayerRecord, village::VillageDbRow};
+
+pub struct ToastyPlayerRepository {
+    db: Arc<Mutex<toasty::Db>>,
+}
+
+impl ToastyPlayerRepository {
+    pub fn new(db: Arc<Mutex<toasty::Db>>) -> Self {
+        Self { db }
+    }
+}
+
+#[async_trait::async_trait]
+impl PlayerRepository for ToastyPlayerRepository {
+    async fn save(&self, player: &Player) -> Result<(), ApplicationError> {
+        let record = PlayerRecord::try_from(player)?;
+        let player_id = record.id;
+        let mut tx_guard = self.db.lock().await;
+
+        let mut rows = toasty::query!(PlayerRecord filter .id == #player_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+
+        if let Some(mut existing) = rows.pop() {
+            existing
+                .update()
+                .username(record.username)
+                .tribe(record.tribe)
+                .user_id(record.user_id)
+                .culture_points(record.culture_points)
+                .exec(&mut *tx_guard)
+                .await
+                .map_err(map_toasty_error)?;
+        } else {
+            toasty::create!(PlayerRecord {
+                id: record.id,
+                username: record.username,
+                tribe: record.tribe,
+                user_id: record.user_id,
+                culture_points: record.culture_points,
+            })
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        }
+
+        Ok(())
+    }
+
+    async fn get_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
+        let mut tx_guard = self.db.lock().await;
+        let mut rows = toasty::query!(PlayerRecord filter .id == #player_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        let row = rows
+            .pop()
+            .ok_or_else(|| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
+        Player::try_from(row)
+    }
+
+    async fn get_by_user_id(&self, user_id: Uuid) -> Result<Player, ApplicationError> {
+        let mut tx_guard = self.db.lock().await;
+        let mut rows = toasty::query!(PlayerRecord filter .user_id == #user_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        let row = rows
+            .pop()
+            .ok_or_else(|| ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))?;
+        Player::try_from(row)
+    }
+
+    async fn leaderboard_page(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
+        let mut tx_guard = self.db.lock().await;
+        let players = PlayerRecord::all()
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        let villages = VillageDbRow::all()
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+
+        let mut per_player: HashMap<Uuid, (i64, i64)> = HashMap::new();
+        for village in villages {
+            let entry = per_player.entry(village.player_id).or_insert((0, 0));
+            entry.0 += 1;
+            entry.1 += i64::from(village.population);
+        }
+
+        let mut entries: Vec<PlayerLeaderboardEntry> = players
+            .into_iter()
+            .map(|row| {
+                let (village_count, population) =
+                    per_player.get(&row.id).copied().unwrap_or((0, 0));
+                let player = Player::try_from(row)?;
+                Ok(PlayerLeaderboardEntry {
+                    player_id: player.id,
+                    username: player.username,
+                    village_count,
+                    population,
+                    tribe: player.tribe,
+                })
+            })
+            .collect::<Result<_, ApplicationError>>()?;
+
+        entries.sort_by(|a, b| {
+            b.population
+                .cmp(&a.population)
+                .then_with(|| a.username.cmp(&b.username))
+        });
+
+        let total_players = i64::try_from(entries.len()).unwrap_or(i64::MAX);
+        let start = usize::try_from(offset.max(0))
+            .unwrap_or(usize::MAX)
+            .min(entries.len());
+        let max_len = usize::try_from(limit.max(0)).unwrap_or(0);
+        let end = start.saturating_add(max_len).min(entries.len());
+        let page = entries[start..end].to_vec();
+
+        Ok((page, total_players))
+    }
+
+    async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
+        let mut tx_guard = self.db.lock().await;
+        let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        let total: i64 = villages.iter().map(|v| i64::from(v.culture_points)).sum();
+        let total = i32::try_from(total).map_err(|_| {
+            ApplicationError::Db(DbError::Transaction(format!(
+                "culture_points overflow while aggregating player {player_id}",
+            )))
+        })?;
+
+        let mut rows = toasty::query!(PlayerRecord filter .id == #player_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+        if let Some(mut player) = rows.pop() {
+            player
+                .update()
+                .culture_points(total)
+                .exec(&mut *tx_guard)
+                .await
+                .map_err(map_toasty_error)?;
+        }
+
+        Ok(())
+    }
+
+    async fn get_total_culture_points_production(
+        &self,
+        player_id: Uuid,
+    ) -> Result<u32, ApplicationError> {
+        let mut tx_guard = self.db.lock().await;
+        let villages = toasty::query!(VillageDbRow filter .player_id == #player_id)
+            .exec(&mut *tx_guard)
+            .await
+            .map_err(map_toasty_error)?;
+
+        let total: i64 = villages
+            .iter()
+            .map(|v| i64::from(v.culture_points_production))
+            .sum();
+
+        u32::try_from(total).map_err(|_| {
+            ApplicationError::Db(DbError::Transaction(format!(
+                "culture_points_production overflow while aggregating player {player_id}",
+            )))
+        })
+    }
+}
+
+fn map_toasty_error(err: toasty::Error) -> ApplicationError {
+    ApplicationError::Db(DbError::Transaction(err.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use parabellum_app::repository::{PlayerRepository, UserRepository};
+    use parabellum_types::tribe::Tribe;
+
+    use crate::{
+        establish_test_connection_pool,
+        mapping::tribe_to_db_code,
+        repository::{PostgresPlayerRepository, ToastyUserRepository},
+        toasty_db::establish_test_toasty_db,
+    };
+
+    #[tokio::test]
+    async fn toasty_player_repo_save_get_and_leaderboard() -> Result<(), ApplicationError> {
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+
+        let user_repo = ToastyUserRepository::new(toasty_db.clone());
+        let player_repo = ToastyPlayerRepository::new(toasty_db.clone());
+
+        let unique = Uuid::new_v4();
+        let email = format!("toasty-player-{unique}@example.test");
+        user_repo
+            .save(email.clone(), format!("hash-{unique}"))
+            .await?;
+        let user = user_repo.get_by_email(&email).await?;
+
+        let player = Player {
+            id: Uuid::new_v4(),
+            username: format!("toasty-player-{unique}"),
+            tribe: Tribe::Roman,
+            user_id: user.id,
+            culture_points: 0,
+        };
+
+        player_repo.save(&player).await?;
+
+        let loaded = player_repo.get_by_id(player.id).await?;
+        assert_eq!(loaded.id, player.id);
+
+        let by_user = player_repo.get_by_user_id(user.id).await?;
+        assert_eq!(by_user.id, player.id);
+
+        let (entries, total) = player_repo.leaderboard_page(0, 50).await?;
+        assert!(total >= 1);
+        assert!(entries.iter().any(|entry| entry.player_id == player.id));
+
+        let cpp = player_repo
+            .get_total_culture_points_production(player.id)
+            .await?;
+        assert_eq!(cpp, 0);
+
+        drop(player_repo);
+        drop(user_repo);
+        drop(toasty_db);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn toasty_and_sqlx_player_get_by_id_parity() -> Result<(), ApplicationError> {
+        let pool = establish_test_connection_pool()
+            .await
+            .map_err(ApplicationError::Db)?;
+
+        let unique = Uuid::new_v4();
+        let email = format!("toasty-sqlx-player-{unique}@example.test");
+        let password_hash = format!("hash-{unique}");
+        let user_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(&email)
+        .bind(&password_hash)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let player_id = Uuid::new_v4();
+        let username = format!("toasty-sqlx-player-{unique}");
+        let tribe = tribe_to_db_code(&Tribe::Gaul);
+        sqlx::query(
+            "INSERT INTO players (id, username, tribe, user_id, culture_points) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(player_id)
+        .bind(&username)
+        .bind(tribe)
+        .bind(user_id)
+        .bind(42_i32)
+        .execute(&pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let sqlx_tx = pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let sqlx_tx = Arc::new(Mutex::new(sqlx_tx));
+        let sqlx_repo = PostgresPlayerRepository::new(sqlx_tx.clone());
+
+        let toasty_db = Arc::new(Mutex::new(
+            establish_test_toasty_db()
+                .await
+                .map_err(ApplicationError::Db)?,
+        ));
+        let toasty_repo = ToastyPlayerRepository::new(toasty_db.clone());
+
+        let from_sqlx = sqlx_repo.get_by_id(player_id).await?;
+        let from_toasty = toasty_repo.get_by_id(player_id).await?;
+
+        assert_eq!(from_sqlx.id, from_toasty.id);
+        assert_eq!(from_sqlx.username, from_toasty.username);
+        assert_eq!(from_sqlx.tribe, from_toasty.tribe);
+        assert_eq!(from_sqlx.user_id, from_toasty.user_id);
+        assert_eq!(from_sqlx.culture_points, from_toasty.culture_points);
+
+        let from_sqlx_by_user = sqlx_repo.get_by_user_id(user_id).await?;
+        let from_toasty_by_user = toasty_repo.get_by_user_id(user_id).await?;
+        assert_eq!(from_sqlx_by_user.id, from_toasty_by_user.id);
+
+        sqlx::query("DELETE FROM players WHERE id = $1")
+            .bind(player_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        drop(toasty_repo);
+        drop(toasty_db);
+        drop(sqlx_repo);
+        drop(sqlx_tx); // rollback on drop
+
+        Ok(())
+    }
+}

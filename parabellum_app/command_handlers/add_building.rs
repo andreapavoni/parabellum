@@ -1,13 +1,24 @@
 use std::sync::Arc;
 
 use parabellum_game::models::buildings::get_building_data;
-use parabellum_types::{Result, buildings::BuildingName, errors::GameError, tribe::Tribe};
+use parabellum_types::{
+    Result,
+    buildings::BuildingName,
+    errors::{AppError, ApplicationError, GameError},
+    tribe::Tribe,
+};
 
 use crate::{
-    command_handlers::helpers::{completion_time_for_slot, enforce_queue_capacity},
+    command_handlers::helpers::{
+        building_queue_jobs, enforce_queue_capacity,
+    },
     config::Config,
+    cqrs_es::village::{
+        VillageAggregate, load_village_aggregate, queue_building_construction_event,
+    },
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::AddBuilding},
-    jobs::{Job, JobPayload, tasks::AddBuildingTask},
+    jobs::Job,
     uow::UnitOfWork,
 };
 
@@ -35,71 +46,65 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
     ) -> Result<()> {
         let villages_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
 
         let mut village = villages_repo.get_by_id(cmd.village_id).await?;
         let active_jobs = job_repo
             .list_active_jobs_by_village(cmd.village_id as i32)
             .await?;
-        let building_jobs: Vec<Job> = active_jobs
-            .into_iter()
-            .filter(|job| {
-                matches!(
-                    job.task.task_type.as_str(),
-                    "AddBuilding" | "BuildingUpgrade"
-                )
-            })
-            .collect();
+        let building_jobs: Vec<Job> = building_queue_jobs(active_jobs);
         let building_limit = if matches!(village.tribe, Tribe::Roman) {
             3
         } else {
             2
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
-        ensure_queue_allows_building(&cmd.name, &building_jobs)?;
+        let queue_aggregate = load_village_aggregate(&event_store, cmd.village_id)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        ensure_queue_allows_building(&cmd.name, &queue_aggregate)?;
+
+        let queue_event = queue_building_construction_event(
+            event_store,
+            cmd.village_id,
+            cmd.slot_id,
+            cmd.name.clone(),
+        )
+        .await
+        .map_err(|_| AppError::QueueItemAlreadyQueued {
+            queue: "building",
+            item: format!("slot {}", cmd.slot_id),
+        })?;
 
         let build_time_secs =
             village.init_building_construction(cmd.slot_id, cmd.name.clone(), config.speed)?;
         villages_repo.save(&village).await?;
 
-        let payload = AddBuildingTask {
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: cmd.player_id,
             village_id: village.id as i32,
-            slot_id: cmd.slot_id,
-            name: cmd.name,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs as i64,
         };
-        let job_payload = JobPayload::new("AddBuilding", serde_json::to_value(&payload)?);
-        let completion_time =
-            completion_time_for_slot(&building_jobs, cmd.slot_id, build_time_secs as i64);
-        let new_job = Job::with_deadline(
-            cmd.player_id,
-            cmd.village_id as i32,
-            job_payload,
-            completion_time,
-        );
-        job_repo.add(&new_job).await?;
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }
 }
 
-fn ensure_queue_allows_building(candidate: &BuildingName, jobs: &[Job]) -> Result<(), GameError> {
-    if jobs.is_empty() {
+fn ensure_queue_allows_building(
+    candidate: &BuildingName,
+    queue_aggregate: &VillageAggregate,
+) -> Result<(), GameError> {
+    let queued_names = queue_aggregate.queued_building_names();
+    if queued_names.is_empty() {
         return Ok(());
     }
 
     let candidate_data = get_building_data(candidate)?;
 
-    for job in jobs {
-        if job.task.task_type != "AddBuilding" {
-            continue;
-        }
-
-        let Some(payload) = serde_json::from_value::<AddBuildingTask>(job.task.data.clone()).ok()
-        else {
-            continue;
-        };
-
-        let queued_name = payload.name;
-
+    for queued_name in queued_names {
         if queued_name == *candidate && !candidate_data.rules.allow_multiple {
             return Err(GameError::NoMultipleBuildingConstraint(candidate.clone()));
         }
@@ -145,7 +150,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        jobs::tasks::AddBuildingTask,
+        cqrs_es::village::queue_building_construction_event,
+        jobs::{JobPayload, tasks::AddBuildingTask},
         test_utils::tests::{MockUnitOfWork, set_village_resources},
     };
     use std::sync::Arc;
@@ -267,6 +273,14 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
+        let _ = queue_building_construction_event(
+            mock_uow.cqrs_event_store(),
+            village_id,
+            22,
+            BuildingName::Palace,
+        )
+        .await
+        .expect("queue event should be seeded");
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {
@@ -306,6 +320,14 @@ mod tests {
             JobPayload::new("AddBuilding", serde_json::to_value(&queued_payload)?);
         let queued_job = Job::new(player_id, village_id as i32, 0, queued_job_payload);
         mock_uow.jobs().add(&queued_job).await?;
+        let _ = queue_building_construction_event(
+            mock_uow.cqrs_event_store(),
+            village_id,
+            22,
+            BuildingName::Palace,
+        )
+        .await
+        .expect("queue event should be seeded");
 
         let handler = AddBuildingCommandHandler::new();
         let command = AddBuilding {

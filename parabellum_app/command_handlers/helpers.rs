@@ -3,9 +3,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
+    cqrs_es::village::VillageEvent,
     jobs::{
-        Job,
-        tasks::{AddBuildingTask, BuildingUpgradeTask},
+        Job, JobPayload,
+        tasks::{AddBuildingTask, BuildingDowngradeTask, BuildingUpgradeTask},
     },
     repository::{ArmyRepository, HeroRepository, VillageRepository},
     uow::UnitOfWork,
@@ -51,29 +52,6 @@ fn slot_ready_time(jobs: &[Job], slot_id: u8) -> DateTime<Utc> {
     }
 }
 
-fn job_target_level(job: &Job) -> Option<u8> {
-    match job.task.task_type.as_str() {
-        "AddBuilding" => Some(1),
-        "BuildingUpgrade" => serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-            .ok()
-            .map(|payload| payload.level),
-        _ => None,
-    }
-}
-
-pub fn highest_target_level_for_slot(jobs: &[Job], slot_id: u8) -> Option<u8> {
-    jobs.iter()
-        .filter_map(|job| {
-            let job_slot = job_slot_id(job)?;
-            if job_slot == slot_id {
-                job_target_level(job)
-            } else {
-                None
-            }
-        })
-        .max()
-}
-
 pub fn completion_time_for_slot(jobs: &[Job], slot_id: u8, duration_secs: i64) -> DateTime<Utc> {
     let start_time = slot_ready_time(jobs, slot_id);
     start_time
@@ -96,12 +74,104 @@ pub fn completion_time_for_queue(jobs: &[Job], duration_secs: i64) -> DateTime<U
         .unwrap_or(start_time)
 }
 
+pub enum BuildingQueueJobPlan {
+    Add(AddBuildingTask),
+    Upgrade(BuildingUpgradeTask),
+    Downgrade(BuildingDowngradeTask),
+}
+
+pub fn building_queue_plan_from_event(
+    village_id: i32,
+    event: &VillageEvent,
+) -> Option<BuildingQueueJobPlan> {
+    match event {
+        VillageEvent::BuildingConstructionQueued { slot_id, name, .. } => {
+            Some(BuildingQueueJobPlan::Add(AddBuildingTask {
+                village_id,
+                slot_id: *slot_id,
+                name: name.clone(),
+            }))
+        }
+        VillageEvent::BuildingUpgradeQueued {
+            slot_id,
+            name,
+            target_level,
+        } => Some(BuildingQueueJobPlan::Upgrade(BuildingUpgradeTask {
+            slot_id: *slot_id,
+            building_name: name.clone(),
+            level: *target_level,
+        })),
+        VillageEvent::BuildingDowngradeQueued {
+            slot_id,
+            name,
+            target_level,
+        } => Some(BuildingQueueJobPlan::Downgrade(BuildingDowngradeTask {
+            slot_id: *slot_id,
+            building_name: name.clone(),
+            level: *target_level,
+        })),
+    }
+}
+
+impl BuildingQueueJobPlan {
+    fn slot_id(&self) -> u8 {
+        match self {
+            Self::Add(task) => task.slot_id,
+            Self::Upgrade(task) => task.slot_id,
+            Self::Downgrade(task) => task.slot_id,
+        }
+    }
+
+    fn job_payload(&self) -> Result<JobPayload, ApplicationError> {
+        match self {
+            Self::Add(task) => Ok(JobPayload::new("AddBuilding", serde_json::to_value(task)?)),
+            Self::Upgrade(task) => Ok(JobPayload::new(
+                "BuildingUpgrade",
+                serde_json::to_value(task)?,
+            )),
+            Self::Downgrade(task) => Ok(JobPayload::new(
+                "BuildingDowngrade",
+                serde_json::to_value(task)?,
+            )),
+        }
+    }
+}
+
+pub fn build_scheduled_building_queue_job(
+    player_id: Uuid,
+    village_id: i32,
+    existing_building_jobs: &[Job],
+    duration_secs: i64,
+    plan: BuildingQueueJobPlan,
+) -> Result<Job, ApplicationError> {
+    let completion_time =
+        completion_time_for_slot(existing_building_jobs, plan.slot_id(), duration_secs);
+    let payload = plan.job_payload()?;
+    Ok(Job::with_deadline(
+        player_id,
+        village_id,
+        payload,
+        completion_time,
+    ))
+}
+
 pub fn enforce_queue_capacity(queue_name: &'static str, jobs: &[Job], limit: usize) -> Result<()> {
     if jobs.len() >= limit {
         Err(AppError::QueueLimitReached { queue: queue_name }.into())
     } else {
         Ok(())
     }
+}
+
+pub fn building_queue_jobs(jobs: Vec<Job>) -> Vec<Job> {
+    jobs.into_iter()
+        .filter(|job| {
+            matches!(
+                job.task.task_type.as_str(),
+                "AddBuilding" | "BuildingUpgrade"
+            )
+        })
+        .collect()
 }
 
 /// Handles the logic of deploying an army from a village.

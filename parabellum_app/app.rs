@@ -41,14 +41,19 @@ impl AppBus {
         H: CommandHandler<C>,
     {
         let uow = self.uow_provider.tx().await?;
+        let transactional = uow.is_transactional();
 
         match handler.handle(cmd, &uow, &self.config).await {
             Ok(_) => {
-                uow.commit().await?; // Commit on success
+                if transactional {
+                    uow.commit().await?;
+                }
                 Ok(())
             }
             Err(e) => {
-                uow.rollback().await?; // Rollback on failure
+                if transactional {
+                    uow.rollback().await?;
+                }
                 Err(e)
             }
         }
@@ -64,11 +69,14 @@ impl AppBus {
         H: QueryHandler<Q>,
     {
         let uow = self.uow_provider.tx().await?;
+        let transactional = uow.is_transactional();
 
         let result = handler.handle(query, &uow, &self.config).await;
 
-        // Always rollback a query, as it should never write data.
-        uow.rollback().await?;
+        if transactional {
+            // Always rollback a query when running in explicit transaction mode.
+            uow.rollback().await?;
+        }
 
         result
     }

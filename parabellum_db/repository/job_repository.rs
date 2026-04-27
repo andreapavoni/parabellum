@@ -1,7 +1,4 @@
 use sqlx::types::Json;
-use sqlx::{Postgres, Transaction};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use parabellum_app::{jobs::Job, repository::JobRepository};
@@ -10,15 +7,18 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::models as db_models;
+use crate::{
+    models as db_models,
+    persistence::{SharedTx, map_sqlx_error},
+};
 
 #[derive(Clone)]
 pub struct PostgresJobRepository<'a> {
-    tx: Arc<Mutex<Transaction<'a, Postgres>>>,
+    tx: SharedTx<'a>,
 }
 
 impl<'a> PostgresJobRepository<'a> {
-    pub fn new(tx: Arc<Mutex<Transaction<'a, Postgres>>>) -> Self {
+    pub fn new(tx: SharedTx<'a>) -> Self {
         Self { tx }
     }
 }
@@ -40,7 +40,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .execute(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }
@@ -66,7 +66,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           player_id
       )
       .fetch_all(&mut *tx_guard.as_mut())
-      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+      .await.map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -89,7 +89,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -117,7 +117,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -141,7 +141,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -165,7 +165,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -189,7 +189,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -213,7 +213,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         )
         .fetch_all(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -238,7 +238,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
           limit
       )
       .fetch_all(&mut *tx_guard.as_mut())
-      .await.map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+      .await.map_err(map_sqlx_error)?;
 
         Ok(due_jobs.into_iter().map(|db_job| db_job.into()).collect())
     }
@@ -248,7 +248,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         sqlx::query!("UPDATE jobs SET status = 'Completed' WHERE id = $1", job_id)
             .execute(&mut *tx_guard.as_mut())
             .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+            .map_err(map_sqlx_error)?;
 
         Ok(())
     }
@@ -272,7 +272,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         .bind(completed_at)
         .execute(&mut *tx_guard.as_mut())
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }
@@ -286,7 +286,7 @@ impl<'a> JobRepository for PostgresJobRepository<'a> {
         sqlx::query!("UPDATE jobs SET status = 'Failed' WHERE id = $1", job_id)
             .execute(&mut *tx_guard.as_mut())
             .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+            .map_err(map_sqlx_error)?;
 
         Ok(())
     }

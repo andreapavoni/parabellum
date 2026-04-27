@@ -7,9 +7,13 @@ use parabellum_types::{
 };
 
 use crate::{
+    command_handlers::helpers::{
+        BuildingQueueJobPlan, building_queue_jobs, building_queue_plan_from_event,
+    },
     config::Config,
+    cqrs_es::village::queue_building_downgrade_event,
+    cqrs_es::jobs_consumer::BuildingJobsConsumer,
     cqrs::{CommandHandler, commands::DowngradeBuilding},
-    jobs::{Job, JobPayload, tasks::BuildingDowngradeTask},
     uow::UnitOfWork,
 };
 
@@ -37,8 +41,13 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
     ) -> Result<()> {
         let village_repo = uow.villages();
         let job_repo = uow.jobs();
+        let event_store = uow.cqrs_event_store();
         let village = village_repo.get_by_id(command.village_id).await?;
         let mb_level = village.main_building_level();
+        let active_jobs = job_repo
+            .list_active_jobs_by_village(command.village_id as i32)
+            .await?;
+        let building_jobs = building_queue_jobs(active_jobs);
 
         let vb = village
             .get_building_by_slot_id(command.slot_id)
@@ -65,25 +74,41 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
                 vb.building.name,
             )));
         }
-        let target_level = current_level - 1;
+        let queue_event = queue_building_downgrade_event(
+            event_store,
+            command.village_id,
+            command.slot_id,
+            vb.building.name.clone(),
+            current_level,
+        )
+        .await
+        .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let Some(plan) = building_queue_plan_from_event(command.village_id as i32, &queue_event)
+        else {
+            return Err(ApplicationError::Unknown(
+                "failed to build job plan from queue downgrade event".to_string(),
+            ));
+        };
+        let target_level = match &plan {
+            BuildingQueueJobPlan::Downgrade(payload) => payload.level,
+            _ => {
+                return Err(ApplicationError::Unknown(
+                    "queue downgrade produced unexpected job plan variant".to_string(),
+                ));
+            }
+        };
         let target_level_building = vb.building.at_level(target_level, config.speed)?;
         let build_time_secs =
             target_level_building.calculate_build_time_secs(&config.speed, &mb_level) as i64;
 
-        let payload = BuildingDowngradeTask {
-            slot_id: command.slot_id,
-            building_name: vb.building.name.clone(),
-            level: target_level,
+        let consumer = BuildingJobsConsumer {
+            job_repo,
+            player_id: command.player_id,
+            village_id: command.village_id as i32,
+            existing_building_jobs: building_jobs,
+            duration_secs: build_time_secs,
         };
-
-        let job_payload = JobPayload::new("BuildingDowngrade", serde_json::to_value(&payload)?);
-        let new_job = Job::new(
-            command.player_id,
-            command.village_id as i32,
-            build_time_secs,
-            job_payload,
-        );
-        job_repo.add(&new_job).await?;
+        let _ = consumer.consume(&queue_event).await?;
 
         Ok(())
     }
@@ -91,6 +116,7 @@ impl CommandHandler<DowngradeBuilding> for DowngradeBuildingCommandHandler {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Duration, Utc};
     use parabellum_game::models::village::Village;
     use parabellum_game::test_utils::{
         PlayerFactoryOptions, VillageFactoryOptions, player_factory, village_factory,
@@ -100,8 +126,11 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::Config, cqrs::commands::DowngradeBuilding, jobs::tasks::BuildingDowngradeTask,
-        test_utils::tests::MockUnitOfWork, uow::UnitOfWork,
+        config::Config,
+        cqrs::commands::DowngradeBuilding,
+        jobs::{Job, JobPayload, tasks::{BuildingDowngradeTask, BuildingUpgradeTask}},
+        test_utils::tests::MockUnitOfWork,
+        uow::UnitOfWork,
     };
     use std::sync::Arc;
 
@@ -163,6 +192,49 @@ mod tests {
             task.level,
             building_in_db.building.level - 1,
             "Task should contain target level at N-1"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_downgrade_building_handler_queues_after_existing_slot_job() -> Result<()> {
+        let mock_uow: Box<dyn UnitOfWork<'_> + '_> = Box::new(MockUnitOfWork::new());
+        let (player, village, config, slot_id) = setup_village_for_downgrade()?;
+        let village_id = village.id;
+        let player_id = player.id;
+        mock_uow.villages().save(&village).await?;
+
+        let queued_payload = JobPayload::new(
+            "BuildingUpgrade",
+            serde_json::to_value(BuildingUpgradeTask {
+                slot_id,
+                building_name: parabellum_types::buildings::BuildingName::MainBuilding,
+                level: 11,
+            })?,
+        );
+        let queued_deadline = Utc::now() + Duration::minutes(5);
+        let queued_job = Job::with_deadline(player_id, village_id as i32, queued_payload, queued_deadline);
+        mock_uow.jobs().add(&queued_job).await?;
+
+        let handler = DowngradeBuildingCommandHandler::new();
+        let command = DowngradeBuilding {
+            player_id,
+            village_id,
+            slot_id,
+        };
+        handler.handle(command, &mock_uow, &config).await?;
+
+        let mut jobs = mock_uow.jobs().list_by_player_id(player_id).await?;
+        jobs.sort_by_key(|job| job.completed_at);
+        assert_eq!(jobs.len(), 2);
+        let scheduled = jobs
+            .iter()
+            .find(|job| job.id != queued_job.id)
+            .expect("new downgrade job");
+        assert_eq!(scheduled.task.task_type, "BuildingDowngrade");
+        assert!(
+            scheduled.completed_at > queued_job.completed_at,
+            "downgrade should be scheduled after existing same-slot queue job"
         );
         Ok(())
     }

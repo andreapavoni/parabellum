@@ -1,4 +1,9 @@
+pub mod cqrs_event_store;
 pub mod mapping;
+pub mod persistence;
+pub mod toasty_db;
+pub mod toasty_models;
+pub mod toasty_time;
 pub mod uow;
 
 mod connection;

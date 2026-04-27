@@ -10,7 +10,10 @@ use parabellum_types::{
     errors::{ApplicationError, DbError},
 };
 
-use crate::models::{self as db_models, Tribe};
+use crate::{
+    mapping::tribe_to_db_code,
+    models::{self as db_models},
+};
 
 #[derive(Clone)]
 pub struct PostgresArmyRepository<'a> {
@@ -35,7 +38,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
               a.village_id,
               a.player_id,
               a.current_map_field_id,
-              a.tribe as "tribe: _",
+              a.tribe,
               a.units,
               a.smithy,
               a.hero_id as "hero_id?: Uuid",
@@ -72,7 +75,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
               a.village_id,
               a.player_id,
               a.current_map_field_id,
-              a.tribe as "tribe: _",
+              a.tribe,
               a.units,
               a.smithy,
               a.hero_id as "hero_id?: Uuid",
@@ -118,7 +121,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
 
     async fn save(&self, army: &Army) -> Result<(), ApplicationError> {
         let mut tx_guard = self.tx.lock().await;
-        let db_tribe: Tribe = army.tribe.clone().into();
+        let db_tribe = tribe_to_db_code(&army.tribe);
         let current_map_field_id: Option<i32> = army.current_map_field_id.map(|id| id as i32);
         let hero_id = army.hero().map(|h| h.id);
 
@@ -142,7 +145,7 @@ impl<'a> ArmyRepository for PostgresArmyRepository<'a> {
                 hero_id,
                 Json(&army.units()) as _,
                 Json(&army.smithy()) as _,
-                db_tribe as _,
+                db_tribe,
                 army.player_id
             )
             .execute(&mut *tx_guard.as_mut())

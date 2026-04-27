@@ -18,11 +18,18 @@ pub trait UnitOfWork<'a>: Send + Sync {
     fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a>;
     fn heroes(&self) -> Arc<dyn HeroRepository + 'a>;
     fn users(&self) -> Arc<dyn UserRepository + 'a>;
+    fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository>;
 
     // Transaction control methods
     // Consume self to ensure the UoW is not used after commit/rollback
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError>;
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError>;
+
+    // Transitional hook while migrating away from explicit UoW transactions.
+    // Toasty-backed sessions can return false and treat commit/rollback as no-ops.
+    fn is_transactional(&self) -> bool {
+        true
+    }
 }
 
 /// A factory for creating Unit of Work instances.

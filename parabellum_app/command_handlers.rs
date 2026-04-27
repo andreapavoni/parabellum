@@ -6,7 +6,7 @@ mod create_hero;
 mod create_marketplace_offer;
 mod downgrade_building;
 mod found_village;
-mod helpers;
+pub(crate) mod helpers;
 mod mark_report_read;
 mod recall_troops;
 mod register_player;

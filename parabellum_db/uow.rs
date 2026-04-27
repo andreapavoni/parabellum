@@ -1,4 +1,4 @@
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -6,9 +6,13 @@ use parabellum_app::{
     repository::*,
     uow::{UnitOfWork, UnitOfWorkProvider},
 };
-use parabellum_types::errors::{ApplicationError, DbError};
+use parabellum_types::errors::ApplicationError;
 
-use crate::repository::*;
+use crate::{
+    cqrs_event_store::PostgresEventStore,
+    persistence::{SharedTx, begin_transaction, commit_transaction, rollback_transaction},
+    repository::*,
+};
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWorkProvider {
@@ -24,22 +28,18 @@ impl PostgresUnitOfWorkProvider {
 #[async_trait::async_trait]
 impl UnitOfWorkProvider for PostgresUnitOfWorkProvider {
     async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
-        let tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        // Transaction must be 'static to be stored in Arc.
-        let tx_arc = Arc::new(Mutex::new(tx));
-
-        Ok(Box::new(PostgresUnitOfWork { tx: tx_arc }))
+        let tx_arc = begin_transaction(&self.pool).await?;
+        Ok(Box::new(PostgresUnitOfWork {
+            tx: tx_arc,
+            pool: self.pool.clone(),
+        }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PostgresUnitOfWork<'a> {
-    tx: Arc<Mutex<Transaction<'a, Postgres>>>,
+    tx: SharedTx<'a>,
+    pool: PgPool,
 }
 
 #[async_trait::async_trait]
@@ -80,32 +80,105 @@ impl<'a> UnitOfWork<'a> for PostgresUnitOfWork<'a> {
         Arc::new(PostgresUserRepository::new(self.tx.clone()))
     }
 
+    fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository> {
+        Arc::new(PostgresEventStore::new(self.pool.clone()))
+    }
+
     async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
-        // Try to unwrap the Arc to get ownership of the Mutex<Transaction>.
-        // If this fails, it means there are other references to the Arc,
-        // the transaction cannot be committed (logical error) and will rollback on Drop.
-        if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex
-                .into_inner()
-                .commit()
-                .await
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        } else {
-            return Err(ApplicationError::Db(DbError::Transaction(
-                "transaction still has multiple owners".to_string(),
-            )));
+        commit_transaction(self.tx).await
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
+        rollback_transaction(self.tx).await
+    }
+
+    fn is_transactional(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToastyUnitOfWorkProvider {
+    db: Arc<Mutex<toasty::Db>>,
+    pool: PgPool,
+}
+
+impl ToastyUnitOfWorkProvider {
+    pub fn new(db: toasty::Db, pool: PgPool) -> Self {
+        Self {
+            db: Arc::new(Mutex::new(db)),
+            pool,
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl UnitOfWorkProvider for ToastyUnitOfWorkProvider {
+    async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
+        Ok(Box::new(ToastyUnitOfWork {
+            db: self.db.clone(),
+            pool: self.pool.clone(),
+        }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToastyUnitOfWork {
+    db: Arc<Mutex<toasty::Db>>,
+    pool: PgPool,
+}
+
+#[async_trait::async_trait]
+impl<'a> UnitOfWork<'a> for ToastyUnitOfWork {
+    fn players(&self) -> Arc<dyn PlayerRepository + 'a> {
+        Arc::new(ToastyPlayerRepository::new(self.db.clone()))
+    }
+
+    fn villages(&self) -> Arc<dyn VillageRepository + 'a> {
+        Arc::new(ToastyVillageRepository::new(self.db.clone()))
+    }
+
+    fn armies(&self) -> Arc<dyn ArmyRepository + 'a> {
+        Arc::new(ToastyArmyRepository::new(self.db.clone()))
+    }
+
+    fn jobs(&self) -> Arc<dyn JobRepository + 'a> {
+        Arc::new(ToastyJobRepository::new(self.db.clone()))
+    }
+
+    fn reports(&self) -> Arc<dyn ReportRepository + 'a> {
+        Arc::new(ToastyReportRepository::new(self.db.clone()))
+    }
+
+    fn map(&self) -> Arc<dyn MapRepository + 'a> {
+        Arc::new(ToastyMapRepository::new(self.db.clone()))
+    }
+
+    fn marketplace(&self) -> Arc<dyn MarketplaceRepository + 'a> {
+        Arc::new(ToastyMarketplaceRepository::new(self.db.clone()))
+    }
+
+    fn heroes(&self) -> Arc<dyn HeroRepository + 'a> {
+        Arc::new(ToastyHeroRepository::new(self.db.clone()))
+    }
+
+    fn users(&self) -> Arc<dyn UserRepository + 'a> {
+        Arc::new(ToastyUserRepository::new(self.db.clone()))
+    }
+
+    fn cqrs_event_store(&self) -> Arc<dyn CqrsEventStoreRepository> {
+        Arc::new(PostgresEventStore::new(self.pool.clone()))
+    }
+
+    async fn commit(self: Box<Self>) -> Result<(), ApplicationError> {
         Ok(())
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), ApplicationError> {
-        if let Ok(mutex) = Arc::try_unwrap(self.tx) {
-            mutex
-                .into_inner()
-                .rollback()
-                .await
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        }
         Ok(())
+    }
+
+    fn is_transactional(&self) -> bool {
+        false
     }
 }
