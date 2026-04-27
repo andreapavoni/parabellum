@@ -21,6 +21,7 @@ use crate::jobs::{
 pub struct BuildingQueueAggregate {
     aggregate_id: Uuid,
     version: u64,
+    queued_names_by_slot: HashMap<u8, BuildingName>,
     queued_levels_by_slot: HashMap<u8, u8>,
 }
 
@@ -29,22 +30,31 @@ impl Aggregate for BuildingQueueAggregate {
 
     async fn apply(&mut self, event: &Self::Event) {
         match event {
-            BuildingQueueEvent::BuildingAdded { slot_id, target_level, .. }
+            BuildingQueueEvent::BuildingAdded {
+                slot_id,
+                name,
+                target_level,
+            }
             | BuildingQueueEvent::BuildingUpgraded {
                 slot_id,
+                name,
                 target_level,
                 ..
             } => {
+                self.queued_names_by_slot.insert(*slot_id, name.clone());
                 self.queued_levels_by_slot.insert(*slot_id, *target_level);
             }
             BuildingQueueEvent::BuildingDowngraded {
                 slot_id,
+                name,
                 target_level,
                 ..
             } => {
                 if *target_level == 0 {
+                    self.queued_names_by_slot.remove(slot_id);
                     self.queued_levels_by_slot.remove(slot_id);
                 } else {
+                    self.queued_names_by_slot.insert(*slot_id, name.clone());
                     self.queued_levels_by_slot.insert(*slot_id, *target_level);
                 }
             }
@@ -78,6 +88,10 @@ impl BuildingQueueAggregate {
                         continue;
                     };
                     aggregate
+                        .queued_names_by_slot
+                        .entry(payload.slot_id)
+                        .or_insert(payload.name.clone());
+                    aggregate
                         .queued_levels_by_slot
                         .entry(payload.slot_id)
                         .and_modify(|level| *level = (*level).max(1))
@@ -89,6 +103,10 @@ impl BuildingQueueAggregate {
                     else {
                         continue;
                     };
+                    aggregate
+                        .queued_names_by_slot
+                        .entry(payload.slot_id)
+                        .or_insert(payload.building_name.clone());
                     aggregate
                         .queued_levels_by_slot
                         .entry(payload.slot_id)
@@ -104,24 +122,16 @@ impl BuildingQueueAggregate {
     pub fn queued_level_for_slot(&self, slot_id: u8) -> Option<u8> {
         self.queued_levels_by_slot.get(&slot_id).copied()
     }
-}
 
-pub fn queued_slot_state(jobs: &[Job], slot_id: u8) -> Option<(BuildingName, u8)> {
-    jobs.iter()
-        .filter_map(|job| match job.task.task_type.as_str() {
-            "AddBuilding" => serde_json::from_value::<AddBuildingTask>(job.task.data.clone())
-                .ok()
-                .filter(|payload| payload.slot_id == slot_id)
-                .map(|payload| (payload.name, 1)),
-            "BuildingUpgrade" => {
-                serde_json::from_value::<BuildingUpgradeTask>(job.task.data.clone())
-                    .ok()
-                    .filter(|payload| payload.slot_id == slot_id)
-                    .map(|payload| (payload.building_name, payload.level))
-            }
-            _ => None,
-        })
-        .max_by_key(|(_, level)| *level)
+    pub fn queued_name_for_slot(&self, slot_id: u8) -> Option<BuildingName> {
+        self.queued_names_by_slot.get(&slot_id).cloned()
+    }
+
+    pub fn queued_state_for_slot(&self, slot_id: u8) -> Option<(BuildingName, u8)> {
+        let name = self.queued_name_for_slot(slot_id)?;
+        let level = self.queued_level_for_slot(slot_id)?;
+        Some((name, level))
+    }
 }
 
 pub async fn execute_add_command(

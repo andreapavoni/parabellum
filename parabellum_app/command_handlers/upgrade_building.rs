@@ -10,12 +10,9 @@ use parabellum_types::{
 use crate::{
     command_handlers::helpers::{
         building_queue_jobs, completion_time_for_slot, enforce_queue_capacity,
-        highest_target_level_for_slot,
     },
     config::Config,
-    cqrs_es::building_queue::{
-        next_upgrade_target_level_via_cqrs, queued_slot_state,
-    },
+    cqrs_es::building_queue::{BuildingQueueAggregate, next_upgrade_target_level_via_cqrs},
     cqrs::{CommandHandler, commands::UpgradeBuilding},
     jobs::{Job, JobPayload, tasks::BuildingUpgradeTask},
     uow::UnitOfWork,
@@ -59,11 +56,13 @@ impl CommandHandler<UpgradeBuilding> for UpgradeBuildingCommandHandler {
         };
         enforce_queue_capacity("building", &building_jobs, building_limit)?;
 
+        let queue_aggregate = BuildingQueueAggregate::from_building_jobs(&building_jobs);
         let vb = village.get_building_by_slot_id(command.slot_id);
-        let queued_slot = queued_slot_state(&building_jobs, command.slot_id);
+        let queued_slot = queue_aggregate.queued_state_for_slot(command.slot_id);
 
         let (building_name, pending_level, template_building) = if let Some(vb) = vb {
-            let pending = highest_target_level_for_slot(&building_jobs, command.slot_id)
+            let pending = queue_aggregate
+                .queued_level_for_slot(command.slot_id)
                 .unwrap_or(vb.building.level);
             (vb.building.name.clone(), pending, vb.building.clone())
         } else if let Some((name, level)) = queued_slot {

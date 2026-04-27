@@ -3,7 +3,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    cqrs_es::building_queue::BuildingQueueAggregate,
     jobs::{
         Job,
         tasks::{AddBuildingTask, BuildingUpgradeTask},
@@ -50,11 +49,6 @@ fn slot_ready_time(jobs: &[Job], slot_id: u8) -> DateTime<Utc> {
         Some(time) if time > now => time,
         _ => now,
     }
-}
-
-pub fn highest_target_level_for_slot(jobs: &[Job], slot_id: u8) -> Option<u8> {
-    let aggregate = BuildingQueueAggregate::from_building_jobs(jobs);
-    aggregate.queued_level_for_slot(slot_id)
 }
 
 pub fn completion_time_for_slot(jobs: &[Job], slot_id: u8, duration_secs: i64) -> DateTime<Utc> {
