@@ -87,6 +87,17 @@ pub fn enforce_queue_capacity(queue_name: &'static str, jobs: &[Job], limit: usi
     }
 }
 
+pub fn building_queue_jobs(jobs: Vec<Job>) -> Vec<Job> {
+    jobs.into_iter()
+        .filter(|job| {
+            matches!(
+                job.task.task_type.as_str(),
+                "AddBuilding" | "BuildingUpgrade"
+            )
+        })
+        .collect()
+}
+
 /// Handles the logic of deploying an army from a village.
 /// Returns the updated Village and the new deployed Army.
 pub async fn deploy_army_from_village(

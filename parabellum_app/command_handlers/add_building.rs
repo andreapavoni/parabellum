@@ -9,7 +9,7 @@ use parabellum_types::{
 };
 
 use crate::{
-    command_handlers::helpers::{completion_time_for_slot, enforce_queue_capacity},
+    command_handlers::helpers::{building_queue_jobs, completion_time_for_slot, enforce_queue_capacity},
     config::Config,
     cqrs_es::building_queue::execute_add_via_cqrs,
     cqrs::{CommandHandler, commands::AddBuilding},
@@ -46,15 +46,7 @@ impl CommandHandler<AddBuilding> for AddBuildingCommandHandler {
         let active_jobs = job_repo
             .list_active_jobs_by_village(cmd.village_id as i32)
             .await?;
-        let building_jobs: Vec<Job> = active_jobs
-            .into_iter()
-            .filter(|job| {
-                matches!(
-                    job.task.task_type.as_str(),
-                    "AddBuilding" | "BuildingUpgrade"
-                )
-            })
-            .collect();
+        let building_jobs: Vec<Job> = building_queue_jobs(active_jobs);
         let building_limit = if matches!(village.tribe, Tribe::Roman) {
             3
         } else {
