@@ -1,7 +1,10 @@
 DROP TABLE IF EXISTS rm_scheduled_actions;
 DROP TABLE IF EXISTS rm_village_movements;
-DROP TABLE IF EXISTS rm_village_overview;
+DROP TABLE IF EXISTS rm_village;
+DROP TYPE IF EXISTS scheduled_action_type;
+DROP TYPE IF EXISTS scheduled_action_status;
+DROP TYPE IF EXISTS movement_type;
+DROP TYPE IF EXISTS movement_direction;
 DROP TABLE IF EXISTS es_projector_offsets;
 DROP TABLE IF EXISTS es_snapshots;
 DROP TABLE IF EXISTS es_events;
-

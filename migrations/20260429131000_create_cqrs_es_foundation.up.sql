@@ -29,13 +29,29 @@ CREATE TABLE es_projector_offsets (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE rm_village_overview (
+CREATE TYPE movement_direction AS ENUM ('Incoming', 'Outgoing');
+CREATE TYPE movement_type AS ENUM ('Attack', 'Raid', 'Reinforcement', 'Return', 'FoundVillage');
+CREATE TYPE scheduled_action_status AS ENUM ('pending', 'processing', 'completed', 'failed');
+CREATE TYPE scheduled_action_type AS ENUM ('ReinforcementArrival', 'AddBuilding', 'UpgradeBuilding', 'DowngradeBuilding');
+
+CREATE TABLE rm_village (
     village_id INTEGER PRIMARY KEY,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
     village_name TEXT NOT NULL,
     position JSONB NOT NULL,
-    resources JSONB NOT NULL DEFAULT '{}'::jsonb,
+    tribe tribe NOT NULL,
+    buildings JSONB NOT NULL DEFAULT '[]'::jsonb,
+    production JSONB NOT NULL DEFAULT '{}'::jsonb,
+    stocks JSONB NOT NULL DEFAULT '{}'::jsonb,
+    population INTEGER NOT NULL DEFAULT 2,
+    loyalty SMALLINT NOT NULL DEFAULT 100 CHECK (loyalty >= 0 AND loyalty <= 100),
+    is_capital BOOLEAN NOT NULL DEFAULT FALSE,
+    culture_points INTEGER NOT NULL DEFAULT 0,
+    culture_points_production INTEGER NOT NULL DEFAULT 0,
+    parent_village_id INTEGER NULL,
     stationed_army JSONB NOT NULL DEFAULT '{}'::jsonb,
+    total_merchants SMALLINT NOT NULL DEFAULT 0,
+    busy_merchants SMALLINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -43,8 +59,8 @@ CREATE TABLE rm_village_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
     movement_id UUID NOT NULL,
-    direction TEXT NOT NULL,
-    movement_type TEXT NOT NULL,
+    direction movement_direction NOT NULL,
+    movement_type movement_type NOT NULL,
     source_village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
     target_village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
     eta TIMESTAMPTZ NOT NULL,
@@ -59,10 +75,10 @@ CREATE INDEX idx_rm_village_movements_village_eta
 
 CREATE TABLE rm_scheduled_actions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    action_type TEXT NOT NULL,
+    action_type scheduled_action_type NOT NULL,
     execute_at TIMESTAMPTZ NOT NULL,
     payload JSONB NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
+    status scheduled_action_status NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

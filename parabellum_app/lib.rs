@@ -29,6 +29,7 @@ pub mod jobs;
 pub mod queries_handlers;
 pub mod repository;
 pub mod uow;
+pub mod villages;
 
 // #[cfg(test)]
 pub mod test_utils;
