@@ -14,6 +14,7 @@ path = "lib.rs"
 parabellum_app = { path = "../parabellum_app" }
 parabellum_game = { path = "../parabellum_game" }
 parabellum_types = { path = "../parabellum_types" }
+mini_cqrs_es = { workspace = true }
 
 sqlx = { workspace = true }
 tokio = { workspace = true }
