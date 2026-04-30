@@ -172,6 +172,8 @@ enum DbScheduledActionStatus {
 #[sqlx(type_name = "scheduled_action_type", rename_all = "PascalCase")]
 enum DbScheduledActionType {
     ReinforcementArrival,
+    MerchantArrival,
+    MerchantReturn,
     AddBuilding,
     UpgradeBuilding,
     DowngradeBuilding,
@@ -206,6 +208,8 @@ impl From<DbScheduledActionType> for ScheduledActionType {
     fn from(value: DbScheduledActionType) -> Self {
         match value {
             DbScheduledActionType::ReinforcementArrival => Self::ReinforcementArrival,
+            DbScheduledActionType::MerchantArrival => Self::MerchantsArrival,
+            DbScheduledActionType::MerchantReturn => Self::MerchantsReturn,
             DbScheduledActionType::AddBuilding => Self::AddBuilding,
             DbScheduledActionType::UpgradeBuilding => Self::UpgradeBuilding,
             DbScheduledActionType::DowngradeBuilding => Self::DowngradeBuilding,
@@ -220,6 +224,8 @@ impl From<ScheduledActionType> for DbScheduledActionType {
     fn from(value: ScheduledActionType) -> Self {
         match value {
             ScheduledActionType::ReinforcementArrival => Self::ReinforcementArrival,
+            ScheduledActionType::MerchantsArrival => Self::MerchantArrival,
+            ScheduledActionType::MerchantsReturn => Self::MerchantReturn,
             ScheduledActionType::AddBuilding => Self::AddBuilding,
             ScheduledActionType::UpgradeBuilding => Self::UpgradeBuilding,
             ScheduledActionType::DowngradeBuilding => Self::DowngradeBuilding,

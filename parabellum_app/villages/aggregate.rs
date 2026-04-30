@@ -41,6 +41,13 @@ impl VillageAggregate {
         self.village.has_units(units)
     }
 
+    pub fn schedule_send_resources(
+        &self,
+        resources: parabellum_types::common::ResourceGroup,
+    ) -> Result<u8, parabellum_types::errors::ApplicationError> {
+        self.village.schedule_send_resources(resources)
+    }
+
     pub fn village(&self) -> &VillageState {
         &self.village
     }
@@ -87,6 +94,59 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}
+            VillageEvent::MerchantsTripScheduled {
+                resources,
+                merchants_used,
+                resources_already_reserved,
+                ..
+            } => {
+                if !resources_already_reserved {
+                    let _ = self
+                        .village
+                        .apply_merchant_departure(resources, *merchants_used);
+                }
+            }
+            VillageEvent::MerchantsArrived { .. } => {}
+            VillageEvent::MerchantsReturned { merchants_used, .. } => {
+                self.village.apply_merchant_return(*merchants_used);
+            }
+            VillageEvent::MarketplaceOfferCreated {
+                offer_resources,
+                merchants_reserved,
+                ..
+            } => {
+                let resources: parabellum_types::common::ResourceGroup = (*offer_resources).into();
+                let _ = self
+                    .village
+                    .apply_merchant_departure(&resources, *merchants_reserved);
+            }
+            VillageEvent::MarketplaceOfferCanceled {
+                owner_village_id,
+                offer_resources,
+                merchants_reserved,
+                ..
+            } => {
+                if *owner_village_id == self.id {
+                    let resources: parabellum_types::common::ResourceGroup =
+                        (*offer_resources).into();
+                    self.village.village.store_resources(&resources);
+                    self.village.apply_merchant_return(*merchants_reserved);
+                }
+            }
+            VillageEvent::MarketplaceOfferAccepted {
+                accepting_village_id,
+                seek_resources,
+                accepting_merchants_used,
+                ..
+            } => {
+                if *accepting_village_id == self.id {
+                    let resources: parabellum_types::common::ResourceGroup =
+                        (*seek_resources).into();
+                    let _ = self
+                        .village
+                        .apply_merchant_departure(&resources, *accepting_merchants_used);
+                }
+            }
             VillageEvent::BuildingConstructionScheduled {
                 action_id,
                 slot_id,

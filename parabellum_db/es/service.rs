@@ -4,25 +4,30 @@ use mini_cqrs_es::{CqrsError, QueryRunner};
 use sqlx::PgPool;
 
 use parabellum_app::villages::models::{
-    ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
-    VillageModel, VillageTroopMovements,
+    MarketplaceOfferSnapshot, MarketplaceOfferStatus, ScheduledAction, ScheduledActionPayload,
+    ScheduledActionStatus, ScheduledActionType, VillageModel, VillageTroopMovements,
 };
 use parabellum_app::villages::queries::{
-    GetScheduledActionStatusCounts, ScheduledActionStatusCounts,
+    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetScheduledActionStatusCounts,
+    ScheduledActionStatusCounts,
 };
 use parabellum_app::villages::repositories::{
-    ScheduledActionRepository, VillageModelRepository, VillageMovementRepository,
+    MarketplaceOfferRepository, ScheduledActionRepository, VillageModelRepository,
+    VillageMovementRepository,
 };
 use parabellum_app::villages::{
-    AddBuilding, CompleteAcademyResearch, CompleteAddBuilding, CompleteDowngradeBuilding,
-    CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding, DowngradeBuilding,
-    FoundVillage, ReinforcementArrived, ResearchAcademy, ResearchSmithy, SendReinforcement,
-    SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
+    AcceptMarketplaceOffer, AddBuilding, CancelMarketplaceOffer, CompleteAcademyResearch,
+    CompleteAddBuilding, CompleteDowngradeBuilding, CompleteMerchantsArrival,
+    CompleteMerchantsReturn, CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, ReinforcementArrived, ResearchAcademy,
+    ResearchSmithy, SendMerchantsTransfer, SendReinforcement, SetVillageResources, TrainUnits,
+    UpgradeBuilding, VillageService,
 };
+use parabellum_types::errors::GameError;
 
 use crate::es::{
-    PostgresScheduledActionRepository, PostgresVillageModelRepository,
-    PostgresVillageMovementRepository, village_cqrs_runtime,
+    PostgresMarketplaceOfferRepository, PostgresScheduledActionRepository,
+    PostgresVillageModelRepository, PostgresVillageMovementRepository, village_cqrs_runtime,
 };
 
 #[derive(Debug, Clone)]
@@ -32,6 +37,19 @@ pub struct VillageEsService {
 }
 
 impl VillageEsService {
+    fn as_offer_snapshot(
+        offer: parabellum_app::villages::models::MarketplaceOfferModel,
+    ) -> MarketplaceOfferSnapshot {
+        MarketplaceOfferSnapshot {
+            offer_id: offer.offer_id,
+            owner_player_id: offer.owner_player_id,
+            owner_village_id: offer.owner_village_id,
+            offer_resources: offer.offer_resources,
+            seek_resources: offer.seek_resources,
+            merchants_reserved: offer.merchants_reserved,
+        }
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -145,6 +163,90 @@ impl VillageEsService {
         let service = VillageService::new(&runtime);
         service
             .complete_downgrade_building(village_id, command)
+            .await
+    }
+
+    pub async fn send_resources(
+        &self,
+        village_id: u32,
+        command: &SendMerchantsTransfer,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.send_resources(village_id, command).await
+    }
+
+    pub async fn create_marketplace_offer(
+        &self,
+        village_id: u32,
+        command: &CreateMarketplaceOffer,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.create_marketplace_offer(village_id, command).await
+    }
+
+    pub async fn cancel_marketplace_offer(
+        &self,
+        village_id: u32,
+        player_id: uuid::Uuid,
+        offer_id: uuid::Uuid,
+    ) -> Result<u32, CqrsError> {
+        let offer = self.get_marketplace_offer(offer_id).await?;
+        if offer.status != MarketplaceOfferStatus::Open
+            || offer.owner_village_id != village_id
+            || offer.owner_player_id != player_id
+        {
+            return Err(CqrsError::domain("invalid marketplace offer cancellation"));
+        }
+
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service
+            .cancel_marketplace_offer(
+                village_id,
+                &CancelMarketplaceOffer {
+                    player_id,
+                    offer: Self::as_offer_snapshot(offer),
+                },
+            )
+            .await
+    }
+
+    pub async fn accept_marketplace_offer(
+        &self,
+        accepting_village_id: u32,
+        accepting_player_id: uuid::Uuid,
+        offer_id: uuid::Uuid,
+        owner_arrives_at: chrono::DateTime<chrono::Utc>,
+        accepting_arrives_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u32, CqrsError> {
+        let offers = PostgresMarketplaceOfferRepository::new(self.pool.clone());
+        let Some(offer) = offers
+            .claim_open_for_accept(
+                offer_id,
+                accepting_player_id,
+                accepting_village_id,
+                chrono::Utc::now(),
+            )
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+        else {
+            return Err(CqrsError::domain(GameError::MarketplaceOfferNoLongerValid));
+        };
+
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service
+            .accept_marketplace_offer(
+                accepting_village_id,
+                &AcceptMarketplaceOffer {
+                    player_id: accepting_player_id,
+                    offer: Self::as_offer_snapshot(offer),
+                    owner_arrives_at,
+                    accepting_arrives_at,
+                },
+            )
             .await
     }
 
@@ -285,6 +387,30 @@ impl VillageEsService {
         runtime.query(&query).await
     }
 
+    pub async fn get_open_marketplace_offers(
+        &self,
+    ) -> Result<Vec<parabellum_app::villages::models::MarketplaceOfferModel>, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        runtime
+            .query(&GetOpenMarketplaceOffers {
+                repository: Arc::new(PostgresMarketplaceOfferRepository::new(self.pool.clone())),
+            })
+            .await
+    }
+
+    pub async fn get_marketplace_offer(
+        &self,
+        offer_id: uuid::Uuid,
+    ) -> Result<parabellum_app::villages::models::MarketplaceOfferModel, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        runtime
+            .query(&GetMarketplaceOfferById {
+                repository: Arc::new(PostgresMarketplaceOfferRepository::new(self.pool.clone())),
+                offer_id,
+            })
+            .await
+    }
+
     /// Returns the number of scheduled actions for one exact status.
     pub async fn get_village_scheduled_action_status_count(
         &self,
@@ -334,6 +460,48 @@ impl VillageEsService {
                 };
                 service
                     .reinforcement_arrived(source_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::MerchantsArrival {
+                action_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                player_id,
+                resources,
+                merchants_used,
+                arrives_at,
+            } => {
+                let command = CompleteMerchantsArrival {
+                    action_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    resources,
+                    merchants_used,
+                    arrives_at,
+                };
+                service
+                    .complete_merchant_arrival(source_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::MerchantsReturn {
+                action_id,
+                village_id: _,
+                source_village_id,
+                player_id,
+                merchants_used,
+                returns_at,
+            } => {
+                let command = CompleteMerchantsReturn {
+                    action_id,
+                    player_id,
+                    source_village_id,
+                    merchants_used,
+                    returns_at,
+                };
+                service
+                    .complete_merchant_return(source_village_id, &command)
                     .await?;
             }
             ScheduledActionPayload::AddBuilding {

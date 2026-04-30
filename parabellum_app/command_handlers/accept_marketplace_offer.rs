@@ -75,11 +75,14 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
         }
 
         // Calculate merchants needed for acceptor
-        let acceptor_merchants_needed =
-            calculate_merchants_needed(&acceptor_village.tribe, offer.seek_resources.total())?;
+        let acceptor_merchants_needed = calculate_merchants_needed(
+            &acceptor_village.tribe,
+            offer.seek_resources.quantity as u32,
+        )?;
 
         // Validate acceptor has enough seek_resources
-        acceptor_village.deduct_resources(&offer.seek_resources)?;
+        let seek_resources: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
+        acceptor_village.deduct_resources(&seek_resources)?;
 
         // Validate acceptor has enough available merchants
         if acceptor_village.available_merchants() < acceptor_merchants_needed {
@@ -109,7 +112,7 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
         let offerer_going_payload = MerchantGoingTask {
             origin_village_id: offerer_village.id,
             destination_village_id: acceptor_village.id,
-            resources: offer.offer_resources.clone(),
+            resources: offer.offer_resources.into(),
             merchants_used: offer.merchants_required,
             travel_time_secs: offerer_to_acceptor_travel_time,
         };
@@ -129,7 +132,7 @@ impl CommandHandler<AcceptMarketplaceOffer> for AcceptMarketplaceOfferCommandHan
         let acceptor_going_payload = MerchantGoingTask {
             origin_village_id: acceptor_village.id,
             destination_village_id: offerer_village.id,
-            resources: offer.seek_resources.clone(),
+            resources: offer.seek_resources.into(),
             merchants_used: acceptor_merchants_needed,
             travel_time_secs: acceptor_to_offerer_travel_time,
         };
@@ -162,7 +165,7 @@ mod tests {
     };
     use parabellum_types::{
         army::TroopSet,
-        common::{Player, ResourceGroup},
+        common::{Player, ResourceGroup, ResourceKind, ResourceQuantity},
         map::Position,
         tribe::Tribe,
     };
@@ -220,9 +223,9 @@ mod tests {
         let offer = MarketplaceOffer::new(
             offerer_player.id,
             offerer_village.id,
-            ResourceGroup(1000, 0, 0, 0), // Offering
-            ResourceGroup(0, 0, 1000, 0), // Seeking
-            2,                            // merchants_required
+            ResourceQuantity::new(ResourceKind::Lumber, 1000), // Offering
+            ResourceQuantity::new(ResourceKind::Iron, 1000),   // Seeking
+            2,                                                 // merchants_required
         );
 
         mock_uow.players().save(&offerer_player).await.unwrap();
@@ -259,6 +262,8 @@ mod tests {
         // Verify acceptor's resources were deducted
         let updated_acceptor = mock_uow.villages().get_by_id(acceptor_village.id).await?;
         assert_eq!(updated_acceptor.stored_resources().iron(), 5000 - 1000);
+        let updated_offerer = mock_uow.villages().get_by_id(offerer_village.id).await?;
+        assert_eq!(updated_offerer.stored_resources().lumber(), 1000);
 
         // Verify offer was deleted
         let offers = mock_uow
@@ -377,8 +382,8 @@ mod tests {
         let invalid_offer = MarketplaceOffer::new(
             offerer_player.id,
             offerer_village.id,
-            ResourceGroup(700, 300, 0, 0), // mixed side
-            ResourceGroup(0, 0, 1000, 0),
+            ResourceQuantity::new(ResourceKind::Lumber, 4000),
+            ResourceQuantity::new(ResourceKind::Iron, 1000),
             2,
         );
         mock_uow.marketplace().create(&invalid_offer).await?;

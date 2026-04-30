@@ -46,7 +46,8 @@ impl CommandHandler<CancelMarketplaceOffer> for CancelMarketplaceOfferCommandHan
         let mut village = village_repo.get_by_id(command.village_id).await?;
 
         // Return resources to village
-        village.store_resources(&offer.offer_resources);
+        let offer_resources: parabellum_types::common::ResourceGroup = offer.offer_resources.into();
+        village.store_resources(&offer_resources);
 
         // Delete offer
         marketplace_repo.delete(command.offer_id).await?;
@@ -76,7 +77,7 @@ mod tests {
     };
     use parabellum_types::{
         buildings::BuildingName,
-        common::{Player, ResourceGroup},
+        common::{Player, ResourceGroup, ResourceKind, ResourceQuantity},
         tribe::Tribe,
     };
 
@@ -120,8 +121,8 @@ mod tests {
         let offer = MarketplaceOffer::new(
             player.id,
             village.id,
-            ResourceGroup(1000, 500, 0, 0),
-            ResourceGroup(0, 0, 1000, 0),
+            ResourceQuantity::new(ResourceKind::Lumber, 1000),
+            ResourceQuantity::new(ResourceKind::Iron, 1000),
             2,
         );
 
@@ -149,7 +150,7 @@ mod tests {
         // Verify resources were returned
         let updated_village = mock_uow.villages().get_by_id(village.id).await?;
         assert_eq!(updated_village.stored_resources().lumber(), 3000 + 1000);
-        assert_eq!(updated_village.stored_resources().clay(), 3000 + 500);
+        assert_eq!(updated_village.stored_resources().clay(), 3000);
 
         // Verify offer was deleted
         let offers = mock_uow.marketplace().list_by_village(village.id).await?;

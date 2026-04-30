@@ -59,10 +59,11 @@ impl CommandHandler<CreateMarketplaceOffer> for CreateMarketplaceOfferCommandHan
         validate_marketplace_exchange_rules(&offer_resources, &seek_resources)?;
 
         // Check if village has enough resources to offer
-        village.deduct_resources(&offer_resources)?;
+        village.deduct_resources(&offer_resources.into())?;
 
         // Calculate merchants needed
-        let merchants_needed = calculate_merchants_needed(&village.tribe, offer_resources.total())?;
+        let merchants_needed =
+            calculate_merchants_needed(&village.tribe, offer_resources.quantity as u32)?;
 
         // Check if enough merchants available
         if village.available_merchants() < merchants_needed {
@@ -102,7 +103,7 @@ mod tests {
         },
     };
     use parabellum_types::{
-        common::{Player, ResourceGroup},
+        common::{Player, ResourceGroup, ResourceKind, ResourceQuantity},
         tribe::Tribe,
     };
 
@@ -154,8 +155,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(1500, 0, 0, 0), // 1500 total, needs 2 merchants (Gaul: 750 capacity)
-            seek_resources: ResourceGroup(0, 0, 1000, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1500),
+            seek_resources: ResourceQuantity::new(ResourceKind::Iron, 1000),
         };
 
         handler.handle(command, &mock_uow, &config).await?;
@@ -168,8 +169,8 @@ mod tests {
         // Verify offer was created
         let offers = mock_uow.marketplace().list_by_village(village.id).await?;
         assert_eq!(offers.len(), 1);
-        assert_eq!(offers[0].offer_resources.lumber(), 1500);
-        assert_eq!(offers[0].seek_resources.iron(), 1000);
+        assert_eq!(offers[0].offer_resources.quantity, 1500);
+        assert_eq!(offers[0].seek_resources.quantity, 1000);
         assert_eq!(offers[0].merchants_required, 2);
 
         Ok(())
@@ -187,8 +188,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(1000, 0, 0, 0),
-            seek_resources: ResourceGroup(0, 1000, 0, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1000),
+            seek_resources: ResourceQuantity::new(ResourceKind::Clay, 1000),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -209,8 +210,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(6000, 0, 0, 0), // More than available
-            seek_resources: ResourceGroup(0, 3000, 0, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 6000), // More than available
+            seek_resources: ResourceQuantity::new(ResourceKind::Clay, 3000),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -231,8 +232,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(0, 0, 0, 0),
-            seek_resources: ResourceGroup(0, 1000, 0, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 0),
+            seek_resources: ResourceQuantity::new(ResourceKind::Clay, 1000),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -246,22 +247,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_offer_mixed_resources_rejected() -> Result<()> {
+    async fn test_create_offer_different_resource_sides_allowed() -> Result<()> {
         let config = Arc::new(Config::from_env());
         let (mock_uow, _player, village) = setup_test_village(&config, Tribe::Gaul).await?;
 
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(1000, 500, 0, 0),
-            seek_resources: ResourceGroup(0, 0, 1000, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1500),
+            seek_resources: ResourceQuantity::new(ResourceKind::Iron, 1000),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
-        assert!(matches!(
-            result,
-            Err(ApplicationError::Game(GameError::InvalidMarketplaceOffer))
-        ));
+        assert!(result.is_ok());
         Ok(())
     }
 
@@ -273,8 +271,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(1000, 0, 0, 0),
-            seek_resources: ResourceGroup(500, 0, 0, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1000),
+            seek_resources: ResourceQuantity::new(ResourceKind::Lumber, 500),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -293,8 +291,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(4000, 0, 0, 0),
-            seek_resources: ResourceGroup(0, 0, 1000, 0), // 4:1 not allowed
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 4000),
+            seek_resources: ResourceQuantity::new(ResourceKind::Iron, 1000), // 4:1 not allowed
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;
@@ -317,8 +315,8 @@ mod tests {
         let handler = CreateMarketplaceOfferCommandHandler::new();
         let command = CreateMarketplaceOffer {
             village_id: village.id,
-            offer_resources: ResourceGroup(2000, 0, 0, 0), // Needs 3 merchants (Gaul: 750 capacity)
-            seek_resources: ResourceGroup(0, 1000, 0, 0),
+            offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 2000), // Needs 3 merchants (Gaul: 750 capacity)
+            seek_resources: ResourceQuantity::new(ResourceKind::Clay, 1000),
         };
 
         let result = handler.handle(command, &mock_uow, &config).await;

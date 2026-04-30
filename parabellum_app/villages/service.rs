@@ -1,10 +1,12 @@
 use mini_cqrs_es::{Cqrs, CqrsError};
 
 use crate::villages::{
-    AddBuilding, CompleteAcademyResearch, CompleteAddBuilding, CompleteDowngradeBuilding,
-    CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding, DowngradeBuilding,
-    FoundVillage, ReinforcementArrived, ResearchAcademy, ResearchSmithy, SendReinforcement,
-    SetVillageResources, TrainUnits, UpgradeBuilding,
+    AcceptMarketplaceOffer, AddBuilding, CancelMarketplaceOffer, CompleteAcademyResearch,
+    CompleteAddBuilding, CompleteDowngradeBuilding, CompleteMerchantsArrival,
+    CompleteMerchantsReturn, CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, ReinforcementArrived, ResearchAcademy,
+    ResearchSmithy, SendMerchantsTransfer, SendReinforcement, SetVillageResources, TrainUnits,
+    UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {
@@ -36,6 +38,14 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
             .await
     }
 
+    pub async fn send_resources(
+        &self,
+        village_id: u32,
+        command: &SendMerchantsTransfer,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute(&village_id, command).await
+    }
+
     pub async fn reinforcement_arrived(
         &self,
         village_id: u32,
@@ -43,6 +53,36 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
     ) -> Result<u32, CqrsError> {
         self.cqrs
             .execute::<ReinforcementArrived>(&village_id, command)
+            .await
+    }
+
+    pub async fn create_marketplace_offer(
+        &self,
+        village_id: u32,
+        command: &CreateMarketplaceOffer,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<CreateMarketplaceOffer>(&village_id, command)
+            .await
+    }
+
+    pub async fn cancel_marketplace_offer(
+        &self,
+        village_id: u32,
+        command: &CancelMarketplaceOffer,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<CancelMarketplaceOffer>(&village_id, command)
+            .await
+    }
+
+    pub async fn accept_marketplace_offer(
+        &self,
+        village_id: u32,
+        command: &AcceptMarketplaceOffer,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<AcceptMarketplaceOffer>(&village_id, command)
             .await
     }
 
@@ -102,6 +142,22 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         self.cqrs
             .execute::<CompleteDowngradeBuilding>(&village_id, command)
             .await
+    }
+
+    pub async fn complete_merchant_arrival(
+        &self,
+        village_id: u32,
+        command: &CompleteMerchantsArrival,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute(&village_id, command).await
+    }
+
+    pub async fn complete_merchant_return(
+        &self,
+        village_id: u32,
+        command: &CompleteMerchantsReturn,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute(&village_id, command).await
     }
 
     pub async fn train_units(

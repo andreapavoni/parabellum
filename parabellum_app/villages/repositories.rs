@@ -4,7 +4,8 @@ use parabellum_types::{common::ResourceGroup, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::villages::models::{
-    ScheduledAction, ScheduledActionStatus, ScheduledActionType, VillageModel, VillageMovement,
+    MarketplaceOfferModel, MarketplaceOfferStatus, ScheduledAction, ScheduledActionStatus,
+    ScheduledActionType, VillageModel, VillageMovement,
 };
 
 #[async_trait::async_trait]
@@ -52,6 +53,11 @@ pub trait VillageModelRepository: Send + Sync {
         village_id: u32,
         resources: ResourceGroup,
     ) -> Result<(), ApplicationError>;
+    async fn set_busy_merchants(
+        &self,
+        village_id: u32,
+        busy_merchants: u8,
+    ) -> Result<(), ApplicationError>;
     async fn get_by_village_id(&self, village_id: u32) -> Result<VillageModel, ApplicationError>;
     async fn list_by_player_id(
         &self,
@@ -88,4 +94,33 @@ pub trait ScheduledActionRepository: Send + Sync {
         village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError>;
+}
+
+#[async_trait::async_trait]
+pub trait MarketplaceOfferRepository: Send + Sync {
+    async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError>;
+    async fn get_by_offer_id(
+        &self,
+        offer_id: Uuid,
+    ) -> Result<MarketplaceOfferModel, ApplicationError>;
+    async fn set_status(
+        &self,
+        offer_id: Uuid,
+        status: MarketplaceOfferStatus,
+        accepted_by_player_id: Option<Uuid>,
+        accepted_by_village_id: Option<u32>,
+        at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), ApplicationError>;
+    async fn list_by_owner_village_id(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError>;
+    async fn list_open(&self) -> Result<Vec<MarketplaceOfferModel>, ApplicationError>;
+    async fn claim_open_for_accept(
+        &self,
+        offer_id: Uuid,
+        accepted_by_player_id: Uuid,
+        accepted_by_village_id: u32,
+        at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<MarketplaceOfferModel>, ApplicationError>;
 }

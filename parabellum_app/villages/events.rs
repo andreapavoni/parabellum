@@ -12,7 +12,7 @@ use mini_cqrs_es::EventPayload;
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::army::{TroopSet, UnitName};
 use parabellum_types::buildings::BuildingName;
-use parabellum_types::common::ResourceGroup;
+use parabellum_types::common::{ResourceGroup, ResourceQuantity};
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,63 @@ pub enum VillageEvent {
         units: TroopSet,
         hero_id: Option<Uuid>,
         arrives_at: DateTime<Utc>,
+    },
+    MerchantsTripScheduled {
+        arrival_action_id: Uuid,
+        return_action_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        resources: ResourceGroup,
+        merchants_used: u8,
+        resources_already_reserved: bool,
+        arrives_at: DateTime<Utc>,
+        returns_at: DateTime<Utc>,
+    },
+    MerchantsArrived {
+        action_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        resources: ResourceGroup,
+        merchants_used: u8,
+        arrives_at: DateTime<Utc>,
+    },
+    MerchantsReturned {
+        action_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        merchants_used: u8,
+        returns_at: DateTime<Utc>,
+    },
+    MarketplaceOfferCreated {
+        offer_id: Uuid,
+        owner_player_id: Uuid,
+        owner_village_id: u32,
+        offer_resources: ResourceQuantity,
+        seek_resources: ResourceQuantity,
+        merchants_reserved: u8,
+        created_at: DateTime<Utc>,
+    },
+    MarketplaceOfferCanceled {
+        offer_id: Uuid,
+        owner_player_id: Uuid,
+        owner_village_id: u32,
+        offer_resources: ResourceQuantity,
+        merchants_reserved: u8,
+        canceled_at: DateTime<Utc>,
+    },
+    MarketplaceOfferAccepted {
+        offer_id: Uuid,
+        owner_player_id: Uuid,
+        owner_village_id: u32,
+        accepting_player_id: Uuid,
+        accepting_village_id: u32,
+        offer_resources: ResourceQuantity,
+        seek_resources: ResourceQuantity,
+        owner_merchants_reserved: u8,
+        accepting_merchants_used: u8,
+        accepted_at: DateTime<Utc>,
     },
     BuildingConstructionScheduled {
         action_id: Uuid,
@@ -175,6 +232,12 @@ impl fmt::Display for VillageEvent {
             VillageEvent::VillageArmyDetached { .. } => "VillageArmyDetached",
             VillageEvent::ReinforcementSent { .. } => "ReinforcementSent",
             VillageEvent::ReinforcementArrived { .. } => "ReinforcementArrived",
+            VillageEvent::MerchantsTripScheduled { .. } => "MerchantsTripScheduled",
+            VillageEvent::MerchantsArrived { .. } => "MerchantsArrived",
+            VillageEvent::MerchantsReturned { .. } => "MerchantsReturned",
+            VillageEvent::MarketplaceOfferCreated { .. } => "MarketplaceOfferCreated",
+            VillageEvent::MarketplaceOfferCanceled { .. } => "MarketplaceOfferCanceled",
+            VillageEvent::MarketplaceOfferAccepted { .. } => "MarketplaceOfferAccepted",
             VillageEvent::BuildingConstructionScheduled { .. } => "BuildingConstructionScheduled",
             VillageEvent::BuildingUpgradeScheduled { .. } => "BuildingUpgradeScheduled",
             VillageEvent::BuildingDowngradeScheduled { .. } => "BuildingDowngradeScheduled",

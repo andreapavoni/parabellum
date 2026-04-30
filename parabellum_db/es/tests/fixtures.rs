@@ -50,6 +50,10 @@ where
 }
 
 pub async fn reset_tables(pool: &sqlx::PgPool) {
+    sqlx::query("DELETE FROM rm_marketplace_offers")
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM rm_village_movements")
         .execute(pool)
         .await
@@ -183,6 +187,16 @@ pub fn granary(level: u8) -> VillageBuilding {
         .expect("granary building data should be available for fixture");
     VillageBuilding {
         slot_id: 27,
+        building,
+    }
+}
+
+pub fn marketplace(level: u8) -> VillageBuilding {
+    let building = Building::new(BuildingName::Marketplace, 1)
+        .at_level(level, 1)
+        .expect("marketplace building data should be available for fixture");
+    VillageBuilding {
+        slot_id: 28,
         building,
     }
 }

@@ -9,15 +9,16 @@ use parabellum_app::villages::models::{
     ScheduledActionStatus, VillageMovement,
 };
 use parabellum_app::villages::repositories::{
-    ScheduledActionRepository, VillageModelRepository, VillageMovementRepository,
+    MarketplaceOfferRepository, ScheduledActionRepository, VillageModelRepository,
+    VillageMovementRepository,
 };
 use parabellum_types::army::TroopSet;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::es::{
-    PostgresScheduledActionRepository, PostgresVillageModelRepository,
-    PostgresVillageMovementRepository,
+    PostgresMarketplaceOfferRepository, PostgresScheduledActionRepository,
+    PostgresVillageModelRepository, PostgresVillageMovementRepository,
 };
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,7 @@ pub struct VillageProjector {
     village: PostgresVillageModelRepository,
     movements: PostgresVillageMovementRepository,
     actions: PostgresScheduledActionRepository,
+    offers: PostgresMarketplaceOfferRepository,
 }
 
 impl VillageProjector {
@@ -32,7 +34,8 @@ impl VillageProjector {
         Self {
             village: PostgresVillageModelRepository::new(pool.clone()),
             movements: PostgresVillageMovementRepository::new(pool.clone()),
-            actions: PostgresScheduledActionRepository::new(pool),
+            actions: PostgresScheduledActionRepository::new(pool.clone()),
+            offers: PostgresMarketplaceOfferRepository::new(pool),
         }
     }
 }
@@ -222,6 +225,248 @@ impl EventConsumer for VillageProjector {
 
                 self.movements
                     .delete_by_movement_id(movement_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::MerchantsTripScheduled {
+                arrival_action_id,
+                return_action_id,
+                player_id,
+                source_village_id,
+                target_village_id,
+                resources,
+                merchants_used,
+                resources_already_reserved,
+                arrives_at,
+                returns_at,
+            } => {
+                self.actions
+                    .add(&ScheduledAction {
+                        id: arrival_action_id,
+                        action_type: ScheduledActionPayload::MerchantsArrival {
+                            action_id: arrival_action_id,
+                            village_id: source_village_id,
+                            source_village_id,
+                            target_village_id,
+                            player_id,
+                            resources: resources.clone(),
+                            merchants_used,
+                            arrives_at,
+                        }
+                        .action_type(),
+                        execute_at: arrives_at,
+                        payload: serde_json::to_value(ScheduledActionPayload::MerchantsArrival {
+                            action_id: arrival_action_id,
+                            village_id: source_village_id,
+                            source_village_id,
+                            target_village_id,
+                            player_id,
+                            resources: resources.clone(),
+                            merchants_used,
+                            arrives_at,
+                        })
+                        .map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                self.actions
+                    .add(&ScheduledAction {
+                        id: return_action_id,
+                        action_type: ScheduledActionPayload::MerchantsReturn {
+                            action_id: return_action_id,
+                            village_id: source_village_id,
+                            source_village_id,
+                            player_id,
+                            merchants_used,
+                            returns_at,
+                        }
+                        .action_type(),
+                        execute_at: returns_at,
+                        payload: serde_json::to_value(ScheduledActionPayload::MerchantsReturn {
+                            action_id: return_action_id,
+                            village_id: source_village_id,
+                            source_village_id,
+                            player_id,
+                            merchants_used,
+                            returns_at,
+                        })
+                        .map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                if !resources_already_reserved {
+                    let source = self
+                        .village
+                        .get_by_village_id(source_village_id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    let next_resources = parabellum_types::common::ResourceGroup::new(
+                        source.stocks.lumber.saturating_sub(resources.lumber()),
+                        source.stocks.clay.saturating_sub(resources.clay()),
+                        source.stocks.iron.saturating_sub(resources.iron()),
+                        (source.stocks.crop.max(0) as u32).saturating_sub(resources.crop()),
+                    );
+                    self.village
+                        .set_stored_resources(source_village_id, next_resources)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    let next_busy = source.busy_merchants.saturating_add(merchants_used);
+                    self.village
+                        .set_busy_merchants(source_village_id, next_busy)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+            }
+            VillageEvent::MerchantsArrived {
+                target_village_id,
+                resources,
+                ..
+            } => {
+                let target = self
+                    .village
+                    .get_by_village_id(target_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let next_resources = parabellum_types::common::ResourceGroup::new(
+                    target.stocks.lumber.saturating_add(resources.lumber()),
+                    target.stocks.clay.saturating_add(resources.clay()),
+                    target.stocks.iron.saturating_add(resources.iron()),
+                    (target.stocks.crop.max(0) as u32).saturating_add(resources.crop()),
+                );
+                self.village
+                    .set_stored_resources(target_village_id, next_resources)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::MerchantsReturned {
+                source_village_id,
+                merchants_used,
+                ..
+            } => {
+                let source = self
+                    .village
+                    .get_by_village_id(source_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let next_busy = source.busy_merchants.saturating_sub(merchants_used);
+                self.village
+                    .set_busy_merchants(source_village_id, next_busy)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::MarketplaceOfferCreated {
+                offer_id,
+                owner_player_id,
+                owner_village_id,
+                offer_resources,
+                seek_resources,
+                merchants_reserved,
+                created_at,
+            } => {
+                self.offers
+                    .upsert(&parabellum_app::villages::models::MarketplaceOfferModel {
+                        offer_id,
+                        owner_player_id,
+                        owner_village_id,
+                        offer_resources,
+                        seek_resources,
+                        merchants_reserved,
+                        status: parabellum_app::villages::models::MarketplaceOfferStatus::Open,
+                        accepted_by_player_id: None,
+                        accepted_by_village_id: None,
+                        created_at,
+                        accepted_at: None,
+                        canceled_at: None,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                let owner = self
+                    .village
+                    .get_by_village_id(owner_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let reserved: parabellum_types::common::ResourceGroup = offer_resources.into();
+                let next_resources = parabellum_types::common::ResourceGroup::new(
+                    owner.stocks.lumber.saturating_sub(reserved.lumber()),
+                    owner.stocks.clay.saturating_sub(reserved.clay()),
+                    owner.stocks.iron.saturating_sub(reserved.iron()),
+                    (owner.stocks.crop.max(0) as u32).saturating_sub(reserved.crop()),
+                );
+                self.village
+                    .set_stored_resources(owner_village_id, next_resources)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.village
+                    .set_busy_merchants(
+                        owner_village_id,
+                        owner.busy_merchants.saturating_add(merchants_reserved),
+                    )
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::MarketplaceOfferCanceled {
+                offer_id,
+                owner_village_id,
+                offer_resources,
+                merchants_reserved,
+                canceled_at,
+                ..
+            } => {
+                self.offers
+                    .set_status(
+                        offer_id,
+                        parabellum_app::villages::models::MarketplaceOfferStatus::Canceled,
+                        None,
+                        None,
+                        canceled_at,
+                    )
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                let owner = self
+                    .village
+                    .get_by_village_id(owner_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let refund: parabellum_types::common::ResourceGroup = offer_resources.into();
+                let next_resources = parabellum_types::common::ResourceGroup::new(
+                    owner.stocks.lumber.saturating_add(refund.lumber()),
+                    owner.stocks.clay.saturating_add(refund.clay()),
+                    owner.stocks.iron.saturating_add(refund.iron()),
+                    (owner.stocks.crop.max(0) as u32).saturating_add(refund.crop()),
+                );
+                self.village
+                    .set_stored_resources(owner_village_id, next_resources)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.village
+                    .set_busy_merchants(
+                        owner_village_id,
+                        owner.busy_merchants.saturating_sub(merchants_reserved),
+                    )
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::MarketplaceOfferAccepted {
+                offer_id,
+                accepting_player_id,
+                accepting_village_id,
+                accepted_at,
+                ..
+            } => {
+                self.offers
+                    .set_status(
+                        offer_id,
+                        parabellum_app::villages::models::MarketplaceOfferStatus::Accepted,
+                        Some(accepting_player_id),
+                        Some(accepting_village_id),
+                        accepted_at,
+                    )
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }

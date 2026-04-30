@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::common::ResourceQuantity;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -72,6 +73,42 @@ pub struct VillageTroopMovements {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MarketplaceOfferStatus {
+    Open,
+    Accepted,
+    Canceled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketplaceOfferModel {
+    pub offer_id: Uuid,
+    pub owner_player_id: Uuid,
+    pub owner_village_id: u32,
+    pub offer_resources: ResourceQuantity,
+    pub seek_resources: ResourceQuantity,
+    pub merchants_reserved: u8,
+    pub status: MarketplaceOfferStatus,
+    pub accepted_by_player_id: Option<Uuid>,
+    pub accepted_by_village_id: Option<u32>,
+    pub created_at: DateTime<Utc>,
+    pub accepted_at: Option<DateTime<Utc>>,
+    pub canceled_at: Option<DateTime<Utc>>,
+}
+
+/// Domain snapshot used for marketplace offer command orchestration.
+///
+/// This is intentionally decoupled from projection-specific read model structs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketplaceOfferSnapshot {
+    pub offer_id: Uuid,
+    pub owner_player_id: Uuid,
+    pub owner_village_id: u32,
+    pub offer_resources: ResourceQuantity,
+    pub seek_resources: ResourceQuantity,
+    pub merchants_reserved: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionStatus {
     Pending,
     Processing,
@@ -82,6 +119,8 @@ pub enum ScheduledActionStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionType {
     ReinforcementArrival,
+    MerchantsArrival,
+    MerchantsReturn,
     AddBuilding,
     UpgradeBuilding,
     DowngradeBuilding,
@@ -111,6 +150,24 @@ pub enum ScheduledActionPayload {
         units: TroopSet,
         hero_id: Option<Uuid>,
         arrives_at: DateTime<Utc>,
+    },
+    MerchantsArrival {
+        action_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: Uuid,
+        resources: parabellum_types::common::ResourceGroup,
+        merchants_used: u8,
+        arrives_at: DateTime<Utc>,
+    },
+    MerchantsReturn {
+        action_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        player_id: Uuid,
+        merchants_used: u8,
+        returns_at: DateTime<Utc>,
     },
     AddBuilding {
         village_id: u32,
@@ -166,6 +223,10 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ReinforcementArrival { .. } => {
                 ScheduledActionType::ReinforcementArrival
             }
+            ScheduledActionPayload::MerchantsArrival { .. } => {
+                ScheduledActionType::MerchantsArrival
+            }
+            ScheduledActionPayload::MerchantsReturn { .. } => ScheduledActionType::MerchantsReturn,
             ScheduledActionPayload::AddBuilding { .. } => ScheduledActionType::AddBuilding,
             ScheduledActionPayload::UpgradeBuilding { .. } => ScheduledActionType::UpgradeBuilding,
             ScheduledActionPayload::DowngradeBuilding { .. } => {

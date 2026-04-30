@@ -47,6 +47,38 @@ pub struct ResearchCost {
 #[allow(dead_code)]
 pub struct ResourceGroup(pub u32, pub u32, pub u32, pub u32);
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResourceKind {
+    Lumber,
+    Clay,
+    Iron,
+    Crop,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResourceQuantity {
+    pub resource: ResourceKind,
+    pub quantity: u64,
+}
+
+impl ResourceQuantity {
+    pub const fn new(resource: ResourceKind, quantity: u64) -> Self {
+        Self { resource, quantity }
+    }
+}
+
+impl From<ResourceQuantity> for ResourceGroup {
+    fn from(value: ResourceQuantity) -> Self {
+        let qty = u32::try_from(value.quantity).unwrap_or(u32::MAX);
+        match value.resource {
+            ResourceKind::Lumber => Self(qty, 0, 0, 0),
+            ResourceKind::Clay => Self(0, qty, 0, 0),
+            ResourceKind::Iron => Self(0, 0, qty, 0),
+            ResourceKind::Crop => Self(0, 0, 0, qty),
+        }
+    }
+}
+
 impl ResourceGroup {
     pub const fn new(lumber: u32, clay: u32, iron: u32, crop: u32) -> Self {
         Self(lumber, clay, iron, crop)

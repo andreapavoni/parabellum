@@ -1,13 +1,15 @@
 use parabellum_app::villages::models::ScheduledActionStatus;
-use parabellum_app::villages::{ResearchAcademy, ResearchSmithy, SendReinforcement, TrainUnits};
+use parabellum_app::villages::{
+    ResearchAcademy, ResearchSmithy, SendMerchantsTransfer, SendReinforcement, TrainUnits,
+};
 use parabellum_types::{army::TroopSet, buildings::BuildingName, map::Position};
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
 
 use super::fixtures::{
-    academy, barracks, granary, main_building, rally_point, resources, setup_village, smithy,
-    warehouse, with_test_pool,
+    academy, barracks, granary, main_building, marketplace, rally_point, resources, setup_village,
+    smithy, warehouse, with_test_pool,
 };
 
 #[tokio::test]
@@ -345,6 +347,89 @@ async fn village_es_service_schedules_and_completes_academy_research() {
             .unwrap();
         assert_eq!(academy_completed, 1);
         assert_eq!(academy_pending, 0);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_schedules_and_completes_merchant_trip() {
+    with_test_pool(|pool| async move {
+        let player_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let service = VillageEsService::new(pool.clone());
+        setup_village(
+            &pool,
+            &service,
+            player_id,
+            user_id,
+            100,
+            "Village A",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), marketplace(2), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        setup_village(
+            &pool,
+            &service,
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            101,
+            "Village B",
+            Position { x: 1, y: 1 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(10_000, 10_000, 10_000, 10_000),
+        )
+        .await;
+
+        let send = parabellum_types::common::ResourceGroup(200, 50, 120, 100);
+        service
+            .send_resources(
+                100,
+                &SendMerchantsTransfer {
+                    player_id,
+                    target_village_id: 101,
+                    resources: send,
+                    arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                },
+            )
+            .await
+            .unwrap();
+
+        let source_after_schedule = service.get_village_model(100).await.unwrap();
+        assert_eq!(source_after_schedule.busy_merchants, 1);
+        assert_eq!(source_after_schedule.stocks.lumber, 79_800);
+        assert_eq!(source_after_schedule.stocks.clay, 79_950);
+        assert_eq!(source_after_schedule.stocks.iron, 79_880);
+        assert_eq!(source_after_schedule.stocks.crop, 79_900);
+
+        let arrival_actions = service
+            .get_village_scheduled_action_status_count(
+                100,
+                parabellum_app::villages::models::ScheduledActionType::MerchantsArrival,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(arrival_actions, 1);
+
+        let due_arrival = chrono::Utc::now() + chrono::Duration::minutes(6);
+        let processed_arrival = service.process_due_actions(due_arrival, 10).await.unwrap();
+        assert_eq!(processed_arrival, 1);
+
+        let target_after_arrival = service.get_village_model(101).await.unwrap();
+        assert_eq!(target_after_arrival.stocks.lumber, 10_200);
+        assert_eq!(target_after_arrival.stocks.clay, 10_050);
+        assert_eq!(target_after_arrival.stocks.iron, 10_120);
+        assert_eq!(target_after_arrival.stocks.crop, 10_100);
+
+        let due_return = chrono::Utc::now() + chrono::Duration::minutes(15);
+        let processed_return = service.process_due_actions(due_return, 10).await.unwrap();
+        assert_eq!(processed_return, 1);
+        let source_after_return = service.get_village_model(100).await.unwrap();
+        assert_eq!(source_after_return.busy_merchants, 0);
     })
     .await;
 }

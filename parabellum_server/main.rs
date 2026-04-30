@@ -5,7 +5,8 @@ use parabellum_app::{
     app::AppBus, config::Config, job_registry::AppJobRegistry, jobs::worker::JobWorker,
 };
 use parabellum_db::{
-    bootstrap_world_map, establish_connection_pool, uow::PostgresUnitOfWorkProvider,
+    bootstrap_world_map, es::EsScheduledActionWorker, es::VillageEsService,
+    establish_connection_pool, uow::PostgresUnitOfWorkProvider,
 };
 use parabellum_types::{Result, errors::ApplicationError};
 use parabellum_web::{AppState, WebRouter};
@@ -17,15 +18,24 @@ use logs::setup_logging;
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
     setup_logging();
-    let (config, app_bus, worker, db_pool) = setup_app().await?;
+    let (config, app_bus, worker, es_worker, db_pool) = setup_app().await?;
     let state = AppState::new(app_bus, db_pool, &config);
 
     worker.run();
+    es_worker.run();
     WebRouter::serve(state, 8080).await
 }
 
-async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>, PgPool), ApplicationError>
-{
+async fn setup_app() -> Result<
+    (
+        Arc<Config>,
+        Arc<AppBus>,
+        Arc<JobWorker>,
+        Arc<EsScheduledActionWorker>,
+        PgPool,
+    ),
+    ApplicationError,
+> {
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
 
@@ -44,8 +54,12 @@ async fn setup_app() -> Result<(Arc<Config>, Arc<AppBus>, Arc<JobWorker>, PgPool
         app_registry,
         config.clone(),
     ));
+    let es_worker = Arc::new(EsScheduledActionWorker::new(
+        VillageEsService::new(db_pool.clone()),
+        1000,
+    ));
 
-    Ok((config, app_bus, worker, db_pool))
+    Ok((config, app_bus, worker, es_worker, db_pool))
 }
 
 async fn setup_world_map(pool: &PgPool, config: &Config) -> Result<(), ApplicationError> {

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use parabellum_types::common::ResourceGroup;
+use parabellum_types::common::ResourceQuantity;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -8,8 +8,8 @@ pub struct MarketplaceOffer {
     pub id: Uuid,
     pub player_id: Uuid,
     pub village_id: u32,
-    pub offer_resources: ResourceGroup,
-    pub seek_resources: ResourceGroup,
+    pub offer_resources: ResourceQuantity,
+    pub seek_resources: ResourceQuantity,
     pub merchants_required: u8,
     pub created_at: DateTime<Utc>,
 }
@@ -18,8 +18,8 @@ impl MarketplaceOffer {
     pub fn new(
         player_id: Uuid,
         village_id: u32,
-        offer_resources: ResourceGroup,
-        seek_resources: ResourceGroup,
+        offer_resources: ResourceQuantity,
+        seek_resources: ResourceQuantity,
         merchants_required: u8,
     ) -> Self {
         Self {

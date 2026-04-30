@@ -139,6 +139,33 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         buildings: &[VillageBuilding],
         army: &parabellum_types::army::TroopSet,
     ) -> Result<(), ApplicationError> {
+        let warehouse_capacity = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Warehouse)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let granary_capacity = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Granary)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let total_merchants = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Marketplace)
+            .map(|b| b.building.level)
+            .max()
+            .unwrap_or(0);
+        let stocks = VillageStocks {
+            warehouse_capacity,
+            granary_capacity,
+            lumber: 800.min(warehouse_capacity),
+            clay: 800.min(warehouse_capacity),
+            iron: 800.min(warehouse_capacity),
+            crop: (800_i64).min(granary_capacity as i64),
+        };
+
         sqlx::query(
             r#"
             INSERT INTO rm_village (
@@ -181,7 +208,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .bind(DbTribe::from(tribe))
         .bind(Json(buildings))
         .bind(Json(VillageProduction::default()))
-        .bind(Json(VillageStocks::default()))
+        .bind(Json(stocks))
         .bind(2_i32)
         .bind(100_i16)
         .bind(false)
@@ -191,7 +218,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .bind(Json(army))
         .bind(Json(parabellum_types::army::TroopSet::default()))
         .bind(Json(parabellum_types::army::TroopSet::default()))
-        .bind(0_i16)
+        .bind(total_merchants as i16)
         .bind(0_i16)
         .execute(&self.pool)
         .await
@@ -322,6 +349,12 @@ impl VillageModelRepository for PostgresVillageModelRepository {
             .map(|b| b.building.value)
             .max()
             .unwrap_or(800);
+        let total_merchants = next_buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Marketplace)
+            .map(|b| b.building.level)
+            .max()
+            .unwrap_or(0);
 
         let mut next_stocks = stocks.0;
         next_stocks.warehouse_capacity = warehouse_capacity;
@@ -334,13 +367,14 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET buildings = $2, stocks = $3, updated_at = NOW()
+            SET buildings = $2, stocks = $3, total_merchants = $4, updated_at = NOW()
             WHERE village_id = $1
             "#,
         )
         .bind(village_id as i32)
         .bind(Json(next_buildings))
         .bind(Json(next_stocks))
+        .bind(total_merchants as i16)
         .execute(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -374,6 +408,26 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         )
         .bind(village_id as i32)
         .bind(Json(next))
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    async fn set_busy_merchants(
+        &self,
+        village_id: u32,
+        busy_merchants: u8,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET busy_merchants = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(busy_merchants as i16)
         .execute(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;

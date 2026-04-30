@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use mini_cqrs_es::{CqrsError, Query};
 
-use crate::villages::models::{ScheduledActionStatus, ScheduledActionType};
-use crate::villages::repositories::ScheduledActionRepository;
+use crate::villages::models::{MarketplaceOfferModel, ScheduledActionStatus, ScheduledActionType};
+use crate::villages::repositories::{MarketplaceOfferRepository, ScheduledActionRepository};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ScheduledActionStatusCounts {
@@ -51,5 +51,38 @@ impl Query for GetScheduledActionStatusCounts {
             }
         }
         Ok(counts)
+    }
+}
+
+/// Query that returns all open marketplace offers from ES read models.
+pub struct GetOpenMarketplaceOffers {
+    pub repository: Arc<dyn MarketplaceOfferRepository>,
+}
+
+impl Query for GetOpenMarketplaceOffers {
+    type Output = Result<Vec<MarketplaceOfferModel>, CqrsError>;
+
+    async fn apply(&self) -> Self::Output {
+        self.repository
+            .list_open()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+}
+
+/// Query that returns a marketplace offer by id from ES read models.
+pub struct GetMarketplaceOfferById {
+    pub repository: Arc<dyn MarketplaceOfferRepository>,
+    pub offer_id: uuid::Uuid,
+}
+
+impl Query for GetMarketplaceOfferById {
+    type Output = Result<MarketplaceOfferModel, CqrsError>;
+
+    async fn apply(&self) -> Self::Output {
+        self.repository
+            .get_by_offer_id(self.offer_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 }

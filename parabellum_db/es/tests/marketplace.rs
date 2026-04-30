@@ -1,0 +1,246 @@
+use chrono::{Duration, Utc};
+use uuid::Uuid;
+
+use parabellum_app::villages::CreateMarketplaceOffer;
+use parabellum_types::{
+    common::{ResourceKind, ResourceQuantity},
+    map::Position,
+    tribe::Tribe,
+};
+
+use crate::es::VillageEsService;
+
+use super::fixtures::{
+    granary, main_building, marketplace, resources, setup_village, warehouse, with_test_pool,
+};
+
+#[tokio::test]
+async fn village_es_service_marketplace_offer_create_accept_flow() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let owner_player_id = Uuid::new_v4();
+        let owner_user_id = Uuid::new_v4();
+        let owner_village_id = 7001;
+        setup_village(
+            &pool,
+            &service,
+            owner_player_id,
+            owner_user_id,
+            owner_village_id,
+            "owner",
+            Position { x: 0, y: 0 },
+            Tribe::Gaul,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let acceptor_player_id = Uuid::new_v4();
+        let acceptor_user_id = Uuid::new_v4();
+        let acceptor_village_id = 7002;
+        setup_village(
+            &pool,
+            &service,
+            acceptor_player_id,
+            acceptor_user_id,
+            acceptor_village_id,
+            "acceptor",
+            Position { x: 8, y: 8 },
+            Tribe::Roman,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let second_acceptor_player_id = Uuid::new_v4();
+        let second_acceptor_user_id = Uuid::new_v4();
+        let second_acceptor_village_id = 7003;
+        setup_village(
+            &pool,
+            &service,
+            second_acceptor_player_id,
+            second_acceptor_user_id,
+            second_acceptor_village_id,
+            "acceptor-2",
+            Position { x: 10, y: 10 },
+            Tribe::Teuton,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .create_marketplace_offer(
+                owner_village_id,
+                &CreateMarketplaceOffer {
+                    player_id: owner_player_id,
+                    offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
+                    seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                },
+            )
+            .await
+            .expect("offer creation should succeed");
+
+        let owner_after_create = service
+            .get_village_model(owner_village_id)
+            .await
+            .expect("owner model should be readable");
+        assert_eq!(owner_after_create.stocks.lumber, 79_000);
+        assert_eq!(owner_after_create.busy_merchants, 2);
+
+        let open_offers = service
+            .get_open_marketplace_offers()
+            .await
+            .expect("open offers query should succeed");
+        assert_eq!(open_offers.len(), 1);
+        let offer = &open_offers[0];
+        assert_eq!(offer.owner_village_id, owner_village_id);
+
+        service
+            .accept_marketplace_offer(
+                acceptor_village_id,
+                acceptor_player_id,
+                offer.offer_id,
+                Utc::now() + Duration::minutes(5),
+                Utc::now() + Duration::minutes(5),
+            )
+            .await
+            .expect("offer acceptance should succeed");
+
+        let second_attempt = service
+            .accept_marketplace_offer(
+                second_acceptor_village_id,
+                second_acceptor_player_id,
+                offer.offer_id,
+                Utc::now() + Duration::minutes(6),
+                Utc::now() + Duration::minutes(6),
+            )
+            .await;
+        assert!(
+            second_attempt.is_err(),
+            "same offer must not be accepted twice"
+        );
+
+        let owner_after_accept = service
+            .get_village_model(owner_village_id)
+            .await
+            .expect("owner model should be readable");
+        assert_eq!(
+            owner_after_accept.stocks.lumber, 79_000,
+            "owner resources must not be deducted twice on accept"
+        );
+        assert_eq!(owner_after_accept.busy_merchants, 2);
+
+        let acceptor_after_accept = service
+            .get_village_model(acceptor_village_id)
+            .await
+            .expect("acceptor model should be readable");
+        assert_eq!(acceptor_after_accept.stocks.iron, 79_100);
+        assert!(acceptor_after_accept.busy_merchants >= 1);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_marketplace_offer_create_cancel_flow() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let owner_player_id = Uuid::new_v4();
+        let owner_user_id = Uuid::new_v4();
+        let owner_village_id = 7101;
+        setup_village(
+            &pool,
+            &service,
+            owner_player_id,
+            owner_user_id,
+            owner_village_id,
+            "owner-cancel",
+            Position { x: 1, y: 1 },
+            Tribe::Roman,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .create_marketplace_offer(
+                owner_village_id,
+                &CreateMarketplaceOffer {
+                    player_id: owner_player_id,
+                    offer_resources: ResourceQuantity::new(ResourceKind::Clay, 1_200),
+                    seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                },
+            )
+            .await
+            .expect("offer creation should succeed");
+
+        let owner_after_create = service
+            .get_village_model(owner_village_id)
+            .await
+            .expect("owner model should be readable after create");
+        assert_eq!(owner_after_create.stocks.clay, 78_800);
+        assert_eq!(owner_after_create.busy_merchants, 3);
+
+        let open_offers = service
+            .get_open_marketplace_offers()
+            .await
+            .expect("open offers query should succeed");
+        assert_eq!(open_offers.len(), 1);
+        let offer = open_offers[0].clone();
+
+        service
+            .cancel_marketplace_offer(owner_village_id, owner_player_id, offer.offer_id)
+            .await
+            .expect("offer cancellation should succeed");
+
+        let owner_after_cancel = service
+            .get_village_model(owner_village_id)
+            .await
+            .expect("owner model should be readable after cancel");
+        assert_eq!(owner_after_cancel.stocks.clay, 80_000);
+        assert_eq!(owner_after_cancel.busy_merchants, 0);
+
+        let offer_after_cancel = service
+            .get_marketplace_offer(offer.offer_id)
+            .await
+            .expect("canceled offer should still be readable");
+        assert_eq!(
+            offer_after_cancel.status,
+            parabellum_app::villages::models::MarketplaceOfferStatus::Canceled
+        );
+
+        let open_after_cancel = service
+            .get_open_marketplace_offers()
+            .await
+            .expect("open offers query after cancel should succeed");
+        assert!(
+            open_after_cancel
+                .iter()
+                .all(|open| open.offer_id != offer.offer_id),
+            "canceled offer must not remain open"
+        );
+    })
+    .await;
+}

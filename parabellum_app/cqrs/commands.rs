@@ -4,8 +4,12 @@ use uuid::Uuid;
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::{
-    army::UnitName, battle::AttackType, buildings::BuildingName, common::ResourceGroup,
-    map::Position, tribe::Tribe,
+    army::UnitName,
+    battle::AttackType,
+    buildings::BuildingName,
+    common::{ResourceGroup, ResourceQuantity},
+    map::Position,
+    tribe::Tribe,
 };
 
 use crate::cqrs::Command;
@@ -164,8 +168,8 @@ impl Command for SendResources {}
 #[derive(Debug, Clone)]
 pub struct CreateMarketplaceOffer {
     pub village_id: u32,
-    pub offer_resources: ResourceGroup,
-    pub seek_resources: ResourceGroup,
+    pub offer_resources: ResourceQuantity,
+    pub seek_resources: ResourceQuantity,
 }
 impl Command for CreateMarketplaceOffer {}
 

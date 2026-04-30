@@ -11,6 +11,7 @@ use parabellum_game::models::{
 use parabellum_types::{
     army::{TroopSet, UnitName},
     buildings::BuildingName,
+    common::ResourceGroup,
     errors::{AppError, ApplicationError, GameError},
     map::Position,
     tribe::Tribe,
@@ -362,6 +363,50 @@ impl VillageState {
             .init_unit_training(unit_idx, &building_name, quantity, speed)
             .map(|(slot_id, unit_name, time_per_unit)| (slot_id, unit_name, time_per_unit as i32))
             .map_err(Into::into)
+    }
+
+    pub fn schedule_send_resources(
+        &self,
+        resources: ResourceGroup,
+    ) -> Result<u8, ApplicationError> {
+        if self.building_level(BuildingName::Marketplace) == 0 {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Marketplace,
+                level: 1,
+            }
+            .into());
+        }
+        if !self.village.has_enough_resources(&resources) {
+            return Err(GameError::NotEnoughResources.into());
+        }
+
+        let capacity = self.village.tribe.merchant_stats().capacity;
+        if capacity == 0 {
+            return Err(GameError::NotEnoughMerchants.into());
+        }
+        let total = resources.total();
+        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
+        let merchants_needed = if total > 0 { needed.max(1) } else { 0 };
+        if merchants_needed == 0 || merchants_needed > self.village.available_merchants() {
+            return Err(GameError::NotEnoughMerchants.into());
+        }
+        Ok(merchants_needed)
+    }
+
+    pub fn apply_merchant_departure(
+        &mut self,
+        resources: &ResourceGroup,
+        merchants_used: u8,
+    ) -> Result<(), ApplicationError> {
+        self.village
+            .deduct_resources(resources)
+            .map_err(ApplicationError::from)?;
+        self.village.busy_merchants = self.village.busy_merchants.saturating_add(merchants_used);
+        Ok(())
+    }
+
+    pub fn apply_merchant_return(&mut self, merchants_used: u8) {
+        self.village.busy_merchants = self.village.busy_merchants.saturating_sub(merchants_used);
     }
 
     pub fn register_training_action(
