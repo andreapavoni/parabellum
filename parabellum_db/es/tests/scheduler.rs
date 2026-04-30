@@ -433,3 +433,87 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_execution() {
+    with_test_pool(|pool| async move {
+        let player_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let service = VillageEsService::new(pool.clone());
+        setup_village(
+            &pool,
+            &service,
+            player_id,
+            user_id,
+            900,
+            "Timing Village",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), barracks(1), warehouse(20), granary(20)],
+            resources(2_000, 2_000, 2_000, 2_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                900,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        let due_at = service
+            .get_village_training_queue(900)
+            .await
+            .unwrap()
+            .iter()
+            .map(|a| a.execute_at)
+            .min()
+            .expect("training queue should contain one action");
+
+        let processed_before_due = service
+            .process_due_actions(due_at - chrono::Duration::milliseconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            processed_before_due, 0,
+            "no actions must execute before execute_at"
+        );
+
+        let (first, second) = tokio::join!(
+            service.process_due_actions(due_at + chrono::Duration::milliseconds(1), 10),
+            service.process_due_actions(due_at + chrono::Duration::milliseconds(1), 10),
+        );
+        let processed_total = first.unwrap() + second.unwrap();
+        assert_eq!(
+            processed_total, 1,
+            "concurrent schedulers must not execute same action twice"
+        );
+
+        let completed = service
+            .get_village_scheduled_action_status_count(
+                900,
+                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                ScheduledActionStatus::Completed,
+            )
+            .await
+            .unwrap();
+        let pending = service
+            .get_village_scheduled_action_status_count(
+                900,
+                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(completed, 1);
+        assert_eq!(pending, 0);
+    })
+    .await;
+}
