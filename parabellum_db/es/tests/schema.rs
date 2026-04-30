@@ -1,12 +1,10 @@
 use sqlx::Row;
 
-use super::fixtures::setup_pool;
+use super::fixtures::with_test_pool;
 
 #[tokio::test]
 async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
-    let Some(pool) = setup_pool().await else {
-        return;
-    };
+    with_test_pool(|pool| async move {
 
     let enum_count: i64 = sqlx::query_scalar(
         r#"
@@ -90,4 +88,20 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         action_type.get::<String, _>("udt_name"),
         "scheduled_action_type"
     );
+
+    let smithy_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'ResearchSmithy'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(smithy_variant_exists, 1);
+    })
+    .await;
 }

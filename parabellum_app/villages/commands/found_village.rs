@@ -1,11 +1,12 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::army::TroopSet;
+use parabellum_types::errors::GameError;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent};
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
 pub struct FoundVillage {
@@ -22,7 +23,9 @@ impl Command for FoundVillage {
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
         if aggregate.version() != 0 {
-            return Err(CqrsError::Domain("village is already founded".to_string()));
+            return Err(as_domain_error(GameError::VillageAlreadyFounded {
+                village_id: aggregate.aggregate_id(),
+            }));
         }
 
         Ok(vec![VillageEvent::VillageFounded {

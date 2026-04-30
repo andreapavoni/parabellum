@@ -3,7 +3,8 @@ use sqlx::PgPool;
 
 use crate::es::{PostgresEventStore, VillageProjector};
 
-pub type VillageCqrsRuntime = SimpleCqrs<PostgresEventStore, SimpleAggregateManager<PostgresEventStore>>;
+pub type VillageCqrsRuntime =
+    SimpleCqrs<PostgresEventStore, SimpleAggregateManager<PostgresEventStore>>;
 
 pub fn village_cqrs_runtime(pool: PgPool) -> VillageCqrsRuntime {
     let event_store = PostgresEventStore::new(pool.clone());
@@ -12,4 +13,3 @@ pub fn village_cqrs_runtime(pool: PgPool) -> VillageCqrsRuntime {
 
     SimpleCqrs::new(aggregate_manager, event_store, consumers)
 }
-

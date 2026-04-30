@@ -1,16 +1,19 @@
 mod aggregate;
-mod commands;
+pub mod commands;
 mod events;
-mod state;
 pub mod models;
+pub mod queries;
 pub mod repositories;
 pub mod service;
+mod state;
 
 pub use aggregate::VillageAggregate;
 pub use commands::{
-    AddBuilding, CompleteAddBuilding, CompleteDowngradeBuilding, CompleteUpgradeBuilding,
-    DowngradeBuilding, FoundVillage, ReinforcementArrived, SendReinforcement, UpgradeBuilding,
+    AddBuilding, CompleteAcademyResearch, CompleteAddBuilding, CompleteDowngradeBuilding,
+    CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding, DowngradeBuilding,
+    FoundVillage, ReinforcementArrived, ResearchAcademy, ResearchSmithy, SendReinforcement,
+    SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 pub use events::VillageEvent;
-pub use state::VillageState;
 pub use service::VillageService;
+pub use state::VillageState;

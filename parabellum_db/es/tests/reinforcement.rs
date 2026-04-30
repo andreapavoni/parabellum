@@ -1,25 +1,15 @@
-use parabellum_app::villages::{AddBuilding, SendReinforcement};
-use parabellum_types::{
-    army::TroopSet,
-    buildings::BuildingName,
-    map::Position,
-};
+use parabellum_app::villages::SendReinforcement;
+use parabellum_types::{army::TroopSet, map::Position};
 use sqlx::Row;
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
 
-use super::fixtures::{found_village_cmd, seed_player_and_village, setup_pool, table_exists};
+use super::fixtures::{found_village_cmd, seed_player_and_village, with_test_pool};
 
 #[tokio::test]
 async fn village_es_service_persists_events_and_projects_reinforcement() {
-    let Some(pool) = setup_pool().await else {
-        return;
-    };
-    if !table_exists(&pool, "rm_village_movements").await {
-        eprintln!("Skipping test: rm_village_movements is not present in TEST_DATABASE_URL");
-        return;
-    }
+    with_test_pool(|pool| async move {
 
     let source_player_id = Uuid::new_v4();
     let source_user_id = Uuid::new_v4();
@@ -59,18 +49,6 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     let movement_id = Uuid::new_v4();
     let army_id = Uuid::new_v4();
     service
-        .add_building(
-            100,
-            &AddBuilding {
-                player_id: source_player_id,
-                slot_id: 22,
-                building_name: BuildingName::Barracks,
-                speed: 1,
-            },
-        )
-        .await
-        .unwrap();
-    service
         .send_reinforcement(
             100,
             &SendReinforcement {
@@ -94,10 +72,10 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(events_count_before, 4);
+    assert_eq!(events_count_before, 3);
 
     let movement_rows = sqlx::query(
-        "SELECT village_id, direction FROM rm_village_movements WHERE movement_id = $1 ORDER BY village_id ASC",
+        "SELECT village_id, direction::text AS direction FROM rm_village_movements WHERE movement_id = $1 ORDER BY village_id ASC",
     )
     .bind(movement_id)
     .fetch_all(&pool)
@@ -121,18 +99,18 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     assert_eq!(village.buildings.len(), 0);
 
     let action_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM rm_scheduled_actions WHERE action_type IN ('ReinforcementArrival', 'AddBuilding')",
+        "SELECT COUNT(*) FROM rm_scheduled_actions WHERE action_type = 'ReinforcementArrival'",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(action_count, 2);
+    assert_eq!(action_count, 1);
 
     let processed = service
         .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
         .await
         .unwrap();
-    assert_eq!(processed, 2);
+    assert_eq!(processed, 1);
 
     let events_count_after: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM es_events WHERE aggregate_type = $1 AND aggregate_id = $2",
@@ -142,7 +120,7 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(events_count_after, 6);
+    assert_eq!(events_count_after, 4);
 
     let movement_count_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM rm_village_movements WHERE movement_id = $1")
@@ -153,10 +131,12 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     assert_eq!(movement_count_after, 0);
 
     let completed_actions: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM rm_scheduled_actions WHERE action_type IN ('ReinforcementArrival', 'AddBuilding') AND status = 'completed'",
+        "SELECT COUNT(*) FROM rm_scheduled_actions WHERE action_type = 'ReinforcementArrival' AND status = 'completed'",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(completed_actions, 2);
+    assert_eq!(completed_actions, 1);
+    })
+    .await;
 }

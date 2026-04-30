@@ -1,6 +1,6 @@
+pub mod es;
 pub mod mapping;
 pub mod uow;
-pub mod es;
 
 mod connection;
 mod models;

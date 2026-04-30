@@ -61,6 +61,12 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
+            VillageEvent::VillageResourcesSet { village_id, .. } => {
+                self.village
+                    .refresh_from_source(village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
             VillageEvent::VillageArmyDetached { units, .. } => {
                 let village_id = event
                     .aggregate_id
@@ -137,16 +143,18 @@ impl EventConsumer for VillageProjector {
                         }
                         .action_type(),
                         execute_at: arrives_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ReinforcementArrival {
-                            movement_id,
-                            army_id,
-                            player_id,
-                            source_village_id,
-                            target_village_id,
-                            units,
-                            hero_id,
-                            arrives_at,
-                        })
+                        payload: serde_json::to_value(
+                            ScheduledActionPayload::ReinforcementArrival {
+                                movement_id,
+                                army_id,
+                                player_id,
+                                source_village_id,
+                                target_village_id,
+                                units,
+                                hero_id,
+                                arrives_at,
+                            },
+                        )
                         .map_err(CqrsError::Serialization)?,
                         status: ScheduledActionStatus::Pending,
                     })
@@ -282,6 +290,107 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
+            VillageEvent::UnitTrainingScheduled {
+                action_id,
+                player_id,
+                village_id,
+                slot_id,
+                unit,
+                time_per_unit,
+                quantity_remaining,
+                execute_at,
+            } => {
+                let payload = ScheduledActionPayload::TrainUnit {
+                    action_id,
+                    village_id,
+                    player_id,
+                    slot_id,
+                    unit,
+                    time_per_unit,
+                    quantity_remaining,
+                    execute_at,
+                };
+                self.actions
+                    .add(&ScheduledAction {
+                        id: action_id,
+                        action_type: payload.action_type(),
+                        execute_at,
+                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::UnitTrained {
+                village_id,
+                unit,
+                quantity_trained,
+                ..
+            } => {
+                let current = self
+                    .village
+                    .get_by_village_id(village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut next_units = current.stationed_army;
+                if let Some(idx) = current.tribe.get_unit_idx_by_name(&unit) {
+                    next_units.add(idx, quantity_trained);
+                    self.village
+                        .update_stationed_army(village_id, &next_units)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+            }
+            VillageEvent::AcademyResearchScheduled {
+                action_id,
+                player_id,
+                village_id,
+                unit,
+                execute_at,
+            } => {
+                let payload = ScheduledActionPayload::ResearchAcademy {
+                    action_id,
+                    village_id,
+                    player_id,
+                    unit,
+                };
+                self.actions
+                    .add(&ScheduledAction {
+                        id: action_id,
+                        action_type: payload.action_type(),
+                        execute_at,
+                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::AcademyResearchCompleted { .. } => {}
+            VillageEvent::SmithyResearchScheduled {
+                action_id,
+                player_id,
+                village_id,
+                unit,
+                execute_at,
+            } => {
+                let payload = ScheduledActionPayload::ResearchSmithy {
+                    action_id,
+                    village_id,
+                    player_id,
+                    unit,
+                };
+                self.actions
+                    .add(&ScheduledAction {
+                        id: action_id,
+                        action_type: payload.action_type(),
+                        execute_at,
+                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::SmithyResearchCompleted { .. } => {}
         }
 
         Ok(())

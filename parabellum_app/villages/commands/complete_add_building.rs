@@ -1,8 +1,8 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
-use parabellum_types::buildings::BuildingName;
+use parabellum_types::{buildings::BuildingName, errors::AppError};
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent};
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
 pub struct CompleteAddBuilding {
@@ -20,7 +20,10 @@ impl Command for CompleteAddBuilding {
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
         if aggregate.aggregate_id() != self.village_id {
-            return Err(CqrsError::Domain("invalid aggregate target".to_string()));
+            return Err(as_invariant_error(AppError::InvalidAggregateTarget {
+                expected: self.village_id,
+                actual: aggregate.aggregate_id(),
+            }));
         }
         Ok(vec![VillageEvent::BuildingAdded {
             action_id: self.action_id,

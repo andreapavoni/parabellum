@@ -3,8 +3,9 @@ use std::fmt;
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::EventPayload;
 use parabellum_game::models::village::VillageBuilding;
-use parabellum_types::army::TroopSet;
+use parabellum_types::army::{TroopSet, UnitName};
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::common::ResourceGroup;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,11 @@ pub enum VillageEvent {
     },
     VillageConquered {
         player_id: Uuid,
+    },
+    VillageResourcesSet {
+        player_id: Uuid,
+        village_id: u32,
+        resources: ResourceGroup,
     },
     VillageArmyDetached {
         army_id: Uuid,
@@ -106,6 +112,49 @@ pub enum VillageEvent {
         level: u8,
         speed: i8,
     },
+    UnitTrainingScheduled {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        slot_id: u8,
+        unit: UnitName,
+        time_per_unit: i32,
+        quantity_remaining: i32,
+        execute_at: DateTime<Utc>,
+    },
+    UnitTrained {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        unit: UnitName,
+        quantity_trained: u32,
+    },
+    AcademyResearchScheduled {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        unit: UnitName,
+        execute_at: DateTime<Utc>,
+    },
+    AcademyResearchCompleted {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        unit: UnitName,
+    },
+    SmithyResearchScheduled {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        unit: UnitName,
+        execute_at: DateTime<Utc>,
+    },
+    SmithyResearchCompleted {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        unit: UnitName,
+    },
 }
 
 impl fmt::Display for VillageEvent {
@@ -113,6 +162,7 @@ impl fmt::Display for VillageEvent {
         let name = match self {
             VillageEvent::VillageFounded { .. } => "VillageFounded",
             VillageEvent::VillageConquered { .. } => "VillageConquered",
+            VillageEvent::VillageResourcesSet { .. } => "VillageResourcesSet",
             VillageEvent::VillageArmyDetached { .. } => "VillageArmyDetached",
             VillageEvent::ReinforcementSent { .. } => "ReinforcementSent",
             VillageEvent::ReinforcementArrived { .. } => "ReinforcementArrived",
@@ -122,6 +172,12 @@ impl fmt::Display for VillageEvent {
             VillageEvent::BuildingAdded { .. } => "BuildingAdded",
             VillageEvent::BuildingUpgraded { .. } => "BuildingUpgraded",
             VillageEvent::BuildingDowngraded { .. } => "BuildingDowngraded",
+            VillageEvent::UnitTrainingScheduled { .. } => "UnitTrainingScheduled",
+            VillageEvent::UnitTrained { .. } => "UnitTrained",
+            VillageEvent::AcademyResearchScheduled { .. } => "AcademyResearchScheduled",
+            VillageEvent::AcademyResearchCompleted { .. } => "AcademyResearchCompleted",
+            VillageEvent::SmithyResearchScheduled { .. } => "SmithyResearchScheduled",
+            VillageEvent::SmithyResearchCompleted { .. } => "SmithyResearchCompleted",
         };
         f.write_str(name)
     }

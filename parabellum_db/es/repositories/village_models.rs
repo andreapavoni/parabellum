@@ -86,7 +86,10 @@ impl From<DbTribe> for parabellum_types::tribe::Tribe {
 
 #[async_trait::async_trait]
 impl VillageModelRepository for PostgresVillageModelRepository {
-    async fn list_by_player_id(&self, player_id: Uuid) -> Result<Vec<VillageModel>, ApplicationError> {
+    async fn list_by_player_id(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Vec<VillageModel>, ApplicationError> {
         let rows: Vec<DbVillageModelRow> = sqlx::query_as(
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
@@ -169,7 +172,11 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         Ok(())
     }
 
-    async fn update_player_id(&self, village_id: u32, player_id: Uuid) -> Result<(), ApplicationError> {
+    async fn update_player_id(
+        &self,
+        village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"
             UPDATE rm_village

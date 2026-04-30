@@ -1,4 +1,6 @@
-use parabellum_app::villages::models::{ScheduledAction, ScheduledActionStatus, ScheduledActionType};
+use parabellum_app::villages::models::{
+    ScheduledAction, ScheduledActionStatus, ScheduledActionType,
+};
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, types::Json};
@@ -132,6 +134,29 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
+
+    async fn list_by_village_and_type(
+        &self,
+        village_id: u32,
+        action_type: ScheduledActionType,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError> {
+        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
+            r#"
+            SELECT id, action_type, execute_at, payload, status
+            FROM rm_scheduled_actions
+            WHERE action_type = $1
+              AND (payload->>'village_id')::int = $2
+            ORDER BY execute_at ASC, created_at ASC
+            "#,
+        )
+        .bind(DbScheduledActionType::from(action_type))
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
 }
 
 #[derive(Debug, Clone, Copy, sqlx::Type)]
@@ -150,6 +175,9 @@ enum DbScheduledActionType {
     AddBuilding,
     UpgradeBuilding,
     DowngradeBuilding,
+    TrainUnit,
+    ResearchAcademy,
+    ResearchSmithy,
 }
 
 impl From<DbScheduledActionStatus> for ScheduledActionStatus {
@@ -181,6 +209,9 @@ impl From<DbScheduledActionType> for ScheduledActionType {
             DbScheduledActionType::AddBuilding => Self::AddBuilding,
             DbScheduledActionType::UpgradeBuilding => Self::UpgradeBuilding,
             DbScheduledActionType::DowngradeBuilding => Self::DowngradeBuilding,
+            DbScheduledActionType::TrainUnit => Self::TrainUnit,
+            DbScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
+            DbScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
         }
     }
 }
@@ -192,6 +223,9 @@ impl From<ScheduledActionType> for DbScheduledActionType {
             ScheduledActionType::AddBuilding => Self::AddBuilding,
             ScheduledActionType::UpgradeBuilding => Self::UpgradeBuilding,
             ScheduledActionType::DowngradeBuilding => Self::DowngradeBuilding,
+            ScheduledActionType::TrainUnit => Self::TrainUnit,
+            ScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
+            ScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
         }
     }
 }

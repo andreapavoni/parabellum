@@ -2,9 +2,10 @@ use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_types::army::TroopSet;
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent};
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
 pub struct SendReinforcement {
@@ -25,33 +26,31 @@ impl Command for SendReinforcement {
         let owner_id = aggregate.village().player_id();
 
         if owner_id != self.player_id {
-            return Err(CqrsError::Domain(
-                "player does not own the source village".to_string(),
-            ));
+            return Err(as_domain_error(GameError::VillageNotOwned {
+                village_id: source_village_id,
+                player_id: self.player_id,
+            }));
         }
 
         if source_village_id == self.target_village_id {
-            return Err(CqrsError::Domain(
-                "cannot reinforce the source village".to_string(),
-            ));
+            return Err(as_domain_error(GameError::VillageCannotTargetItself {
+                village_id: source_village_id,
+            }));
         }
 
         if aggregate.village().building_level(BuildingName::RallyPoint) == 0 {
-            return Err(CqrsError::Domain(
-                "rally point is required to send reinforcements".to_string(),
-            ));
+            return Err(as_domain_error(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::RallyPoint,
+                level: 1,
+            }));
         }
 
         if self.units.immensity() == 0 && self.hero_id.is_none() {
-            return Err(CqrsError::Domain(
-                "reinforcement must include troops or a hero".to_string(),
-            ));
+            return Err(as_domain_error(GameError::NoUnitsSelected));
         }
 
         if !aggregate.village().has_units(&self.units) {
-            return Err(CqrsError::Domain(
-                "not enough stationed units for reinforcement".to_string(),
-            ));
+            return Err(as_domain_error(GameError::NotEnoughUnits));
         }
 
         Ok(vec![

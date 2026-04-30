@@ -1,7 +1,8 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
+use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent};
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
 pub struct DowngradeBuilding {
@@ -15,12 +16,15 @@ impl Command for DowngradeBuilding {
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
         if aggregate.village().player_id() != self.player_id {
-            return Err(CqrsError::Domain("player does not own village".to_string()));
+            return Err(as_domain_error(GameError::VillageNotOwned {
+                village_id: aggregate.aggregate_id(),
+                player_id: self.player_id,
+            }));
         }
         let (building_name, next_level, duration_secs) = aggregate
             .village()
             .schedule_downgrade_building(self.slot_id, self.speed)
-            .map_err(CqrsError::Domain)?;
+            .map_err(as_domain_error)?;
         let execute_at = aggregate
             .village()
             .next_execution_time_for_slot(self.slot_id, duration_secs);

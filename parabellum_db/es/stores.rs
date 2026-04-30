@@ -135,10 +135,9 @@ impl EventStore for PostgresEventStore {
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             let metadata: EventMetadata = serde_json::from_value(metadata_value)?;
 
-            let stream_version = row
-                .try_get::<i64, _>("stream_version")
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?
-                as u64;
+            let stream_version =
+                row.try_get::<i64, _>("stream_version")
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))? as u64;
             version = stream_version;
 
             events.push(StoredEvent {
@@ -217,7 +216,10 @@ impl SnapshotStore for PostgresSnapshotStore {
         Ok(())
     }
 
-    async fn load_snapshot<T>(&self, aggregate_id: &T::Id) -> Result<AggregateSnapshot<T>, CqrsError>
+    async fn load_snapshot<T>(
+        &self,
+        aggregate_id: &T::Id,
+    ) -> Result<AggregateSnapshot<T>, CqrsError>
     where
         T: Aggregate,
     {
@@ -251,4 +253,3 @@ impl SnapshotStore for PostgresSnapshotStore {
         AggregateSnapshot::new(&aggregate, Some(version))
     }
 }
-

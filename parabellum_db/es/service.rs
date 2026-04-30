@@ -1,16 +1,23 @@
-use mini_cqrs_es::CqrsError;
+use std::sync::Arc;
+
+use mini_cqrs_es::{CqrsError, QueryRunner};
 use sqlx::PgPool;
 
 use parabellum_app::villages::models::{
-    ScheduledActionPayload, ScheduledActionStatus, VillageModel, VillageTroopMovements,
+    ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
+    VillageModel, VillageTroopMovements,
+};
+use parabellum_app::villages::queries::{
+    GetScheduledActionStatusCounts, ScheduledActionStatusCounts,
 };
 use parabellum_app::villages::repositories::{
     ScheduledActionRepository, VillageModelRepository, VillageMovementRepository,
 };
 use parabellum_app::villages::{
-    AddBuilding, CompleteAddBuilding, CompleteDowngradeBuilding, CompleteUpgradeBuilding,
-    DowngradeBuilding, FoundVillage, ReinforcementArrived, SendReinforcement, UpgradeBuilding,
-    VillageService,
+    AddBuilding, CompleteAcademyResearch, CompleteAddBuilding, CompleteDowngradeBuilding,
+    CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding, DowngradeBuilding,
+    FoundVillage, ReinforcementArrived, ResearchAcademy, ResearchSmithy, SendReinforcement,
+    SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
 };
 
 use crate::es::{
@@ -78,6 +85,36 @@ impl VillageEsService {
         service.downgrade_building(village_id, command).await
     }
 
+    pub async fn train_units(
+        &self,
+        village_id: u32,
+        command: &TrainUnits,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.train_units(village_id, command).await
+    }
+
+    pub async fn research_academy(
+        &self,
+        village_id: u32,
+        command: &ResearchAcademy,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.research_academy(village_id, command).await
+    }
+
+    pub async fn research_smithy(
+        &self,
+        village_id: u32,
+        command: &ResearchSmithy,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.research_smithy(village_id, command).await
+    }
+
     pub async fn complete_add_building(
         &self,
         village_id: u32,
@@ -105,7 +142,19 @@ impl VillageEsService {
     ) -> Result<u32, CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
-        service.complete_downgrade_building(village_id, command).await
+        service
+            .complete_downgrade_building(village_id, command)
+            .await
+    }
+
+    pub async fn set_village_resources(
+        &self,
+        village_id: u32,
+        command: &SetVillageResources,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.set_village_resources(village_id, command).await
     }
 
     pub async fn process_due_actions(
@@ -152,8 +201,12 @@ impl VillageEsService {
         let mut incoming = Vec::new();
         for movement in movements {
             match movement.direction {
-                parabellum_app::villages::models::MovementDirection::Outgoing => outgoing.push(movement),
-                parabellum_app::villages::models::MovementDirection::Incoming => incoming.push(movement),
+                parabellum_app::villages::models::MovementDirection::Outgoing => {
+                    outgoing.push(movement)
+                }
+                parabellum_app::villages::models::MovementDirection::Incoming => {
+                    incoming.push(movement)
+                }
             }
         }
         outgoing.sort_by_key(|m| m.arrives_at);
@@ -176,6 +229,52 @@ impl VillageEsService {
         repo.list_by_player_id(player_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
+    pub async fn get_village_training_queue(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<ScheduledAction>, CqrsError> {
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        repo.list_by_village_and_type(village_id, ScheduledActionType::TrainUnit)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
+    pub async fn get_village_smithy_queue(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<ScheduledAction>, CqrsError> {
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        repo.list_by_village_and_type(village_id, ScheduledActionType::ResearchSmithy)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
+    pub async fn get_village_academy_queue(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<ScheduledAction>, CqrsError> {
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        repo.list_by_village_and_type(village_id, ScheduledActionType::ResearchAcademy)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
+    pub async fn get_village_scheduled_action_status_counts(
+        &self,
+        village_id: u32,
+        action_type: ScheduledActionType,
+        status_filter: Option<ScheduledActionStatus>,
+    ) -> Result<ScheduledActionStatusCounts, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let query = GetScheduledActionStatusCounts {
+            repository: Arc::new(PostgresScheduledActionRepository::new(self.pool.clone())),
+            village_id,
+            action_type,
+            status_filter,
+        };
+        runtime.query(&query).await
     }
 
     async fn execute_action(
@@ -246,7 +345,9 @@ impl VillageEsService {
                     level,
                     speed,
                 };
-                service.complete_upgrade_building(village_id, &command).await?;
+                service
+                    .complete_upgrade_building(village_id, &command)
+                    .await?;
             }
             ScheduledActionPayload::DowngradeBuilding {
                 village_id,
@@ -265,7 +366,63 @@ impl VillageEsService {
                     level,
                     speed,
                 };
-                service.complete_downgrade_building(village_id, &command).await?;
+                service
+                    .complete_downgrade_building(village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::TrainUnit {
+                action_id,
+                village_id,
+                player_id,
+                slot_id,
+                unit,
+                time_per_unit,
+                quantity_remaining,
+                execute_at,
+            } => {
+                let command = CompleteTrainUnit {
+                    action_id,
+                    player_id,
+                    village_id,
+                    slot_id,
+                    unit,
+                    time_per_unit,
+                    quantity_remaining,
+                    execute_at,
+                };
+                service.complete_train_unit(village_id, &command).await?;
+            }
+            ScheduledActionPayload::ResearchAcademy {
+                action_id,
+                village_id,
+                player_id,
+                unit,
+            } => {
+                let command = CompleteAcademyResearch {
+                    action_id,
+                    player_id,
+                    village_id,
+                    unit,
+                };
+                service
+                    .complete_academy_research(village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::ResearchSmithy {
+                action_id,
+                village_id,
+                player_id,
+                unit,
+            } => {
+                let command = CompleteSmithyResearch {
+                    action_id,
+                    player_id,
+                    village_id,
+                    unit,
+                };
+                service
+                    .complete_smithy_research(village_id, &command)
+                    .await?;
             }
         }
         Ok(())

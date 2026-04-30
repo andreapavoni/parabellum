@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_types::army::TroopSet;
+use parabellum_types::errors::AppError;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent};
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
 pub struct ReinforcementArrived {
@@ -22,9 +23,10 @@ impl Command for ReinforcementArrived {
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
         if aggregate.aggregate_id() != self.source_village_id {
-            return Err(CqrsError::Domain(
-                "reinforcement arrival must be executed on source village stream".to_string(),
-            ));
+            return Err(as_invariant_error(AppError::InvalidAggregateTarget {
+                expected: self.source_village_id,
+                actual: aggregate.aggregate_id(),
+            }));
         }
 
         Ok(vec![VillageEvent::ReinforcementArrived {

@@ -20,4 +20,7 @@ pub enum AppError {
 
     #[error("{queue} queue already contains {item}")]
     QueueItemAlreadyQueued { queue: &'static str, item: String },
+
+    #[error("Invalid aggregate target: expected village {expected}, got village {actual}")]
+    InvalidAggregateTarget { expected: u32, actual: u32 },
 }

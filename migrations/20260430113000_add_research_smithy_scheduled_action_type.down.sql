@@ -1,0 +1,2 @@
+-- PostgreSQL does not support removing enum values.
+-- no-op rollback for development branch

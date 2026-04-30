@@ -83,6 +83,9 @@ pub enum ScheduledActionType {
     AddBuilding,
     UpgradeBuilding,
     DowngradeBuilding,
+    TrainUnit,
+    ResearchAcademy,
+    ResearchSmithy,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -131,6 +134,28 @@ pub enum ScheduledActionPayload {
         level: u8,
         speed: i8,
     },
+    TrainUnit {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        slot_id: u8,
+        unit: parabellum_types::army::UnitName,
+        time_per_unit: i32,
+        quantity_remaining: i32,
+        execute_at: DateTime<Utc>,
+    },
+    ResearchAcademy {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        unit: parabellum_types::army::UnitName,
+    },
+    ResearchSmithy {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        unit: parabellum_types::army::UnitName,
+    },
 }
 
 impl ScheduledActionPayload {
@@ -144,6 +169,9 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::DowngradeBuilding { .. } => {
                 ScheduledActionType::DowngradeBuilding
             }
+            ScheduledActionPayload::TrainUnit { .. } => ScheduledActionType::TrainUnit,
+            ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
+            ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
         }
     }
 }

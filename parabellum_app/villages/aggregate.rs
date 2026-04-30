@@ -50,6 +50,11 @@ impl VillageAggregate {
     pub fn village(&self) -> &VillageState {
         &self.village
     }
+
+    #[cfg(test)]
+    pub fn set_resources_for_test(&mut self, resources: parabellum_types::common::ResourceGroup) {
+        self.village.village.store_resources(&resources);
+    }
 }
 
 impl Aggregate for VillageAggregate {
@@ -80,6 +85,9 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::VillageConquered { player_id } => {
                 self.village.village.player_id = *player_id;
+            }
+            VillageEvent::VillageResourcesSet { resources, .. } => {
+                self.village.set_resources(resources.clone());
             }
             VillageEvent::VillageArmyDetached { units, .. } => {
                 self.village.detach_units(units);
@@ -157,6 +165,51 @@ impl Aggregate for VillageAggregate {
                 self.village.complete_building_action(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
+            }
+            VillageEvent::UnitTrainingScheduled {
+                action_id,
+                slot_id,
+                execute_at,
+                ..
+            } => self
+                .village
+                .register_training_action(*action_id, *slot_id, *execute_at),
+            VillageEvent::UnitTrained {
+                action_id,
+                unit,
+                quantity_trained,
+                ..
+            } => {
+                self.village.complete_training_action(*action_id);
+                let _ = self.village.train_units(unit.clone(), *quantity_trained);
+            }
+            VillageEvent::AcademyResearchScheduled {
+                action_id,
+                unit,
+                execute_at,
+                ..
+            } => self
+                .village
+                .register_academy_action(*action_id, unit.clone(), *execute_at),
+            VillageEvent::AcademyResearchCompleted {
+                action_id, unit, ..
+            } => {
+                self.village.complete_academy_action(*action_id);
+                let _ = self.village.complete_academy_research(unit.clone());
+            }
+            VillageEvent::SmithyResearchScheduled {
+                action_id,
+                unit,
+                execute_at,
+                ..
+            } => self
+                .village
+                .register_smithy_action(*action_id, unit.clone(), *execute_at),
+            VillageEvent::SmithyResearchCompleted {
+                action_id, unit, ..
+            } => {
+                self.village.complete_smithy_action(*action_id);
+                let _ = self.village.complete_smithy_research(unit.clone());
             }
         }
     }

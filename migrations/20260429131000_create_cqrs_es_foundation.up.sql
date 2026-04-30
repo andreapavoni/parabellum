@@ -32,7 +32,7 @@ CREATE TABLE es_projector_offsets (
 CREATE TYPE movement_direction AS ENUM ('Incoming', 'Outgoing');
 CREATE TYPE movement_type AS ENUM ('Attack', 'Raid', 'Reinforcement', 'Return', 'FoundVillage');
 CREATE TYPE scheduled_action_status AS ENUM ('pending', 'processing', 'completed', 'failed');
-CREATE TYPE scheduled_action_type AS ENUM ('ReinforcementArrival', 'AddBuilding', 'UpgradeBuilding', 'DowngradeBuilding');
+CREATE TYPE scheduled_action_type AS ENUM ('ReinforcementArrival', 'AddBuilding', 'UpgradeBuilding', 'DowngradeBuilding', 'TrainUnit');
 
 CREATE TABLE rm_village (
     village_id INTEGER PRIMARY KEY,

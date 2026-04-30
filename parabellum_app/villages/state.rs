@@ -5,8 +5,9 @@ use parabellum_game::models::{
     village::{AcademyResearch, Village, VillageBuilding, VillageProduction, VillageStocks},
 };
 use parabellum_types::{
-    army::TroopSet,
+    army::{TroopSet, UnitName},
     buildings::BuildingName,
+    errors::{AppError, ApplicationError, GameError},
     map::Position,
     tribe::Tribe,
 };
@@ -17,6 +18,9 @@ use uuid::Uuid;
 pub struct VillageState {
     pub village: Village,
     pending_building_actions: Vec<PendingBuildingAction>,
+    pending_training_actions: Vec<PendingTrainingAction>,
+    pending_academy_actions: Vec<PendingAcademyAction>,
+    pending_smithy_actions: Vec<PendingSmithyAction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +28,27 @@ struct PendingBuildingAction {
     action_id: Uuid,
     slot_id: u8,
     building_name: BuildingName,
+    execute_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PendingTrainingAction {
+    action_id: Uuid,
+    slot_id: u8,
+    execute_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PendingAcademyAction {
+    action_id: Uuid,
+    unit: UnitName,
+    execute_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PendingSmithyAction {
+    action_id: Uuid,
+    unit: UnitName,
     execute_at: chrono::DateTime<Utc>,
 }
 
@@ -55,6 +80,9 @@ impl Default for VillageState {
         Self {
             village,
             pending_building_actions: vec![],
+            pending_training_actions: vec![],
+            pending_academy_actions: vec![],
+            pending_smithy_actions: vec![],
         }
     }
 }
@@ -106,6 +134,9 @@ impl VillageState {
         Self {
             village,
             pending_building_actions: vec![],
+            pending_training_actions: vec![],
+            pending_academy_actions: vec![],
+            pending_smithy_actions: vec![],
         }
     }
 
@@ -138,6 +169,26 @@ impl VillageState {
         })
     }
 
+    pub fn set_resources(&mut self, resources: parabellum_types::common::ResourceGroup) {
+        let current = self.village.stored_resources();
+        let to_remove = parabellum_types::common::ResourceGroup::new(
+            current.lumber().saturating_sub(resources.lumber()),
+            current.clay().saturating_sub(resources.clay()),
+            current.iron().saturating_sub(resources.iron()),
+            current.crop().saturating_sub(resources.crop()),
+        );
+        let _ = self.village.deduct_resources(&to_remove);
+
+        let after_remove = self.village.stored_resources();
+        let to_add = parabellum_types::common::ResourceGroup::new(
+            resources.lumber().saturating_sub(after_remove.lumber()),
+            resources.clay().saturating_sub(after_remove.clay()),
+            resources.iron().saturating_sub(after_remove.iron()),
+            resources.crop().saturating_sub(after_remove.crop()),
+        );
+        self.village.store_resources(&to_add);
+    }
+
     pub fn detach_units(&mut self, units: &TroopSet) {
         let mut next = self
             .village
@@ -162,7 +213,7 @@ impl VillageState {
     pub fn set_building_level(
         &mut self,
         slot_id: u8,
-        _building_name: BuildingName,
+        building_name: BuildingName,
         level: u8,
         speed: i8,
     ) {
@@ -170,7 +221,16 @@ impl VillageState {
             let _ = self.village.remove_building_at_slot(slot_id, speed);
             return;
         }
-        let _ = self.village.set_building_level_at_slot(slot_id, level, speed);
+        if self.village.get_building_by_slot_id(slot_id).is_none() {
+            if let Ok(building) = Building::new(building_name.clone(), speed).at_level(level, speed)
+            {
+                let _ = self.village.add_building_at_slot(building, slot_id);
+                return;
+            }
+        }
+        let _ = self
+            .village
+            .set_building_level_at_slot(slot_id, level, speed);
     }
 
     pub fn schedule_add_building(
@@ -178,69 +238,81 @@ impl VillageState {
         slot_id: u8,
         building_name: BuildingName,
         speed: i8,
-    ) -> Result<i64, String> {
+    ) -> Result<i64, ApplicationError> {
         self.enforce_building_queue_capacity()?;
         self.ensure_add_queue_allows_building(&building_name)?;
         let mut village = self.village.clone();
         village
             .init_building_construction(slot_id, building_name, speed)
             .map(|secs| secs as i64)
-            .map_err(|e| e.to_string())
+            .map_err(Into::into)
     }
 
     pub fn schedule_upgrade_building(
         &self,
         slot_id: u8,
         speed: i8,
-    ) -> Result<(BuildingName, u8, i64), String> {
+    ) -> Result<(BuildingName, u8, i64), ApplicationError> {
         self.enforce_building_queue_capacity()?;
         let current = self
             .find_building_by_slot(slot_id)
-            .ok_or_else(|| "empty slot".to_string())?;
+            .ok_or(GameError::EmptySlot { slot_id })?;
         let max = get_building_data(&current.building.name)
-            .map_err(|e| e.to_string())?
+            .map_err(ApplicationError::from)?
             .rules
             .max_level;
         if current.building.level >= max {
-            return Err("building max level reached".to_string());
+            return Err(GameError::BuildingMaxLevelReached.into());
         }
         let next_level = current.building.level + 1;
         let target = Building::new(current.building.name.clone(), speed)
             .at_level(next_level, speed)
-            .map_err(|e| e.to_string())?;
+            .map_err(ApplicationError::from)?;
         let mut village = self.village.clone();
-        let data = get_building_data(&current.building.name).map_err(|e| e.to_string())?;
+        let data = get_building_data(&current.building.name).map_err(ApplicationError::from)?;
         village
             .validate_building_requirements(data.rules.requirements)
-            .map_err(|e| e.to_string())?;
+            .map_err(ApplicationError::from)?;
         village
             .deduct_resources(&target.cost().resources)
-            .map_err(|e| e.to_string())?;
+            .map_err(ApplicationError::from)?;
         let duration_secs = target.calculate_build_time_secs(&speed, &self.main_building_level());
-        Ok((current.building.name.clone(), next_level, duration_secs as i64))
+        Ok((
+            current.building.name.clone(),
+            next_level,
+            duration_secs as i64,
+        ))
     }
 
     pub fn schedule_downgrade_building(
         &self,
         slot_id: u8,
         speed: i8,
-    ) -> Result<(BuildingName, u8, i64), String> {
+    ) -> Result<(BuildingName, u8, i64), ApplicationError> {
         self.enforce_building_queue_capacity()?;
         if self.village.main_building_level() < 10 {
-            return Err("main building level 10 required for downgrade".to_string());
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::MainBuilding,
+                level: 10,
+            }
+            .into());
         }
         let current = self
             .find_building_by_slot(slot_id)
-            .ok_or_else(|| "empty slot".to_string())?;
+            .ok_or(GameError::EmptySlot { slot_id })?;
         if current.building.level == 0 {
-            return Err("invalid building level".to_string());
+            return Err(GameError::InvalidBuildingLevel(0, current.building.name.clone()).into());
         }
         let next_level = current.building.level - 1;
         let target = Building::new(current.building.name.clone(), speed)
             .at_level(next_level, speed)
-            .map_err(|e| e.to_string())?;
+            .map_err(ApplicationError::from)?;
         let duration_secs = target.calculate_build_time_secs(&speed, &self.main_building_level());
-        Ok((current.building.name.clone(), next_level, duration_secs as i64))
+        Ok((
+            current.building.name.clone(),
+            next_level,
+            duration_secs as i64,
+        ))
     }
 
     pub fn register_building_action(
@@ -280,29 +352,213 @@ impl VillageState {
         ready_at + chrono::Duration::seconds(duration_secs.max(1))
     }
 
-    fn enforce_building_queue_capacity(&self) -> Result<(), String> {
+    pub fn schedule_train_units(
+        &self,
+        unit_idx: u8,
+        building_name: BuildingName,
+        quantity: i32,
+        speed: i8,
+    ) -> Result<(u8, UnitName, i32), ApplicationError> {
+        let mut village = self.village.clone();
+        village
+            .init_unit_training(unit_idx, &building_name, quantity, speed)
+            .map(|(slot_id, unit_name, time_per_unit)| (slot_id, unit_name, time_per_unit as i32))
+            .map_err(Into::into)
+    }
+
+    pub fn register_training_action(
+        &mut self,
+        action_id: Uuid,
+        slot_id: u8,
+        execute_at: chrono::DateTime<Utc>,
+    ) {
+        self.pending_training_actions.push(PendingTrainingAction {
+            action_id,
+            slot_id,
+            execute_at,
+        });
+    }
+
+    pub fn complete_training_action(&mut self, action_id: Uuid) {
+        self.pending_training_actions
+            .retain(|action| action.action_id != action_id);
+    }
+
+    pub fn next_execution_time_for_training_slot(
+        &self,
+        slot_id: u8,
+        duration_secs: i64,
+    ) -> chrono::DateTime<Utc> {
+        let now = Utc::now();
+        let ready_at = self
+            .pending_training_actions
+            .iter()
+            .filter(|action| action.slot_id == slot_id)
+            .map(|action| action.execute_at)
+            .max()
+            .filter(|time| *time > now)
+            .unwrap_or(now);
+        ready_at + chrono::Duration::seconds(duration_secs.max(1))
+    }
+
+    pub fn train_units(&mut self, unit: UnitName, quantity: u32) -> Result<(), ApplicationError> {
+        let mut village_army = self
+            .village
+            .army()
+            .map_or(Army::new_village_army(&self.village), |a| a.clone());
+        village_army
+            .add_unit(unit, quantity)
+            .map_err(ApplicationError::from)?;
+        self.village
+            .set_army(Some(&village_army))
+            .map_err(Into::into)
+    }
+
+    pub fn schedule_academy_research(
+        &self,
+        unit: UnitName,
+        speed: i8,
+    ) -> Result<i64, ApplicationError> {
+        if self.pending_academy_actions.len() >= 2 {
+            return Err(AppError::QueueLimitReached { queue: "academy" }.into());
+        }
+        if self
+            .pending_academy_actions
+            .iter()
+            .any(|action| action.unit == unit)
+        {
+            return Err(AppError::QueueItemAlreadyQueued {
+                queue: "academy",
+                item: format!("{unit:?}"),
+            }
+            .into());
+        }
+
+        let mut village = self.village.clone();
+        village
+            .init_academy_research(&unit, speed)
+            .map(|secs| secs as i64)
+            .map_err(Into::into)
+    }
+
+    pub fn register_academy_action(
+        &mut self,
+        action_id: Uuid,
+        unit: UnitName,
+        execute_at: chrono::DateTime<Utc>,
+    ) {
+        self.pending_academy_actions.push(PendingAcademyAction {
+            action_id,
+            unit,
+            execute_at,
+        });
+    }
+
+    pub fn complete_academy_action(&mut self, action_id: Uuid) {
+        self.pending_academy_actions
+            .retain(|action| action.action_id != action_id);
+    }
+
+    pub fn next_execution_time_for_academy(&self, duration_secs: i64) -> chrono::DateTime<Utc> {
+        let now = Utc::now();
+        let ready_at = self
+            .pending_academy_actions
+            .iter()
+            .map(|action| action.execute_at)
+            .max()
+            .filter(|time| *time > now)
+            .unwrap_or(now);
+        ready_at + chrono::Duration::seconds(duration_secs.max(1))
+    }
+
+    pub fn complete_academy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+        self.village.research_academy(unit).map_err(Into::into)
+    }
+
+    pub fn schedule_smithy_research(
+        &self,
+        unit: UnitName,
+        speed: i8,
+    ) -> Result<i64, ApplicationError> {
+        if self.pending_smithy_actions.len() >= 2 {
+            return Err(AppError::QueueLimitReached { queue: "smithy" }.into());
+        }
+        if self
+            .pending_smithy_actions
+            .iter()
+            .any(|action| action.unit == unit)
+        {
+            return Err(AppError::QueueItemAlreadyQueued {
+                queue: "smithy",
+                item: format!("{unit:?}"),
+            }
+            .into());
+        }
+
+        let mut village = self.village.clone();
+        village
+            .init_smithy_research(&unit, speed)
+            .map(|secs| secs as i64)
+            .map_err(Into::into)
+    }
+
+    pub fn register_smithy_action(
+        &mut self,
+        action_id: Uuid,
+        unit: UnitName,
+        execute_at: chrono::DateTime<Utc>,
+    ) {
+        self.pending_smithy_actions.push(PendingSmithyAction {
+            action_id,
+            unit,
+            execute_at,
+        });
+    }
+
+    pub fn complete_smithy_action(&mut self, action_id: Uuid) {
+        self.pending_smithy_actions
+            .retain(|action| action.action_id != action_id);
+    }
+
+    pub fn next_execution_time_for_smithy(&self, duration_secs: i64) -> chrono::DateTime<Utc> {
+        let now = Utc::now();
+        let ready_at = self
+            .pending_smithy_actions
+            .iter()
+            .map(|action| action.execute_at)
+            .max()
+            .filter(|time| *time > now)
+            .unwrap_or(now);
+        ready_at + chrono::Duration::seconds(duration_secs.max(1))
+    }
+
+    pub fn complete_smithy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+        self.village.upgrade_smithy(unit).map_err(Into::into)
+    }
+
+    fn enforce_building_queue_capacity(&self) -> Result<(), ApplicationError> {
         let limit = if matches!(self.village.tribe, Tribe::Roman) {
             3usize
         } else {
             2usize
         };
         if self.pending_building_actions.len() >= limit {
-            return Err("building queue limit reached".to_string());
+            return Err(AppError::QueueLimitReached { queue: "building" }.into());
         }
         Ok(())
     }
 
-    fn ensure_add_queue_allows_building(&self, candidate: &BuildingName) -> Result<(), String> {
+    fn ensure_add_queue_allows_building(
+        &self,
+        candidate: &BuildingName,
+    ) -> Result<(), ApplicationError> {
         if self.pending_building_actions.is_empty() {
             return Ok(());
         }
 
-        let candidate_data = get_building_data(candidate).map_err(|e| e.to_string())?;
+        let candidate_data = get_building_data(candidate).map_err(ApplicationError::from)?;
         for action in &self.pending_building_actions {
             let queued_name = action.building_name.clone();
-            if queued_name == *candidate && !candidate_data.rules.allow_multiple {
-                return Err(format!("building {} cannot be queued multiple times", candidate));
-            }
 
             if candidate_data
                 .rules
@@ -310,10 +566,7 @@ impl VillageState {
                 .iter()
                 .any(|conflict| conflict.0 == queued_name)
             {
-                return Err(format!(
-                    "building {} conflicts with queued {}",
-                    candidate, queued_name
-                ));
+                return Err(GameError::BuildingConflict(candidate.clone(), queued_name).into());
             }
 
             if let Ok(queued_data) = get_building_data(&queued_name)
@@ -323,10 +576,7 @@ impl VillageState {
                     .iter()
                     .any(|conflict| conflict.0 == *candidate)
             {
-                return Err(format!(
-                    "building {} conflicts with queued {}",
-                    candidate, queued_name
-                ));
+                return Err(GameError::BuildingConflict(candidate.clone(), queued_name).into());
             }
         }
         Ok(())
