@@ -26,7 +26,6 @@ pub enum VillageEvent {
         position: Position,
         tribe: Tribe,
         player_id: Uuid,
-        stationed_units: TroopSet,
         buildings: Vec<VillageBuilding>,
     },
     VillageConquered {
@@ -34,7 +33,7 @@ pub enum VillageEvent {
     },
     /// Emitted when resources are explicitly set through `SetVillageResources`.
     ///
-    /// Projectors should refresh resource-dependent read models from source.
+    /// Projectors should update resource-dependent read models directly.
     VillageResourcesSet {
         player_id: Uuid,
         village_id: u32,

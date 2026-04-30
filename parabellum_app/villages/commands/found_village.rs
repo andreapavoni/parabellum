@@ -1,6 +1,5 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::village::VillageBuilding;
-use parabellum_types::army::TroopSet;
 use parabellum_types::errors::GameError;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
@@ -15,7 +14,6 @@ pub struct FoundVillage {
     pub position: Position,
     pub tribe: Tribe,
     pub player_id: Uuid,
-    pub stationed_units: TroopSet,
     pub buildings: Vec<VillageBuilding>,
 }
 
@@ -35,7 +33,6 @@ impl Command for FoundVillage {
             position: self.position.clone(),
             tribe: self.tribe.clone(),
             player_id: self.player_id,
-            stationed_units: self.stationed_units.clone(),
             buildings: self.buildings.clone(),
         }])
     }
@@ -46,7 +43,6 @@ mod tests {
     use mini_cqrs_es::{Aggregate, Command};
     use parabellum_game::models::{buildings::Building, village::VillageBuilding};
     use parabellum_types::{
-        army::TroopSet,
         buildings::{BuildingGroup, BuildingName},
         map::Position,
         tribe::Tribe,
@@ -80,7 +76,6 @@ mod tests {
             position: Position { x: 0, y: 0 },
             tribe: Tribe::Roman,
             player_id,
-            stationed_units: TroopSet::new([2, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
             buildings: vec![rally_point(1)],
         }
         .handle(&aggregate)
@@ -95,7 +90,6 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
-                stationed_units: TroopSet::new([2, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 buildings: vec![rally_point(1)],
             }]
         );

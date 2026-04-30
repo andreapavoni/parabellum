@@ -1,11 +1,14 @@
-use parabellum_app::villages::SendReinforcement;
-use parabellum_types::{army::TroopSet, map::Position};
+use parabellum_app::villages::{SendReinforcement, TrainUnits};
+use parabellum_types::{army::TroopSet, buildings::BuildingName, map::Position, tribe::Tribe};
 use sqlx::Row;
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
 
-use super::fixtures::{found_village_cmd, seed_player_and_village, with_test_pool};
+use super::fixtures::{
+    barracks, granary, main_building, rally_point, resources, setup_village, warehouse,
+    with_test_pool,
+};
 
 #[tokio::test]
 async fn village_es_service_persists_events_and_projects_reinforcement() {
@@ -16,35 +19,65 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     let target_player_id = Uuid::new_v4();
     let target_user_id = Uuid::new_v4();
 
-    seed_player_and_village(
+    let service = VillageEsService::new(pool.clone());
+    setup_village(
         &pool,
+        &service,
         source_player_id,
         source_user_id,
         100,
         "Source Village",
-        0,
-        0,
+        Position { x: 0, y: 0 },
+        Tribe::Roman,
+        vec![
+            main_building(1),
+            rally_point(1),
+            barracks(1),
+            warehouse(20),
+            granary(20),
+        ],
+        resources(80_000, 80_000, 80_000, 80_000),
     )
     .await;
-    seed_player_and_village(
+    setup_village(
         &pool,
+        &service,
         target_player_id,
         target_user_id,
         200,
         "Target Village",
-        10,
-        10,
+        Position { x: 10, y: 10 },
+        Tribe::Roman,
+        vec![main_building(1), warehouse(20), granary(20)],
+        resources(80_000, 80_000, 80_000, 80_000),
     )
     .await;
-
-    let service = VillageEsService::new(pool.clone());
     service
-        .found_village(
+        .train_units(
             100,
-            &found_village_cmd(source_player_id, "Source Village", Position { x: 0, y: 0 }),
+            &TrainUnits {
+                player_id: source_player_id,
+                unit_idx: 0,
+                building_name: BuildingName::Barracks,
+                quantity: 1,
+                speed: 1,
+            },
         )
         .await
         .unwrap();
+    service
+        .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+        .await
+        .unwrap();
+
+    let source_before_arrival = service.get_village_model(100).await.unwrap();
+    assert_eq!(source_before_arrival.army.get(0), 1);
+    assert_eq!(source_before_arrival.reinforcements.get(0), 0);
+    assert_eq!(source_before_arrival.deployed_armies.get(0), 0);
+    let target_before_arrival = service.get_village_model(200).await.unwrap();
+    assert_eq!(target_before_arrival.army.get(0), 0);
+    assert_eq!(target_before_arrival.reinforcements.get(0), 0);
+    assert_eq!(target_before_arrival.deployed_armies.get(0), 0);
 
     let movement_id = Uuid::new_v4();
     let army_id = Uuid::new_v4();
@@ -56,7 +89,7 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
                 army_id,
                 player_id: source_player_id,
                 target_village_id: 200,
-                units: TroopSet::new([7, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                 hero_id: None,
                 arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
             },
@@ -72,7 +105,7 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(events_count_before, 3);
+    assert_eq!(events_count_before, 6);
 
     let movement_rows = sqlx::query(
         "SELECT village_id, direction::text AS direction FROM rm_village_movements WHERE movement_id = $1 ORDER BY village_id ASC",
@@ -95,8 +128,8 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     let village = service.get_village_model(100).await.unwrap();
     assert_eq!(village.player_id, source_player_id);
     assert_eq!(village.village_name, "Source Village");
-    assert_eq!(village.stationed_army.get(0), 13);
-    assert_eq!(village.buildings.len(), 0);
+    assert_eq!(village.army.get(0), 0);
+    assert_eq!(village.buildings.len(), 5);
 
     let action_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM rm_scheduled_actions WHERE action_type = 'ReinforcementArrival'",
@@ -112,6 +145,15 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
         .unwrap();
     assert_eq!(processed, 1);
 
+    let source_after_arrival = service.get_village_model(100).await.unwrap();
+    assert_eq!(source_after_arrival.army.get(0), 0);
+    assert_eq!(source_after_arrival.reinforcements.get(0), 0);
+    assert_eq!(source_after_arrival.deployed_armies.get(0), 1);
+    let target_after_arrival = service.get_village_model(200).await.unwrap();
+    assert_eq!(target_after_arrival.army.get(0), 0);
+    assert_eq!(target_after_arrival.reinforcements.get(0), 1);
+    assert_eq!(target_after_arrival.deployed_armies.get(0), 0);
+
     let events_count_after: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM es_events WHERE aggregate_type = $1 AND aggregate_id = $2",
     )
@@ -120,7 +162,7 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(events_count_after, 4);
+    assert_eq!(events_count_after, 7);
 
     let movement_count_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM rm_village_movements WHERE movement_id = $1")

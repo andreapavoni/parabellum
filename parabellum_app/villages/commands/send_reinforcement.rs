@@ -77,7 +77,7 @@ impl Command for SendReinforcement {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use mini_cqrs_es::Command;
+    use mini_cqrs_es::{Aggregate, Command};
     use parabellum_game::models::{buildings::Building, village::VillageBuilding};
     use parabellum_types::{
         army::TroopSet,
@@ -106,12 +106,16 @@ mod tests {
         let player_id = Uuid::new_v4();
         let army_id = Uuid::new_v4();
         let movement_id = Uuid::new_v4();
-        let aggregate = VillageAggregate::founded(
-            10,
-            player_id,
-            TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            vec![rally_point(1)],
-        );
+        let mut aggregate = VillageAggregate::founded(10, player_id, vec![rally_point(1)]);
+        aggregate
+            .apply(&VillageEvent::UnitTrained {
+                action_id: Uuid::new_v4(),
+                player_id,
+                village_id: 10,
+                unit: parabellum_types::army::UnitName::Legionnaire,
+                quantity_trained: 20,
+            })
+            .await;
         let units = TroopSet::new([12, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         let arrives_at = Utc::now();
 
@@ -153,12 +157,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_reinforcement_when_units_are_not_available() {
         let player_id = Uuid::new_v4();
-        let aggregate = VillageAggregate::founded(
-            10,
-            player_id,
-            TroopSet::new([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            vec![rally_point(1)],
-        );
+        let aggregate = VillageAggregate::founded(10, player_id, vec![rally_point(1)]);
 
         let result = SendReinforcement {
             movement_id: Uuid::new_v4(),
@@ -178,12 +177,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_reinforcement_without_rally_point() {
         let player_id = Uuid::new_v4();
-        let aggregate = VillageAggregate::founded(
-            10,
-            player_id,
-            TroopSet::new([5, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            vec![],
-        );
+        let aggregate = VillageAggregate::founded(10, player_id, vec![]);
 
         let result = SendReinforcement {
             movement_id: Uuid::new_v4(),

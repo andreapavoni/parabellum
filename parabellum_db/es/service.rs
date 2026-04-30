@@ -285,6 +285,24 @@ impl VillageEsService {
         runtime.query(&query).await
     }
 
+    /// Returns the number of scheduled actions for one exact status.
+    pub async fn get_village_scheduled_action_status_count(
+        &self,
+        village_id: u32,
+        action_type: ScheduledActionType,
+        status: ScheduledActionStatus,
+    ) -> Result<usize, CqrsError> {
+        let counts = self
+            .get_village_scheduled_action_status_counts(village_id, action_type, Some(status))
+            .await?;
+        Ok(match status {
+            ScheduledActionStatus::Pending => counts.pending,
+            ScheduledActionStatus::Processing => counts.processing,
+            ScheduledActionStatus::Completed => counts.completed,
+            ScheduledActionStatus::Failed => counts.failed,
+        })
+    }
+
     /// Maps one scheduled action payload to its deterministic completion command.
     async fn execute_action(
         &self,

@@ -11,6 +11,7 @@ use parabellum_app::villages::models::{
 use parabellum_app::villages::repositories::{
     ScheduledActionRepository, VillageModelRepository, VillageMovementRepository,
 };
+use parabellum_types::army::TroopSet;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -50,12 +51,23 @@ impl EventConsumer for VillageProjector {
         match domain_event {
             VillageEvent::VillageFounded {
                 village_id,
+                village_name,
+                position,
+                tribe,
                 player_id,
-                stationed_units,
+                buildings,
                 ..
             } => {
                 self.village
-                    .upsert_from_village(village_id, player_id, &stationed_units)
+                    .upsert_from_village(
+                        village_id,
+                        player_id,
+                        &village_name,
+                        &position,
+                        tribe,
+                        &buildings,
+                        &TroopSet::default(),
+                    )
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -69,9 +81,13 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
-            VillageEvent::VillageResourcesSet { village_id, .. } => {
+            VillageEvent::VillageResourcesSet {
+                village_id,
+                resources,
+                ..
+            } => {
                 self.village
-                    .refresh_from_source(village_id)
+                    .set_stored_resources(village_id, resources)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -85,12 +101,12 @@ impl EventConsumer for VillageProjector {
                     .get_by_village_id(village_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                let mut next_units = current.stationed_army;
+                let mut next_units = current.army;
                 for idx in 0..10 {
                     next_units.remove(idx, units.get(idx));
                 }
                 self.village
-                    .update_stationed_army(village_id, &next_units)
+                    .update_army(village_id, &next_units)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -169,7 +185,41 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
-            VillageEvent::ReinforcementArrived { movement_id, .. } => {
+            VillageEvent::ReinforcementArrived {
+                movement_id,
+                source_village_id,
+                target_village_id,
+                units,
+                ..
+            } => {
+                let source = self
+                    .village
+                    .get_by_village_id(source_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut source_deployed = source.deployed_armies;
+                for idx in 0..10 {
+                    source_deployed.add(idx, units.get(idx));
+                }
+                self.village
+                    .update_deployed_armies(source_village_id, &source_deployed)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                let target = self
+                    .village
+                    .get_by_village_id(target_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut target_reinforcements = target.reinforcements;
+                for idx in 0..10 {
+                    target_reinforcements.add(idx, units.get(idx));
+                }
+                self.village
+                    .update_reinforcements(target_village_id, &target_reinforcements)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
                 self.movements
                     .delete_by_movement_id(movement_id)
                     .await
@@ -286,15 +336,32 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
-            VillageEvent::BuildingAdded { .. }
-            | VillageEvent::BuildingUpgraded { .. }
-            | VillageEvent::BuildingDowngraded { .. } => {
-                let village_id = event
-                    .aggregate_id
-                    .parse::<u32>()
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            VillageEvent::BuildingAdded {
+                village_id,
+                slot_id,
+                building_name,
+                level,
+                speed,
+                ..
+            }
+            | VillageEvent::BuildingUpgraded {
+                village_id,
+                slot_id,
+                building_name,
+                level,
+                speed,
+                ..
+            }
+            | VillageEvent::BuildingDowngraded {
+                village_id,
+                slot_id,
+                building_name,
+                level,
+                speed,
+                ..
+            } => {
                 self.village
-                    .refresh_from_source(village_id)
+                    .update_building(village_id, slot_id, building_name, level, speed)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -340,11 +407,11 @@ impl EventConsumer for VillageProjector {
                     .get_by_village_id(village_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                let mut next_units = current.stationed_army;
+                let mut next_units = current.army;
                 if let Some(idx) = current.tribe.get_unit_idx_by_name(&unit) {
                     next_units.add(idx, quantity_trained);
                     self.village
-                        .update_stationed_army(village_id, &next_units)
+                        .update_army(village_id, &next_units)
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }

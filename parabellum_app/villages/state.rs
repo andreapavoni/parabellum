@@ -98,7 +98,6 @@ impl VillageState {
         position: Position,
         tribe: Tribe,
         player_id: Uuid,
-        stationed_units: TroopSet,
         buildings: Vec<VillageBuilding>,
     ) -> Self {
         let mut village = Village::from_persistence(
@@ -124,17 +123,7 @@ impl VillageState {
             Utc::now(),
             None,
         );
-        let army = Army::new(
-            None,
-            village.id,
-            Some(village.id),
-            village.player_id,
-            village.tribe.clone(),
-            &stationed_units,
-            village.smithy(),
-            None,
-        );
-        let _ = village.set_army(Some(&army));
+        let _ = village.set_army(None);
         Self {
             village,
             pending_building_actions: vec![],
@@ -212,7 +201,7 @@ impl VillageState {
         let _ = self.village.set_army(Some(&next));
     }
 
-    pub fn stationed_units(&self) -> TroopSet {
+    pub fn army_units(&self) -> TroopSet {
         self.village
             .army()
             .map(|a| a.units().clone())

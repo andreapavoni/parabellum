@@ -26,7 +26,9 @@ pub struct VillageModel {
     pub total_merchants: u8,
     pub busy_merchants: u8,
     pub parent_village_id: Option<u32>,
-    pub stationed_army: TroopSet,
+    pub army: TroopSet,
+    pub reinforcements: TroopSet,
+    pub deployed_armies: TroopSet,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

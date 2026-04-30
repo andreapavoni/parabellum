@@ -6,14 +6,14 @@ use uuid::Uuid;
 
 use crate::es::VillageEsService;
 
-use super::fixtures::{found_village_cmd, seed_player_and_village, with_test_pool};
+use super::fixtures::{found_village_cmd, seed_user_and_player, with_test_pool};
 
 #[tokio::test]
 async fn village_es_service_projects_building_lifecycle_on_rm_village() {
     with_test_pool(|pool| async move {
         let player_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
-        seed_player_and_village(&pool, player_id, user_id, 100, "Village A", 0, 0).await;
+        seed_user_and_player(&pool, player_id, user_id).await;
 
         let service = VillageEsService::new(pool.clone());
         service

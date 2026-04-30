@@ -60,7 +60,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_upgrade_on_empty_slot() {
-        let aggregate = VillageAggregate::founded(1, Uuid::new_v4(), Default::default(), vec![]);
+        let aggregate = VillageAggregate::founded(1, Uuid::new_v4(), vec![]);
         let result = UpgradeBuilding {
             player_id: aggregate.player_id(),
             slot_id: 22,
@@ -77,7 +77,6 @@ mod tests {
         let aggregate = VillageAggregate::founded(
             1,
             player_id,
-            Default::default(),
             vec![VillageBuilding {
                 slot_id: 19,
                 building: Building {
@@ -115,7 +114,6 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe,
                 player_id,
-                stationed_units: Default::default(),
                 buildings: vec![
                     VillageBuilding {
                         slot_id: 19,

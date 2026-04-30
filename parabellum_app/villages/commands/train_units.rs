@@ -63,7 +63,6 @@ mod tests {
     use mini_cqrs_es::{Aggregate, Command};
     use parabellum_game::models::{buildings::Building, village::VillageBuilding};
     use parabellum_types::{
-        army::TroopSet,
         buildings::{BuildingGroup, BuildingName},
         map::Position,
         tribe::Tribe,
@@ -82,7 +81,6 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
-                stationed_units: TroopSet::default(),
                 buildings: vec![
                     VillageBuilding {
                         slot_id: 19,

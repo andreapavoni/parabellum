@@ -1,4 +1,6 @@
+use parabellum_types::buildings::BuildingName;
 use parabellum_types::errors::ApplicationError;
+use parabellum_types::{common::ResourceGroup, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::villages::models::{
@@ -11,19 +13,45 @@ pub trait VillageModelRepository: Send + Sync {
         &self,
         village_id: u32,
         player_id: Uuid,
-        stationed_army: &parabellum_types::army::TroopSet,
+        village_name: &str,
+        position: &Position,
+        tribe: Tribe,
+        buildings: &[parabellum_game::models::village::VillageBuilding],
+        army: &parabellum_types::army::TroopSet,
     ) -> Result<(), ApplicationError>;
     async fn update_player_id(
         &self,
         village_id: u32,
         player_id: Uuid,
     ) -> Result<(), ApplicationError>;
-    async fn update_stationed_army(
+    async fn update_army(
         &self,
         village_id: u32,
-        stationed_army: &parabellum_types::army::TroopSet,
+        army: &parabellum_types::army::TroopSet,
     ) -> Result<(), ApplicationError>;
-    async fn refresh_from_source(&self, village_id: u32) -> Result<(), ApplicationError>;
+    async fn update_reinforcements(
+        &self,
+        village_id: u32,
+        reinforcements: &parabellum_types::army::TroopSet,
+    ) -> Result<(), ApplicationError>;
+    async fn update_deployed_armies(
+        &self,
+        village_id: u32,
+        deployed_armies: &parabellum_types::army::TroopSet,
+    ) -> Result<(), ApplicationError>;
+    async fn update_building(
+        &self,
+        village_id: u32,
+        slot_id: u8,
+        building_name: BuildingName,
+        level: u8,
+        speed: i8,
+    ) -> Result<(), ApplicationError>;
+    async fn set_stored_resources(
+        &self,
+        village_id: u32,
+        resources: ResourceGroup,
+    ) -> Result<(), ApplicationError>;
     async fn get_by_village_id(&self, village_id: u32) -> Result<VillageModel, ApplicationError>;
     async fn list_by_player_id(
         &self,

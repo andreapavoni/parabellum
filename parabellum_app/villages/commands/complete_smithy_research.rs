@@ -36,7 +36,7 @@ impl Command for CompleteSmithyResearch {
 #[cfg(test)]
 mod tests {
     use mini_cqrs_es::{Aggregate, Command};
-    use parabellum_types::{army::TroopSet, map::Position, tribe::Tribe};
+    use parabellum_types::{map::Position, tribe::Tribe};
     use uuid::Uuid;
 
     use crate::villages::{CompleteSmithyResearch, VillageAggregate, VillageEvent};
@@ -52,7 +52,6 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
-                stationed_units: TroopSet::default(),
                 buildings: vec![],
             })
             .await;

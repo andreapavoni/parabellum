@@ -6,9 +6,8 @@ use uuid::Uuid;
 use crate::es::VillageEsService;
 
 use super::fixtures::{
-    academy, barracks, found_village_cmd, granary, main_building, seed_player_and_village,
-    setup_scheduler_village, smithy, stocks_for_research, stocks_for_training, warehouse,
-    with_test_pool,
+    academy, barracks, granary, main_building, rally_point, resources, setup_village, smithy,
+    warehouse, with_test_pool,
 };
 
 #[tokio::test]
@@ -16,19 +15,57 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
     with_test_pool(|pool| async move {
         let player_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
-        seed_player_and_village(&pool, player_id, user_id, 100, "Village A", 0, 0).await;
-        seed_player_and_village(&pool, player_id, user_id, 101, "Village B", 1, 1).await;
 
         let service = VillageEsService::new(pool.clone());
-        for (id, name, pos) in [
-            (100u32, "Village A", Position { x: 0, y: 0 }),
-            (101u32, "Village B", Position { x: 1, y: 1 }),
-        ] {
-            service
-                .found_village(id, &found_village_cmd(player_id, name, pos))
-                .await
-                .unwrap();
-        }
+        setup_village(
+            &pool,
+            &service,
+            player_id,
+            user_id,
+            100,
+            "Village A",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        setup_village(
+            &pool,
+            &service,
+            player_id,
+            user_id,
+            101,
+            "Village B",
+            Position { x: 1, y: 1 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        service
+            .train_units(
+                100,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+            .await
+            .unwrap();
 
         service
             .send_reinforcement(
@@ -75,7 +112,7 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         let player_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_scheduler_village(
+        setup_village(
             &pool,
             &service,
             player_id,
@@ -84,9 +121,8 @@ async fn village_es_service_trains_units_in_batched_sequence() {
             "Village A",
             Position { x: 0, y: 0 },
             parabellum_types::tribe::Tribe::Roman,
-            vec![main_building(1), barracks(1)],
-            parabellum_types::army::TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            stocks_for_training(),
+            vec![main_building(1), barracks(1), warehouse(20), granary(20)],
+            resources(2_000, 2_000, 2_000, 2_000),
         )
         .await;
 
@@ -148,19 +184,27 @@ async fn village_es_service_trains_units_in_batched_sequence() {
             .await
             .unwrap();
         assert_eq!(second, 1);
-        let training_counts_after_second = service
-            .get_village_scheduled_action_status_counts(
+        let completed_training_after_second = service
+            .get_village_scheduled_action_status_count(
                 100,
                 parabellum_app::villages::models::ScheduledActionType::TrainUnit,
-                None,
+                ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
-        assert_eq!(training_counts_after_second.completed, 2);
-        assert_eq!(training_counts_after_second.pending, 0);
+        let pending_training_after_second = service
+            .get_village_scheduled_action_status_count(
+                100,
+                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(completed_training_after_second, 2);
+        assert_eq!(pending_training_after_second, 0);
 
         let village = service.get_village_model(100).await.unwrap();
-        assert_eq!(village.stationed_army.get(0), 2);
+        assert_eq!(village.army.get(0), 2);
     })
     .await;
 }
@@ -171,7 +215,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
         let player_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_scheduler_village(
+        setup_village(
             &pool,
             &service,
             player_id,
@@ -187,8 +231,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
                 warehouse(20),
                 granary(20),
             ],
-            parabellum_types::army::TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            stocks_for_research(),
+            resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
 
@@ -218,15 +261,15 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
             .unwrap();
         assert_eq!(smithy_processed, 1);
 
-        let smithy_counts = service
-            .get_village_scheduled_action_status_counts(
+        let completed_smithy = service
+            .get_village_scheduled_action_status_count(
                 100,
                 parabellum_app::villages::models::ScheduledActionType::ResearchSmithy,
-                None,
+                ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
-        assert_eq!(smithy_counts.completed, 1);
+        assert_eq!(completed_smithy, 1);
     })
     .await;
 }
@@ -237,7 +280,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         let player_id = Uuid::new_v4();
         let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_scheduler_village(
+        setup_village(
             &pool,
             &service,
             player_id,
@@ -254,8 +297,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
                 warehouse(20),
                 granary(20),
             ],
-            parabellum_types::army::TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            stocks_for_research(),
+            resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
 
@@ -285,16 +327,24 @@ async fn village_es_service_schedules_and_completes_academy_research() {
             .unwrap();
         assert_eq!(academy_processed, 1);
 
-        let academy_completed_counts = service
-            .get_village_scheduled_action_status_counts(
+        let academy_completed = service
+            .get_village_scheduled_action_status_count(
                 100,
                 parabellum_app::villages::models::ScheduledActionType::ResearchAcademy,
-                Some(ScheduledActionStatus::Completed),
+                ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
-        assert_eq!(academy_completed_counts.completed, 1);
-        assert_eq!(academy_completed_counts.pending, 0);
+        let academy_pending = service
+            .get_village_scheduled_action_status_count(
+                100,
+                parabellum_app::villages::models::ScheduledActionType::ResearchAcademy,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(academy_completed, 1);
+        assert_eq!(academy_pending, 0);
     })
     .await;
 }

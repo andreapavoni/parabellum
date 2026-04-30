@@ -5,14 +5,12 @@
 //! - seed resources through utility command (`set_village_resources`)
 //! - keep scheduler tests deterministic by deriving due times from queued actions
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
-use parabellum_types::army::TroopSet;
 use parabellum_types::{
     buildings::{BuildingGroup, BuildingName},
     common::ResourceGroup,
     map::Position,
     tribe::Tribe,
 };
-use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
@@ -24,6 +22,7 @@ static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
 static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
 
 pub async fn setup_pool() -> sqlx::PgPool {
+    // Run embedded migrations once for the shared test database.
     let pool = establish_test_connection_pool()
         .await
         .expect("TEST_DATABASE_URL connection must be available");
@@ -85,15 +84,8 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .unwrap();
 }
 
-pub async fn seed_player_and_village(
-    pool: &sqlx::PgPool,
-    player_id: Uuid,
-    user_id: Uuid,
-    village_id: i32,
-    village_name: &str,
-    position_x: i32,
-    position_y: i32,
-) {
+pub async fn seed_user_and_player(pool: &sqlx::PgPool, player_id: Uuid, user_id: Uuid) {
+    // Village rows are not seeded for ES tests; villages are created by `FoundVillage`.
     sqlx::query(
         "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
     )
@@ -113,56 +105,10 @@ pub async fn seed_player_and_village(
     .execute(pool)
     .await
     .unwrap();
-
-    sqlx::query(
-        r#"
-        INSERT INTO villages (
-            id, player_id, name, position, buildings, production, stocks, smithy_upgrades, academy_research,
-            population, loyalty, is_capital, culture_points, culture_points_production, parent_village_id
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 2, 100, false, 0, 0, NULL)
-        "#,
-    )
-    .bind(village_id)
-    .bind(player_id)
-    .bind(village_name)
-    .bind(json!({ "x": position_x, "y": position_y }))
-    .bind(json!([]))
-    .bind(json!({
-        "lumber": 0, "clay": 0, "iron": 0, "crop": 0,
-        "upkeep": 0, "bonus": {"lumber": 0, "clay": 0, "iron": 0, "crop": 0},
-        "effective": {"lumber": 0, "clay": 0, "iron": 0, "crop": 0}
-    }))
-    .bind(json!({
-        "warehouse_capacity": 800, "granary_capacity": 800, "lumber": 20000, "clay": 20000, "iron": 20000, "crop": 20000
-    }))
-    .bind(json!({}))
-    .bind(json!({}))
-    .execute(pool)
-    .await
-    .unwrap();
 }
 
-pub fn stocks_for_training() -> serde_json::Value {
-    json!({
-        "warehouse_capacity": 800,
-        "granary_capacity": 800,
-        "lumber": 2000,
-        "clay": 2000,
-        "iron": 2000,
-        "crop": 2000
-    })
-}
-
-pub fn stocks_for_research() -> serde_json::Value {
-    json!({
-        "warehouse_capacity": 80000,
-        "granary_capacity": 80000,
-        "lumber": 80000,
-        "clay": 80000,
-        "iron": 80000,
-        "crop": 80000
-    })
+pub fn resources(lumber: u32, clay: u32, iron: u32, crop: u32) -> ResourceGroup {
+    ResourceGroup::new(lumber, clay, iron, crop)
 }
 
 pub fn main_building(level: u8) -> VillageBuilding {
@@ -241,7 +187,7 @@ pub fn granary(level: u8) -> VillageBuilding {
     }
 }
 
-pub async fn setup_scheduler_village(
+pub async fn setup_village(
     pool: &sqlx::PgPool,
     service: &VillageEsService,
     player_id: Uuid,
@@ -251,33 +197,10 @@ pub async fn setup_scheduler_village(
     position: Position,
     tribe: Tribe,
     buildings: Vec<VillageBuilding>,
-    stationed_units: TroopSet,
-    stocks: serde_json::Value,
+    resources: ResourceGroup,
 ) {
-    // Seed legacy source rows required by rm_village refresh and projector lookups.
-    seed_player_and_village(
-        pool,
-        player_id,
-        user_id,
-        village_id as i32,
-        village_name,
-        position.x,
-        position.y,
-    )
-    .await;
-
-    sqlx::query(
-        r#"
-        UPDATE villages
-        SET stocks = $1::jsonb
-        WHERE id = $2
-        "#,
-    )
-    .bind(stocks.clone())
-    .bind(village_id as i32)
-    .execute(pool)
-    .await
-    .unwrap();
+    // Seed identity rows only. Village state is initialized via FoundVillage.
+    seed_user_and_player(pool, player_id, user_id).await;
 
     service
         .found_village(
@@ -287,19 +210,12 @@ pub async fn setup_scheduler_village(
                 position,
                 tribe,
                 player_id,
-                stationed_units,
                 buildings,
             },
         )
         .await
         .unwrap();
     // Apply explicit resource target through the ES utility command.
-    let resources = ResourceGroup::new(
-        stocks["lumber"].as_u64().unwrap_or(0) as u32,
-        stocks["clay"].as_u64().unwrap_or(0) as u32,
-        stocks["iron"].as_u64().unwrap_or(0) as u32,
-        stocks["crop"].as_u64().unwrap_or(0) as u32,
-    );
     service
         .set_village_resources(
             village_id,
@@ -336,7 +252,6 @@ pub fn found_village_cmd(
         position,
         tribe: Tribe::Roman,
         player_id,
-        stationed_units: parabellum_types::army::TroopSet::new([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
         buildings: vec![main_building(1), rally_point(1)],
     }
 }

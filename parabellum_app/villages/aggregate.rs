@@ -18,12 +18,7 @@ pub struct VillageAggregate {
 }
 
 impl VillageAggregate {
-    pub fn founded(
-        id: u32,
-        player_id: Uuid,
-        stationed_units: TroopSet,
-        buildings: Vec<VillageBuilding>,
-    ) -> Self {
+    pub fn founded(id: u32, player_id: Uuid, buildings: Vec<VillageBuilding>) -> Self {
         Self {
             id,
             version: 0,
@@ -33,7 +28,6 @@ impl VillageAggregate {
                 parabellum_types::map::Position { x: 0, y: 0 },
                 parabellum_types::tribe::Tribe::Roman,
                 player_id,
-                stationed_units,
                 buildings,
             ),
         }
@@ -41,10 +35,6 @@ impl VillageAggregate {
 
     pub fn player_id(&self) -> Uuid {
         self.village.player_id()
-    }
-
-    pub fn stationed_units(&self) -> TroopSet {
-        self.village.stationed_units()
     }
 
     pub fn has_units(&self, units: &TroopSet) -> bool {
@@ -74,7 +64,6 @@ impl Aggregate for VillageAggregate {
                 position,
                 tribe,
                 player_id,
-                stationed_units,
                 buildings,
             } => {
                 self.id = *village_id;
@@ -84,7 +73,6 @@ impl Aggregate for VillageAggregate {
                     position.clone(),
                     tribe.clone(),
                     *player_id,
-                    stationed_units.clone(),
                     buildings.clone(),
                 );
             }

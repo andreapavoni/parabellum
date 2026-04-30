@@ -63,7 +63,6 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe,
                 player_id: Uuid::new_v4(),
-                stationed_units: Default::default(),
                 buildings: vec![VillageBuilding {
                     slot_id: 19,
                     building: Building {
