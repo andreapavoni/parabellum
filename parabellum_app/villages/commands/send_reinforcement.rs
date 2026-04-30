@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Schedules a reinforcement movement from source village to target village.
 pub struct SendReinforcement {
     pub movement_id: Uuid,
     pub army_id: Uuid,

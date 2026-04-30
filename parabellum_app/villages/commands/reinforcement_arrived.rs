@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
+/// Completes a scheduled reinforcement arrival.
 pub struct ReinforcementArrived {
     pub movement_id: Uuid,
     pub army_id: Uuid,

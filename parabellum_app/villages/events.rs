@@ -1,3 +1,10 @@
+//! Village aggregate domain events for CQRS/ES flows.
+//!
+//! Event families:
+//! - immediate actions (e.g. `VillageFounded`, `ReinforcementSent`)
+//! - scheduled actions (`*Scheduled`)
+//! - deterministic completions (`*Completed`, `Building*`)
+//! - utility updates (`VillageResourcesSet`)
 use std::fmt;
 
 use chrono::{DateTime, Utc};
@@ -25,6 +32,9 @@ pub enum VillageEvent {
     VillageConquered {
         player_id: Uuid,
     },
+    /// Emitted when resources are explicitly set through `SetVillageResources`.
+    ///
+    /// Projectors should refresh resource-dependent read models from source.
     VillageResourcesSet {
         player_id: Uuid,
         village_id: u32,

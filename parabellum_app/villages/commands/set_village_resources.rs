@@ -4,9 +4,15 @@ use uuid::Uuid;
 
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
+/// Utility command that sets village stored resources to requested amounts,
+/// clamped by current warehouse/granary capacities.
+///
+/// If requested quantities exceed current capacities, the overflow is discarded.
 #[derive(Debug, Clone)]
 pub struct SetVillageResources {
+    /// Command caller; must own the village.
     pub player_id: Uuid,
+    /// Desired stored resources before capacity clamping.
     pub resources: ResourceGroup,
 }
 

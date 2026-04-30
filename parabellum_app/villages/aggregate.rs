@@ -1,3 +1,7 @@
+//! Event-sourced village aggregate state and event application rules.
+//!
+//! The aggregate mirrors domain state in `VillageState` and applies only
+//! `VillageEvent` transitions.
 use mini_cqrs_es::Aggregate;
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::army::TroopSet;
@@ -62,6 +66,7 @@ impl Aggregate for VillageAggregate {
     type Event = VillageEvent;
 
     async fn apply(&mut self, event: &Self::Event) {
+        // Keep apply deterministic: no external reads/writes, only state transitions.
         match event {
             VillageEvent::VillageFounded {
                 village_id,

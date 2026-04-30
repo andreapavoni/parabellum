@@ -162,6 +162,9 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
             .await
     }
 
+    /// Executes `SetVillageResources` on a village aggregate.
+    ///
+    /// Effective stored values are clamped by current storage capacities.
     pub async fn set_village_resources(
         &self,
         village_id: u32,

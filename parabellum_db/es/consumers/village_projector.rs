@@ -1,3 +1,7 @@
+//! Synchronous village event projector for ES read models.
+//!
+//! This consumer runs in the command transaction scope and must keep read-model
+//! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{
@@ -39,6 +43,10 @@ impl EventConsumer for VillageProjector {
         }
 
         let domain_event = event.get_payload::<VillageEvent>()?;
+        // Projection contract by event family:
+        // - founded/conquered/resources/buildings -> rm_village
+        // - reinforcement -> rm_village_movements + rm_scheduled_actions
+        // - training/research scheduling -> rm_scheduled_actions
         match domain_event {
             VillageEvent::VillageFounded {
                 village_id,

@@ -1,3 +1,7 @@
+//! Village aggregate command set for the CQRS/ES path.
+//!
+//! Scheduling commands validate preconditions and emit scheduling events.
+//! Completion commands apply already-validated work deterministically.
 mod add_building;
 mod complete_academy_research;
 mod complete_add_building;

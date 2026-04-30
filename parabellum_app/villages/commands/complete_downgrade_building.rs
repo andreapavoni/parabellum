@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
+/// Completes a previously scheduled building downgrade action.
 pub struct CompleteDowngradeBuilding {
     pub action_id: Uuid,
     pub player_id: Uuid,

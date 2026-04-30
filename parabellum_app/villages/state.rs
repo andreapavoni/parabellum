@@ -1,3 +1,7 @@
+//! Internal village aggregate state and deterministic transition helpers.
+//!
+//! Scheduling validation lives on scheduling methods; completion methods assume
+//! work was already validated at scheduling time.
 use chrono::Utc;
 use parabellum_game::models::{
     army::Army,
@@ -169,6 +173,11 @@ impl VillageState {
         })
     }
 
+    /// Sets stored resources to requested absolute quantities.
+    ///
+    /// This method first removes any excess from current stocks, then stores the
+    /// missing delta through domain storage logic, so final values are capped by
+    /// current warehouse/granary capacities.
     pub fn set_resources(&mut self, resources: parabellum_types::common::ResourceGroup) {
         let current = self.village.stored_resources();
         let to_remove = parabellum_types::common::ResourceGroup::new(

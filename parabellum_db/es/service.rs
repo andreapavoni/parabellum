@@ -26,6 +26,7 @@ use crate::es::{
 };
 
 #[derive(Debug, Clone)]
+/// ES orchestration facade for village command, scheduler, and read helper flows.
 pub struct VillageEsService {
     pool: PgPool,
 }
@@ -147,6 +148,7 @@ impl VillageEsService {
             .await
     }
 
+    /// Executes the village resource utility command through the ES runtime.
     pub async fn set_village_resources(
         &self,
         village_id: u32,
@@ -157,6 +159,9 @@ impl VillageEsService {
         service.set_village_resources(village_id, command).await
     }
 
+    /// Executes due scheduled actions by dispatching completion commands.
+    ///
+    /// Status transitions are persisted for each action (`completed` or `failed`).
     pub async fn process_due_actions(
         &self,
         before_or_equal: chrono::DateTime<chrono::Utc>,
@@ -261,6 +266,9 @@ impl VillageEsService {
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
+    /// Returns scheduled-action status counters for a village and action type.
+    ///
+    /// If `status_filter` is provided, only that status contributes to counters.
     pub async fn get_village_scheduled_action_status_counts(
         &self,
         village_id: u32,
@@ -277,6 +285,7 @@ impl VillageEsService {
         runtime.query(&query).await
     }
 
+    /// Maps one scheduled action payload to its deterministic completion command.
     async fn execute_action(
         &self,
         service: &VillageService<'_, crate::es::VillageCqrsRuntime>,

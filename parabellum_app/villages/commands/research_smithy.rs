@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Schedules a smithy research action for a unit.
 pub struct ResearchSmithy {
     pub player_id: Uuid,
     pub unit: UnitName,

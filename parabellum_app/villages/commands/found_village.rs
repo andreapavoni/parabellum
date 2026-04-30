@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Initializes a village aggregate with immutable founding data and initial state.
 pub struct FoundVillage {
     pub village_name: String,
     pub position: Position,

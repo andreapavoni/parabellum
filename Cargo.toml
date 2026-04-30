@@ -46,8 +46,8 @@ authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/andreapavoni/parabellum"
-keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game"]
-rust-version = "1.85"
+keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game", "cqrs-es"]
+rust-version = "1.95"
 
 [workspace.dependencies]
 mini_cqrs_es = "0.11.0"

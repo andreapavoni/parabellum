@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Schedules a building level upgrade for an existing slot.
 pub struct UpgradeBuilding {
     pub player_id: Uuid,
     pub slot_id: u8,

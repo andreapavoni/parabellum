@@ -7,16 +7,22 @@ use crate::villages::repositories::ScheduledActionRepository;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ScheduledActionStatusCounts {
+    /// Number of actions currently pending.
     pub pending: usize,
+    /// Number of actions currently locked/processing.
     pub processing: usize,
+    /// Number of actions completed successfully.
     pub completed: usize,
+    /// Number of actions failed.
     pub failed: usize,
 }
 
+/// Query that computes scheduled-action status counters for one village and action type.
 pub struct GetScheduledActionStatusCounts {
     pub repository: Arc<dyn ScheduledActionRepository>,
     pub village_id: u32,
     pub action_type: ScheduledActionType,
+    /// Optional status filter. When set, only actions with this status are counted.
     pub status_filter: Option<ScheduledActionStatus>,
 }
 

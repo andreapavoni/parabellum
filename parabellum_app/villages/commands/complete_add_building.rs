@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
+/// Completes a previously scheduled building construction action.
 pub struct CompleteAddBuilding {
     pub action_id: Uuid,
     pub player_id: Uuid,

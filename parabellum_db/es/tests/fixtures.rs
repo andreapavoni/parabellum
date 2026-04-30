@@ -1,3 +1,9 @@
+//! ES integration-test fixtures.
+//!
+//! Fixture policy:
+//! - initialize village streams through ES commands (`found_village`)
+//! - seed resources through utility command (`set_village_resources`)
+//! - keep scheduler tests deterministic by deriving due times from queued actions
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::army::TroopSet;
 use parabellum_types::{
@@ -38,6 +44,7 @@ where
     F: FnOnce(sqlx::PgPool) -> Fut,
     Fut: std::future::Future<Output = T>,
 {
+    // DB mutex guarantees isolated integration-test state for shared IDs.
     let _guard = TEST_DB_MUTEX.lock().await;
     let pool = setup_pool().await;
     f(pool).await
@@ -247,6 +254,7 @@ pub async fn setup_scheduler_village(
     stationed_units: TroopSet,
     stocks: serde_json::Value,
 ) {
+    // Seed legacy source rows required by rm_village refresh and projector lookups.
     seed_player_and_village(
         pool,
         player_id,
@@ -285,6 +293,7 @@ pub async fn setup_scheduler_village(
         )
         .await
         .unwrap();
+    // Apply explicit resource target through the ES utility command.
     let resources = ResourceGroup::new(
         stocks["lumber"].as_u64().unwrap_or(0) as u32,
         stocks["clay"].as_u64().unwrap_or(0) as u32,

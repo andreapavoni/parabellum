@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Schedules construction of a new building at a given slot.
 pub struct AddBuilding {
     pub player_id: Uuid,
     pub slot_id: u8,

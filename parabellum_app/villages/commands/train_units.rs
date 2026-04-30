@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
 
 #[derive(Debug, Clone)]
+/// Schedules unit training according to village queue rules.
 pub struct TrainUnits {
     pub player_id: Uuid,
     pub unit_idx: u8,
