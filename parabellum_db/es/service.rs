@@ -1,33 +1,39 @@
 use std::sync::Arc;
 
+use mini_cqrs_es::anyhow::Result;
 use mini_cqrs_es::{CqrsError, QueryRunner};
 use sqlx::PgPool;
 
 use parabellum_app::villages::models::{
-    MarketplaceOfferSnapshot, MarketplaceOfferStatus, ScheduledAction, ScheduledActionPayload,
-    ScheduledActionStatus, ScheduledActionType, VillageModel, VillageTroopMovements,
+    MarketplaceOfferSnapshot, MarketplaceOfferStatus, ReportModel, ScheduledAction,
+    ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType, VillageModel,
+    VillageTroopMovements,
 };
 use parabellum_app::villages::queries::{
-    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetScheduledActionStatusCounts,
-    ScheduledActionStatusCounts,
+    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer,
+    GetScheduledActionStatusCounts, ListReportsForPlayer, ScheduledActionStatusCounts,
 };
 use parabellum_app::villages::repositories::{
-    MarketplaceOfferRepository, ScheduledActionRepository, VillageModelRepository,
-    VillageMovementRepository,
+    MarketplaceOfferRepository, ReportReadModelRepository, ScheduledActionRepository,
+    VillageModelRepository, VillageMovementRepository,
 };
 use parabellum_app::villages::{
-    AcceptMarketplaceOffer, AddBuilding, CancelMarketplaceOffer, CompleteAcademyResearch,
-    CompleteAddBuilding, CompleteDowngradeBuilding, CompleteMerchantsArrival,
-    CompleteMerchantsReturn, CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding,
-    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, ReinforcementArrived, ResearchAcademy,
-    ResearchSmithy, SendMerchantsTransfer, SendReinforcement, SetVillageResources, TrainUnits,
+    AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
+    CompleteAcademyResearch, CompleteAddBuilding, CompleteAttackArrival, CompleteAttackReturn,
+    CompleteDowngradeBuilding, CompleteMerchantsArrival, CompleteMerchantsReturn,
+    CompleteReinforcementsReturn, CompleteScoutArrival, CompleteScoutReturn,
+    CompleteSettlersArrival, CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding,
+    ConquerVillage, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
+    ReinforcementArrived, ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ScoutVillage,
+    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
     UpgradeBuilding, VillageService,
 };
 use parabellum_types::errors::GameError;
 
 use crate::es::{
-    PostgresMarketplaceOfferRepository, PostgresScheduledActionRepository,
-    PostgresVillageModelRepository, PostgresVillageMovementRepository, village_cqrs_runtime,
+    PostgresMarketplaceOfferRepository, PostgresReportReadModelRepository,
+    PostgresScheduledActionRepository, PostgresVillageModelRepository,
+    PostgresVillageMovementRepository, village_cqrs_runtime,
 };
 
 #[derive(Debug, Clone)]
@@ -74,6 +80,65 @@ impl VillageEsService {
         service.send_reinforcement(village_id, command).await
     }
 
+    pub async fn send_attack(
+        &self,
+        village_id: u32,
+        command: &AttackVillage,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.send_attack(village_id, command).await
+    }
+
+    pub async fn recall_reinforcements(
+        &self,
+        village_id: u32,
+        command: &RecallReinforcements,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.recall_reinforcements(village_id, command).await
+    }
+
+    pub async fn release_reinforcements(
+        &self,
+        village_id: u32,
+        command: &ReleaseReinforcements,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.release_reinforcements(village_id, command).await
+    }
+
+    pub async fn send_scout(
+        &self,
+        village_id: u32,
+        command: &ScoutVillage,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.send_scout(village_id, command).await
+    }
+
+    pub async fn send_settlers(
+        &self,
+        village_id: u32,
+        command: &SendSettlers,
+    ) -> Result<u32, CqrsError> {
+        let target_exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rm_village WHERE village_id = $1)")
+                .bind(command.target_village_id as i32)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        if target_exists {
+            return Err(CqrsError::domain(GameError::TargetOccupied.to_string()));
+        }
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.send_settlers(village_id, command).await
+    }
+
     pub async fn add_building(
         &self,
         village_id: u32,
@@ -112,6 +177,16 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.train_units(village_id, command).await
+    }
+
+    pub async fn complete_train_unit(
+        &self,
+        village_id: u32,
+        command: &CompleteTrainUnit,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.complete_train_unit(village_id, command).await
     }
 
     pub async fn research_academy(
@@ -411,6 +486,49 @@ impl VillageEsService {
             .await
     }
 
+    pub async fn list_reports_for_player(
+        &self,
+        player_id: uuid::Uuid,
+        limit: i64,
+    ) -> Result<Vec<ReportModel>, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        runtime
+            .query(&ListReportsForPlayer {
+                repository: Arc::new(PostgresReportReadModelRepository::new(self.pool.clone()))
+                    as Arc<dyn ReportReadModelRepository>,
+                player_id,
+                limit,
+            })
+            .await
+    }
+
+    pub async fn get_report_for_player(
+        &self,
+        report_id: uuid::Uuid,
+        player_id: uuid::Uuid,
+    ) -> Result<Option<ReportModel>, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        runtime
+            .query(&GetReportForPlayer {
+                repository: Arc::new(PostgresReportReadModelRepository::new(self.pool.clone()))
+                    as Arc<dyn ReportReadModelRepository>,
+                report_id,
+                player_id,
+            })
+            .await
+    }
+
+    pub async fn mark_report_as_read(
+        &self,
+        report_id: uuid::Uuid,
+        player_id: uuid::Uuid,
+    ) -> Result<(), CqrsError> {
+        let repo = PostgresReportReadModelRepository::new(self.pool.clone());
+        repo.mark_as_read(report_id, player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
     /// Returns the number of scheduled actions for one exact status.
     pub async fn get_village_scheduled_action_status_count(
         &self,
@@ -444,8 +562,7 @@ impl VillageEsService {
                 player_id,
                 source_village_id,
                 target_village_id,
-                units,
-                hero_id,
+                army,
                 arrives_at,
             } => {
                 let command = ReinforcementArrived {
@@ -454,12 +571,207 @@ impl VillageEsService {
                     player_id,
                     source_village_id,
                     target_village_id,
-                    units,
-                    hero_id,
+                    army,
                     arrives_at,
                 };
                 service
                     .reinforcement_arrived(source_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::ReinforcementReturn {
+                action_id,
+                movement_id,
+                army_id,
+                village_id: _,
+                home_village_id,
+                stationed_village_id,
+                player_id,
+                army,
+                returns_at,
+            } => {
+                let command = CompleteReinforcementsReturn {
+                    action_id,
+                    movement_id,
+                    army_id,
+                    player_id,
+                    home_village_id,
+                    stationed_village_id,
+                    army,
+                    returns_at,
+                };
+                service
+                    .complete_reinforcements_return(home_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::SettlersArrival {
+                action_id,
+                movement_id,
+                army_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                target_position,
+                player_id,
+                village_name,
+                tribe,
+                arrives_at,
+            } => {
+                let command = CompleteSettlersArrival {
+                    action_id,
+                    movement_id,
+                    army_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    target_position: target_position.clone(),
+                    village_name: village_name.clone(),
+                    tribe: tribe.clone(),
+                    arrives_at,
+                };
+                service
+                    .complete_settlers_arrival(source_village_id, &command)
+                    .await?;
+
+                if self.get_village_model(target_village_id).await.is_err() {
+                    let found = FoundVillage {
+                        village_name,
+                        position: target_position,
+                        tribe,
+                        player_id,
+                        buildings: vec![],
+                    };
+                    service.found_village(target_village_id, &found).await?;
+                }
+            }
+            ScheduledActionPayload::AttackArrival {
+                action_id,
+                movement_id,
+                army_id,
+                return_action_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                player_id,
+                army,
+                attack_type,
+                catapult_targets,
+                arrives_at,
+                returns_at,
+            } => {
+                let command = CompleteAttackArrival {
+                    movement_id,
+                    army_id,
+                    action_id,
+                    return_action_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    army: army.clone(),
+                    attack_type: attack_type.clone(),
+                    catapult_targets,
+                    arrives_at,
+                    returns_at,
+                };
+                service
+                    .complete_attack_arrival(source_village_id, &command)
+                    .await?;
+
+                let has_chief = army.units().get(8) > 0;
+                if matches!(attack_type, parabellum_types::battle::AttackType::Normal) && has_chief
+                {
+                    let target = self.get_village_model(target_village_id).await?;
+                    if target.loyalty == 0 {
+                        let conquer = ConquerVillage {
+                            player_id,
+                            village_id: target_village_id,
+                        };
+                        service.conquer_village(target_village_id, &conquer).await?;
+                    }
+                }
+            }
+            ScheduledActionPayload::AttackReturn {
+                action_id,
+                movement_id,
+                army_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                player_id,
+                army,
+                returns_at,
+                bounty,
+            } => {
+                let command = CompleteAttackReturn {
+                    action_id,
+                    movement_id,
+                    army_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    army,
+                    bounty,
+                    returns_at,
+                };
+                service
+                    .complete_attack_return(source_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::ScoutArrival {
+                action_id,
+                movement_id,
+                army_id,
+                return_action_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                player_id,
+                army,
+                target,
+                attack_type,
+                arrives_at,
+                returns_at,
+            } => {
+                let command = CompleteScoutArrival {
+                    movement_id,
+                    army_id,
+                    action_id,
+                    return_action_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    army,
+                    target,
+                    attack_type,
+                    arrives_at,
+                    returns_at,
+                };
+                service
+                    .complete_scout_arrival(source_village_id, &command)
+                    .await?;
+            }
+            ScheduledActionPayload::ScoutReturn {
+                action_id,
+                movement_id,
+                army_id,
+                village_id: _,
+                source_village_id,
+                target_village_id,
+                player_id,
+                army,
+                returns_at,
+            } => {
+                let command = CompleteScoutReturn {
+                    action_id,
+                    movement_id,
+                    army_id,
+                    player_id,
+                    source_village_id,
+                    target_village_id,
+                    army,
+                    returns_at,
+                };
+                service
+                    .complete_scout_return(source_village_id, &command)
                     .await?;
             }
             ScheduledActionPayload::MerchantsArrival {

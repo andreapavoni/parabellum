@@ -4,8 +4,8 @@ use parabellum_types::{common::ResourceGroup, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::villages::models::{
-    MarketplaceOfferModel, MarketplaceOfferStatus, ScheduledAction, ScheduledActionStatus,
-    ScheduledActionType, VillageModel, VillageMovement,
+    MarketplaceOfferModel, MarketplaceOfferStatus, ReportModel, ScheduledAction,
+    ScheduledActionStatus, ScheduledActionType, VillageModel, VillageMovement,
 };
 
 #[async_trait::async_trait]
@@ -18,7 +18,7 @@ pub trait VillageModelRepository: Send + Sync {
         position: &Position,
         tribe: Tribe,
         buildings: &[parabellum_game::models::village::VillageBuilding],
-        army: &parabellum_types::army::TroopSet,
+        army: &Option<parabellum_game::models::army::Army>,
     ) -> Result<(), ApplicationError>;
     async fn update_player_id(
         &self,
@@ -28,17 +28,17 @@ pub trait VillageModelRepository: Send + Sync {
     async fn update_army(
         &self,
         village_id: u32,
-        army: &parabellum_types::army::TroopSet,
+        army: &Option<parabellum_game::models::army::Army>,
     ) -> Result<(), ApplicationError>;
     async fn update_reinforcements(
         &self,
         village_id: u32,
-        reinforcements: &parabellum_types::army::TroopSet,
+        reinforcements: &[parabellum_game::models::army::Army],
     ) -> Result<(), ApplicationError>;
     async fn update_deployed_armies(
         &self,
         village_id: u32,
-        deployed_armies: &parabellum_types::army::TroopSet,
+        deployed_armies: &[parabellum_game::models::army::Army],
     ) -> Result<(), ApplicationError>;
     async fn update_building(
         &self,
@@ -123,4 +123,21 @@ pub trait MarketplaceOfferRepository: Send + Sync {
         accepted_by_village_id: u32,
         at: chrono::DateTime<chrono::Utc>,
     ) -> Result<Option<MarketplaceOfferModel>, ApplicationError>;
+}
+
+#[async_trait::async_trait]
+pub trait ReportReadModelRepository: Send + Sync {
+    async fn list_for_player(
+        &self,
+        player_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<ReportModel>, ApplicationError>;
+
+    async fn get_for_player(
+        &self,
+        report_id: Uuid,
+        player_id: Uuid,
+    ) -> Result<Option<ReportModel>, ApplicationError>;
+
+    async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError>;
 }

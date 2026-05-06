@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
+use parabellum_game::models::army::Army;
 use parabellum_types::army::TroopSet;
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::errors::GameError;
@@ -53,12 +54,19 @@ impl Command for SendReinforcement {
         if !aggregate.village().has_units(&self.units) {
             return Err(as_domain_error(GameError::NotEnoughUnits));
         }
-
+        let detached_army = Army::new(
+            Some(self.army_id),
+            source_village_id,
+            Some(self.target_village_id),
+            self.player_id,
+            aggregate.village().village.tribe.clone(),
+            &self.units,
+            aggregate.village().village.smithy(),
+            None,
+        );
         Ok(vec![
             VillageEvent::VillageArmyDetached {
-                army_id: self.army_id,
-                units: self.units.clone(),
-                hero_id: self.hero_id,
+                army: detached_army.clone(),
             },
             VillageEvent::ReinforcementSent {
                 movement_id: self.movement_id,
@@ -66,8 +74,7 @@ impl Command for SendReinforcement {
                 player_id: self.player_id,
                 source_village_id,
                 target_village_id: self.target_village_id,
-                units: self.units.clone(),
-                hero_id: self.hero_id,
+                army: detached_army,
                 arrives_at: self.arrives_at,
             },
         ])
@@ -132,26 +139,22 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(
-            events,
-            vec![
-                VillageEvent::VillageArmyDetached {
-                    army_id,
-                    units: units.clone(),
-                    hero_id: None,
-                },
-                VillageEvent::ReinforcementSent {
-                    movement_id,
-                    army_id,
-                    player_id,
-                    source_village_id: 10,
-                    target_village_id: 20,
-                    units,
-                    hero_id: None,
-                    arrives_at,
-                },
-            ]
-        );
+        assert!(matches!(
+            events.first(),
+            Some(VillageEvent::VillageArmyDetached { army }) if army.id == army_id
+        ));
+        assert!(matches!(
+            events.get(1),
+            Some(VillageEvent::ReinforcementSent {
+                movement_id: m,
+                army_id: a,
+                player_id: p,
+                source_village_id: 10,
+                target_village_id: 20,
+                arrives_at: at,
+                ..
+            }) if *m == movement_id && *a == army_id && *p == player_id && *at == arrives_at
+        ));
     }
 
     #[tokio::test]

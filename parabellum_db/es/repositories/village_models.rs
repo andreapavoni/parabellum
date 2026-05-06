@@ -1,5 +1,6 @@
 use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::repositories::VillageModelRepository;
+use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::errors::{ApplicationError, DbError};
@@ -17,6 +18,60 @@ pub struct PostgresVillageModelRepository {
 impl PostgresVillageModelRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    pub async fn replace_village_state(
+        &self,
+        model: &VillageModel,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET player_id = $2,
+                village_name = $3,
+                position = $4,
+                tribe = $5,
+                buildings = $6,
+                production = $7,
+                stocks = $8,
+                population = $9,
+                loyalty = $10,
+                is_capital = $11,
+                culture_points = $12,
+                culture_points_production = $13,
+                parent_village_id = $14,
+                army = $15,
+                reinforcements = $16,
+                deployed_armies = $17,
+                total_merchants = $18,
+                busy_merchants = $19,
+                updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(model.village_id as i32)
+        .bind(model.player_id)
+        .bind(&model.village_name)
+        .bind(Json(&model.position))
+        .bind(DbTribe::from(model.tribe.clone()))
+        .bind(Json(&model.buildings))
+        .bind(Json(&model.production))
+        .bind(Json(&model.stocks))
+        .bind(model.population as i32)
+        .bind(model.loyalty as i16)
+        .bind(model.is_capital)
+        .bind(model.culture_points as i32)
+        .bind(model.culture_points_production as i32)
+        .bind(model.parent_village_id.map(|id| id as i32))
+        .bind(Json(&model.army))
+        .bind(Json(&model.reinforcements))
+        .bind(Json(&model.deployed_armies))
+        .bind(model.total_merchants as i16)
+        .bind(model.busy_merchants as i16)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 }
 
@@ -36,9 +91,9 @@ struct DbVillageModelRow {
     culture_points: i32,
     culture_points_production: i32,
     parent_village_id: Option<i32>,
-    army: Json<parabellum_types::army::TroopSet>,
-    reinforcements: Json<parabellum_types::army::TroopSet>,
-    deployed_armies: Json<parabellum_types::army::TroopSet>,
+    army: Json<Option<Army>>,
+    reinforcements: Json<Vec<Army>>,
+    deployed_armies: Json<Vec<Army>>,
     total_merchants: i16,
     busy_merchants: i16,
 }
@@ -137,7 +192,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         position: &Position,
         tribe: Tribe,
         buildings: &[VillageBuilding],
-        army: &parabellum_types::army::TroopSet,
+        army: &Option<Army>,
     ) -> Result<(), ApplicationError> {
         let warehouse_capacity = buildings
             .iter()
@@ -216,8 +271,8 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .bind(0_i32)
         .bind(None::<i32>)
         .bind(Json(army))
-        .bind(Json(parabellum_types::army::TroopSet::default()))
-        .bind(Json(parabellum_types::army::TroopSet::default()))
+        .bind(Json(Vec::<Army>::new()))
+        .bind(Json(Vec::<Army>::new()))
         .bind(total_merchants as i16)
         .bind(0_i16)
         .execute(&self.pool)
@@ -249,7 +304,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
     async fn update_army(
         &self,
         village_id: u32,
-        army: &parabellum_types::army::TroopSet,
+        army: &Option<Army>,
     ) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"
@@ -269,7 +324,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
     async fn update_reinforcements(
         &self,
         village_id: u32,
-        reinforcements: &parabellum_types::army::TroopSet,
+        reinforcements: &[Army],
     ) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"
@@ -289,7 +344,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
     async fn update_deployed_armies(
         &self,
         village_id: u32,
-        deployed_armies: &parabellum_types::army::TroopSet,
+        deployed_armies: &[Army],
     ) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"

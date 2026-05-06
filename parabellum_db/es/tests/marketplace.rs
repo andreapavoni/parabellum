@@ -1,5 +1,4 @@
 use chrono::{Duration, Utc};
-use uuid::Uuid;
 
 use parabellum_app::villages::CreateMarketplaceOffer;
 use parabellum_types::{
@@ -18,16 +17,9 @@ use super::fixtures::{
 async fn village_es_service_marketplace_offer_create_accept_flow() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-
-        let owner_player_id = Uuid::new_v4();
-        let owner_user_id = Uuid::new_v4();
-        let owner_village_id = 7001;
-        setup_village(
+        let (_owner_user_id, owner_player_id, owner_village_id) = setup_village(
             &pool,
             &service,
-            owner_player_id,
-            owner_user_id,
-            owner_village_id,
             "owner",
             Position { x: 0, y: 0 },
             Tribe::Gaul,
@@ -41,15 +33,9 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
         )
         .await;
 
-        let acceptor_player_id = Uuid::new_v4();
-        let acceptor_user_id = Uuid::new_v4();
-        let acceptor_village_id = 7002;
-        setup_village(
+        let (_acceptor_user_id, acceptor_player_id, acceptor_village_id) = setup_village(
             &pool,
             &service,
-            acceptor_player_id,
-            acceptor_user_id,
-            acceptor_village_id,
             "acceptor",
             Position { x: 8, y: 8 },
             Tribe::Roman,
@@ -63,27 +49,22 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
         )
         .await;
 
-        let second_acceptor_player_id = Uuid::new_v4();
-        let second_acceptor_user_id = Uuid::new_v4();
-        let second_acceptor_village_id = 7003;
-        setup_village(
-            &pool,
-            &service,
-            second_acceptor_player_id,
-            second_acceptor_user_id,
-            second_acceptor_village_id,
-            "acceptor-2",
-            Position { x: 10, y: 10 },
-            Tribe::Teuton,
-            vec![
-                main_building(10),
-                warehouse(20),
-                granary(20),
-                marketplace(10),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
+        let (_second_acceptor_user_id, second_acceptor_player_id, second_acceptor_village_id) =
+            setup_village(
+                &pool,
+                &service,
+                "acceptor-2",
+                Position { x: 10, y: 10 },
+                Tribe::Teuton,
+                vec![
+                    main_building(10),
+                    warehouse(20),
+                    granary(20),
+                    marketplace(10),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
 
         service
             .create_marketplace_offer(
@@ -162,15 +143,9 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
 
-        let owner_player_id = Uuid::new_v4();
-        let owner_user_id = Uuid::new_v4();
-        let owner_village_id = 7101;
-        setup_village(
+        let (_owner_user_id, owner_player_id, owner_village_id) = setup_village(
             &pool,
             &service,
-            owner_player_id,
-            owner_user_id,
-            owner_village_id,
             "owner-cancel",
             Position { x: 1, y: 1 },
             Tribe::Roman,

@@ -9,7 +9,7 @@ use parabellum_game::models::{
     village::{AcademyResearch, Village, VillageBuilding, VillageProduction, VillageStocks},
 };
 use parabellum_types::{
-    army::{TroopSet, UnitName},
+    army::{TroopSet, UnitName, UnitRole},
     buildings::BuildingName,
     common::ResourceGroup,
     errors::{AppError, ApplicationError, GameError},
@@ -40,6 +40,8 @@ struct PendingBuildingAction {
 struct PendingTrainingAction {
     action_id: Uuid,
     slot_id: u8,
+    unit: UnitName,
+    quantity_remaining: i32,
     execute_at: chrono::DateTime<Utc>,
 }
 
@@ -358,11 +360,109 @@ impl VillageState {
         quantity: i32,
         speed: i8,
     ) -> Result<(u8, UnitName, i32), ApplicationError> {
+        self.validate_expansion_unit_training(unit_idx, quantity)?;
         let mut village = self.village.clone();
         village
             .init_unit_training(unit_idx, &building_name, quantity, speed)
             .map(|(slot_id, unit_name, time_per_unit)| (slot_id, unit_name, time_per_unit as i32))
             .map_err(Into::into)
+    }
+
+    fn validate_expansion_unit_training(
+        &self,
+        unit_idx: u8,
+        quantity: i32,
+    ) -> Result<(), ApplicationError> {
+        let unit = self
+            .village
+            .tribe
+            .units()
+            .get(unit_idx as usize)
+            .ok_or(GameError::InvalidUnitIndex(unit_idx))?;
+        if !matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
+            return Ok(());
+        }
+
+        let available_slots = self.village.max_foundation_slots();
+        if available_slots == 0 {
+            return Err(GameError::NoFoundationSlotsAvailable.into());
+        }
+
+        let (chiefs_total, settlers_total) = self.count_expansion_units();
+        let committed_this_unit = match unit.role {
+            UnitRole::Chief => chiefs_total,
+            UnitRole::Settler => settlers_total,
+            _ => 0,
+        };
+        let max_trainable = Village::max_expansion_unit_trainable(
+            unit.role.clone(),
+            available_slots,
+            chiefs_total,
+            settlers_total,
+            committed_this_unit,
+        );
+        let requested = quantity as u32;
+        if requested <= max_trainable {
+            return Ok(());
+        }
+
+        match unit.role {
+            UnitRole::Chief => Err(GameError::ChiefLimitExceeded {
+                max: max_trainable,
+                current: chiefs_total,
+                requested,
+            }
+            .into()),
+            UnitRole::Settler => Err(GameError::SettlerLimitExceeded {
+                max: max_trainable + settlers_total,
+                current: settlers_total,
+                requested,
+            }
+            .into()),
+            _ => Ok(()),
+        }
+    }
+
+    fn count_expansion_units(&self) -> (u32, u32) {
+        let chiefs_at_home = self.village.count_chiefs_at_home();
+        let settlers_at_home = self.village.count_settlers_at_home();
+        let chiefs_deployed: u32 = self
+            .village
+            .deployed_armies()
+            .iter()
+            .map(|army| army.units().get(8))
+            .sum();
+        let settlers_deployed: u32 = self
+            .village
+            .deployed_armies()
+            .iter()
+            .map(|army| army.units().get(9))
+            .sum();
+
+        let mut chiefs_queued = 0;
+        let mut settlers_queued = 0;
+        for action in &self.pending_training_actions {
+            let Some(unit) = self
+                .village
+                .tribe
+                .units()
+                .iter()
+                .find(|u| u.name == action.unit)
+            else {
+                continue;
+            };
+            let remaining = action.quantity_remaining.max(0) as u32;
+            match unit.role {
+                UnitRole::Chief => chiefs_queued += remaining,
+                UnitRole::Settler => settlers_queued += remaining,
+                _ => {}
+            }
+        }
+
+        (
+            chiefs_at_home + chiefs_deployed + chiefs_queued,
+            settlers_at_home + settlers_deployed + settlers_queued,
+        )
     }
 
     pub fn schedule_send_resources(
@@ -413,11 +513,15 @@ impl VillageState {
         &mut self,
         action_id: Uuid,
         slot_id: u8,
+        unit: UnitName,
+        quantity_remaining: i32,
         execute_at: chrono::DateTime<Utc>,
     ) {
         self.pending_training_actions.push(PendingTrainingAction {
             action_id,
             slot_id,
+            unit,
+            quantity_remaining,
             execute_at,
         });
     }
@@ -452,6 +556,21 @@ impl VillageState {
         village_army
             .add_unit(unit, quantity)
             .map_err(ApplicationError::from)?;
+        self.village
+            .set_army(Some(&village_army))
+            .map_err(Into::into)
+    }
+
+    pub fn merge_units_home(&mut self, units: &TroopSet) -> Result<(), ApplicationError> {
+        let mut village_army = self
+            .village
+            .army()
+            .map_or(Army::new_village_army(&self.village), |a| a.clone());
+        let mut next_units = village_army.units().clone();
+        for idx in 0..10 {
+            next_units.add(idx, units.get(idx));
+        }
+        village_army.update_units(&next_units);
         self.village
             .set_army(Some(&village_army))
             .map_err(Into::into)

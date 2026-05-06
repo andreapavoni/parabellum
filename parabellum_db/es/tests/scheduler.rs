@@ -1,59 +1,70 @@
-use parabellum_app::villages::models::ScheduledActionStatus;
-use parabellum_app::villages::{
-    ResearchAcademy, ResearchSmithy, SendMerchantsTransfer, SendReinforcement, TrainUnits,
+use parabellum_app::villages::models::{
+    self, ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
-use parabellum_types::{army::TroopSet, buildings::BuildingName, map::Position};
+use parabellum_app::villages::repositories::ScheduledActionRepository;
+use parabellum_app::villages::{
+    AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
+    SendReinforcement, SetVillageResources, TrainUnits,
+};
+use parabellum_types::{
+    army::{TroopSet, UnitName},
+    battle::AttackType,
+    buildings::BuildingName,
+    map::Position,
+};
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
+use crate::es::repositories::PostgresScheduledActionRepository;
+use crate::es::tests::fixtures::setup_village_for_player;
 
 use super::fixtures::{
     academy, barracks, granary, main_building, marketplace, rally_point, resources, setup_village,
     smithy, warehouse, with_test_pool,
 };
 
+fn troops_sum(armies: &[parabellum_game::models::army::Army], idx: usize) -> u32 {
+    armies.iter().map(|a| a.units().get(idx)).sum()
+}
+
+fn army_units(v: &models::VillageModel, idx: usize) -> u32 {
+    v.army.as_ref().map(|a| a.units().get(idx)).unwrap_or(0)
+}
+
 #[tokio::test]
 async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
-
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            100,
             "Village A",
             Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![
                 main_building(1),
                 rally_point(1),
                 barracks(1),
+                academy(20),
                 warehouse(20),
                 granary(20),
             ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
-        setup_village(
-            &pool,
+        let second_village_id = setup_village_for_player(
             &service,
             player_id,
-            user_id,
-            101,
             "Village B",
             Position { x: 1, y: 1 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![main_building(1), warehouse(20), granary(20)],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
         service
             .train_units(
-                100,
+                village_id,
                 &TrainUnits {
                     player_id,
                     unit_idx: 0,
@@ -71,12 +82,12 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
 
         service
             .send_reinforcement(
-                100,
+                village_id,
                 &SendReinforcement {
                     movement_id: Uuid::new_v4(),
                     army_id: Uuid::new_v4(),
                     player_id,
-                    target_village_id: 101,
+                    target_village_id: second_village_id,
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
@@ -102,8 +113,8 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
             .await
             .unwrap();
         assert_eq!(models.len(), 2);
-        assert_eq!(models[0].village_id, 100);
-        assert_eq!(models[1].village_id, 101);
+        assert!(models.iter().any(|v| v.village_id == village_id));
+        assert!(models.iter().any(|v| v.village_id == second_village_id));
     })
     .await;
 }
@@ -111,18 +122,13 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
 #[tokio::test]
 async fn village_es_service_trains_units_in_batched_sequence() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            100,
             "Village A",
             Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![main_building(1), barracks(1), warehouse(20), granary(20)],
             resources(2_000, 2_000, 2_000, 2_000),
         )
@@ -130,7 +136,7 @@ async fn village_es_service_trains_units_in_batched_sequence() {
 
         service
             .train_units(
-                100,
+                village_id,
                 &TrainUnits {
                     player_id,
                     unit_idx: 0,
@@ -143,7 +149,7 @@ async fn village_es_service_trains_units_in_batched_sequence() {
             .unwrap();
 
         let first_due = service
-            .get_village_training_queue(100)
+            .get_village_training_queue(village_id)
             .await
             .unwrap()
             .iter()
@@ -158,8 +164,8 @@ async fn village_es_service_trains_units_in_batched_sequence() {
 
         let training_counts_after_first = service
             .get_village_scheduled_action_status_counts(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                village_id,
+                models::ScheduledActionType::TrainUnit,
                 None,
             )
             .await
@@ -171,7 +177,10 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(training_counts_after_first.completed, 1);
         assert_eq!(training_counts_after_first.pending, 1);
 
-        let queue_after_first = service.get_village_training_queue(100).await.unwrap();
+        let queue_after_first = service
+            .get_village_training_queue(village_id)
+            .await
+            .unwrap();
         assert_eq!(queue_after_first.len(), 2);
         assert!(queue_after_first[0].execute_at <= queue_after_first[1].execute_at);
 
@@ -188,16 +197,16 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(second, 1);
         let completed_training_after_second = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                village_id,
+                models::ScheduledActionType::TrainUnit,
                 ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
         let pending_training_after_second = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                village_id,
+                models::ScheduledActionType::TrainUnit,
                 ScheduledActionStatus::Pending,
             )
             .await
@@ -205,8 +214,8 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(completed_training_after_second, 2);
         assert_eq!(pending_training_after_second, 0);
 
-        let village = service.get_village_model(100).await.unwrap();
-        assert_eq!(village.army.get(0), 2);
+        let village = service.get_village_model(village_id).await.unwrap();
+        assert_eq!(army_units(&village, 0), 2);
     })
     .await;
 }
@@ -214,15 +223,10 @@ async fn village_es_service_trains_units_in_batched_sequence() {
 #[tokio::test]
 async fn village_es_service_schedules_and_completes_smithy_research() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            100,
             "Village A",
             Position { x: 0, y: 0 },
             parabellum_types::tribe::Tribe::Teuton,
@@ -239,7 +243,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
 
         service
             .research_smithy(
-                100,
+                village_id,
                 &ResearchSmithy {
                     player_id,
                     unit: parabellum_types::army::UnitName::Maceman,
@@ -249,7 +253,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
             .await
             .unwrap();
 
-        let smithy_queue = service.get_village_smithy_queue(100).await.unwrap();
+        let smithy_queue = service.get_village_smithy_queue(village_id).await.unwrap();
         assert_eq!(smithy_queue.len(), 1);
 
         let due_at = smithy_queue
@@ -265,8 +269,8 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
 
         let completed_smithy = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::ResearchSmithy,
+                village_id,
+                models::ScheduledActionType::ResearchSmithy,
                 ScheduledActionStatus::Completed,
             )
             .await
@@ -279,15 +283,10 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
 #[tokio::test]
 async fn village_es_service_schedules_and_completes_academy_research() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            100,
             "Village A",
             Position { x: 0, y: 0 },
             parabellum_types::tribe::Tribe::Teuton,
@@ -305,7 +304,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
 
         service
             .research_academy(
-                100,
+                village_id,
                 &ResearchAcademy {
                     player_id,
                     unit: parabellum_types::army::UnitName::Spearman,
@@ -315,7 +314,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
             .await
             .unwrap();
 
-        let academy_queue = service.get_village_academy_queue(100).await.unwrap();
+        let academy_queue = service.get_village_academy_queue(village_id).await.unwrap();
         assert_eq!(academy_queue.len(), 1);
 
         let due_at = academy_queue
@@ -331,16 +330,16 @@ async fn village_es_service_schedules_and_completes_academy_research() {
 
         let academy_completed = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::ResearchAcademy,
+                village_id,
+                models::ScheduledActionType::ResearchAcademy,
                 ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
         let academy_pending = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::ResearchAcademy,
+                village_id,
+                models::ScheduledActionType::ResearchAcademy,
                 ScheduledActionStatus::Pending,
             )
             .await
@@ -354,31 +353,23 @@ async fn village_es_service_schedules_and_completes_academy_research() {
 #[tokio::test]
 async fn village_es_service_schedules_and_completes_merchant_trip() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            100,
             "Village A",
             Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![main_building(1), marketplace(2), warehouse(20), granary(20)],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
-        setup_village(
+        let (_user_id, _player_id, target_village_id) = setup_village(
             &pool,
             &service,
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            101,
             "Village B",
             Position { x: 1, y: 1 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![main_building(1), warehouse(20), granary(20)],
             resources(10_000, 10_000, 10_000, 10_000),
         )
@@ -387,10 +378,10 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let send = parabellum_types::common::ResourceGroup(200, 50, 120, 100);
         service
             .send_resources(
-                100,
+                village_id,
                 &SendMerchantsTransfer {
                     player_id,
-                    target_village_id: 101,
+                    target_village_id,
                     resources: send,
                     arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
                 },
@@ -398,7 +389,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
             .await
             .unwrap();
 
-        let source_after_schedule = service.get_village_model(100).await.unwrap();
+        let source_after_schedule = service.get_village_model(village_id).await.unwrap();
         assert_eq!(source_after_schedule.busy_merchants, 1);
         assert_eq!(source_after_schedule.stocks.lumber, 79_800);
         assert_eq!(source_after_schedule.stocks.clay, 79_950);
@@ -407,8 +398,8 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
 
         let arrival_actions = service
             .get_village_scheduled_action_status_count(
-                100,
-                parabellum_app::villages::models::ScheduledActionType::MerchantsArrival,
+                village_id,
+                models::ScheduledActionType::MerchantsArrival,
                 ScheduledActionStatus::Pending,
             )
             .await
@@ -419,7 +410,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let processed_arrival = service.process_due_actions(due_arrival, 10).await.unwrap();
         assert_eq!(processed_arrival, 1);
 
-        let target_after_arrival = service.get_village_model(101).await.unwrap();
+        let target_after_arrival = service.get_village_model(target_village_id).await.unwrap();
         assert_eq!(target_after_arrival.stocks.lumber, 10_200);
         assert_eq!(target_after_arrival.stocks.clay, 10_050);
         assert_eq!(target_after_arrival.stocks.iron, 10_120);
@@ -428,7 +419,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let due_return = chrono::Utc::now() + chrono::Duration::minutes(15);
         let processed_return = service.process_due_actions(due_return, 10).await.unwrap();
         assert_eq!(processed_return, 1);
-        let source_after_return = service.get_village_model(100).await.unwrap();
+        let source_after_return = service.get_village_model(village_id).await.unwrap();
         assert_eq!(source_after_return.busy_merchants, 0);
     })
     .await;
@@ -437,18 +428,13 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
 #[tokio::test]
 async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_execution() {
     with_test_pool(|pool| async move {
-        let player_id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
         let service = VillageEsService::new(pool.clone());
-        setup_village(
+        let (_user_id, player_id, village_id) = setup_village(
             &pool,
             &service,
-            player_id,
-            user_id,
-            900,
             "Timing Village",
             Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Roman,
+            parabellum_types::tribe::Tribe::Teuton,
             vec![main_building(1), barracks(1), warehouse(20), granary(20)],
             resources(2_000, 2_000, 2_000, 2_000),
         )
@@ -456,7 +442,7 @@ async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_exe
 
         service
             .train_units(
-                900,
+                village_id,
                 &TrainUnits {
                     player_id,
                     unit_idx: 0,
@@ -469,7 +455,7 @@ async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_exe
             .unwrap();
 
         let due_at = service
-            .get_village_training_queue(900)
+            .get_village_training_queue(village_id)
             .await
             .unwrap()
             .iter()
@@ -498,22 +484,644 @@ async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_exe
 
         let completed = service
             .get_village_scheduled_action_status_count(
-                900,
-                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                village_id,
+                models::ScheduledActionType::TrainUnit,
                 ScheduledActionStatus::Completed,
             )
             .await
             .unwrap();
         let pending = service
             .get_village_scheduled_action_status_count(
-                900,
-                parabellum_app::villages::models::ScheduledActionType::TrainUnit,
+                village_id,
+                models::ScheduledActionType::TrainUnit,
                 ScheduledActionStatus::Pending,
             )
             .await
             .unwrap();
         assert_eq!(completed, 1);
         assert_eq!(pending, 0);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_schedules_attack_arrival_and_return() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                academy(20),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let target_village_id = setup_village_for_player(
+            &service,
+            player_id,
+            "Target",
+            Position { x: 3, y: 3 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let first_due = service
+            .get_village_training_queue(village_id)
+            .await
+            .unwrap()
+            .iter()
+            .map(|a| a.execute_at)
+            .min()
+            .expect("training queue should contain scheduled actions");
+        service
+            .process_due_actions(first_due + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+        let movement_id = Uuid::new_v4();
+        let arrival_action_id = Uuid::new_v4();
+        let return_action_id = Uuid::new_v4();
+
+        service
+            .send_attack(
+                village_id,
+                &AttackVillage {
+                    movement_id,
+                    arrival_action_id,
+                    return_action_id,
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+
+        let before_arrival = service.get_village_model(village_id).await.unwrap();
+        assert_eq!(army_units(&before_arrival, 0), 0);
+        assert_eq!(troops_sum(&before_arrival.deployed_armies, 0), 0);
+
+        let first_processed = service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(first_processed, 1);
+
+        let after_arrival = service.get_village_model(village_id).await.unwrap();
+        assert_eq!(army_units(&after_arrival, 0), 0);
+        assert_eq!(troops_sum(&after_arrival.deployed_armies, 0), 1);
+
+        let second_processed = service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(second_processed, 1);
+
+        let after_return = service.get_village_model(village_id).await.unwrap();
+        assert_eq!(army_units(&after_return, 0), 1);
+        assert_eq!(troops_sum(&after_return.deployed_armies, 0), 0);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_attack_arrival_processes_and_schedules_return_action() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(20),
+                rally_point(1),
+                barracks(1),
+                academy(20),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let (_user_id, _target_player_id, target_village_id) = setup_village(
+            &pool,
+            &service,
+            "Target",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(12), 500)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+        let source = service.get_village_model(village_id).await.unwrap();
+        let mut arriving_army = source.army.clone().unwrap();
+        arriving_army.update_units(&TroopSet::default());
+        let arrival_action_id = Uuid::new_v4();
+        let return_action_id = Uuid::new_v4();
+
+        let payload = ScheduledActionPayload::AttackArrival {
+            action_id: arrival_action_id,
+            movement_id: Uuid::new_v4(),
+            army_id: Uuid::new_v4(),
+            return_action_id,
+            village_id: village_id,
+            source_village_id: village_id,
+            target_village_id,
+            player_id,
+            army: arriving_army,
+            attack_type: AttackType::Normal,
+            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            arrives_at,
+            returns_at,
+        };
+        let repo = PostgresScheduledActionRepository::new(pool.clone());
+        repo.add(&ScheduledAction {
+            id: arrival_action_id,
+            action_type: ScheduledActionType::AttackArrival,
+            execute_at: arrives_at,
+            payload: serde_json::to_value(payload).unwrap(),
+            status: ScheduledActionStatus::Pending,
+        })
+        .await
+        .unwrap();
+
+        let processed_arrival = service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(processed_arrival, 1);
+
+        let pending_returns = service
+            .get_village_scheduled_action_status_count(
+                village_id,
+                models::ScheduledActionType::AttackReturn,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_returns, 0);
+
+        let processed_return_window = service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(processed_return_window, 0);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), rally_point(1), barracks(1)],
+            resources(800, 800, 800, 800),
+        )
+        .await;
+        let target_village_id = setup_village_for_player(
+            &service,
+            player_id,
+            "Target",
+            Position { x: 1, y: 1 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1)],
+            resources(800, 800, 800, 800),
+        )
+        .await;
+
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 20)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+
+        service
+            .send_attack(
+                village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Raid,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::MainBuilding],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+
+        service
+            .set_village_resources(
+                village_id,
+                &SetVillageResources {
+                    player_id,
+                    resources: resources(799, 799, 799, 799),
+                },
+            )
+            .await
+            .unwrap();
+
+        service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+
+        let source_after_return = service.get_village_model(village_id).await.unwrap();
+        assert!(source_after_return.stocks.lumber <= source_after_return.stocks.warehouse_capacity);
+        assert!(source_after_return.stocks.clay <= source_after_return.stocks.warehouse_capacity);
+        assert!(source_after_return.stocks.iron <= source_after_return.stocks.warehouse_capacity);
+        assert!(
+            source_after_return.stocks.crop.max(0) as u32
+                <= source_after_return.stocks.granary_capacity
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_attack_wipeout_skips_return_scheduling() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                academy(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let target_village_id = setup_village_for_player(
+            &service,
+            player_id,
+            "Target",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(1), barracks(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .train_units(
+                target_village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 25,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(12), 200)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+        service
+            .send_attack(
+                village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+
+        let arrival_processed = service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(arrival_processed, 1);
+
+        let pending_returns = service
+            .get_village_scheduled_action_status_count(
+                village_id,
+                models::ScheduledActionType::AttackReturn,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_returns, 1);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_attack_bounty_respects_source_capacity() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), rally_point(1), barracks(1)],
+            resources(799, 799, 799, 799),
+        )
+        .await;
+        let target_village_id = setup_village_for_player(
+            &service,
+            player_id,
+            "Target",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1)],
+            resources(800, 800, 800, 800),
+        )
+        .await;
+
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(24), 500)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+        service
+            .send_attack(
+                village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Raid,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+
+        let after = service.get_village_model(village_id).await.unwrap();
+        assert!(after.stocks.lumber <= 800);
+        assert!(after.stocks.clay <= 800);
+        assert!(after.stocks.iron <= 800);
+        assert!(after.stocks.crop <= 800);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_schedules_scout_arrival_and_return() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Scout Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(20),
+                rally_point(1),
+                barracks(1),
+                academy(20),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let target_village_id = setup_village_for_player(
+            &service,
+            player_id,
+            "Scout Target",
+            Position { x: 3, y: 3 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .research_academy(
+                village_id,
+                &ResearchAcademy {
+                    player_id,
+                    unit: UnitName::Scout,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 20)
+            .await
+            .unwrap();
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 3,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 20)
+            .await
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let arrives_at = now + chrono::Duration::seconds(2);
+        let returns_at = now + chrono::Duration::seconds(4);
+
+        service
+            .send_scout(
+                village_id,
+                &ScoutVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([0, 0, 0, 1, 0, 0, 0, 0, 0, 0]),
+                    target: parabellum_types::battle::ScoutingTarget::Resources,
+                    attack_type: AttackType::Raid,
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+
+        let first_processed = service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(first_processed, 1);
+
+        let second_processed = service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+        assert_eq!(second_processed, 1);
+
+        let after_return = service.get_village_model(village_id).await.unwrap();
+        assert_eq!(army_units(&after_return, 3), 1);
+        assert_eq!(troops_sum(&after_return.deployed_armies, 3), 0);
     })
     .await;
 }

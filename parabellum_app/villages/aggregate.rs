@@ -56,6 +56,17 @@ impl VillageAggregate {
     pub fn set_resources_for_test(&mut self, resources: parabellum_types::common::ResourceGroup) {
         self.village.village.store_resources(&resources);
     }
+
+    #[cfg(test)]
+    pub fn set_academy_research_for_test(
+        &mut self,
+        unit: &parabellum_types::army::UnitName,
+        is_researched: bool,
+    ) {
+        self.village
+            .village
+            .set_academy_research_for_test(unit, is_researched);
+    }
 }
 
 impl Aggregate for VillageAggregate {
@@ -89,11 +100,32 @@ impl Aggregate for VillageAggregate {
             VillageEvent::VillageResourcesSet { resources, .. } => {
                 self.village.set_resources(resources.clone());
             }
-            VillageEvent::VillageArmyDetached { units, .. } => {
-                self.village.detach_units(units);
+            VillageEvent::VillageArmyDetached { army } => {
+                self.village.detach_units(army.units());
             }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}
+            VillageEvent::ReinforcementsRecalled { .. } => {}
+            VillageEvent::ReinforcementsReleased { .. } => {}
+            VillageEvent::ReinforcementsReturned { army, .. } => {
+                let _ = self.village.merge_units_home(army.units());
+            }
+            VillageEvent::SettlersSent { .. } => {
+                let resources = parabellum_types::common::ResourceGroup::new(800, 800, 800, 800);
+                let _ = self.village.village.deduct_resources(&resources);
+            }
+            VillageEvent::SettlersArrived { .. } => {}
+            VillageEvent::AttackSent { .. } => {}
+            VillageEvent::AttackArrived { .. } => {}
+            VillageEvent::AttackReturned { army, bounty, .. } => {
+                let _ = self.village.merge_units_home(army.units());
+                self.village.village.store_resources(bounty);
+            }
+            VillageEvent::ScoutSent { .. } => {}
+            VillageEvent::ScoutArrived { .. } => {}
+            VillageEvent::ScoutReturned { army, .. } => {
+                let _ = self.village.merge_units_home(army.units());
+            }
             VillageEvent::MerchantsTripScheduled {
                 resources,
                 merchants_used,
@@ -222,11 +254,17 @@ impl Aggregate for VillageAggregate {
             VillageEvent::UnitTrainingScheduled {
                 action_id,
                 slot_id,
+                unit,
+                quantity_remaining,
                 execute_at,
                 ..
-            } => self
-                .village
-                .register_training_action(*action_id, *slot_id, *execute_at),
+            } => self.village.register_training_action(
+                *action_id,
+                *slot_id,
+                unit.clone(),
+                *quantity_remaining,
+                *execute_at,
+            ),
             VillageEvent::UnitTrained {
                 action_id,
                 unit,

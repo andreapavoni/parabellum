@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
-use parabellum_types::army::TroopSet;
+use parabellum_game::models::army::Army;
 use parabellum_types::errors::AppError;
 use uuid::Uuid;
 
@@ -14,8 +14,7 @@ pub struct ReinforcementArrived {
     pub player_id: Uuid,
     pub source_village_id: u32,
     pub target_village_id: u32,
-    pub units: TroopSet,
-    pub hero_id: Option<Uuid>,
+    pub army: Army,
     pub arrives_at: DateTime<Utc>,
 }
 
@@ -36,8 +35,7 @@ impl Command for ReinforcementArrived {
             player_id: self.player_id,
             source_village_id: self.source_village_id,
             target_village_id: self.target_village_id,
-            units: self.units.clone(),
-            hero_id: self.hero_id,
+            army: self.army.clone(),
             arrives_at: self.arrives_at,
         }])
     }
@@ -47,7 +45,6 @@ impl Command for ReinforcementArrived {
 mod tests {
     use chrono::Utc;
     use mini_cqrs_es::Command;
-    use parabellum_types::army::TroopSet;
     use uuid::Uuid;
 
     use crate::villages::{ReinforcementArrived, VillageAggregate, VillageEvent};
@@ -61,8 +58,16 @@ mod tests {
             player_id: Uuid::new_v4(),
             source_village_id: 0,
             target_village_id: 2,
-            units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-            hero_id: None,
+            army: parabellum_game::models::army::Army::new(
+                Some(Uuid::new_v4()),
+                0,
+                Some(2),
+                Uuid::new_v4(),
+                parabellum_types::tribe::Tribe::Roman,
+                &parabellum_types::army::TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                &[0, 0, 0, 0, 0, 0, 0, 0],
+                None,
+            ),
             arrives_at: Utc::now(),
         };
 

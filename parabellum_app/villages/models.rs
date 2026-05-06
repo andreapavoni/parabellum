@@ -1,11 +1,14 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
+use parabellum_types::battle::AttackType;
+use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceQuantity;
+use parabellum_types::reports::ReportPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_types::army::TroopSet;
+use parabellum_game::models::army::Army;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 
@@ -27,15 +30,16 @@ pub struct VillageModel {
     pub total_merchants: u8,
     pub busy_merchants: u8,
     pub parent_village_id: Option<u32>,
-    pub army: TroopSet,
-    pub reinforcements: TroopSet,
-    pub deployed_armies: TroopSet,
+    pub army: Option<Army>,
+    pub reinforcements: Vec<Army>,
+    pub deployed_armies: Vec<Army>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MovementType {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -62,7 +66,7 @@ pub struct VillageMovement {
     pub target_position: Option<Position>,
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: Option<u32>,
-    pub units: TroopSet,
+    pub units: parabellum_types::army::TroopSet,
     pub tribe: Option<Tribe>,
 }
 
@@ -108,6 +112,19 @@ pub struct MarketplaceOfferSnapshot {
     pub merchants_reserved: u8,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportModel {
+    pub id: Uuid,
+    pub report_type: String,
+    pub payload: ReportPayload,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
+    pub created_at: DateTime<Utc>,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionStatus {
     Pending,
@@ -119,6 +136,12 @@ pub enum ScheduledActionStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionType {
     ReinforcementArrival,
+    ReinforcementReturn,
+    SettlersArrival,
+    AttackArrival,
+    AttackReturn,
+    ScoutArrival,
+    ScoutReturn,
     MerchantsArrival,
     MerchantsReturn,
     AddBuilding,
@@ -147,9 +170,85 @@ pub enum ScheduledActionPayload {
         player_id: Uuid,
         source_village_id: u32,
         target_village_id: u32,
-        units: TroopSet,
-        hero_id: Option<Uuid>,
+        army: Army,
         arrives_at: DateTime<Utc>,
+    },
+    ReinforcementReturn {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        village_id: u32,
+        home_village_id: u32,
+        stationed_village_id: u32,
+        player_id: Uuid,
+        army: Army,
+        returns_at: DateTime<Utc>,
+    },
+    SettlersArrival {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        target_position: Position,
+        player_id: Uuid,
+        village_name: String,
+        tribe: Tribe,
+        arrives_at: DateTime<Utc>,
+    },
+    AttackArrival {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        return_action_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: Uuid,
+        army: Army,
+        attack_type: AttackType,
+        catapult_targets: [BuildingName; 2],
+        arrives_at: DateTime<Utc>,
+        returns_at: DateTime<Utc>,
+    },
+    AttackReturn {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: Uuid,
+        army: Army,
+        bounty: parabellum_types::common::ResourceGroup,
+        returns_at: DateTime<Utc>,
+    },
+    ScoutArrival {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        return_action_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: Uuid,
+        army: Army,
+        target: ScoutingTarget,
+        attack_type: AttackType,
+        arrives_at: DateTime<Utc>,
+        returns_at: DateTime<Utc>,
+    },
+    ScoutReturn {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        village_id: u32,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: Uuid,
+        army: Army,
+        returns_at: DateTime<Utc>,
     },
     MerchantsArrival {
         action_id: Uuid,
@@ -223,6 +322,14 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ReinforcementArrival { .. } => {
                 ScheduledActionType::ReinforcementArrival
             }
+            ScheduledActionPayload::ReinforcementReturn { .. } => {
+                ScheduledActionType::ReinforcementReturn
+            }
+            ScheduledActionPayload::SettlersArrival { .. } => ScheduledActionType::SettlersArrival,
+            ScheduledActionPayload::AttackArrival { .. } => ScheduledActionType::AttackArrival,
+            ScheduledActionPayload::AttackReturn { .. } => ScheduledActionType::AttackReturn,
+            ScheduledActionPayload::ScoutArrival { .. } => ScheduledActionType::ScoutArrival,
+            ScheduledActionPayload::ScoutReturn { .. } => ScheduledActionType::ScoutReturn,
             ScheduledActionPayload::MerchantsArrival { .. } => {
                 ScheduledActionType::MerchantsArrival
             }

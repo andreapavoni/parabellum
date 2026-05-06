@@ -53,6 +53,20 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
     assert_eq!(movement_type.get::<String, _>("data_type"), "USER-DEFINED");
     assert_eq!(movement_type.get::<String, _>("udt_name"), "movement_type");
 
+    let scout_movement_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'movement_type'
+          AND e.enumlabel = 'Scout'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(scout_movement_variant_exists, 1);
+
     let action_status = sqlx::query(
         r#"
         SELECT data_type, udt_name
@@ -102,6 +116,116 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
     .await
     .unwrap();
     assert_eq!(smithy_variant_exists, 1);
+
+    let attack_arrival_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'AttackArrival'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(attack_arrival_variant_exists, 1);
+
+    let reinforcement_return_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'ReinforcementReturn'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(reinforcement_return_variant_exists, 1);
+
+    let settlers_arrival_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'SettlersArrival'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(settlers_arrival_variant_exists, 1);
+
+    let attack_return_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'AttackReturn'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(attack_return_variant_exists, 1);
+
+    let scout_arrival_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'ScoutArrival'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(scout_arrival_variant_exists, 1);
+
+    let scout_return_variant_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'scheduled_action_type'
+          AND e.enumlabel = 'ScoutReturn'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(scout_return_variant_exists, 1);
+
+    let rm_reports_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'rm_reports'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rm_reports_exists, 1);
+
+    let rm_report_reads_exists: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'rm_report_reads'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rm_report_reads_exists, 1);
     })
     .await;
 }

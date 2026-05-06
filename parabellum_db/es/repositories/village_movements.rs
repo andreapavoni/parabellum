@@ -102,6 +102,7 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
 enum DbMovementType {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -112,6 +113,7 @@ impl From<parabellum_app::villages::models::MovementType> for DbMovementType {
         match value {
             parabellum_app::villages::models::MovementType::Attack => Self::Attack,
             parabellum_app::villages::models::MovementType::Raid => Self::Raid,
+            parabellum_app::villages::models::MovementType::Scout => Self::Scout,
             parabellum_app::villages::models::MovementType::Reinforcement => Self::Reinforcement,
             parabellum_app::villages::models::MovementType::Return => Self::Return,
             parabellum_app::villages::models::MovementType::FoundVillage => Self::FoundVillage,

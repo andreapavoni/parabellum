@@ -63,6 +63,7 @@ mod tests {
     use mini_cqrs_es::{Aggregate, Command};
     use parabellum_game::models::{buildings::Building, village::VillageBuilding};
     use parabellum_types::{
+        army::UnitName,
         buildings::{BuildingGroup, BuildingName},
         map::Position,
         tribe::Tribe,
@@ -70,6 +71,15 @@ mod tests {
     use uuid::Uuid;
 
     use crate::villages::{TrainUnits, VillageAggregate, VillageEvent};
+
+    fn building(slot_id: u8, name: BuildingName, level: u8, speed: i8) -> VillageBuilding {
+        VillageBuilding {
+            slot_id,
+            building: Building::new(name, speed)
+                .at_level(level, speed)
+                .expect("building data should be available for train unit tests"),
+        }
+    }
 
     async fn training_ready_aggregate() -> VillageAggregate {
         let mut aggregate = VillageAggregate::default();
@@ -110,6 +120,31 @@ mod tests {
         aggregate.set_resources_for_test(parabellum_types::common::ResourceGroup(
             20_000, 20_000, 20_000, 20_000,
         ));
+        aggregate
+    }
+
+    async fn expansion_ready_aggregate(expansion_building: VillageBuilding) -> VillageAggregate {
+        let mut aggregate = VillageAggregate::default();
+        let player_id = Uuid::new_v4();
+        aggregate
+            .apply(&VillageEvent::VillageFounded {
+                village_id: 1,
+                village_name: "v1".to_string(),
+                position: Position { x: 0, y: 0 },
+                tribe: Tribe::Roman,
+                player_id,
+                buildings: vec![
+                    building(19, BuildingName::MainBuilding, 1, 1),
+                    expansion_building,
+                    building(26, BuildingName::Warehouse, 20, 1),
+                    building(27, BuildingName::Granary, 20, 1),
+                ],
+            })
+            .await;
+        aggregate.set_resources_for_test(parabellum_types::common::ResourceGroup(
+            80_000, 80_000, 80_000, 80_000,
+        ));
+        aggregate.set_academy_research_for_test(&UnitName::Senator, true);
         aggregate
     }
 
@@ -155,6 +190,125 @@ mod tests {
         }
         .handle(&aggregate)
         .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_settlers_without_foundation_slots() {
+        let aggregate = training_ready_aggregate().await;
+        let result = TrainUnits {
+            player_id: aggregate.player_id(),
+            unit_idx: 9,
+            building_name: BuildingName::Residence,
+            quantity: 3,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn allows_three_settlers_with_residence_level_10() {
+        let aggregate =
+            expansion_ready_aggregate(building(25, BuildingName::Residence, 10, 1)).await;
+
+        let events = TrainUnits {
+            player_id: aggregate.player_id(),
+            unit_idx: 9,
+            building_name: BuildingName::Residence,
+            quantity: 3,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            events.first(),
+            Some(VillageEvent::UnitTrainingScheduled {
+                unit: UnitName::Settler,
+                quantity_remaining: 3,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn rejects_four_settlers_with_one_residence_slot() {
+        let aggregate =
+            expansion_ready_aggregate(building(25, BuildingName::Residence, 10, 1)).await;
+
+        let result = TrainUnits {
+            player_id: aggregate.player_id(),
+            unit_idx: 9,
+            building_name: BuildingName::Residence,
+            quantity: 4,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_chief_when_settlers_use_only_residence_slot() {
+        let mut aggregate =
+            expansion_ready_aggregate(building(25, BuildingName::Residence, 10, 1)).await;
+        let player_id = aggregate.player_id();
+        aggregate
+            .apply(&VillageEvent::UnitTrained {
+                action_id: Uuid::new_v4(),
+                player_id,
+                village_id: 1,
+                unit: UnitName::Settler,
+                quantity_trained: 3,
+            })
+            .await;
+
+        let result = TrainUnits {
+            player_id,
+            unit_idx: 8,
+            building_name: BuildingName::Residence,
+            quantity: 1,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_settlers_when_queued_settlers_fill_residence_slot() {
+        let mut aggregate =
+            expansion_ready_aggregate(building(25, BuildingName::Residence, 10, 1)).await;
+        let player_id = aggregate.player_id();
+        aggregate
+            .apply(&VillageEvent::UnitTrainingScheduled {
+                action_id: Uuid::new_v4(),
+                player_id,
+                village_id: 1,
+                slot_id: 25,
+                unit: UnitName::Settler,
+                time_per_unit: 60,
+                quantity_remaining: 3,
+                execute_at: Utc::now() + Duration::minutes(2),
+            })
+            .await;
+
+        let result = TrainUnits {
+            player_id,
+            unit_idx: 9,
+            building_name: BuildingName::Residence,
+            quantity: 1,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await;
+
         assert!(result.is_err());
     }
 

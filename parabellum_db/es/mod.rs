@@ -15,10 +15,11 @@ pub use mini_cqrs_es::{
     StoredEvent,
 };
 
-pub use consumers::VillageProjector;
+pub use consumers::{ReportProjector, VillageProjector};
 pub use repositories::{
-    PostgresMarketplaceOfferRepository, PostgresScheduledActionRepository,
-    PostgresVillageModelRepository, PostgresVillageMovementRepository,
+    NewProjectedReport, PostgresMarketplaceOfferRepository, PostgresReportReadModelRepository,
+    PostgresScheduledActionRepository, PostgresVillageModelRepository,
+    PostgresVillageMovementRepository,
 };
 pub use runtime::{VillageCqrsRuntime, village_cqrs_runtime};
 pub use service::VillageEsService;

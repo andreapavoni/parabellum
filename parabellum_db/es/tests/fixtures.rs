@@ -88,7 +88,10 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .unwrap();
 }
 
-pub async fn seed_user_and_player(pool: &sqlx::PgPool, player_id: Uuid, user_id: Uuid) {
+pub async fn seed_user_and_player(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
+    let user_id = Uuid::new_v4();
+    let player_id = Uuid::new_v4();
+
     // Village rows are not seeded for ES tests; villages are created by `FoundVillage`.
     sqlx::query(
         "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
@@ -109,6 +112,8 @@ pub async fn seed_user_and_player(pool: &sqlx::PgPool, player_id: Uuid, user_id:
     .execute(pool)
     .await
     .unwrap();
+
+    (user_id, player_id)
 }
 
 pub fn resources(lumber: u32, clay: u32, iron: u32, crop: u32) -> ResourceGroup {
@@ -201,21 +206,16 @@ pub fn marketplace(level: u8) -> VillageBuilding {
     }
 }
 
-pub async fn setup_village(
-    pool: &sqlx::PgPool,
+pub async fn setup_village_for_player(
     service: &VillageEsService,
     player_id: Uuid,
-    user_id: Uuid,
-    village_id: u32,
     village_name: &str,
     position: Position,
     tribe: Tribe,
     buildings: Vec<VillageBuilding>,
     resources: ResourceGroup,
-) {
-    // Seed identity rows only. Village state is initialized via FoundVillage.
-    seed_user_and_player(pool, player_id, user_id).await;
-
+) -> u32 {
+    let village_id = position.to_id(100);
     service
         .found_village(
             village_id,
@@ -229,7 +229,7 @@ pub async fn setup_village(
         )
         .await
         .unwrap();
-    // Apply explicit resource target through the ES utility command.
+
     service
         .set_village_resources(
             village_id,
@@ -240,6 +240,32 @@ pub async fn setup_village(
         )
         .await
         .unwrap();
+    village_id
+}
+
+pub async fn setup_village(
+    pool: &sqlx::PgPool,
+    service: &VillageEsService,
+    village_name: &str,
+    position: Position,
+    tribe: Tribe,
+    buildings: Vec<VillageBuilding>,
+    resources: ResourceGroup,
+) -> (Uuid, Uuid, u32) {
+    // Seed identity rows only. Village state is initialized via FoundVillage.
+    let (user_id, player_id) = seed_user_and_player(pool).await;
+
+    let village_id = setup_village_for_player(
+        service,
+        player_id,
+        village_name,
+        position,
+        tribe,
+        buildings,
+        resources,
+    )
+    .await;
+    (user_id, player_id, village_id)
 }
 
 pub fn rally_point(level: u8) -> VillageBuilding {

@@ -1,0 +1,227 @@
+use parabellum_app::villages::{CompleteTrainUnit, SendSettlers};
+use parabellum_types::{army::UnitName, map::Position, tribe::Tribe};
+use uuid::Uuid;
+
+use crate::es::VillageEsService;
+
+use super::fixtures::{
+    granary, main_building, rally_point, resources, setup_village, warehouse, with_test_pool,
+};
+
+#[tokio::test]
+async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resources() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_, player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source Village",
+            Position { x: 0, y: 0 },
+            Tribe::Roman,
+            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        for _ in 0..3 {
+            service
+                .complete_train_unit(
+                    source_village_id,
+                    &CompleteTrainUnit {
+                        action_id: Uuid::new_v4(),
+                        player_id,
+                        village_id: source_village_id,
+                        slot_id: 19,
+                        unit: UnitName::Settler,
+                        time_per_unit: 1,
+                        quantity_remaining: 1,
+                        execute_at: chrono::Utc::now(),
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        let source_before = service.get_village_model(source_village_id).await.unwrap();
+        assert_eq!(
+            source_before.army.as_ref().map(|a| a.units().get(9)),
+            Some(3)
+        );
+        let before = source_before.stocks.clone();
+
+        let target_position = Position { x: 20, y: 20 };
+        let target_village_id = target_position.to_id(100);
+        service
+            .send_settlers(
+                source_village_id,
+                &SendSettlers {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    target_position: target_position.clone(),
+                    village_name: "New Village".to_string(),
+                    tribe: Tribe::Roman,
+                    arrives_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+                },
+            )
+            .await
+            .unwrap();
+
+        let source_after = service.get_village_model(source_village_id).await.unwrap();
+        let after = source_after.stocks.clone();
+        assert_eq!(
+            source_after
+                .army
+                .as_ref()
+                .map(|a| a.units().get(9))
+                .unwrap_or(0),
+            0
+        );
+        assert_eq!(before.lumber - after.lumber, 800);
+        assert_eq!(before.clay - after.clay, 800);
+        assert_eq!(before.iron - after.iron, 800);
+        assert_eq!(before.crop - after.crop, 800);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_settlers_arrival_founds_new_village_with_default_stocks() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_, player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source Village",
+            Position { x: 0, y: 0 },
+            Tribe::Roman,
+            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        for _ in 0..3 {
+            service
+                .complete_train_unit(
+                    source_village_id,
+                    &CompleteTrainUnit {
+                        action_id: Uuid::new_v4(),
+                        player_id,
+                        village_id: source_village_id,
+                        slot_id: 19,
+                        unit: UnitName::Settler,
+                        time_per_unit: 1,
+                        quantity_remaining: 1,
+                        execute_at: chrono::Utc::now(),
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        let target_position = Position { x: 30, y: 30 };
+        let target_village_id = target_position.to_id(100);
+        service
+            .send_settlers(
+                source_village_id,
+                &SendSettlers {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    target_position: target_position.clone(),
+                    village_name: "Colony".to_string(),
+                    tribe: Tribe::Roman,
+                    arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                },
+            )
+            .await
+            .unwrap();
+
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
+            .await
+            .unwrap();
+
+        let founded = service.get_village_model(target_village_id).await.unwrap();
+        assert_eq!(founded.player_id, player_id);
+        assert_eq!(founded.village_name, "Colony");
+        assert_eq!(founded.position, target_position);
+        assert_eq!(founded.buildings.len(), 0);
+        assert_eq!(founded.stocks.lumber, 800);
+        assert_eq!(founded.stocks.clay, 800);
+        assert_eq!(founded.stocks.iron, 800);
+        assert_eq!(founded.stocks.crop, 800);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_send_settlers_rejects_occupied_target_village() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_, player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source Village",
+            Position { x: 0, y: 0 },
+            Tribe::Roman,
+            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        for _ in 0..3 {
+            service
+                .complete_train_unit(
+                    source_village_id,
+                    &CompleteTrainUnit {
+                        action_id: Uuid::new_v4(),
+                        player_id,
+                        village_id: source_village_id,
+                        slot_id: 19,
+                        unit: UnitName::Settler,
+                        time_per_unit: 1,
+                        quantity_remaining: 1,
+                        execute_at: chrono::Utc::now(),
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        let occupied_position = Position { x: 40, y: 40 };
+        let occupied_village_id = setup_village(
+            &pool,
+            &service,
+            "Occupied Village",
+            occupied_position.clone(),
+            Tribe::Roman,
+            vec![main_building(1), rally_point(1)],
+            resources(800, 800, 800, 800),
+        )
+        .await
+        .2;
+
+        let result = service
+            .send_settlers(
+                source_village_id,
+                &SendSettlers {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id: occupied_village_id,
+                    target_position: occupied_position,
+                    village_name: "Should Fail".to_string(),
+                    tribe: Tribe::Roman,
+                    arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                },
+            )
+            .await;
+
+        assert!(result.is_err());
+    })
+    .await;
+}
