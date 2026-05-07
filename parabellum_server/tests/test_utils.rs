@@ -12,13 +12,17 @@ pub mod tests {
 
     use parabellum_app::{
         app::AppBus,
+        application::GameApplication,
         auth::hash_password,
         config::Config,
         job_registry::AppJobRegistry,
         jobs::worker::JobWorker,
         uow::{UnitOfWork, UnitOfWorkProvider},
     };
-    use parabellum_db::{bootstrap_world_map, uow::PostgresUnitOfWorkProvider};
+    use parabellum_db::{
+        adapters::VillageEsAdapter, bootstrap_world_map, es::VillageEsService,
+        identity::IdentityService, uow::PostgresUnitOfWorkProvider,
+    };
     use parabellum_game::{
         models::{army::Army, hero::Hero, village::Village},
         test_utils::{
@@ -157,7 +161,8 @@ pub mod tests {
             bootstrap_world_map(&pool, config.world_size).await?;
         }
 
-        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
+        let identity = Arc::new(IdentityService::new(pool.clone(), config.clone()));
+        let app_bus = AppBus::new(config.clone(), uow_provider.clone(), identity);
         let app_registry = Arc::new(AppJobRegistry::new());
         let worker = Arc::new(JobWorker::new(
             uow_provider.clone(),
@@ -184,9 +189,17 @@ pub mod tests {
             .port();
         drop(listener);
 
-        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
-        let app = Arc::new(app_bus);
-        let state = AppState::new(app, pool, &config);
+        let villages = Arc::new(VillageEsAdapter::new(
+            VillageEsService::new(pool.clone()),
+            config.clone(),
+        ));
+        let game_app = Arc::new(GameApplication::new(
+            Arc::new(IdentityService::new(pool.clone(), config.clone())),
+            villages.clone(),
+            villages.clone(),
+            villages,
+        ));
+        let state = AppState::new(game_app, pool, &config);
         tokio::spawn(WebRouter::serve(state.clone(), port));
 
         let base_url = format!("http://127.0.0.1:{port}");

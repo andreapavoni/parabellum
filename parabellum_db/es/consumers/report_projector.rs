@@ -5,7 +5,7 @@ use parabellum_app::villages::repositories::VillageModelRepository;
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
-use parabellum_game::models::village::{AcademyResearch, Village};
+use parabellum_game::models::village::Village;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::reports::{
     BattlePartyPayload, BattleReportPayload, MarketplaceDeliveryReportPayload,
@@ -36,29 +36,7 @@ impl ReportProjector {
     }
 
     fn village_from_model(model: &VillageModel) -> Village {
-        Village::from_persistence(
-            model.village_id,
-            model.village_name.clone(),
-            model.player_id,
-            model.position.clone(),
-            model.tribe.clone(),
-            model.buildings.clone(),
-            vec![],
-            model.population,
-            model.army.clone(),
-            model.reinforcements.clone(),
-            model.deployed_armies.clone(),
-            model.loyalty,
-            model.production.clone(),
-            model.is_capital,
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            model.stocks.clone(),
-            AcademyResearch::default(),
-            model.culture_points,
-            model.culture_points_production,
-            chrono::Utc::now(),
-            model.parent_village_id,
-        )
+        Village::try_from(model.clone()).expect("VillageModel to Village conversion must succeed")
     }
 
     async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {

@@ -2,14 +2,13 @@ use mini_cqrs_es::{Cqrs, CqrsError};
 
 use crate::villages::{
     AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
-    CompleteAcademyResearch, CompleteAddBuilding, CompleteAttackArrival, CompleteAttackReturn,
+    CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
     CompleteDowngradeBuilding, CompleteMerchantsArrival, CompleteMerchantsReturn,
-    CompleteReinforcementsReturn, CompleteScoutArrival, CompleteScoutReturn,
-    CompleteSettlersArrival, CompleteSmithyResearch, CompleteTrainUnit, CompleteUpgradeBuilding,
-    ConquerVillage, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
-    ReinforcementArrived, ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
-    UpgradeBuilding,
+    CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch, CompleteTrainUnit,
+    CompleteUpgradeBuilding, ConquerVillage, CreateMarketplaceOffer, DowngradeBuilding,
+    FoundVillage, RecallReinforcements, ReinforcementArrived, ReleaseReinforcements,
+    ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {
@@ -109,16 +108,6 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
             .await
     }
 
-    pub async fn complete_reinforcements_return(
-        &self,
-        village_id: u32,
-        command: &CompleteReinforcementsReturn,
-    ) -> Result<u32, CqrsError> {
-        self.cqrs
-            .execute::<CompleteReinforcementsReturn>(&village_id, command)
-            .await
-    }
-
     pub async fn complete_attack_arrival(
         &self,
         village_id: u32,
@@ -129,13 +118,13 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
             .await
     }
 
-    pub async fn complete_attack_return(
+    pub async fn complete_army_return(
         &self,
         village_id: u32,
-        command: &CompleteAttackReturn,
+        command: &CompleteArmyReturn,
     ) -> Result<u32, CqrsError> {
         self.cqrs
-            .execute::<CompleteAttackReturn>(&village_id, command)
+            .execute::<CompleteArmyReturn>(&village_id, command)
             .await
     }
 
@@ -146,16 +135,6 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
     ) -> Result<u32, CqrsError> {
         self.cqrs
             .execute::<CompleteScoutArrival>(&village_id, command)
-            .await
-    }
-
-    pub async fn complete_scout_return(
-        &self,
-        village_id: u32,
-        command: &CompleteScoutReturn,
-    ) -> Result<u32, CqrsError> {
-        self.cqrs
-            .execute::<CompleteScoutReturn>(&village_id, command)
             .await
     }
 

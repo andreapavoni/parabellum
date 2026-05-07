@@ -194,38 +194,54 @@ pub async fn bootstrap_world_map(pool: &PgPool, world_size: i16) -> Result<bool,
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-    if count > 0 {
-        return Ok(false);
+    if count == 0 {
+        tracing::info!("Generating new World Map");
+        let map_fields = generate_new_map(world_size as i32);
+
+        const BATCH_SIZE: usize = 10_000;
+        for chunk in map_fields.chunks(BATCH_SIZE) {
+            let mut tx = pool.begin().await.map_err(DbError::Database)?;
+            let mut query_builder = QueryBuilder::new(
+                "INSERT INTO map_fields (id, village_id, player_id, position, topology) ",
+            );
+
+            query_builder.push_values(chunk.iter(), |mut q, field| {
+                q.push_bind(field.id as i32)
+                    .push_bind(field.village_id.map(|id| id as i32))
+                    .push_bind(field.player_id)
+                    .push_bind(Json(&field.position))
+                    .push_bind(Json(&field.topology));
+            });
+
+            let query = query_builder.build();
+            query
+                .execute(&mut *tx.as_mut())
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+            tx.commit()
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        }
     }
 
-    tracing::info!("Generating new World Map");
-    let map_fields = generate_new_map(world_size as i32);
+    // Seed ES map read model from generated canonical map fields.
+    sqlx::query(
+        r#"
+        INSERT INTO rm_map_fields (id, village_id, player_id, position, topology)
+        SELECT id, village_id, player_id, position, topology
+        FROM map_fields
+        ON CONFLICT (id) DO UPDATE
+        SET village_id = EXCLUDED.village_id,
+            player_id = EXCLUDED.player_id,
+            position = EXCLUDED.position,
+            topology = EXCLUDED.topology,
+            updated_at = NOW()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-    const BATCH_SIZE: usize = 10_000;
-    for chunk in map_fields.chunks(BATCH_SIZE) {
-        let mut tx = pool.begin().await.map_err(DbError::Database)?;
-        let mut query_builder = QueryBuilder::new(
-            "INSERT INTO map_fields (id, village_id, player_id, position, topology) ",
-        );
-
-        query_builder.push_values(chunk.iter(), |mut q, field| {
-            q.push_bind(field.id as i32)
-                .push_bind(field.village_id.map(|id| id as i32))
-                .push_bind(field.player_id)
-                .push_bind(Json(&field.position))
-                .push_bind(Json(&field.topology));
-        });
-
-        let query = query_builder.build();
-        query
-            .execute(&mut *tx.as_mut())
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        tx.commit()
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-    }
-
-    Ok(true)
+    Ok(count == 0)
 }

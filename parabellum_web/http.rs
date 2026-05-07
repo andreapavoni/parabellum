@@ -16,7 +16,7 @@ use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
-use parabellum_app::{app::AppBus, config::Config};
+use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::{
@@ -41,7 +41,7 @@ use crate::{
 #[derive(Clone)]
 /// Shared Axum application state.
 pub struct AppState {
-    pub app_bus: Arc<AppBus>,
+    pub game_app: Arc<GameApplication>,
     pub db_pool: PgPool,
     pub token_service: Arc<AuthTokenService>,
     pub world_size: i32,
@@ -50,11 +50,11 @@ pub struct AppState {
 
 impl AppState {
     /// Builds a new `AppState` from app bus, db pool and runtime config.
-    pub fn new(app_bus: Arc<AppBus>, db_pool: PgPool, config: &Config) -> AppState {
+    pub fn new(game_app: Arc<GameApplication>, db_pool: PgPool, config: &Config) -> AppState {
         let token_service = Arc::new(AuthTokenService::new(config));
 
         AppState {
-            app_bus,
+            game_app,
             db_pool,
             token_service,
             world_size: config.world_size as i32,

@@ -107,9 +107,6 @@ impl Aggregate for VillageAggregate {
             VillageEvent::ReinforcementArrived { .. } => {}
             VillageEvent::ReinforcementsRecalled { .. } => {}
             VillageEvent::ReinforcementsReleased { .. } => {}
-            VillageEvent::ReinforcementsReturned { army, .. } => {
-                let _ = self.village.merge_units_home(army.units());
-            }
             VillageEvent::SettlersSent { .. } => {
                 let resources = parabellum_types::common::ResourceGroup::new(800, 800, 800, 800);
                 let _ = self.village.village.deduct_resources(&resources);
@@ -117,15 +114,14 @@ impl Aggregate for VillageAggregate {
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
-            VillageEvent::AttackReturned { army, bounty, .. } => {
+            VillageEvent::ArmyReturned { army, bounty, .. } => {
                 let _ = self.village.merge_units_home(army.units());
-                self.village.village.store_resources(bounty);
+                if let Some(bounty) = bounty {
+                    self.village.village.store_resources(bounty);
+                }
             }
             VillageEvent::ScoutSent { .. } => {}
             VillageEvent::ScoutArrived { .. } => {}
-            VillageEvent::ScoutReturned { army, .. } => {
-                let _ = self.village.merge_units_home(army.units());
-            }
             VillageEvent::MerchantsTripScheduled {
                 resources,
                 merchants_used,

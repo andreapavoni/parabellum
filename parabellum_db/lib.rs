@@ -1,4 +1,6 @@
+pub mod adapters;
 pub mod es;
+pub mod identity;
 pub mod mapping;
 pub mod uow;
 

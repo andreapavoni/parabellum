@@ -50,7 +50,7 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
         let before = source_before.stocks.clone();
 
         let target_position = Position { x: 20, y: 20 };
-        let target_village_id = target_position.to_id(100);
+        let target_field_id = target_position.to_id(100);
         service
             .send_settlers(
                 source_village_id,
@@ -59,7 +59,7 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
                     movement_id: Uuid::new_v4(),
                     army_id: Uuid::new_v4(),
                     player_id,
-                    target_village_id,
+                    target_village_id: target_field_id,
                     target_position: target_position.clone(),
                     village_name: "New Village".to_string(),
                     tribe: Tribe::Roman,
@@ -121,7 +121,7 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
         }
 
         let target_position = Position { x: 30, y: 30 };
-        let target_village_id = target_position.to_id(100);
+        let target_field_id = target_position.to_id(100);
         service
             .send_settlers(
                 source_village_id,
@@ -130,7 +130,7 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
                     movement_id: Uuid::new_v4(),
                     army_id: Uuid::new_v4(),
                     player_id,
-                    target_village_id,
+                    target_village_id: target_field_id,
                     target_position: target_position.clone(),
                     village_name: "Colony".to_string(),
                     tribe: Tribe::Roman,
@@ -145,7 +145,7 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
             .await
             .unwrap();
 
-        let founded = service.get_village_model(target_village_id).await.unwrap();
+        let founded = service.get_village_model(target_field_id).await.unwrap();
         assert_eq!(founded.player_id, player_id);
         assert_eq!(founded.village_name, "Colony");
         assert_eq!(founded.position, target_position);
@@ -159,7 +159,7 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
 }
 
 #[tokio::test]
-async fn village_es_service_send_settlers_rejects_occupied_target_village() {
+async fn village_es_service_settlers_arrival_on_occupied_target_is_cancelled() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
         let (_, player_id, source_village_id) = setup_village(
@@ -204,7 +204,12 @@ async fn village_es_service_send_settlers_rejects_occupied_target_village() {
         .await
         .2;
 
-        let result = service
+        let occupied_before = service
+            .get_village_model(occupied_village_id)
+            .await
+            .unwrap();
+
+        service
             .send_settlers(
                 source_village_id,
                 &SendSettlers {
@@ -219,9 +224,119 @@ async fn village_es_service_send_settlers_rejects_occupied_target_village() {
                     arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
                 },
             )
-            .await;
+            .await
+            .unwrap();
 
-        assert!(result.is_err());
+        let processed = service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
+            .await
+            .unwrap();
+        assert_eq!(processed, 1);
+
+        let occupied_after = service
+            .get_village_model(occupied_village_id)
+            .await
+            .unwrap();
+        assert_eq!(occupied_after.player_id, occupied_before.player_id);
+        assert_eq!(occupied_after.village_name, occupied_before.village_name);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_same_valley() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_, player_a, source_a) = setup_village(
+            &pool,
+            &service,
+            "Source A",
+            Position { x: 0, y: 0 },
+            Tribe::Roman,
+            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_, player_b, source_b) = setup_village(
+            &pool,
+            &service,
+            "Source B",
+            Position { x: 10, y: 10 },
+            Tribe::Gaul,
+            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        for (player_id, source_village_id) in [(player_a, source_a), (player_b, source_b)] {
+            for _ in 0..3 {
+                service
+                    .complete_train_unit(
+                        source_village_id,
+                        &CompleteTrainUnit {
+                            action_id: Uuid::new_v4(),
+                            player_id,
+                            village_id: source_village_id,
+                            slot_id: 19,
+                            unit: UnitName::Settler,
+                            time_per_unit: 1,
+                            quantity_remaining: 1,
+                            execute_at: chrono::Utc::now(),
+                        },
+                    )
+                    .await
+                    .unwrap();
+            }
+        }
+
+        let target_position = Position { x: 45, y: -45 };
+        let target_field_id = target_position.to_id(100);
+        let now = chrono::Utc::now();
+        service
+            .send_settlers(
+                source_a,
+                &SendSettlers {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id: player_a,
+                    target_village_id: target_field_id,
+                    target_position: target_position.clone(),
+                    village_name: "First Colony".to_string(),
+                    tribe: Tribe::Roman,
+                    arrives_at: now + chrono::Duration::minutes(5),
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .send_settlers(
+                source_b,
+                &SendSettlers {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id: player_b,
+                    target_village_id: target_field_id,
+                    target_position: target_position.clone(),
+                    village_name: "Second Colony".to_string(),
+                    tribe: Tribe::Gaul,
+                    arrives_at: now + chrono::Duration::minutes(8),
+                },
+            )
+            .await
+            .unwrap();
+
+        let processed = service
+            .process_due_actions(now + chrono::Duration::minutes(10), 10)
+            .await
+            .unwrap();
+        assert_eq!(processed, 2);
+
+        let founded = service.get_village_model(target_field_id).await.unwrap();
+        assert_eq!(founded.player_id, player_a);
+        assert_eq!(founded.village_name, "First Colony");
+        assert_eq!(founded.tribe, Tribe::Roman);
     })
     .await;
 }

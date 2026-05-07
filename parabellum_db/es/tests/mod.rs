@@ -1,4 +1,5 @@
 mod buildings;
+mod expansion;
 mod fixtures;
 mod foundation;
 mod marketplace;

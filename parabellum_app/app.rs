@@ -5,6 +5,7 @@ use parabellum_types::errors::{ApplicationError, Result};
 use crate::{
     config::Config,
     cqrs::{Command, CommandHandler, Query, QueryHandler},
+    identity::{IdentityPort, RegisterPlayerRequest},
     uow::UnitOfWorkProvider,
 };
 
@@ -18,14 +19,24 @@ use crate::{
 pub struct AppBus {
     config: Arc<Config>,
     uow_provider: Arc<dyn UnitOfWorkProvider>,
+    identity: Arc<dyn IdentityPort>,
 }
 
 impl AppBus {
-    pub fn new(config: Arc<Config>, uow_provider: Arc<dyn UnitOfWorkProvider>) -> Self {
+    pub fn new(
+        config: Arc<Config>,
+        uow_provider: Arc<dyn UnitOfWorkProvider>,
+        identity: Arc<dyn IdentityPort>,
+    ) -> Self {
         Self {
             config,
             uow_provider,
+            identity,
         }
+    }
+
+    pub async fn register_player(&self, request: RegisterPlayerRequest) -> Result<()> {
+        self.identity.register_player(request).await
     }
 
     /// Executes a command.

@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
+use parabellum_game::models::{
+    smithy::SmithyUpgrades,
+    village::{AcademyResearch, VillageBuilding, VillageProduction, VillageStocks},
+};
 use parabellum_types::battle::AttackType;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::buildings::BuildingName;
@@ -27,6 +30,8 @@ pub struct VillageModel {
     pub is_capital: bool,
     pub culture_points: u32,
     pub culture_points_production: u32,
+    pub smithy_upgrades: SmithyUpgrades,
+    pub academy_research: AcademyResearch,
     pub total_merchants: u8,
     pub busy_merchants: u8,
     pub parent_village_id: Option<u32>,
@@ -136,12 +141,10 @@ pub enum ScheduledActionStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionType {
     ReinforcementArrival,
-    ReinforcementReturn,
     SettlersArrival,
     AttackArrival,
-    AttackReturn,
+    ArmyReturn,
     ScoutArrival,
-    ScoutReturn,
     MerchantsArrival,
     MerchantsReturn,
     AddBuilding,
@@ -173,17 +176,6 @@ pub enum ScheduledActionPayload {
         army: Army,
         arrives_at: DateTime<Utc>,
     },
-    ReinforcementReturn {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        village_id: u32,
-        home_village_id: u32,
-        stationed_village_id: u32,
-        player_id: Uuid,
-        army: Army,
-        returns_at: DateTime<Utc>,
-    },
     SettlersArrival {
         action_id: Uuid,
         movement_id: Uuid,
@@ -212,7 +204,7 @@ pub enum ScheduledActionPayload {
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
     },
-    AttackReturn {
+    ArmyReturn {
         action_id: Uuid,
         movement_id: Uuid,
         army_id: Uuid,
@@ -221,7 +213,7 @@ pub enum ScheduledActionPayload {
         target_village_id: u32,
         player_id: Uuid,
         army: Army,
-        bounty: parabellum_types::common::ResourceGroup,
+        bounty: Option<parabellum_types::common::ResourceGroup>,
         returns_at: DateTime<Utc>,
     },
     ScoutArrival {
@@ -237,17 +229,6 @@ pub enum ScheduledActionPayload {
         target: ScoutingTarget,
         attack_type: AttackType,
         arrives_at: DateTime<Utc>,
-        returns_at: DateTime<Utc>,
-    },
-    ScoutReturn {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        player_id: Uuid,
-        army: Army,
         returns_at: DateTime<Utc>,
     },
     MerchantsArrival {
@@ -322,14 +303,10 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ReinforcementArrival { .. } => {
                 ScheduledActionType::ReinforcementArrival
             }
-            ScheduledActionPayload::ReinforcementReturn { .. } => {
-                ScheduledActionType::ReinforcementReturn
-            }
             ScheduledActionPayload::SettlersArrival { .. } => ScheduledActionType::SettlersArrival,
             ScheduledActionPayload::AttackArrival { .. } => ScheduledActionType::AttackArrival,
-            ScheduledActionPayload::AttackReturn { .. } => ScheduledActionType::AttackReturn,
+            ScheduledActionPayload::ArmyReturn { .. } => ScheduledActionType::ArmyReturn,
             ScheduledActionPayload::ScoutArrival { .. } => ScheduledActionType::ScoutArrival,
-            ScheduledActionPayload::ScoutReturn { .. } => ScheduledActionType::ScoutReturn,
             ScheduledActionPayload::MerchantsArrival { .. } => {
                 ScheduledActionType::MerchantsArrival
             }

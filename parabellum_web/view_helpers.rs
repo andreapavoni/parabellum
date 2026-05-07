@@ -343,8 +343,8 @@ pub fn prepare_own_offers(marketplace_data: &MarketplaceData) -> Vec<Marketplace
                 village_id: offer.village_id,
                 village_name: village_info.name.clone(),
                 position: village_info.position.clone(),
-                offer_resources: offer.offer_resources.clone(),
-                seek_resources: offer.seek_resources.clone(),
+                offer_resources: offer.offer_resources.into(),
+                seek_resources: offer.seek_resources.into(),
                 merchants_required: offer.merchants_required,
                 created_at: offer.created_at.timestamp(),
             }
@@ -368,8 +368,8 @@ pub fn prepare_global_offers(marketplace_data: &MarketplaceData) -> Vec<Marketpl
                 village_id: offer.village_id,
                 village_name: village_info.name.clone(),
                 position: village_info.position.clone(),
-                offer_resources: offer.offer_resources.clone(),
-                seek_resources: offer.seek_resources.clone(),
+                offer_resources: offer.offer_resources.into(),
+                seek_resources: offer.seek_resources.into(),
                 merchants_required: offer.merchants_required,
                 created_at: offer.created_at.timestamp(),
             }

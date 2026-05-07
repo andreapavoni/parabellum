@@ -16,26 +16,19 @@ use chrono::Utc;
 use serde::Serialize;
 
 use parabellum_app::{
-    cqrs::queries::{
-        AcademyQueueItem, BuildingQueueItem, GetCulturePointsInfo, GetMarketplaceData,
-        GetVillageInfoByIds, SmithyQueueItem, TrainingQueueItem,
-    },
+    cqrs::queries::{AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem},
     jobs::JobStatus,
-    queries_handlers::{
-        GetCulturePointsInfoQueryHandler, GetMarketplaceDataHandler, GetVillageInfoByIdsHandler,
-    },
     repository::VillageInfo,
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
-    culture_points::required_cp,
     smithy::smithy_upgrade_cost_for_unit,
     village::VillageBuilding,
 };
 use parabellum_types::{
     army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
-    common::{ResourceGroup, Speed},
+    common::ResourceGroup,
 };
 
 use crate::{
@@ -116,6 +109,7 @@ pub enum BuildingTypeDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpansionDetailDto {
+    pub village_culture_points: u32,
     pub village_culture_points_production: u32,
     pub account_culture_points_production: u32,
     pub account_culture_points: u32,
@@ -545,22 +539,29 @@ pub async fn building_detail(
             }
             BuildingTypeDto::Expansion => {
                 let culture_points_info = state
-                    .app_bus
-                    .query(
-                        GetCulturePointsInfo {
-                            player_id: user.player.id,
-                        },
-                        GetCulturePointsInfoQueryHandler::new(),
-                    )
+                    .game_app
+                    .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
                     .await
                     .ok();
                 let account_culture_points_production = culture_points_info
                     .as_ref()
-                    .map(|info| info.account_culture_points_production)
+                    .map(|info| info.player_culture_points_production)
                     .unwrap_or(0);
                 let account_culture_points = culture_points_info
                     .as_ref()
-                    .map(|info| info.account_culture_points)
+                    .map(|info| info.player_culture_points)
+                    .unwrap_or(0);
+                let village_culture_points = culture_points_info
+                    .as_ref()
+                    .map(|info| info.village_culture_points)
+                    .unwrap_or(0);
+                let village_culture_points_production = culture_points_info
+                    .as_ref()
+                    .map(|info| info.village_culture_points_production)
+                    .unwrap_or(0);
+                let next_cp_required = culture_points_info
+                    .as_ref()
+                    .map(|info| info.next_cp_required)
                     .unwrap_or(0);
 
                 let training_units = training_options_for_group(
@@ -602,16 +603,6 @@ pub async fn building_detail(
                     0
                 };
 
-                let speed = match state.server_speed {
-                    1 => Speed::X1,
-                    2 => Speed::X2,
-                    3 => Speed::X3,
-                    5 => Speed::X5,
-                    10 => Speed::X10,
-                    _ => Speed::X1,
-                };
-                let next_cp_required = required_cp(speed, user.villages.len() + 1);
-
                 BuildingDetailDto {
                     slot_id,
                     village_id: user.village.id,
@@ -635,7 +626,8 @@ pub async fn building_detail(
                         queue: training_queue,
                     }),
                     expansion: Some(ExpansionDetailDto {
-                        village_culture_points_production: user.village.culture_points_production,
+                        village_culture_points,
+                        village_culture_points_production,
                         account_culture_points_production,
                         account_culture_points,
                         next_cp_required,
@@ -733,13 +725,8 @@ pub async fn building_detail(
             }
             BuildingTypeDto::Marketplace => {
                 let marketplace_data = state
-                    .app_bus
-                    .query(
-                        GetMarketplaceData {
-                            village_id: user.village.id,
-                        },
-                        GetMarketplaceDataHandler::new(),
-                    )
+                    .game_app
+                    .get_marketplace_data(user.village.id)
                     .await
                     .map_err(|err| ApiError::internal(err.to_string()))?;
 
@@ -1101,11 +1088,8 @@ async fn fetch_village_info_for_rally_point(
     let ids: Vec<u32> = village_ids.into_iter().collect();
 
     state
-        .app_bus
-        .query(
-            GetVillageInfoByIds { village_ids: ids },
-            GetVillageInfoByIdsHandler::new(),
-        )
+        .game_app
+        .get_village_info_by_ids(ids)
         .await
         .unwrap_or_default()
 }

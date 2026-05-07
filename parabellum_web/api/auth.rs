@@ -13,14 +13,7 @@
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
-use parabellum_app::{
-    command_handlers::RegisterPlayerCommandHandler,
-    cqrs::{
-        commands::RegisterPlayer,
-        queries::{AuthenticateUser, GetUserByEmail},
-    },
-    queries_handlers::{AuthenticateUserHandler, GetUserByEmailHandler},
-};
+use parabellum_app::ports::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
     errors::{AppError, ApplicationError, DbError},
@@ -100,14 +93,8 @@ pub async fn token_login(
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let account = state
-        .app_bus
-        .query(
-            AuthenticateUser {
-                email: payload.email,
-                password: payload.password,
-            },
-            AuthenticateUserHandler::new(),
-        )
+        .game_app
+        .authenticate_user(&payload.email, &payload.password)
         .await
         .map_err(|err| {
             inc_auth_failure();
@@ -143,30 +130,22 @@ pub async fn token_register(
 ) -> Result<impl IntoResponse, ApiError> {
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
-
     state
-        .app_bus
-        .execute(
-            RegisterPlayer::new(
-                payload.username.clone(),
-                payload.email.clone(),
-                payload.password.clone(),
-                tribe,
-                quadrant,
-            ),
-            RegisterPlayerCommandHandler::new(),
-        )
+        .game_app
+        .register_player(RegisterPlayerRequest {
+            player_id: uuid::Uuid::new_v4(),
+            username: payload.username.clone(),
+            email: payload.email.clone(),
+            password: payload.password.clone(),
+            tribe,
+            quadrant,
+        })
         .await
         .map_err(map_register_error)?;
 
     let account = state
-        .app_bus
-        .query(
-            GetUserByEmail {
-                email: payload.email,
-            },
-            GetUserByEmailHandler::new(),
-        )
+        .game_app
+        .get_user_by_email(&payload.email)
         .await
         .map_err(|err| ApiError::internal(err.to_string()))?;
     let current = current_user_by_ids(&state, account.id, None)

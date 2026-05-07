@@ -1,16 +1,7 @@
 use axum::response::Redirect;
 use uuid::Uuid;
 
-use parabellum_app::{
-    cqrs::queries::{
-        GetPlayerByUserId, GetUserById, GetVillageQueues, GetVillageTroopMovements,
-        ListVillagesByPlayerId, VillageQueues, VillageTroopMovements,
-    },
-    queries_handlers::{
-        GetPlayerByUserIdHandler, GetUserByIdHandler, GetVillageQueuesHandler,
-        GetVillageTroopMovementsHandler, ListVillagesByPlayerIdHandler,
-    },
-};
+use parabellum_app::cqrs::queries::{VillageQueues, VillageTroopMovements};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player as PlayerType, User as UserType},
@@ -47,21 +38,14 @@ async fn load_current_user(
     user_id: Uuid,
     selected_village_id: Option<u32>,
 ) -> Result<CurrentUser, Redirect> {
-    let user = state
-        .app_bus
-        .query(GetUserById { id: user_id }, GetUserByIdHandler::new())
-        .await
-        .map_err(|e| {
-            tracing::error!("Unable to load user {user_id}: {e}");
-            Redirect::to("/login")
-        })?;
+    let user = state.game_app.get_user_by_id(user_id).await.map_err(|e| {
+        tracing::error!("Unable to load user {user_id}: {e}");
+        Redirect::to("/login")
+    })?;
 
     let player = state
-        .app_bus
-        .query(
-            GetPlayerByUserId { user_id },
-            GetPlayerByUserIdHandler::new(),
-        )
+        .game_app
+        .get_player_by_user_id(user_id)
         .await
         .map_err(|e| {
             tracing::error!("Unable to load player for {user_id}: {e}");
@@ -117,26 +101,18 @@ async fn list_player_villages(
     state: &AppState,
     player_id: Uuid,
 ) -> Result<Vec<Village>, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            ListVillagesByPlayerId { player_id },
-            ListVillagesByPlayerIdHandler::new(),
-        )
-        .await
+    let models = state
+        .game_app
+        .list_village_models_by_player_id(player_id)
+        .await?;
+    models.into_iter().map(Village::try_from).collect()
 }
 
 async fn load_village_queues(
     state: &AppState,
     village_id: u32,
 ) -> Result<VillageQueues, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            GetVillageQueues { village_id },
-            GetVillageQueuesHandler::new(),
-        )
-        .await
+    state.game_app.get_village_queues(village_id).await
 }
 
 pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> VillageQueues {
@@ -157,13 +133,7 @@ async fn load_village_movements(
     state: &AppState,
     village_id: u32,
 ) -> Result<VillageTroopMovements, ApplicationError> {
-    state
-        .app_bus
-        .query(
-            GetVillageTroopMovements { village_id },
-            GetVillageTroopMovementsHandler::new(),
-        )
-        .await
+    state.game_app.get_village_troop_movements(village_id).await
 }
 
 pub async fn village_movements_or_empty(

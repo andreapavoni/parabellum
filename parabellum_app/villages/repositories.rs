@@ -63,6 +63,12 @@ pub trait VillageModelRepository: Send + Sync {
         &self,
         player_id: Uuid,
     ) -> Result<Vec<VillageModel>, ApplicationError>;
+    async fn set_map_occupancy(
+        &self,
+        field_id: u32,
+        village_id: Option<u32>,
+        player_id: Option<Uuid>,
+    ) -> Result<(), ApplicationError>;
 }
 
 #[async_trait::async_trait]

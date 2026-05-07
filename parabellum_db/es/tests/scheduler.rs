@@ -276,6 +276,14 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
             .await
             .unwrap();
         assert_eq!(completed_smithy, 1);
+
+        let model = service.get_village_model(village_id).await.unwrap();
+        let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let idx = hydrated
+            .tribe
+            .get_unit_idx_by_name(&parabellum_types::army::UnitName::Maceman)
+            .unwrap();
+        assert_eq!(hydrated.smithy()[idx], 1);
     })
     .await;
 }
@@ -346,6 +354,14 @@ async fn village_es_service_schedules_and_completes_academy_research() {
             .unwrap();
         assert_eq!(academy_completed, 1);
         assert_eq!(academy_pending, 0);
+
+        let model = service.get_village_model(village_id).await.unwrap();
+        let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let idx = hydrated
+            .tribe
+            .get_unit_idx_by_name(&parabellum_types::army::UnitName::Spearman)
+            .unwrap();
+        assert!(hydrated.academy_research().get(idx));
     })
     .await;
 }
@@ -712,7 +728,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
         let pending_returns = service
             .get_village_scheduled_action_status_count(
                 village_id,
-                models::ScheduledActionType::AttackReturn,
+                models::ScheduledActionType::ArmyReturn,
                 ScheduledActionStatus::Pending,
             )
             .await
@@ -924,7 +940,7 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
         let pending_returns = service
             .get_village_scheduled_action_status_count(
                 village_id,
-                models::ScheduledActionType::AttackReturn,
+                models::ScheduledActionType::ArmyReturn,
                 ScheduledActionStatus::Pending,
             )
             .await

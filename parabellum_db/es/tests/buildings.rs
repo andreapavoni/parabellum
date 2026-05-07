@@ -104,3 +104,74 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn village_es_service_recomputes_culture_points_production_after_building_changes() {
+    with_test_pool(|pool| async move {
+        let (_user_id, player_id) = seed_user_and_player(&pool).await;
+        let position = Position { x: 1, y: 1 };
+        let village_id = position.to_id(100);
+
+        let service = VillageEsService::new(pool.clone());
+        service
+            .found_village(
+                village_id,
+                &found_village_cmd(player_id, "Village B", position),
+            )
+            .await
+            .unwrap();
+
+        service
+            .complete_upgrade_building(
+                village_id,
+                &CompleteUpgradeBuilding {
+                    action_id: Uuid::new_v4(),
+                    player_id,
+                    village_id,
+                    slot_id: 19,
+                    building_name: BuildingName::MainBuilding,
+                    level: 2,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        let after_upgrade = service.get_village_model(village_id).await.unwrap();
+        let hydrated_after_upgrade =
+            parabellum_game::models::village::Village::try_from(after_upgrade.clone()).unwrap();
+        assert_eq!(
+            after_upgrade.culture_points_production,
+            hydrated_after_upgrade.culture_points_production
+        );
+
+        service
+            .complete_downgrade_building(
+                village_id,
+                &CompleteDowngradeBuilding {
+                    action_id: Uuid::new_v4(),
+                    player_id,
+                    village_id,
+                    slot_id: 19,
+                    building_name: BuildingName::MainBuilding,
+                    level: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        let after_downgrade = service.get_village_model(village_id).await.unwrap();
+        let hydrated_after_downgrade =
+            parabellum_game::models::village::Village::try_from(after_downgrade.clone()).unwrap();
+        assert_eq!(
+            after_downgrade.culture_points_production,
+            hydrated_after_downgrade.culture_points_production
+        );
+        assert_ne!(
+            after_upgrade.culture_points_production,
+            after_downgrade.culture_points_production
+        );
+    })
+    .await;
+}

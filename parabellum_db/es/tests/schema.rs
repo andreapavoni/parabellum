@@ -131,20 +131,6 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
     .unwrap();
     assert_eq!(attack_arrival_variant_exists, 1);
 
-    let reinforcement_return_variant_exists: i64 = sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)
-        FROM pg_enum e
-        JOIN pg_type t ON t.oid = e.enumtypid
-        WHERE t.typname = 'scheduled_action_type'
-          AND e.enumlabel = 'ReinforcementReturn'
-        "#,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(reinforcement_return_variant_exists, 1);
-
     let settlers_arrival_variant_exists: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
@@ -159,19 +145,19 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
     .unwrap();
     assert_eq!(settlers_arrival_variant_exists, 1);
 
-    let attack_return_variant_exists: i64 = sqlx::query_scalar(
+    let army_return_variant_exists: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
         WHERE t.typname = 'scheduled_action_type'
-          AND e.enumlabel = 'AttackReturn'
+          AND e.enumlabel = 'ArmyReturn'
         "#,
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(attack_return_variant_exists, 1);
+    assert_eq!(army_return_variant_exists, 1);
 
     let scout_arrival_variant_exists: i64 = sqlx::query_scalar(
         r#"
@@ -186,21 +172,6 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
     .await
     .unwrap();
     assert_eq!(scout_arrival_variant_exists, 1);
-
-    let scout_return_variant_exists: i64 = sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)
-        FROM pg_enum e
-        JOIN pg_type t ON t.oid = e.enumtypid
-        WHERE t.typname = 'scheduled_action_type'
-          AND e.enumlabel = 'ScoutReturn'
-        "#,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(scout_return_variant_exists, 1);
-
     let rm_reports_exists: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)

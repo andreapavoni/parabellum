@@ -32,6 +32,22 @@ pub async fn setup_pool() -> sqlx::PgPool {
                 .run(&pool)
                 .await
                 .expect("failed to run test migrations");
+            sqlx::query(
+                r#"
+                INSERT INTO rm_map_fields (id, village_id, player_id, position, topology)
+                SELECT id, village_id, player_id, position, topology
+                FROM map_fields
+                ON CONFLICT (id) DO UPDATE
+                SET village_id = EXCLUDED.village_id,
+                    player_id = EXCLUDED.player_id,
+                    position = EXCLUDED.position,
+                    topology = EXCLUDED.topology,
+                    updated_at = NOW()
+                "#,
+            )
+            .execute(&pool)
+            .await
+            .expect("failed to seed rm_map_fields from map_fields");
         })
         .await;
     reset_tables(&pool).await;
@@ -58,11 +74,19 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM rm_armies")
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM rm_scheduled_actions")
         .execute(pool)
         .await
         .unwrap();
     sqlx::query("DELETE FROM rm_village")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE rm_map_fields SET village_id = NULL, player_id = NULL")
         .execute(pool)
         .await
         .unwrap();

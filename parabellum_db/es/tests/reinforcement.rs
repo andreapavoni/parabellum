@@ -221,6 +221,16 @@ async fn village_es_service_recall_reinforcements_supports_partial_split() {
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
             .await
             .unwrap();
+        let stationed_state: Option<(String, i32)> =
+            sqlx::query_as("SELECT state, current_village_id FROM rm_armies WHERE army_id = $1")
+                .bind(army_id)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            stationed_state,
+            Some(("stationed".to_string(), target_village_id as i32))
+        );
         let deployed_army = service
             .get_village_model(source_village_id)
             .await
@@ -480,6 +490,16 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
         let target_after_recall = service.get_village_model(target_village_id).await.unwrap();
         assert_eq!(troops_sum(&source_after_recall.deployed_armies, 0), 0);
         assert_eq!(troops_sum(&target_after_recall.reinforcements, 0), 0);
+        let moving_state: Option<(String, i32)> =
+            sqlx::query_as("SELECT state, current_village_id FROM rm_armies WHERE army_id = $1")
+                .bind(army_id)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            moving_state,
+            Some(("moving".to_string(), target_village_id as i32))
+        );
 
         service
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(30), 10)
@@ -491,6 +511,13 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
         assert_eq!(army_units(&source_after_return, 0), 2);
         assert_eq!(troops_sum(&source_after_return.deployed_armies, 0), 0);
         assert_eq!(troops_sum(&target_after_return.reinforcements, 0), 0);
+        let returned_row_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM rm_armies WHERE army_id = $1")
+                .bind(army_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(returned_row_count, 0);
     })
     .await;
 }

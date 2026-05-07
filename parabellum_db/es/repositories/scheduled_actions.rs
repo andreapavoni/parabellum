@@ -172,12 +172,10 @@ enum DbScheduledActionStatus {
 #[sqlx(type_name = "scheduled_action_type", rename_all = "PascalCase")]
 enum DbScheduledActionType {
     ReinforcementArrival,
-    ReinforcementReturn,
     SettlersArrival,
     AttackArrival,
-    AttackReturn,
+    ArmyReturn,
     ScoutArrival,
-    ScoutReturn,
     MerchantArrival,
     MerchantReturn,
     AddBuilding,
@@ -214,12 +212,10 @@ impl From<DbScheduledActionType> for ScheduledActionType {
     fn from(value: DbScheduledActionType) -> Self {
         match value {
             DbScheduledActionType::ReinforcementArrival => Self::ReinforcementArrival,
-            DbScheduledActionType::ReinforcementReturn => Self::ReinforcementReturn,
             DbScheduledActionType::SettlersArrival => Self::SettlersArrival,
             DbScheduledActionType::AttackArrival => Self::AttackArrival,
-            DbScheduledActionType::AttackReturn => Self::AttackReturn,
+            DbScheduledActionType::ArmyReturn => Self::ArmyReturn,
             DbScheduledActionType::ScoutArrival => Self::ScoutArrival,
-            DbScheduledActionType::ScoutReturn => Self::ScoutReturn,
             DbScheduledActionType::MerchantArrival => Self::MerchantsArrival,
             DbScheduledActionType::MerchantReturn => Self::MerchantsReturn,
             DbScheduledActionType::AddBuilding => Self::AddBuilding,
@@ -236,12 +232,10 @@ impl From<ScheduledActionType> for DbScheduledActionType {
     fn from(value: ScheduledActionType) -> Self {
         match value {
             ScheduledActionType::ReinforcementArrival => Self::ReinforcementArrival,
-            ScheduledActionType::ReinforcementReturn => Self::ReinforcementReturn,
             ScheduledActionType::SettlersArrival => Self::SettlersArrival,
             ScheduledActionType::AttackArrival => Self::AttackArrival,
-            ScheduledActionType::AttackReturn => Self::AttackReturn,
+            ScheduledActionType::ArmyReturn => Self::ArmyReturn,
             ScheduledActionType::ScoutArrival => Self::ScoutArrival,
-            ScheduledActionType::ScoutReturn => Self::ScoutReturn,
             ScheduledActionType::MerchantsArrival => Self::MerchantArrival,
             ScheduledActionType::MerchantsReturn => Self::MerchantReturn,
             ScheduledActionType::AddBuilding => Self::AddBuilding,

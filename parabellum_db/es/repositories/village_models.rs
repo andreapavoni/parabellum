@@ -2,6 +2,7 @@ use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::repositories::VillageModelRepository;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
+use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::errors::{ApplicationError, DbError};
 use parabellum_types::{
@@ -39,12 +40,14 @@ impl PostgresVillageModelRepository {
                 is_capital = $11,
                 culture_points = $12,
                 culture_points_production = $13,
-                parent_village_id = $14,
-                army = $15,
-                reinforcements = $16,
-                deployed_armies = $17,
-                total_merchants = $18,
-                busy_merchants = $19,
+                smithy_upgrades = $14,
+                academy_research = $15,
+                parent_village_id = $16,
+                army = $17,
+                reinforcements = $18,
+                deployed_armies = $19,
+                total_merchants = $20,
+                busy_merchants = $21,
                 updated_at = NOW()
             WHERE village_id = $1
             "#,
@@ -62,6 +65,8 @@ impl PostgresVillageModelRepository {
         .bind(model.is_capital)
         .bind(model.culture_points as i32)
         .bind(model.culture_points_production as i32)
+        .bind(Json(&model.smithy_upgrades))
+        .bind(Json(&model.academy_research))
         .bind(model.parent_village_id.map(|id| id as i32))
         .bind(Json(&model.army))
         .bind(Json(&model.reinforcements))
@@ -90,6 +95,8 @@ struct DbVillageModelRow {
     is_capital: bool,
     culture_points: i32,
     culture_points_production: i32,
+    smithy_upgrades: Json<SmithyUpgrades>,
+    academy_research: Json<parabellum_game::models::village::AcademyResearch>,
     parent_village_id: Option<i32>,
     army: Json<Option<Army>>,
     reinforcements: Json<Vec<Army>>,
@@ -116,6 +123,8 @@ impl TryFrom<DbVillageModelRow> for VillageModel {
             is_capital: value.is_capital,
             culture_points: value.culture_points as u32,
             culture_points_production: value.culture_points_production as u32,
+            smithy_upgrades: value.smithy_upgrades.0,
+            academy_research: value.academy_research.0,
             total_merchants: value.total_merchants as u8,
             busy_merchants: value.busy_merchants as u8,
             parent_village_id: value.parent_village_id.map(|v| v as u32),
@@ -169,7 +178,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         let rows: Vec<DbVillageModelRow> = sqlx::query_as(
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points, culture_points_production, parent_village_id,
+                   population, loyalty, is_capital, culture_points, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
                    army, reinforcements, deployed_armies, total_merchants, busy_merchants
             FROM rm_village
             WHERE player_id = $1
@@ -220,18 +229,41 @@ impl VillageModelRepository for PostgresVillageModelRepository {
             iron: 800.min(warehouse_capacity),
             crop: (800_i64).min(granary_capacity as i64),
         };
+        let projected = parabellum_game::models::village::Village::from_persistence(
+            village_id,
+            village_name.to_string(),
+            player_id,
+            position.clone(),
+            tribe.clone(),
+            buildings.to_vec(),
+            vec![],
+            2,
+            army.clone(),
+            vec![],
+            vec![],
+            100,
+            VillageProduction::default(),
+            false,
+            [0_u8; 8],
+            stocks.clone(),
+            parabellum_game::models::village::AcademyResearch::default(),
+            0,
+            0,
+            chrono::Utc::now(),
+            None,
+        );
 
         sqlx::query(
             r#"
             INSERT INTO rm_village (
                 village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                population, loyalty, is_capital, culture_points, culture_points_production, parent_village_id,
+                population, loyalty, is_capital, culture_points, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
                 army, reinforcements, deployed_armies, total_merchants, busy_merchants
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8,
-                $9, $10, $11, $12, $13, $14,
-                $15, $16, $17, $18, $19
+                $9, $10, $11, $12, $13, $14, $15, $16,
+                $17, $18, $19, $20, $21
             )
             ON CONFLICT (village_id)
             DO UPDATE SET
@@ -247,6 +279,8 @@ impl VillageModelRepository for PostgresVillageModelRepository {
                 is_capital = EXCLUDED.is_capital,
                 culture_points = EXCLUDED.culture_points,
                 culture_points_production = EXCLUDED.culture_points_production,
+                smithy_upgrades = EXCLUDED.smithy_upgrades,
+                academy_research = EXCLUDED.academy_research,
                 parent_village_id = EXCLUDED.parent_village_id,
                 army = EXCLUDED.army,
                 reinforcements = EXCLUDED.reinforcements,
@@ -262,13 +296,15 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .bind(Json(position))
         .bind(DbTribe::from(tribe))
         .bind(Json(buildings))
-        .bind(Json(VillageProduction::default()))
+        .bind(Json(projected.production.clone()))
         .bind(Json(stocks))
-        .bind(2_i32)
+        .bind(projected.population as i32)
         .bind(100_i16)
         .bind(false)
         .bind(0_i32)
-        .bind(0_i32)
+        .bind(projected.culture_points_production as i32)
+        .bind(Json([0_u8; 8]))
+        .bind(Json(parabellum_game::models::village::AcademyResearch::default()))
         .bind(None::<i32>)
         .bind(Json(army))
         .bind(Json(Vec::<Army>::new()))
@@ -369,14 +405,23 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         level: u8,
         speed: i8,
     ) -> Result<(), ApplicationError> {
-        let (buildings, stocks): (Json<Vec<VillageBuilding>>, Json<VillageStocks>) =
-            sqlx::query_as("SELECT buildings, stocks FROM rm_village WHERE village_id = $1")
-                .bind(village_id as i32)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row: DbVillageModelRow = sqlx::query_as(
+            r#"
+            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                   population, loyalty, is_capital, culture_points, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants
+            FROM rm_village
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let mut next_buildings = buildings.0;
+        let model: VillageModel = row.try_into()?;
+
+        let mut next_buildings = model.buildings.clone();
         if let Some(entry) = next_buildings.iter_mut().find(|b| b.slot_id == slot_id) {
             let next_building = Building::new(building_name.clone(), speed)
                 .at_level(level, speed)
@@ -411,7 +456,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
             .max()
             .unwrap_or(0);
 
-        let mut next_stocks = stocks.0;
+        let mut next_stocks = model.stocks.clone();
         next_stocks.warehouse_capacity = warehouse_capacity;
         next_stocks.granary_capacity = granary_capacity;
         next_stocks.lumber = next_stocks.lumber.min(warehouse_capacity);
@@ -419,10 +464,40 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         next_stocks.iron = next_stocks.iron.min(warehouse_capacity);
         next_stocks.crop = next_stocks.crop.min(granary_capacity as i64);
 
+        let hydrated = parabellum_game::models::village::Village::from_persistence(
+            model.village_id,
+            model.village_name.clone(),
+            model.player_id,
+            model.position,
+            model.tribe,
+            next_buildings.clone(),
+            vec![],
+            model.population,
+            model.army.clone(),
+            model.reinforcements.clone(),
+            model.deployed_armies.clone(),
+            model.loyalty,
+            model.production.clone(),
+            model.is_capital,
+            model.smithy_upgrades,
+            next_stocks.clone(),
+            model.academy_research.clone(),
+            model.culture_points,
+            model.culture_points_production,
+            chrono::Utc::now(),
+            model.parent_village_id,
+        );
+
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET buildings = $2, stocks = $3, total_merchants = $4, updated_at = NOW()
+            SET buildings = $2,
+                stocks = $3,
+                total_merchants = $4,
+                production = $5,
+                population = $6,
+                culture_points_production = $7,
+                updated_at = NOW()
             WHERE village_id = $1
             "#,
         )
@@ -430,6 +505,9 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .bind(Json(next_buildings))
         .bind(Json(next_stocks))
         .bind(total_merchants as i16)
+        .bind(Json(hydrated.production.clone()))
+        .bind(hydrated.population as i32)
+        .bind(hydrated.culture_points_production as i32)
         .execute(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -493,7 +571,7 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         let row: DbVillageModelRow = sqlx::query_as(
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points, culture_points_production, parent_village_id,
+                   population, loyalty, is_capital, culture_points, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
                    army, reinforcements, deployed_armies, total_merchants, busy_merchants
             FROM rm_village
             WHERE village_id = $1
@@ -505,5 +583,29 @@ impl VillageModelRepository for PostgresVillageModelRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         row.try_into()
+    }
+
+    async fn set_map_occupancy(
+        &self,
+        field_id: u32,
+        village_id: Option<u32>,
+        player_id: Option<Uuid>,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_map_fields
+            SET village_id = $2,
+                player_id = $3,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(field_id as i32)
+        .bind(village_id.map(|id| id as i32))
+        .bind(player_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 }
