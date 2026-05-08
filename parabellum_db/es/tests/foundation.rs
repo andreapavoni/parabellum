@@ -327,16 +327,27 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             .await
             .unwrap();
 
-        let processed = service
-            .process_due_actions(now + chrono::Duration::minutes(10), 10)
+        let processed_first = service
+            .process_due_actions(now + chrono::Duration::minutes(6), 10)
             .await
             .unwrap();
-        assert_eq!(processed, 2);
+        assert_eq!(processed_first, 1);
 
         let founded = service.get_village_model(target_field_id).await.unwrap();
         assert_eq!(founded.player_id, player_a);
         assert_eq!(founded.village_name, "First Colony");
         assert_eq!(founded.tribe, Tribe::Roman);
+
+        let processed_second = service
+            .process_due_actions(now + chrono::Duration::minutes(10), 10)
+            .await
+            .unwrap();
+        assert_eq!(processed_second, 1);
+
+        let founded_after_second = service.get_village_model(target_field_id).await.unwrap();
+        assert_eq!(founded_after_second.player_id, player_a);
+        assert_eq!(founded_after_second.village_name, "First Colony");
+        assert_eq!(founded_after_second.tribe, Tribe::Roman);
     })
     .await;
 }

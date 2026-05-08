@@ -8,6 +8,7 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
+use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_game::models::village::Village;
 use parabellum_types::reports::ReportPayload;
 
@@ -23,7 +24,7 @@ struct BuildingQueueItemView {
 }
 
 fn building_queue_to_views(
-    items: &[parabellum_app::cqrs::queries::BuildingQueueItem],
+    items: &[parabellum_app::ports::queries::BuildingQueueItem],
 ) -> Vec<BuildingQueueItemView> {
     let now = Utc::now();
     items
@@ -34,7 +35,7 @@ fn building_queue_to_views(
                 slot_id: item.slot_id,
                 building_name: format!("{:?}", item.building_name),
                 target_level: item.target_level,
-                is_processing: matches!(item.status, parabellum_app::jobs::JobStatus::Processing),
+                is_processing: matches!(item.status, ScheduledActionStatus::Processing),
                 time_seconds: remaining,
             }
         })
@@ -417,7 +418,7 @@ fn current_troops(village: &Village) -> Vec<CurrentTroopDto> {
 
 pub fn village_overview_response(
     village: &Village,
-    queues: &parabellum_app::cqrs::queries::VillageQueues,
+    queues: &parabellum_app::ports::queries::VillageQueues,
 ) -> VillageOverviewResponse {
     let queue_views = building_queue_to_views(&queues.building);
     VillageOverviewResponse {
@@ -430,7 +431,7 @@ pub fn village_overview_response(
 
 pub fn village_resources_response(
     village: &Village,
-    queues: &parabellum_app::cqrs::queries::VillageQueues,
+    queues: &parabellum_app::ports::queries::VillageQueues,
 ) -> VillageResourcesResponse {
     let queue_views = building_queue_to_views(&queues.building);
     VillageResourcesResponse {

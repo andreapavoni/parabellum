@@ -1,7 +1,7 @@
 use axum::response::Redirect;
 use uuid::Uuid;
 
-use parabellum_app::cqrs::queries::{VillageQueues, VillageTroopMovements};
+use parabellum_app::ports::queries::{VillageQueues, VillageTroopMovements};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player as PlayerType, User as UserType},
@@ -105,7 +105,7 @@ async fn list_player_villages(
         .game_app
         .list_village_models_by_player_id(player_id)
         .await?;
-    models.into_iter().map(Village::try_from).collect()
+    models.into_iter().map(|model| Ok(model.into())).collect()
 }
 
 async fn load_village_queues(

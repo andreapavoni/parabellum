@@ -18,21 +18,12 @@
 // StartTownHallCelebration
 // StartBreweryCelebration
 
-pub mod app;
 pub mod application;
 pub mod auth;
-pub mod command_handlers;
 pub mod config;
-pub mod cqrs;
-pub mod identity;
-pub mod job_handlers;
-pub mod job_registry;
-pub mod jobs;
-pub mod marketplace;
 pub mod ports;
-pub mod queries_handlers;
+pub mod query_models;
 pub mod repository;
-pub mod uow;
 pub mod villages;
 
 // #[cfg(test)]

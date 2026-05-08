@@ -1,7 +1,10 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
+use parabellum_app::repository::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::VillageModelRepository;
+use parabellum_app::villages::repositories::{
+    ProjectedReport, ReportRepository, VillageModelRepository,
+};
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
@@ -11,19 +14,18 @@ use parabellum_types::reports::{
     BattlePartyPayload, BattleReportPayload, MarketplaceDeliveryReportPayload,
     ReinforcementReportPayload, ReportPayload,
 };
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::es::{
-    NewProjectedReport, PostgresReportReadModelRepository, PostgresVillageModelRepository,
-};
+use crate::es::{PostgresReportReadModelRepository, PostgresVillageModelRepository};
+use crate::identity::repositories::PostgresPlayerRepository;
 
 #[derive(Debug, Clone)]
 pub struct ReportProjector {
-    pool: PgPool,
     villages: PostgresVillageModelRepository,
     reports: PostgresReportReadModelRepository,
+    players: PostgresPlayerRepository,
 }
 
 impl ReportProjector {
@@ -31,7 +33,7 @@ impl ReportProjector {
         Self {
             villages: PostgresVillageModelRepository::new(pool.clone()),
             reports: PostgresReportReadModelRepository::new(pool.clone()),
-            pool,
+            players: PostgresPlayerRepository::new(pool),
         }
     }
 
@@ -40,12 +42,12 @@ impl ReportProjector {
     }
 
     async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
-        let row = sqlx::query("SELECT username FROM players WHERE id = $1")
-            .bind(player_id)
-            .fetch_one(&self.pool)
+        let player = self
+            .players
+            .get_by_id(player_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(row.get::<String, _>("username"))
+        Ok(player.username)
     }
 
     async fn try_village(&self, village_id: u32) -> Result<Option<VillageModel>, CqrsError> {
@@ -92,8 +94,8 @@ impl ReportProjector {
         }
 
         self.reports
-            .add(
-                &NewProjectedReport {
+            .add_projected(
+                &ProjectedReport {
                     report_type: "reinforcement".to_string(),
                     payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
                     actor_player_id: source.player_id,
@@ -139,8 +141,8 @@ impl ReportProjector {
         }
 
         self.reports
-            .add(
-                &NewProjectedReport {
+            .add_projected(
+                &ProjectedReport {
                     report_type: "marketplace_delivery".to_string(),
                     payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
                     actor_player_id: source.player_id,
@@ -315,8 +317,8 @@ impl EventConsumer for ReportProjector {
 
             return self
                 .reports
-                .add(
-                    &NewProjectedReport {
+                .add_projected(
+                    &ProjectedReport {
                         report_type: "battle".to_string(),
                         payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
                         actor_player_id: *player_id,
@@ -439,8 +441,8 @@ impl EventConsumer for ReportProjector {
             audiences.push(target.player_id);
         }
         self.reports
-            .add(
-                &NewProjectedReport {
+            .add_projected(
+                &ProjectedReport {
                     report_type: "battle".to_string(),
                     payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
                     actor_player_id: player_id,

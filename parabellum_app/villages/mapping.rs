@@ -1,13 +1,10 @@
 use chrono::Utc;
-use parabellum_types::errors::ApplicationError;
 
 use super::models::VillageModel;
 
-impl TryFrom<VillageModel> for parabellum_game::models::village::Village {
-    type Error = ApplicationError;
-
-    fn try_from(model: VillageModel) -> Result<Self, Self::Error> {
-        Ok(parabellum_game::models::village::Village::from_persistence(
+impl From<VillageModel> for parabellum_game::models::village::Village {
+    fn from(model: VillageModel) -> Self {
+        parabellum_game::models::village::Village::from_persistence(
             model.village_id,
             model.village_name,
             model.player_id,
@@ -29,7 +26,7 @@ impl TryFrom<VillageModel> for parabellum_game::models::village::Village {
             model.culture_points_production,
             Utc::now(),
             model.parent_village_id,
-        ))
+        )
     }
 }
 

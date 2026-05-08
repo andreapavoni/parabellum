@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
+use parabellum_app::ports::queries::{MerchantMovement, MerchantMovementKind};
 use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferStatus};
-use parabellum_app::villages::repositories::MarketplaceOfferRepository;
+use parabellum_app::villages::repositories::MarketplaceRepository;
+use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, types::Json};
 use uuid::Uuid;
@@ -80,7 +82,7 @@ impl From<DbMarketplaceOfferRow> for MarketplaceOfferModel {
 }
 
 #[async_trait::async_trait]
-impl MarketplaceOfferRepository for PostgresMarketplaceOfferRepository {
+impl MarketplaceRepository for PostgresMarketplaceOfferRepository {
     async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"
@@ -242,5 +244,148 @@ impl MarketplaceOfferRepository for PostgresMarketplaceOfferRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(row.map(Into::into))
+    }
+
+    async fn list_active_outgoing(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MerchantMovement>, ApplicationError> {
+        #[derive(Debug, FromRow)]
+        struct DbMerchantArrivalRow {
+            id: Uuid,
+            source_village_id: i32,
+            target_village_id: i32,
+            resources: serde_json::Value,
+            merchants_used: i16,
+            arrives_at: DateTime<Utc>,
+        }
+        #[derive(Debug, FromRow)]
+        struct DbMerchantReturnRow {
+            id: Uuid,
+            source_village_id: i32,
+            target_village_id: i32,
+            merchants_used: i16,
+            arrives_at: DateTime<Utc>,
+        }
+
+        let arrivals: Vec<DbMerchantArrivalRow> = sqlx::query_as(
+            r#"
+            SELECT
+                id,
+                (payload->>'source_village_id')::int AS source_village_id,
+                (payload->>'target_village_id')::int AS target_village_id,
+                payload->'resources' AS resources,
+                (payload->>'merchants_used')::smallint AS merchants_used,
+                (payload->>'arrives_at')::timestamptz AS arrives_at
+            FROM rm_scheduled_actions
+            WHERE action_type = 'MerchantArrival'
+              AND (payload->>'village_id')::int = $1
+              AND status IN ('pending', 'processing')
+            ORDER BY execute_at ASC, created_at ASC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let returns: Vec<DbMerchantReturnRow> = sqlx::query_as(
+            r#"
+            SELECT
+                id,
+                (payload->>'source_village_id')::int AS source_village_id,
+                (payload->>'village_id')::int AS target_village_id,
+                (payload->>'merchants_used')::smallint AS merchants_used,
+                (payload->>'returns_at')::timestamptz AS arrives_at
+            FROM rm_scheduled_actions
+            WHERE action_type = 'MerchantReturn'
+              AND (payload->>'village_id')::int = $1
+              AND status IN ('pending', 'processing')
+            ORDER BY execute_at ASC, created_at ASC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let mut out = Vec::with_capacity(arrivals.len() + returns.len());
+        for row in arrivals {
+            let resources: ResourceGroup = serde_json::from_value(row.resources)
+                .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            out.push(MerchantMovement {
+                job_id: row.id,
+                kind: MerchantMovementKind::Going,
+                origin_village_id: row.source_village_id as u32,
+                destination_village_id: row.target_village_id as u32,
+                resources,
+                merchants_used: row.merchants_used as u8,
+                arrives_at: row.arrives_at,
+            });
+        }
+        for row in returns {
+            out.push(MerchantMovement {
+                job_id: row.id,
+                kind: MerchantMovementKind::Return,
+                origin_village_id: row.source_village_id as u32,
+                destination_village_id: row.target_village_id as u32,
+                resources: ResourceGroup::new(0, 0, 0, 0),
+                merchants_used: row.merchants_used as u8,
+                arrives_at: row.arrives_at,
+            });
+        }
+        out.sort_by_key(|m| m.arrives_at);
+        Ok(out)
+    }
+
+    async fn list_active_incoming(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MerchantMovement>, ApplicationError> {
+        #[derive(Debug, FromRow)]
+        struct DbMerchantArrivalRow {
+            id: Uuid,
+            source_village_id: i32,
+            target_village_id: i32,
+            resources: serde_json::Value,
+            merchants_used: i16,
+            arrives_at: DateTime<Utc>,
+        }
+        let arrivals: Vec<DbMerchantArrivalRow> = sqlx::query_as(
+            r#"
+            SELECT
+                id,
+                (payload->>'source_village_id')::int AS source_village_id,
+                (payload->>'target_village_id')::int AS target_village_id,
+                payload->'resources' AS resources,
+                (payload->>'merchants_used')::smallint AS merchants_used,
+                (payload->>'arrives_at')::timestamptz AS arrives_at
+            FROM rm_scheduled_actions
+            WHERE action_type = 'MerchantArrival'
+              AND (payload->>'target_village_id')::int = $1
+              AND status IN ('pending', 'processing')
+            ORDER BY execute_at ASC, created_at ASC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let mut out = Vec::with_capacity(arrivals.len());
+        for row in arrivals {
+            let resources: ResourceGroup = serde_json::from_value(row.resources)
+                .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            out.push(MerchantMovement {
+                job_id: row.id,
+                kind: MerchantMovementKind::Going,
+                origin_village_id: row.source_village_id as u32,
+                destination_village_id: row.target_village_id as u32,
+                resources,
+                merchants_used: row.merchants_used as u8,
+                arrives_at: row.arrives_at,
+            });
+        }
+        Ok(out)
     }
 }

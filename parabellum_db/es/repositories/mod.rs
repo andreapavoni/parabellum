@@ -7,7 +7,7 @@ mod village_movements;
 
 pub use armies::PostgresArmyModelRepository;
 pub use marketplace_offers::PostgresMarketplaceOfferRepository;
-pub use reports::{NewProjectedReport, PostgresReportReadModelRepository};
+pub use reports::PostgresReportReadModelRepository;
 pub use scheduled_actions::PostgresScheduledActionRepository;
 pub use village_models::PostgresVillageModelRepository;
 pub use village_movements::PostgresVillageMovementRepository;

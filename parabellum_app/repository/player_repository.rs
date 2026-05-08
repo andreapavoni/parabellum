@@ -1,17 +1,8 @@
-use uuid::Uuid;
-
 use parabellum_types::common::Player;
 use parabellum_types::errors::ApplicationError;
-use parabellum_types::tribe::Tribe;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct PlayerLeaderboardEntry {
-    pub player_id: Uuid,
-    pub username: String,
-    pub village_count: i64,
-    pub population: i64,
-    pub tribe: Tribe,
-}
+use crate::query_models::PlayerLeaderboardEntry;
 
 #[async_trait::async_trait]
 pub trait PlayerRepository: Send + Sync {

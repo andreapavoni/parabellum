@@ -3,10 +3,12 @@ use parabellum_types::errors::ApplicationError;
 use parabellum_types::{common::ResourceGroup, map::Position, tribe::Tribe};
 use uuid::Uuid;
 
+use crate::ports::queries::MerchantMovement;
 use crate::villages::models::{
     MarketplaceOfferModel, MarketplaceOfferStatus, ReportModel, ScheduledAction,
     ScheduledActionStatus, ScheduledActionType, VillageModel, VillageMovement,
 };
+use crate::villages::queries::ScheduledActionStatusCounts;
 
 #[async_trait::async_trait]
 pub trait VillageModelRepository: Send + Sync {
@@ -100,10 +102,31 @@ pub trait ScheduledActionRepository: Send + Sync {
         village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError>;
+    async fn list_by_target_village_and_type(
+        &self,
+        target_village_id: u32,
+        action_type: ScheduledActionType,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError>;
+    async fn list_active_by_village_and_type(
+        &self,
+        village_id: u32,
+        action_type: ScheduledActionType,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError>;
+    async fn list_active_by_target_village_and_type(
+        &self,
+        target_village_id: u32,
+        action_type: ScheduledActionType,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError>;
+    async fn count_by_village_and_type(
+        &self,
+        village_id: u32,
+        action_type: ScheduledActionType,
+        status_filter: Option<ScheduledActionStatus>,
+    ) -> Result<ScheduledActionStatusCounts, ApplicationError>;
 }
 
 #[async_trait::async_trait]
-pub trait MarketplaceOfferRepository: Send + Sync {
+pub trait MarketplaceRepository: Send + Sync {
     async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError>;
     async fn get_by_offer_id(
         &self,
@@ -129,10 +152,33 @@ pub trait MarketplaceOfferRepository: Send + Sync {
         accepted_by_village_id: u32,
         at: chrono::DateTime<chrono::Utc>,
     ) -> Result<Option<MarketplaceOfferModel>, ApplicationError>;
+    async fn list_active_outgoing(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MerchantMovement>, ApplicationError>;
+    async fn list_active_incoming(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MerchantMovement>, ApplicationError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectedReport {
+    pub report_type: String,
+    pub payload: serde_json::Value,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
 }
 
 #[async_trait::async_trait]
-pub trait ReportReadModelRepository: Send + Sync {
+pub trait ReportRepository: Send + Sync {
+    async fn add_projected(
+        &self,
+        report: &ProjectedReport,
+        audience_player_ids: &[Uuid],
+    ) -> Result<(), ApplicationError>;
     async fn list_for_player(
         &self,
         player_id: Uuid,
@@ -146,4 +192,51 @@ pub trait ReportReadModelRepository: Send + Sync {
     ) -> Result<Option<ReportModel>, ApplicationError>;
 
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError>;
+}
+
+#[async_trait::async_trait]
+pub trait ArmyRepository: Send + Sync {
+    async fn upsert_home(
+        &self,
+        army: &parabellum_game::models::army::Army,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError>;
+    async fn upsert_moving(
+        &self,
+        army: &parabellum_game::models::army::Army,
+        current_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError>;
+    async fn upsert_stationed(
+        &self,
+        army: &parabellum_game::models::army::Army,
+        stationed_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError>;
+    async fn delete(&self, army_id: Uuid) -> Result<(), ApplicationError>;
+
+    async fn get_home_army(
+        &self,
+        village_id: u32,
+    ) -> Result<Option<parabellum_game::models::army::Army>, ApplicationError>;
+
+    async fn list_stationed_armies(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<parabellum_game::models::army::Army>, ApplicationError>;
+
+    async fn list_deployed_armies(
+        &self,
+        home_village_id: u32,
+    ) -> Result<Vec<parabellum_game::models::army::Army>, ApplicationError>;
+
+    async fn get_moving_army(
+        &self,
+        army_id: Uuid,
+    ) -> Result<parabellum_game::models::army::Army, ApplicationError>;
+
+    async fn find_stationed_context_by_army_id(
+        &self,
+        army_id: Uuid,
+    ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
 }

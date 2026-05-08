@@ -175,7 +175,6 @@ impl Village {
         village
             .init_village_buildings(valley, server_speed)
             .unwrap();
-        village.update_merchants_count();
         village.update_state();
         village
     }

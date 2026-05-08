@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS rm_armies;

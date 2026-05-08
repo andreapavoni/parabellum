@@ -326,10 +326,16 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
             .unwrap();
         assert!(reread.read_at.is_some());
 
-        let legacy_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM reports")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let legacy_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'reports'
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         assert_eq!(legacy_count, 0);
     })
     .await;

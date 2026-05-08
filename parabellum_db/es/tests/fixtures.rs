@@ -98,10 +98,6 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM villages")
-        .execute(pool)
-        .await
-        .unwrap();
     sqlx::query("DELETE FROM players")
         .execute(pool)
         .await

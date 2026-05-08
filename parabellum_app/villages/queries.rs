@@ -6,7 +6,7 @@ use crate::villages::models::{
     MarketplaceOfferModel, ReportModel, ScheduledActionStatus, ScheduledActionType,
 };
 use crate::villages::repositories::{
-    MarketplaceOfferRepository, ReportReadModelRepository, ScheduledActionRepository,
+    MarketplaceRepository, ReportRepository, ScheduledActionRepository,
 };
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -60,7 +60,7 @@ impl Query for GetScheduledActionStatusCounts {
 
 /// Query that returns all open marketplace offers from ES read models.
 pub struct GetOpenMarketplaceOffers {
-    pub repository: Arc<dyn MarketplaceOfferRepository>,
+    pub repository: Arc<dyn MarketplaceRepository>,
 }
 
 impl Query for GetOpenMarketplaceOffers {
@@ -76,7 +76,7 @@ impl Query for GetOpenMarketplaceOffers {
 
 /// Query that returns a marketplace offer by id from ES read models.
 pub struct GetMarketplaceOfferById {
-    pub repository: Arc<dyn MarketplaceOfferRepository>,
+    pub repository: Arc<dyn MarketplaceRepository>,
     pub offer_id: uuid::Uuid,
 }
 
@@ -93,7 +93,7 @@ impl Query for GetMarketplaceOfferById {
 
 /// Query that lists projected reports for one player from ES read models.
 pub struct ListReportsForPlayer {
-    pub repository: Arc<dyn ReportReadModelRepository>,
+    pub repository: Arc<dyn ReportRepository>,
     pub player_id: uuid::Uuid,
     pub limit: i64,
 }
@@ -111,7 +111,7 @@ impl Query for ListReportsForPlayer {
 
 /// Query that loads one projected report for one player from ES read models.
 pub struct GetReportForPlayer {
-    pub repository: Arc<dyn ReportReadModelRepository>,
+    pub repository: Arc<dyn ReportRepository>,
     pub report_id: uuid::Uuid,
     pub player_id: uuid::Uuid,
 }
@@ -148,7 +148,15 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl ReportReadModelRepository for MockReportRepo {
+    impl ReportRepository for MockReportRepo {
+        async fn add_projected(
+            &self,
+            _report: &crate::villages::repositories::ProjectedReport,
+            _audience_player_ids: &[Uuid],
+        ) -> Result<(), parabellum_types::errors::ApplicationError> {
+            Ok(())
+        }
+
         async fn list_for_player(
             &self,
             player_id: Uuid,

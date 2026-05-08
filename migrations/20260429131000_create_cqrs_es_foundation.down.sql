@@ -1,6 +1,12 @@
+DROP TABLE IF EXISTS rm_map_fields;
+DROP TABLE IF EXISTS rm_armies;
+DROP TABLE IF EXISTS rm_report_reads;
+DROP TABLE IF EXISTS rm_reports;
+DROP TABLE IF EXISTS rm_marketplace_offers;
 DROP TABLE IF EXISTS rm_scheduled_actions;
 DROP TABLE IF EXISTS rm_village_movements;
 DROP TABLE IF EXISTS rm_village;
+DROP TYPE IF EXISTS rm_marketplace_offer_status;
 DROP TYPE IF EXISTS scheduled_action_type;
 DROP TYPE IF EXISTS scheduled_action_status;
 DROP TYPE IF EXISTS movement_type;

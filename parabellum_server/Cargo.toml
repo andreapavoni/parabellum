@@ -11,10 +11,6 @@ keywords = { workspace = true }
 name = "parabellum"
 path = "main.rs"
 
-[[bin]]
-name = "seed_game"
-path = "bin/seed_game.rs"
-
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }

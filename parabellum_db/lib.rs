@@ -1,12 +1,10 @@
 pub mod adapters;
 pub mod es;
 pub mod identity;
-pub mod mapping;
-pub mod uow;
+pub mod map;
 
 mod connection;
-mod models;
-mod repository;
+mod db_types;
 
 pub use connection::{DbPool, establish_connection_pool, establish_test_connection_pool};
-pub use repository::*;
+pub use map::bootstrap_world_map;

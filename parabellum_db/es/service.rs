@@ -5,17 +5,20 @@ use mini_cqrs_es::{CqrsError, QueryRunner};
 use parabellum_game::models::army::Army;
 use sqlx::PgPool;
 
+use parabellum_app::ports::queries::{
+    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, VillageQueues,
+};
 use parabellum_app::villages::models::{
     MarketplaceOfferSnapshot, MarketplaceOfferStatus, ReportModel, ScheduledAction,
     ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType, VillageModel,
     VillageTroopMovements,
 };
 use parabellum_app::villages::queries::{
-    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer,
-    GetScheduledActionStatusCounts, ListReportsForPlayer, ScheduledActionStatusCounts,
+    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer, ListReportsForPlayer,
+    ScheduledActionStatusCounts,
 };
 use parabellum_app::villages::repositories::{
-    MarketplaceOfferRepository, ReportReadModelRepository, ScheduledActionRepository,
+    ArmyRepository, MarketplaceRepository, ReportRepository, ScheduledActionRepository,
     VillageModelRepository, VillageMovementRepository,
 };
 use parabellum_app::villages::{
@@ -346,15 +349,23 @@ impl VillageEsService {
         before_or_equal: chrono::DateTime<chrono::Utc>,
         limit: i64,
     ) -> Result<usize, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
         let actions = PostgresScheduledActionRepository::new(self.pool.clone())
             .take_due_pending(before_or_equal, limit)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        self.process_actions(&actions).await
+    }
+
+    pub async fn process_actions(
+        &self,
+        actions: &Vec<ScheduledAction>,
+    ) -> Result<usize, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
         let mut processed = 0usize;
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+
         for action in actions {
             let result = self.execute_action(&service, &action).await;
             let next_status = if result.is_ok() {
@@ -419,7 +430,8 @@ impl VillageEsService {
         &self,
         army_id: uuid::Uuid,
     ) -> Result<ReinforcementContext, CqrsError> {
-        let army_repo = PostgresArmyModelRepository::new(self.pool.clone());
+        let army_repo: Arc<dyn ArmyRepository> =
+            Arc::new(PostgresArmyModelRepository::new(self.pool.clone()));
         if let Some((stationed_village_id, army)) = army_repo
             .find_stationed_context_by_army_id(army_id)
             .await
@@ -488,6 +500,113 @@ impl VillageEsService {
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
+    pub async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, CqrsError> {
+        let mut building = Vec::new();
+        let building_actions = self.get_village_building_queue(village_id).await?;
+        for action in building_actions {
+            let Ok(payload) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
+                continue;
+            };
+            let (slot_id, building_name, target_level) = match payload {
+                ScheduledActionPayload::AddBuilding {
+                    slot_id,
+                    building_name,
+                    level,
+                    ..
+                }
+                | ScheduledActionPayload::UpgradeBuilding {
+                    slot_id,
+                    building_name,
+                    level,
+                    ..
+                }
+                | ScheduledActionPayload::DowngradeBuilding {
+                    slot_id,
+                    building_name,
+                    level,
+                    ..
+                } => (slot_id, building_name, level),
+                _ => continue,
+            };
+            building.push(BuildingQueueItem {
+                job_id: action.id,
+                slot_id,
+                building_name,
+                target_level,
+                status: action.status,
+                finishes_at: action.execute_at,
+            });
+        }
+        building.sort_by_key(|it| it.finishes_at);
+
+        let mut training = Vec::new();
+        let training_actions = self.get_village_training_queue(village_id).await?;
+        for action in training_actions {
+            let Ok(ScheduledActionPayload::TrainUnit {
+                slot_id,
+                unit,
+                quantity_remaining,
+                time_per_unit,
+                ..
+            }) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
+                continue;
+            };
+            training.push(TrainingQueueItem {
+                job_id: action.id,
+                slot_id,
+                unit,
+                quantity: quantity_remaining,
+                time_per_unit,
+                status: action.status,
+                finishes_at: action.execute_at,
+            });
+        }
+        training.sort_by_key(|it| it.finishes_at);
+
+        let mut academy = Vec::new();
+        let academy_actions = self.get_village_academy_queue(village_id).await?;
+        for action in academy_actions {
+            let Ok(ScheduledActionPayload::ResearchAcademy { unit, .. }) =
+                serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
+                continue;
+            };
+            academy.push(AcademyQueueItem {
+                job_id: action.id,
+                unit,
+                status: action.status,
+                finishes_at: action.execute_at,
+            });
+        }
+        academy.sort_by_key(|it| it.finishes_at);
+
+        let mut smithy = Vec::new();
+        let smithy_actions = self.get_village_smithy_queue(village_id).await?;
+        for action in smithy_actions {
+            let Ok(ScheduledActionPayload::ResearchSmithy { unit, .. }) =
+                serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
+                continue;
+            };
+            smithy.push(SmithyQueueItem {
+                job_id: action.id,
+                unit,
+                status: action.status,
+                finishes_at: action.execute_at,
+            });
+        }
+        smithy.sort_by_key(|it| it.finishes_at);
+
+        Ok(VillageQueues {
+            building,
+            training,
+            academy,
+            smithy,
+        })
+    }
+
     /// Returns scheduled-action status counters for a village and action type.
     ///
     /// If `status_filter` is provided, only that status contributes to counters.
@@ -497,14 +616,10 @@ impl VillageEsService {
         action_type: ScheduledActionType,
         status_filter: Option<ScheduledActionStatus>,
     ) -> Result<ScheduledActionStatusCounts, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let query = GetScheduledActionStatusCounts {
-            repository: Arc::new(PostgresScheduledActionRepository::new(self.pool.clone())),
-            village_id,
-            action_type,
-            status_filter,
-        };
-        runtime.query(&query).await
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        repo.count_by_village_and_type(village_id, action_type, status_filter)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     pub async fn get_open_marketplace_offers(
@@ -540,7 +655,7 @@ impl VillageEsService {
         runtime
             .query(&ListReportsForPlayer {
                 repository: Arc::new(PostgresReportReadModelRepository::new(self.pool.clone()))
-                    as Arc<dyn ReportReadModelRepository>,
+                    as Arc<dyn ReportRepository>,
                 player_id,
                 limit,
             })
@@ -556,7 +671,7 @@ impl VillageEsService {
         runtime
             .query(&GetReportForPlayer {
                 repository: Arc::new(PostgresReportReadModelRepository::new(self.pool.clone()))
-                    as Arc<dyn ReportReadModelRepository>,
+                    as Arc<dyn ReportRepository>,
                 report_id,
                 player_id,
             })
@@ -694,11 +809,13 @@ impl VillageEsService {
                             return Err(err);
                         }
                     }
-                } else if let Some(army) = PostgresArmyModelRepository::new(self.pool.clone())
-                    .find_moving_by_army_id(army_id)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?
-                {
+                } else {
+                    let army_repo: Arc<dyn ArmyRepository> =
+                        Arc::new(PostgresArmyModelRepository::new(self.pool.clone()));
+                    let army = army_repo
+                        .get_moving_army(army_id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                     let source = self.get_village_model(source_village_id).await?;
                     let cfg = parabellum_app::config::Config::from_env();
                     let travel_secs = source.position.calculate_travel_time_secs(

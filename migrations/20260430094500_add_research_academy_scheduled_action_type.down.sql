@@ -1,2 +1,0 @@
--- PostgreSQL does not support DROP VALUE for enums.
--- No-op rollback for development branch.

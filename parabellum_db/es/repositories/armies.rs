@@ -1,3 +1,4 @@
+use parabellum_app::villages::repositories::ArmyRepository;
 use parabellum_game::models::army::Army;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{PgPool, types::Json};
@@ -11,30 +12,6 @@ pub struct PostgresArmyModelRepository {
 impl PostgresArmyModelRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
-    }
-
-    pub async fn upsert_home(&self, army: &Army, player_id: Uuid) -> Result<(), ApplicationError> {
-        self.upsert(army, army.village_id, player_id, "home").await
-    }
-
-    pub async fn upsert_moving(
-        &self,
-        army: &Army,
-        current_village_id: u32,
-        player_id: Uuid,
-    ) -> Result<(), ApplicationError> {
-        self.upsert(army, current_village_id, player_id, "moving")
-            .await
-    }
-
-    pub async fn upsert_stationed(
-        &self,
-        army: &Army,
-        stationed_village_id: u32,
-        player_id: Uuid,
-    ) -> Result<(), ApplicationError> {
-        self.upsert(army, stationed_village_id, player_id, "stationed")
-            .await
     }
 
     async fn upsert(
@@ -71,7 +48,7 @@ impl PostgresArmyModelRepository {
         Ok(())
     }
 
-    pub async fn delete(&self, army_id: Uuid) -> Result<(), ApplicationError> {
+    async fn delete_row(&self, army_id: Uuid) -> Result<(), ApplicationError> {
         sqlx::query("DELETE FROM rm_armies WHERE army_id = $1")
             .bind(army_id)
             .execute(&self.pool)
@@ -80,7 +57,7 @@ impl PostgresArmyModelRepository {
         Ok(())
     }
 
-    pub async fn find_stationed_context_by_army_id(
+    async fn find_stationed_context(
         &self,
         army_id: Uuid,
     ) -> Result<Option<(u32, Army)>, ApplicationError> {
@@ -99,10 +76,7 @@ impl PostgresArmyModelRepository {
         Ok(row.map(|(stationed_village_id, army)| (stationed_village_id as u32, army.0)))
     }
 
-    pub async fn find_moving_by_army_id(
-        &self,
-        army_id: Uuid,
-    ) -> Result<Option<Army>, ApplicationError> {
+    async fn get_moving_by_army_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
         let row: Option<Json<Army>> = sqlx::query_scalar(
             r#"
             SELECT payload
@@ -115,6 +89,105 @@ impl PostgresArmyModelRepository {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(row.map(|army| army.0))
+        row.map(|army| army.0)
+            .ok_or(ApplicationError::Db(DbError::ArmyNotFound(army_id)))
+    }
+}
+
+#[async_trait::async_trait]
+impl ArmyRepository for PostgresArmyModelRepository {
+    async fn upsert_home(&self, army: &Army, player_id: Uuid) -> Result<(), ApplicationError> {
+        self.upsert(army, army.village_id, player_id, "home").await
+    }
+
+    async fn upsert_moving(
+        &self,
+        army: &Army,
+        current_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.upsert(army, current_village_id, player_id, "moving")
+            .await
+    }
+
+    async fn upsert_stationed(
+        &self,
+        army: &Army,
+        stationed_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.upsert(army, stationed_village_id, player_id, "stationed")
+            .await
+    }
+
+    async fn delete(&self, army_id: Uuid) -> Result<(), ApplicationError> {
+        self.delete_row(army_id).await
+    }
+
+    async fn get_home_army(&self, village_id: u32) -> Result<Option<Army>, ApplicationError> {
+        let row: Option<Json<Army>> = sqlx::query_scalar(
+            r#"
+            SELECT payload
+            FROM rm_armies
+            WHERE village_id = $1
+              AND current_village_id = $1
+              AND state = 'home'
+            LIMIT 1
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(row.map(|it| it.0))
+    }
+
+    async fn list_stationed_armies(&self, village_id: u32) -> Result<Vec<Army>, ApplicationError> {
+        let rows: Vec<Json<Army>> = sqlx::query_scalar(
+            r#"
+            SELECT payload
+            FROM rm_armies
+            WHERE current_village_id = $1
+              AND state = 'stationed'
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows.into_iter().map(|it| it.0).collect())
+    }
+
+    async fn list_deployed_armies(
+        &self,
+        home_village_id: u32,
+    ) -> Result<Vec<Army>, ApplicationError> {
+        let rows: Vec<Json<Army>> = sqlx::query_scalar(
+            r#"
+            SELECT payload
+            FROM rm_armies
+            WHERE village_id = $1
+              AND state IN ('stationed', 'moving')
+              AND current_village_id <> $1
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(home_village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows.into_iter().map(|it| it.0).collect())
+    }
+
+    async fn get_moving_army(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
+        self.get_moving_by_army_id(army_id).await
+    }
+
+    async fn find_stationed_context_by_army_id(
+        &self,
+        army_id: Uuid,
+    ) -> Result<Option<(u32, Army)>, ApplicationError> {
+        self.find_stationed_context(army_id).await
     }
 }

@@ -1,1 +1,0 @@
--- Enum value removals are intentionally omitted for PostgreSQL enum safety.

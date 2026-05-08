@@ -17,7 +17,7 @@ pub use mini_cqrs_es::{
 
 pub use consumers::{ReportProjector, VillageProjector};
 pub use repositories::{
-    NewProjectedReport, PostgresArmyModelRepository, PostgresMarketplaceOfferRepository,
+    PostgresArmyModelRepository, PostgresMarketplaceOfferRepository,
     PostgresReportReadModelRepository, PostgresScheduledActionRepository,
     PostgresVillageModelRepository, PostgresVillageMovementRepository,
 };

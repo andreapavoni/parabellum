@@ -9,7 +9,7 @@ use parabellum_app::villages::models::{
     ScheduledActionStatus, VillageModel, VillageMovement,
 };
 use parabellum_app::villages::repositories::{
-    MarketplaceOfferRepository, ScheduledActionRepository, VillageModelRepository,
+    ArmyRepository, MarketplaceRepository, ScheduledActionRepository, VillageModelRepository,
     VillageMovementRepository,
 };
 use parabellum_game::battle::Battle;
@@ -22,6 +22,7 @@ use parabellum_types::battle::AttackType;
 use parabellum_types::common::ResourceGroup;
 use sqlx::PgPool;
 use std::collections::HashSet;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::es::{
@@ -30,10 +31,10 @@ use crate::es::{
     PostgresVillageMovementRepository,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VillageProjector {
     village: PostgresVillageModelRepository,
-    armies: PostgresArmyModelRepository,
+    armies: Arc<dyn ArmyRepository>,
     movements: PostgresVillageMovementRepository,
     actions: PostgresScheduledActionRepository,
     offers: PostgresMarketplaceOfferRepository,
@@ -43,7 +44,7 @@ impl VillageProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
             village: PostgresVillageModelRepository::new(pool.clone()),
-            armies: PostgresArmyModelRepository::new(pool.clone()),
+            armies: Arc::new(PostgresArmyModelRepository::new(pool.clone())),
             movements: PostgresVillageMovementRepository::new(pool.clone()),
             actions: PostgresScheduledActionRepository::new(pool.clone()),
             offers: PostgresMarketplaceOfferRepository::new(pool),

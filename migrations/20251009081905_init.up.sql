@@ -1,71 +1,32 @@
--- Add up migration script here
--- ENUM for tribes
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TYPE tribe AS ENUM ('Roman', 'Gaul', 'Teuton', 'Natar', 'Nature');
 
--- Extension to use UUID as primary key
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL
+);
 
--- Players
 CREATE TABLE players (
     id UUID PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
-    tribe tribe NOT NULL
-);
-
--- Villages
-CREATE TABLE villages (
-    id SERIAL PRIMARY KEY,
-    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    position JSONB NOT NULL,
-
-    buildings JSONB NOT NULL,
-    production JSONB NOT NULL,
-    stocks JSONB NOT NULL,
-    smithy_upgrades JSONB NOT NULL,
-
-    population INTEGER NOT NULL DEFAULT 2,
-    loyalty SMALLINT NOT NULL DEFAULT 100 CHECK (loyalty >= 0 AND loyalty <= 100),
-    is_capital BOOLEAN NOT NULL DEFAULT FALSE,
-
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    UNIQUE(position)
-);
-
--- Armies
-CREATE TABLE armies (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    village_id INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
-    current_map_field_id INTEGER,
-    units JSONB NOT NULL,
-    smithy JSONB NOT NULL,
     tribe tribe NOT NULL,
-    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    culture_points INTEGER NOT NULL DEFAULT 0
 );
 
--- Armies
+CREATE INDEX idx_players_user_id ON players (user_id);
+
 CREATE TABLE map_fields (
     id INTEGER PRIMARY KEY,
-    village_id INTEGER REFERENCES villages(id),
-    player_id UUID REFERENCES players(id),
+    village_id INTEGER NULL,
+    player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
     position JSONB NOT NULL,
     topology JSONB NOT NULL,
-
     UNIQUE(position)
 );
 
--- Trigger to automatically update `updated_at`
-CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER set_villages_timestamp
-BEFORE UPDATE ON villages
-FOR EACH ROW
-EXECUTE PROCEDURE trigger_set_timestamp();
+CREATE INDEX idx_map_fields_village_id ON map_fields (village_id);
+CREATE INDEX idx_map_fields_player_id ON map_fields (player_id);

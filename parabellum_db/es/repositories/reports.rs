@@ -1,17 +1,8 @@
 use parabellum_app::villages::models::ReportModel;
-use parabellum_app::villages::repositories::ReportReadModelRepository;
+use parabellum_app::villages::repositories::{ProjectedReport, ReportRepository};
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
-
-pub struct NewProjectedReport {
-    pub report_type: String,
-    pub payload: serde_json::Value,
-    pub actor_player_id: Uuid,
-    pub actor_village_id: Option<u32>,
-    pub target_player_id: Option<Uuid>,
-    pub target_village_id: Option<u32>,
-}
 
 #[derive(Debug, Clone)]
 pub struct PostgresReportReadModelRepository {
@@ -22,10 +13,13 @@ impl PostgresReportReadModelRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
 
-    pub async fn add(
+#[async_trait::async_trait]
+impl ReportRepository for PostgresReportReadModelRepository {
+    async fn add_projected(
         &self,
-        report: &NewProjectedReport,
+        report: &ProjectedReport,
         audience_player_ids: &[Uuid],
     ) -> Result<(), ApplicationError> {
         let mut tx = self
@@ -68,10 +62,7 @@ impl PostgresReportReadModelRepository {
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl ReportReadModelRepository for PostgresReportReadModelRepository {
     async fn list_for_player(
         &self,
         player_id: Uuid,

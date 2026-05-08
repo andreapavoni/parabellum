@@ -1,1 +1,0 @@
--- no-op: this migration intentionally collapses legacy enum labels.

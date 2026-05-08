@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use parabellum_app::auth::hash_password;
 use parabellum_app::config::Config;
-use parabellum_app::identity::{IdentityPort, RegisterPlayerRequest};
+use parabellum_app::ports::identity::{IdentityPort, RegisterPlayerRequest};
 use parabellum_app::villages::FoundVillage;
 use parabellum_game::models::map::{MapQuadrant, Valley};
 use parabellum_game::models::village::Village;
@@ -11,8 +11,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::db_types as db_models;
 use crate::es::VillageEsService;
-use crate::models as db_models;
 
 #[derive(Clone)]
 /// Core registration service that persists identity/player data and initializes
@@ -48,7 +48,7 @@ impl IdentityService {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let tribe: crate::models::Tribe = req.tribe.clone().into();
+        let tribe: crate::db_types::Tribe = req.tribe.clone().into();
         sqlx::query(
             r#"
             INSERT INTO players (id, username, tribe, user_id, culture_points)
@@ -139,7 +139,7 @@ impl IdentityService {
             }
         };
 
-        let map_field = sqlx::query_as::<_, crate::models::MapField>(query)
+        let map_field = sqlx::query_as::<_, crate::db_types::MapField>(query)
             .fetch_one(&mut **tx)
             .await
             .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;

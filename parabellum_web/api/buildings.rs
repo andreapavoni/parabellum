@@ -16,9 +16,12 @@ use chrono::Utc;
 use serde::Serialize;
 
 use parabellum_app::{
-    cqrs::queries::{AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem},
-    jobs::JobStatus,
-    repository::VillageInfo,
+    ports::queries::{
+        AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem,
+        VillageArmyStateView,
+    },
+    query_models::VillageInfo,
+    villages::models::ScheduledActionStatus,
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
@@ -788,10 +791,10 @@ pub async fn building_detail(
                             }
                         },
                         kind: match movement.kind {
-                            parabellum_app::cqrs::queries::MerchantMovementKind::Going => {
+                            parabellum_app::ports::queries::MerchantMovementKind::Going => {
                                 MerchantMovementKindDto::Going
                             }
-                            parabellum_app::cqrs::queries::MerchantMovementKind::Return => {
+                            parabellum_app::ports::queries::MerchantMovementKind::Return => {
                                 MerchantMovementKindDto::Return
                             }
                         },
@@ -844,69 +847,81 @@ pub async fn building_detail(
             }
             BuildingTypeDto::RallyPoint => {
                 let movements = village_movements_or_empty(&state, user.village.id).await;
-                let village_info = fetch_village_info_for_rally_point(&state, &user.village).await;
-                let cards = prepare_rally_point_cards(&user.village, &movements, &village_info)
-                    .into_iter()
-                    .map(|card| {
-                        let (action, action_id) = match card.action_button {
-                            Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
-                                (Some(RallyActionDto::Recall), Some(army_id))
-                            }
-                            Some(crate::view_helpers::ArmyAction::Release { army_id }) => {
-                                (Some(RallyActionDto::Release), Some(army_id))
-                            }
-                            None => (None, None),
-                        };
-
-                        RallyCardDto {
-                            village_id: card.village_id,
-                            village_name: card.village_name,
-                            position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
-                            units: card.units.units().to_vec(),
-                            category: match card.category {
-                                crate::view_helpers::ArmyCategory::Stationed => {
-                                    RallyCardCategoryDto::Stationed
-                                }
-                                crate::view_helpers::ArmyCategory::Reinforcement => {
-                                    RallyCardCategoryDto::Reinforcement
-                                }
-                                crate::view_helpers::ArmyCategory::Deployed => {
-                                    RallyCardCategoryDto::Deployed
-                                }
-                                crate::view_helpers::ArmyCategory::Incoming => {
-                                    RallyCardCategoryDto::Incoming
-                                }
-                                crate::view_helpers::ArmyCategory::Outgoing => {
-                                    RallyCardCategoryDto::Outgoing
-                                }
-                            },
-                            movement_kind: card.movement_kind.map(|kind| match kind {
-                                crate::view_helpers::MovementKind::Attack => {
-                                    RallyMovementKindDto::Attack
-                                }
-                                crate::view_helpers::MovementKind::Raid => {
-                                    RallyMovementKindDto::Raid
-                                }
-                                crate::view_helpers::MovementKind::Reinforcement => {
-                                    RallyMovementKindDto::Reinforcement
-                                }
-                                crate::view_helpers::MovementKind::Return => {
-                                    RallyMovementKindDto::Return
-                                }
-                                crate::view_helpers::MovementKind::FoundVillage => {
-                                    RallyMovementKindDto::FoundVillage
-                                }
-                            }),
-                            arrival_time: card.arrival_time,
-                            action,
-                            action_id,
+                let army_state = state
+                    .game_app
+                    .get_village_army_state_view(user.village.id)
+                    .await
+                    .map_err(|err| ApiError::internal(err.to_string()))?;
+                let village_info =
+                    fetch_village_info_for_rally_point(&state, &user.village, &army_state).await;
+                let cards = prepare_rally_point_cards(
+                    user.village.id,
+                    &user.village.name,
+                    &user.village.position,
+                    &user.village.tribe,
+                    &army_state,
+                    &movements,
+                    &village_info,
+                )
+                .into_iter()
+                .map(|card| {
+                    let (action, action_id) = match card.action_button {
+                        Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
+                            (Some(RallyActionDto::Recall), Some(army_id))
                         }
-                    })
-                    .collect();
+                        Some(crate::view_helpers::ArmyAction::Release { army_id }) => {
+                            (Some(RallyActionDto::Release), Some(army_id))
+                        }
+                        None => (None, None),
+                    };
 
-                let available_units = user
-                    .village
-                    .army()
+                    RallyCardDto {
+                        village_id: card.village_id,
+                        village_name: card.village_name,
+                        position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
+                        units: card.units.units().to_vec(),
+                        category: match card.category {
+                            crate::view_helpers::ArmyCategory::Stationed => {
+                                RallyCardCategoryDto::Stationed
+                            }
+                            crate::view_helpers::ArmyCategory::Reinforcement => {
+                                RallyCardCategoryDto::Reinforcement
+                            }
+                            crate::view_helpers::ArmyCategory::Deployed => {
+                                RallyCardCategoryDto::Deployed
+                            }
+                            crate::view_helpers::ArmyCategory::Incoming => {
+                                RallyCardCategoryDto::Incoming
+                            }
+                            crate::view_helpers::ArmyCategory::Outgoing => {
+                                RallyCardCategoryDto::Outgoing
+                            }
+                        },
+                        movement_kind: card.movement_kind.map(|kind| match kind {
+                            crate::view_helpers::MovementKind::Attack => {
+                                RallyMovementKindDto::Attack
+                            }
+                            crate::view_helpers::MovementKind::Raid => RallyMovementKindDto::Raid,
+                            crate::view_helpers::MovementKind::Reinforcement => {
+                                RallyMovementKindDto::Reinforcement
+                            }
+                            crate::view_helpers::MovementKind::Return => {
+                                RallyMovementKindDto::Return
+                            }
+                            crate::view_helpers::MovementKind::FoundVillage => {
+                                RallyMovementKindDto::FoundVillage
+                            }
+                        }),
+                        arrival_time: card.arrival_time,
+                        action,
+                        action_id,
+                    }
+                })
+                .collect();
+
+                let available_units = army_state
+                    .home_army
+                    .as_ref()
                     .map(|army| army.units().clone())
                     .unwrap_or_default();
                 let sendable_units = user
@@ -1068,16 +1083,17 @@ pub async fn building_detail(
 async fn fetch_village_info_for_rally_point(
     state: &AppState,
     village: &parabellum_game::models::village::Village,
+    army_state: &VillageArmyStateView,
 ) -> HashMap<u32, VillageInfo> {
     let mut village_ids = std::collections::HashSet::new();
 
-    for army in village.deployed_armies() {
+    for army in &army_state.deployed_armies {
         if let Some(dest_id) = army.current_map_field_id {
             village_ids.insert(dest_id);
         }
     }
 
-    for reinforcement in village.reinforcements() {
+    for reinforcement in &army_state.reinforcements {
         village_ids.insert(reinforcement.village_id);
     }
 
@@ -1336,7 +1352,7 @@ fn academy_queue_for_slot(queue: &[AcademyQueueItem]) -> Vec<AcademyQueueItemDto
         .map(|item| AcademyQueueItemDto {
             unit_name: unit_key(&item.unit),
             time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
-            is_processing: item.status == JobStatus::Processing,
+            is_processing: item.status == ScheduledActionStatus::Processing,
         })
         .collect()
 }
@@ -1455,7 +1471,7 @@ fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
                 unit_name: unit_key(&item.unit),
                 target_level: *count,
                 time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
-                is_processing: item.status == JobStatus::Processing,
+                is_processing: item.status == ScheduledActionStatus::Processing,
             }
         })
         .collect()

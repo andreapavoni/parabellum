@@ -58,7 +58,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'movement_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'Scout'
         "#,
     )
@@ -108,7 +110,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'scheduled_action_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'ResearchSmithy'
         "#,
     )
@@ -122,7 +126,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'scheduled_action_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'AttackArrival'
         "#,
     )
@@ -136,7 +142,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'scheduled_action_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'SettlersArrival'
         "#,
     )
@@ -150,7 +158,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'scheduled_action_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'ArmyReturn'
         "#,
     )
@@ -164,7 +174,9 @@ async fn cqrs_es_schema_uses_native_postgres_enums_for_projected_models() {
         SELECT COUNT(*)
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
         WHERE t.typname = 'scheduled_action_type'
+          AND n.nspname = 'public'
           AND e.enumlabel = 'ScoutArrival'
         "#,
     )

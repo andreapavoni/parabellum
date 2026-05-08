@@ -15,7 +15,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_app::repository::MapRegionTile;
+use parabellum_app::query_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::village::Village;
 use parabellum_types::map::ValleyTopology;

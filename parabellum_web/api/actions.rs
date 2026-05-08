@@ -3,7 +3,7 @@
 //! This module contains command-style endpoints (build, train, send troops/resources,
 //! marketplace actions, research, reinforce/recall, and village founding).
 //! Handlers stay orchestration-only: validate request shape, resolve authenticated user,
-//! invoke `parabellum_app` command handlers, and map errors to API codes.
+//! invoke `GameApplication`, and map errors to API codes.
 
 use axum::{
     Json,
