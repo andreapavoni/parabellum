@@ -31,9 +31,11 @@ use crate::{
         errors::ApiError,
     },
     http::AppState,
-    session::{CurrentUser, village_queues_or_empty},
+    session::CurrentUser,
 };
 
+use super::error_mapping::{internal_error, map_application_error};
+use super::helpers::map_token_error;
 use super::{authenticated_user, bearer_token};
 
 const LEADERBOARD_PAGE_SIZE: i64 = 20;
@@ -243,7 +245,11 @@ pub async fn village_overview(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = village_queues_or_empty(&state, village.id).await;
+    let queues = state
+        .game_app
+        .get_village_queues(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
     Ok(Json(village_overview_response(&village, &queues)))
 }
 
@@ -255,7 +261,11 @@ pub async fn village_resources(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = village_queues_or_empty(&state, village.id).await;
+    let queues = state
+        .game_app
+        .get_village_queues(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
     Ok(Json(village_resources_response(&village, &queues)))
 }
 
@@ -287,7 +297,7 @@ pub async fn switch_village(
         let claims = state
             .token_service
             .verify_access_token(token)
-            .map_err(|_| ApiError::unauthorized("Invalid bearer token"))?;
+            .map_err(map_token_error)?;
         state
             .token_service
             .update_refresh_session_village(
@@ -296,7 +306,7 @@ pub async fn switch_village(
                 payload.village_id,
             )
             .await
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| internal_error("unable_to_update_refresh_session_village", err))?;
         let (access_token, expires_in) = state
             .token_service
             .issue_access_token_with_context(
@@ -305,7 +315,7 @@ pub async fn switch_village(
                 payload.village_id,
                 claims.refresh_session_id,
             )
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| internal_error("unable_to_issue_access_token", err))?;
         response.access_token = Some(access_token);
         response.expires_in = Some(expires_in);
     }
@@ -326,7 +336,7 @@ pub async fn stats(
         .game_app
         .get_leaderboard_page(requested_page, LEADERBOARD_PAGE_SIZE)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
 
     let total_pages = if data.total_players == 0 {
         1
@@ -341,7 +351,7 @@ pub async fn stats(
             .game_app
             .get_leaderboard_page(page, LEADERBOARD_PAGE_SIZE)
             .await
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
     }
 
     Ok(Json(StatsResponse {
@@ -380,13 +390,13 @@ pub async fn player_profile(
         .game_app
         .get_player_by_id(player_id)
         .await
-        .map_err(|_| ApiError::not_found("Player not found"))?;
+        .map_err(|err| map_application_error("unable_to_load_player_profile", err))?;
 
     let villages = state
         .game_app
-        .list_village_models_by_player_id(player_id)
+        .list_villages_by_player_id(player_id)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_player_villages", err))?;
 
     Ok(Json(PlayerProfileResponse {
         server_time: Utc::now().timestamp(),
@@ -415,7 +425,7 @@ pub async fn reports(
         .game_app
         .list_reports_for_player(user.player.id, 50)
         .await
-        .unwrap_or_default();
+        .map_err(|err| map_application_error("unable_to_list_reports", err))?;
 
     Ok(Json(ReportsResponse {
         server_time: Utc::now().timestamp(),
@@ -434,7 +444,7 @@ pub async fn report_detail(
         .game_app
         .get_report_for_player(report_id, user.player.id)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?
+        .map_err(|err| map_application_error("unable_to_load_report", err))?
         .ok_or_else(|| ApiError::not_found("Report not found"))?;
 
     let _ = state
@@ -465,7 +475,7 @@ pub async fn map_region(
         .game_app
         .get_map_region(center.x, center.y, MAP_REGION_RADIUS, state.world_size)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_map_region", err))?;
 
     Ok(Json(MapRegionResponse {
         center,
@@ -485,12 +495,12 @@ pub async fn map_field(
         .game_app
         .get_map_field(field_id)
         .await
-        .map_err(|_| ApiError::not_found("Map field not found"))?;
+        .map_err(|err| map_application_error("unable_to_load_map_field", err))?;
     let region_tile = state
         .game_app
         .get_map_region_tile_by_field_id(field_id)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_map_field_tile", err))?;
 
     let (tile_type, valley, oasis) = match field.topology {
         MapFieldTopology::Oasis(variant) => (TileType::Oasis, None, Some(format!("{variant:?}"))),
@@ -580,10 +590,15 @@ async fn owned_village_by_id(
     user: &CurrentUser,
     village_id: u32,
 ) -> Result<Village, ApiError> {
-    let _ = state;
-    user.villages
-        .iter()
-        .find(|v| v.id == village_id)
-        .cloned()
-        .ok_or_else(|| ApiError::not_found("Village not available for the current player"))
+    let village = state
+        .game_app
+        .get_village_model(village_id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village", e))?;
+    if village.player_id != user.player.id {
+        return Err(ApiError::not_found(
+            "Village not available for the current player",
+        ));
+    }
+    Ok(village.into())
 }

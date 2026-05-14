@@ -49,7 +49,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Builds a new `AppState` from app bus, db pool and runtime config.
+    /// Builds a new `AppState` from `GameApplication`, db pool and runtime config.
     pub fn new(game_app: Arc<GameApplication>, db_pool: PgPool, config: &Config) -> AppState {
         let token_service = Arc::new(AuthTokenService::new(config));
 

@@ -3,7 +3,7 @@ use parabellum_app::repository::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::repositories::{
-    ProjectedReport, ReportRepository, VillageModelRepository,
+    ProjectedReport, ReportRepository, VillageRepository,
 };
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -18,21 +18,21 @@ use sqlx::PgPool;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::es::{PostgresReportReadModelRepository, PostgresVillageModelRepository};
+use crate::es::{PostgresReportRepository, PostgresVillageRepository};
 use crate::identity::repositories::PostgresPlayerRepository;
 
 #[derive(Debug, Clone)]
 pub struct ReportProjector {
-    villages: PostgresVillageModelRepository,
-    reports: PostgresReportReadModelRepository,
+    villages: PostgresVillageRepository,
+    reports: PostgresReportRepository,
     players: PostgresPlayerRepository,
 }
 
 impl ReportProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
-            villages: PostgresVillageModelRepository::new(pool.clone()),
-            reports: PostgresReportReadModelRepository::new(pool.clone()),
+            villages: PostgresVillageRepository::new(pool.clone()),
+            reports: PostgresReportRepository::new(pool.clone()),
             players: PostgresPlayerRepository::new(pool),
         }
     }

@@ -52,7 +52,7 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
             .await
             .unwrap();
 
-        let after_add = service.get_village_model(village_id).await.unwrap();
+        let after_add = service.get_village(village_id).await.unwrap();
         assert_eq!(
             building_level(&after_add, 22, BuildingName::Cranny),
             Some(1)
@@ -74,7 +74,7 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
             .await
             .unwrap();
 
-        let after_upgrade = service.get_village_model(village_id).await.unwrap();
+        let after_upgrade = service.get_village(village_id).await.unwrap();
         assert_eq!(
             building_level(&after_upgrade, 22, BuildingName::Cranny),
             Some(2)
@@ -96,7 +96,7 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
             .await
             .unwrap();
 
-        let after_downgrade = service.get_village_model(village_id).await.unwrap();
+        let after_downgrade = service.get_village(village_id).await.unwrap();
         assert_eq!(
             building_level(&after_downgrade, 22, BuildingName::Cranny),
             Some(1)
@@ -137,7 +137,7 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
             .await
             .unwrap();
 
-        let after_upgrade = service.get_village_model(village_id).await.unwrap();
+        let after_upgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_upgrade =
             parabellum_game::models::village::Village::try_from(after_upgrade.clone()).unwrap();
         assert_eq!(
@@ -161,7 +161,7 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
             .await
             .unwrap();
 
-        let after_downgrade = service.get_village_model(village_id).await.unwrap();
+        let after_downgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_downgrade =
             parabellum_game::models::village::Village::try_from(after_downgrade.clone()).unwrap();
         assert_eq!(

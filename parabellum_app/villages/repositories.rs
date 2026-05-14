@@ -11,7 +11,7 @@ use crate::villages::models::{
 use crate::villages::queries::ScheduledActionStatusCounts;
 
 #[async_trait::async_trait]
-pub trait VillageModelRepository: Send + Sync {
+pub trait VillageRepository: Send + Sync {
     async fn upsert_from_village(
         &self,
         village_id: u32,
@@ -64,6 +64,10 @@ pub trait VillageModelRepository: Send + Sync {
     async fn list_by_player_id(
         &self,
         player_id: Uuid,
+    ) -> Result<Vec<VillageModel>, ApplicationError>;
+    async fn list_by_village_ids(
+        &self,
+        village_ids: &[u32],
     ) -> Result<Vec<VillageModel>, ApplicationError>;
     async fn set_map_occupancy(
         &self,
@@ -239,4 +243,24 @@ pub trait ArmyRepository: Send + Sync {
         &self,
         army_id: Uuid,
     ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
+}
+
+#[async_trait::async_trait]
+pub trait HeroRepository: Send + Sync {
+    async fn upsert(
+        &self,
+        hero: &parabellum_game::models::hero::Hero,
+        home_village_id: u32,
+        current_village_id: u32,
+        state: &str,
+    ) -> Result<(), ApplicationError>;
+    async fn get_by_id(
+        &self,
+        hero_id: Uuid,
+    ) -> Result<parabellum_game::models::hero::Hero, ApplicationError>;
+    async fn get_by_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<parabellum_game::models::hero::Hero>, ApplicationError>;
+    async fn has_alive_for_player(&self, player_id: Uuid) -> Result<bool, ApplicationError>;
 }

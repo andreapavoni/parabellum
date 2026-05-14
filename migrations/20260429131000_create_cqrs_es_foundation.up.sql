@@ -45,7 +45,8 @@ CREATE TYPE scheduled_action_type AS ENUM (
     'DowngradeBuilding',
     'TrainUnit',
     'ResearchAcademy',
-    'ResearchSmithy'
+    'ResearchSmithy',
+    'HeroRevival'
 );
 CREATE TYPE rm_marketplace_offer_status AS ENUM ('open', 'accepted', 'canceled');
 
@@ -162,6 +163,31 @@ CREATE INDEX idx_rm_armies_village_id ON rm_armies(village_id);
 CREATE INDEX idx_rm_armies_current_village_id ON rm_armies(current_village_id);
 CREATE INDEX idx_rm_armies_player_id ON rm_armies(player_id);
 CREATE INDEX idx_rm_armies_state ON rm_armies(state);
+
+CREATE TABLE rm_heroes (
+    hero_id UUID PRIMARY KEY,
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    home_village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
+    current_village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
+    state TEXT NOT NULL CHECK (state IN ('home', 'stationed', 'moving')),
+    tribe tribe NOT NULL,
+    level SMALLINT NOT NULL,
+    health SMALLINT NOT NULL,
+    experience INTEGER NOT NULL,
+    resource_focus JSONB NOT NULL,
+    strength_points SMALLINT NOT NULL,
+    off_bonus_points SMALLINT NOT NULL,
+    def_bonus_points SMALLINT NOT NULL,
+    regeneration_points SMALLINT NOT NULL,
+    resources_points SMALLINT NOT NULL,
+    unassigned_points SMALLINT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_rm_heroes_player_id ON rm_heroes(player_id);
+CREATE INDEX idx_rm_heroes_home_village_id ON rm_heroes(home_village_id);
+CREATE INDEX idx_rm_heroes_current_village_id ON rm_heroes(current_village_id);
+CREATE INDEX idx_rm_heroes_state ON rm_heroes(state);
 
 CREATE TABLE rm_map_fields (
     id INTEGER PRIMARY KEY,

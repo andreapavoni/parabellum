@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use parabellum_game::models::{
+    hero::Hero,
     smithy::SmithyUpgrades,
     village::{AcademyResearch, VillageBuilding, VillageProduction, VillageStocks},
 };
@@ -153,6 +154,7 @@ pub enum ScheduledActionType {
     TrainUnit,
     ResearchAcademy,
     ResearchSmithy,
+    HeroRevival,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -295,6 +297,14 @@ pub enum ScheduledActionPayload {
         player_id: Uuid,
         unit: parabellum_types::army::UnitName,
     },
+    HeroRevival {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        hero: Hero,
+        reset: bool,
+        revive_at: DateTime<Utc>,
+    },
 }
 
 impl ScheduledActionPayload {
@@ -319,6 +329,7 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::TrainUnit { .. } => ScheduledActionType::TrainUnit,
             ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
             ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
+            ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
         }
     }
 }

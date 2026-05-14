@@ -55,6 +55,26 @@ impl Command for AttackVillage {
         if !aggregate.village().has_units(&self.units) {
             return Err(as_domain_error(GameError::NotEnoughUnits));
         }
+        let detached_hero = if let Some(hero_id) = self.hero_id {
+            let Some(home_army) = aggregate.village().village.army() else {
+                return Err(as_domain_error(GameError::NoArmyInVillage));
+            };
+            let Some(hero) = home_army.hero() else {
+                return Err(as_domain_error(GameError::HeroNotAtHome {
+                    hero_id,
+                    village_id: source_village_id,
+                }));
+            };
+            if hero.id != hero_id {
+                return Err(as_domain_error(GameError::HeroNotAtHome {
+                    hero_id,
+                    village_id: source_village_id,
+                }));
+            }
+            Some(hero)
+        } else {
+            None
+        };
         let detached_army = Army::new(
             Some(self.movement_id),
             source_village_id,
@@ -63,7 +83,7 @@ impl Command for AttackVillage {
             aggregate.village().village.tribe.clone(),
             &self.units,
             aggregate.village().village.smithy(),
-            None,
+            detached_hero,
         );
         Ok(vec![
             VillageEvent::VillageArmyDetached {

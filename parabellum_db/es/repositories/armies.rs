@@ -5,11 +5,11 @@ use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct PostgresArmyModelRepository {
+pub struct PostgresArmyRepository {
     pool: PgPool,
 }
 
-impl PostgresArmyModelRepository {
+impl PostgresArmyRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -95,7 +95,7 @@ impl PostgresArmyModelRepository {
 }
 
 #[async_trait::async_trait]
-impl ArmyRepository for PostgresArmyModelRepository {
+impl ArmyRepository for PostgresArmyRepository {
     async fn upsert_home(&self, army: &Army, player_id: Uuid) -> Result<(), ApplicationError> {
         self.upsert(army, army.village_id, player_id, "home").await
     }

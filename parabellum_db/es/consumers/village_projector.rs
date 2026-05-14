@@ -9,8 +9,8 @@ use parabellum_app::villages::models::{
     ScheduledActionStatus, VillageModel, VillageMovement,
 };
 use parabellum_app::villages::repositories::{
-    ArmyRepository, MarketplaceRepository, ScheduledActionRepository, VillageModelRepository,
-    VillageMovementRepository,
+    ArmyRepository, HeroRepository, MarketplaceRepository, ScheduledActionRepository,
+    VillageMovementRepository, VillageRepository,
 };
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -19,6 +19,7 @@ use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::Village;
 use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
+use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceGroup;
 use sqlx::PgPool;
 use std::collections::HashSet;
@@ -26,28 +27,30 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::es::{
-    PostgresArmyModelRepository, PostgresMarketplaceOfferRepository,
-    PostgresScheduledActionRepository, PostgresVillageModelRepository,
-    PostgresVillageMovementRepository,
+    PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
+    PostgresScheduledActionRepository, PostgresVillageMovementRepository,
+    PostgresVillageRepository,
 };
 
 #[derive(Clone)]
 pub struct VillageProjector {
-    village: PostgresVillageModelRepository,
+    village: PostgresVillageRepository,
     armies: Arc<dyn ArmyRepository>,
+    heroes: Arc<dyn HeroRepository>,
     movements: PostgresVillageMovementRepository,
     actions: PostgresScheduledActionRepository,
-    offers: PostgresMarketplaceOfferRepository,
+    offers: PostgresMarketplaceRepository,
 }
 
 impl VillageProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
-            village: PostgresVillageModelRepository::new(pool.clone()),
-            armies: Arc::new(PostgresArmyModelRepository::new(pool.clone())),
+            village: PostgresVillageRepository::new(pool.clone()),
+            armies: Arc::new(PostgresArmyRepository::new(pool.clone())),
+            heroes: Arc::new(PostgresHeroRepository::new(pool.clone())),
             movements: PostgresVillageMovementRepository::new(pool.clone()),
             actions: PostgresScheduledActionRepository::new(pool.clone()),
-            offers: PostgresMarketplaceOfferRepository::new(pool),
+            offers: PostgresMarketplaceRepository::new(pool),
         }
     }
 
@@ -55,22 +58,37 @@ impl VillageProjector {
         Village::try_from(model.clone()).expect("VillageModel to Village conversion must succeed")
     }
 
-    fn split_army(army: &Army, requested: &TroopSet) -> (Option<Army>, Army) {
+    fn split_army(army: &Army, requested: &TroopSet, carry_hero: bool) -> (Option<Army>, Army) {
         let mut returning = army.clone();
         returning.update_units(requested);
+        if carry_hero {
+            returning.set_hero(army.hero());
+        } else {
+            returning.set_hero(None);
+        }
 
         let mut remaining_units = army.units().clone();
         for idx in 0..10 {
             remaining_units.remove(idx, requested.get(idx));
         }
 
-        if remaining_units.immensity() == 0 {
+        if remaining_units.immensity() == 0 && (!carry_hero || army.hero().is_none()) {
             (None, returning)
         } else {
             let mut remaining = army.clone();
             remaining.update_units(&remaining_units);
+            if carry_hero {
+                remaining.set_hero(None);
+            }
             (Some(remaining), returning)
         }
+    }
+
+    fn has_hero_mansion(model: &VillageModel) -> bool {
+        model
+            .buildings
+            .iter()
+            .any(|b| b.building.name == BuildingName::HeroMansion && b.building.level > 0)
     }
 }
 
@@ -155,6 +173,9 @@ impl EventConsumer for VillageProjector {
                         next_units.remove(idx, detached_army.units().get(idx));
                     }
                     army.update_units(&next_units);
+                    if detached_army.hero().is_some() {
+                        army.set_hero(None);
+                    }
                     if army.immensity() == 0 {
                         next_army = None;
                     }
@@ -165,6 +186,64 @@ impl EventConsumer for VillageProjector {
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 self.armies
                     .upsert_moving(&detached_army, village_id, current.player_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = detached_army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+            }
+            VillageEvent::HeroCreated {
+                village_id, hero, ..
+            } => {
+                self.heroes
+                    .upsert(&hero, village_id, village_id, "home")
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::HeroRevivalScheduled {
+                action_id,
+                player_id,
+                village_id,
+                hero,
+                reset,
+                revive_at,
+                ..
+            } => {
+                self.actions
+                    .add(&ScheduledAction {
+                        id: action_id,
+                        action_type: ScheduledActionPayload::HeroRevival {
+                            action_id,
+                            village_id,
+                            player_id,
+                            hero: hero.clone(),
+                            reset,
+                            revive_at,
+                        }
+                        .action_type(),
+                        execute_at: revive_at,
+                        payload: serde_json::to_value(ScheduledActionPayload::HeroRevival {
+                            action_id,
+                            village_id,
+                            player_id,
+                            hero,
+                            reset,
+                            revive_at,
+                        })
+                        .map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    })
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            }
+            VillageEvent::HeroRevived {
+                village_id, hero, ..
+            } => {
+                self.heroes
+                    .upsert(&hero, village_id, village_id, "home")
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -181,6 +260,12 @@ impl EventConsumer for VillageProjector {
                     .upsert_moving(&army, source_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, source_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
                 let outgoing = VillageMovement {
                     movement_id,
                     movement_type: MovementType::Reinforcement,
@@ -257,28 +342,72 @@ impl EventConsumer for VillageProjector {
                     .get_by_village_id(source_village_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                let mut source_deployed = source.deployed_armies;
-                source_deployed.push(army.clone());
-                self.village
-                    .update_deployed_armies(source_village_id, &source_deployed)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-
                 let target = self
                     .village
                     .get_by_village_id(target_village_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                let mut target_reinforcements = target.reinforcements;
-                target_reinforcements.push(army.clone());
-                self.village
-                    .update_reinforcements(target_village_id, &target_reinforcements)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                self.armies
-                    .upsert_stationed(&army, target_village_id, player_id)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let hero_alone_transfer = army.hero().is_some()
+                    && army.units().immensity() == 0
+                    && source.player_id == target.player_id
+                    && Self::has_hero_mansion(&source)
+                    && Self::has_hero_mansion(&target);
+
+                if hero_alone_transfer {
+                    let mut target_army = target.army.clone().unwrap_or_else(|| {
+                        Army::new_village_army(&Self::village_from_model(&target))
+                    });
+                    target_army.set_hero(army.hero());
+                    let next_target_army = if target_army.immensity() == 0 {
+                        None
+                    } else {
+                        Some(target_army)
+                    };
+                    self.village
+                        .update_army(target_village_id, &next_target_army)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    self.armies
+                        .delete(army.id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    if let Some(ref home_army) = next_target_army {
+                        self.armies
+                            .upsert_home(home_army, target.player_id)
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
+                    if let Some(mut hero) = army.hero() {
+                        hero.village_id = target_village_id;
+                        self.heroes
+                            .upsert(&hero, target_village_id, target_village_id, "home")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
+                } else {
+                    let mut source_deployed = source.deployed_armies;
+                    source_deployed.push(army.clone());
+                    self.village
+                        .update_deployed_armies(source_village_id, &source_deployed)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    let mut target_reinforcements = target.reinforcements;
+                    target_reinforcements.push(army.clone());
+                    self.village
+                        .update_reinforcements(target_village_id, &target_reinforcements)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    self.armies
+                        .upsert_stationed(&army, target_village_id, player_id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    if let Some(hero) = army.hero() {
+                        self.heroes
+                            .upsert(&hero, hero.village_id, target_village_id, "stationed")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
+                }
 
                 self.movements
                     .delete_by_movement_id(movement_id)
@@ -313,7 +442,8 @@ impl EventConsumer for VillageProjector {
                 let mut next_deployed = source.deployed_armies;
                 if let Some(idx) = next_deployed.iter().position(|a| a.id == army_id) {
                     let existing = next_deployed[idx].clone();
-                    let (remaining, _) = Self::split_army(&existing, army.units());
+                    let (remaining, _) =
+                        Self::split_army(&existing, army.units(), army.hero().is_some());
                     if let Some(remaining) = remaining {
                         next_deployed[idx] = remaining;
                     } else {
@@ -333,13 +463,20 @@ impl EventConsumer for VillageProjector {
                 let mut next_reinforcements = stationed.reinforcements;
                 if let Some(idx) = next_reinforcements.iter().position(|a| a.id == army_id) {
                     let existing = next_reinforcements[idx].clone();
-                    let (remaining, _) = Self::split_army(&existing, army.units());
+                    let (remaining, _) =
+                        Self::split_army(&existing, army.units(), army.hero().is_some());
                     if let Some(remaining) = remaining {
                         next_reinforcements[idx] = remaining.clone();
                         self.armies
                             .upsert_stationed(&remaining, stationed_village_id, player_id)
                             .await
                             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                        if let Some(hero) = remaining.hero() {
+                            self.heroes
+                                .upsert(&hero, hero.village_id, stationed_village_id, "stationed")
+                                .await
+                                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                        }
                     } else {
                         next_reinforcements.remove(idx);
                         self.armies
@@ -386,6 +523,12 @@ impl EventConsumer for VillageProjector {
                     .upsert_moving(&army, stationed_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, stationed_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
 
                 self.actions
                     .add(&ScheduledAction {
@@ -440,6 +583,12 @@ impl EventConsumer for VillageProjector {
                     .upsert_moving(&army, source_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, source_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
                 let source = self
                     .village
                     .get_by_village_id(source_village_id)
@@ -519,6 +668,12 @@ impl EventConsumer for VillageProjector {
                     .upsert_moving(&army, source_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, source_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
                 let movement_type = match attack_type {
                     AttackType::Raid => MovementType::Raid,
                     AttackType::Normal => MovementType::Attack,
@@ -790,6 +945,12 @@ impl EventConsumer for VillageProjector {
                         .upsert_home(after_home, target_next.player_id)
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    if let Some(hero) = after_home.hero() {
+                        self.heroes
+                            .upsert(&hero, hero.village_id, target_village_id, "home")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
                     after_ids.insert(after_home.id);
                 }
                 for after_reinforcement in &target_next.reinforcements {
@@ -801,6 +962,12 @@ impl EventConsumer for VillageProjector {
                         )
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    if let Some(hero) = after_reinforcement.hero() {
+                        self.heroes
+                            .upsert(&hero, hero.village_id, target_village_id, "stationed")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
                     after_ids.insert(after_reinforcement.id);
                 }
                 for removed_id in before_ids.difference(&after_ids) {
@@ -811,6 +978,12 @@ impl EventConsumer for VillageProjector {
                 }
 
                 if attacker_army.immensity() == 0 {
+                    if let Some(hero) = attacker_army.hero() {
+                        self.heroes
+                            .upsert(&hero, source_village_id, source_village_id, "home")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
                     return Ok(());
                 }
 
@@ -823,13 +996,19 @@ impl EventConsumer for VillageProjector {
                     source.tribe.clone(),
                     attacker_army.units(),
                     &no_smithy,
-                    None,
+                    attacker_army.hero(),
                 );
                 source_deployed.push(return_army.clone());
                 self.armies
                     .upsert_moving(&return_army, target_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = return_army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, target_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
                 self.village
                     .update_deployed_armies(source_village_id, &source_deployed)
                     .await
@@ -924,9 +1103,15 @@ impl EventConsumer for VillageProjector {
                     None,
                 );
                 let report = battle.calculate_scout_battle(target.clone());
-                attacker_army.update_units(&report.attacker.survivors);
+                attacker_army.apply_battle_report(&report.attacker);
 
                 if attacker_army.immensity() == 0 {
+                    if let Some(hero) = attacker_army.hero() {
+                        self.heroes
+                            .upsert(&hero, source_village_id, source_village_id, "home")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
                     return Ok(());
                 }
 
@@ -939,7 +1124,7 @@ impl EventConsumer for VillageProjector {
                     source.tribe.clone(),
                     attacker_army.units(),
                     &no_smithy,
-                    None,
+                    attacker_army.hero(),
                 );
                 let mut next_deployed = source_deployed;
                 next_deployed.push(return_army.clone());
@@ -947,6 +1132,12 @@ impl EventConsumer for VillageProjector {
                     .upsert_moving(&return_army, target_village_id, player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = return_army.hero() {
+                    self.heroes
+                        .upsert(&hero, hero.village_id, target_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
                 self.village
                     .update_deployed_armies(source_village_id, &next_deployed)
                     .await
@@ -1010,6 +1201,9 @@ impl EventConsumer for VillageProjector {
                     next_units.add(idx, army.units().get(idx));
                 }
                 source_army.update_units(&next_units);
+                if source_army.hero().is_none() {
+                    source_army.set_hero(army.hero());
+                }
                 source_deployed.retain(|army| army.id != movement_id);
                 let next_source_army = if source_army.immensity() == 0 {
                     None
@@ -1037,6 +1231,12 @@ impl EventConsumer for VillageProjector {
                         .upsert_home(home_army, player_id)
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    if let Some(hero) = home_army.hero() {
+                        self.heroes
+                            .upsert(&hero, source_village_id, source_village_id, "home")
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
                 }
 
                 if let Some(bounty) = bounty {

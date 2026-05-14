@@ -9,6 +9,7 @@ use parabellum_types::common::{Player, User};
 use parabellum_types::errors::{AppError, ApplicationError, DbError};
 use sqlx::PgPool;
 use std::sync::Arc;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::db_types as db_models;
@@ -91,15 +92,9 @@ impl IdentityService {
             buildings: village.buildings().clone(),
         };
 
-        // ES runtime owns its own transaction boundary today, so this call is
-        // outside the SQLx transaction above. We still finalize map ownership
-        // only after the village aggregate has been successfully founded.
-        VillageEsService::new(self.pool.clone())
-            .found_village(village_id, &found)
-            .await
-            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
-
-        sqlx::query(
+        // Reserve the selected map field in the canonical world map before
+        // releasing the transaction lock.
+        let updated = sqlx::query(
             r#"
             UPDATE map_fields
             SET village_id = $1, player_id = $2
@@ -112,11 +107,83 @@ impl IdentityService {
         .execute(&mut *tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        if updated.rows_affected() != 1 {
+            return Err(ApplicationError::Db(DbError::Transaction(
+                "selected valley became occupied during registration".to_string(),
+            )));
+        }
 
         tx.commit()
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        // ES runtime owns a separate transaction; call it only after the
+        // player row is committed so rm_village FK checks can succeed.
+        if let Err(e) = VillageEsService::new(self.pool.clone())
+            .found_village(village_id, &found)
+            .await
+            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
+        {
+            // Registration must be all-or-nothing. If village foundation fails
+            // after identity commit, rollback identity + map reservation.
+            if let Err(cleanup_err) = self
+                .cleanup_failed_registration(user_id, req.player_id, village_id)
+                .await
+            {
+                warn!(
+                    user_id = %user_id,
+                    player_id = %req.player_id,
+                    village_id,
+                    error = %cleanup_err,
+                    "failed to cleanup registration after village foundation error"
+                );
+            }
+            return Err(e);
+        }
+
         Ok(())
+    }
+
+    async fn cleanup_failed_registration(
+        &self,
+        user_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<(), ApplicationError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        sqlx::query(
+            r#"
+            UPDATE map_fields
+            SET village_id = NULL, player_id = NULL
+            WHERE id = $1 AND player_id = $2
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(player_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        sqlx::query("DELETE FROM players WHERE id = $1")
+            .bind(player_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))
     }
 
     async fn select_unoccupied_valley(

@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
 
 use crate::{
-    api::errors::ApiError,
+    api::{error_mapping::internal_error, errors::ApiError},
     auth_metrics::inc_token_expired,
     auth_tokens::{AuthTokenError, RefreshSession},
     http::AppState,
@@ -56,15 +56,17 @@ fn validate_refresh_context(
     Ok(())
 }
 
-fn map_token_error(error: AuthTokenError) -> ApiError {
+pub(crate) fn map_token_error(error: AuthTokenError) -> ApiError {
     match error {
         AuthTokenError::TokenExpired => {
             inc_token_expired();
             ApiError::token_expired("Access token expired")
         }
-        AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh session expired"),
-        AuthTokenError::SessionRevoked => ApiError::session_revoked("Session revoked"),
+        AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh token expired"),
+        AuthTokenError::SessionRevoked => ApiError::session_revoked("Refresh session revoked"),
         AuthTokenError::InvalidToken => ApiError::unauthorized("Invalid bearer token"),
-        AuthTokenError::Database(msg) | AuthTokenError::Internal(msg) => ApiError::internal(msg),
+        AuthTokenError::Database(msg) | AuthTokenError::Internal(msg) => {
+            internal_error("auth_helper_token_validation_failed", msg)
+        }
     }
 }

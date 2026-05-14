@@ -17,4 +17,9 @@ pub trait MapRepository: Send + Sync {
         radius: i32,
         world_size: i32,
     ) -> Result<Vec<MapRegionTile>, ApplicationError>;
+    async fn get_region_tile_by_field_id(
+        &self,
+        field_id: i32,
+    ) -> Result<Option<MapRegionTile>, ApplicationError>;
+    async fn is_unoccupied_valley(&self, field_id: i32) -> Result<bool, ApplicationError>;
 }

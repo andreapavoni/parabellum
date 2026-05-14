@@ -1,4 +1,6 @@
 mod consumers;
+pub(crate) mod lock_keys;
+mod replay;
 mod repositories;
 mod runtime;
 mod service;
@@ -16,10 +18,11 @@ pub use mini_cqrs_es::{
 };
 
 pub use consumers::{ReportProjector, VillageProjector};
+pub use replay::{ReplayMode, ReplayRequest, ReplayService, ReplaySummary, ReplayTarget};
 pub use repositories::{
-    PostgresArmyModelRepository, PostgresMarketplaceOfferRepository,
-    PostgresReportReadModelRepository, PostgresScheduledActionRepository,
-    PostgresVillageModelRepository, PostgresVillageMovementRepository,
+    PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
+    PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
+    PostgresVillageRepository,
 };
 pub use runtime::{VillageCqrsRuntime, village_cqrs_runtime};
 pub use service::VillageEsService;

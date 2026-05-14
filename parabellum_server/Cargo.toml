@@ -11,6 +11,10 @@ keywords = { workspace = true }
 name = "parabellum"
 path = "main.rs"
 
+[[bin]]
+name = "parabellum-replay"
+path = "replay.rs"
+
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }

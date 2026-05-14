@@ -7,6 +7,7 @@ pub mod actions;
 pub mod auth;
 pub mod buildings;
 pub mod dto;
+mod error_mapping;
 pub mod errors;
 pub mod game;
 mod helpers;

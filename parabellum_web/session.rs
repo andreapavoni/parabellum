@@ -1,7 +1,6 @@
 use axum::response::Redirect;
 use uuid::Uuid;
 
-use parabellum_app::ports::queries::{VillageQueues, VillageTroopMovements};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player as PlayerType, User as UserType},
@@ -101,54 +100,6 @@ async fn list_player_villages(
     state: &AppState,
     player_id: Uuid,
 ) -> Result<Vec<Village>, ApplicationError> {
-    let models = state
-        .game_app
-        .list_village_models_by_player_id(player_id)
-        .await?;
+    let models = state.game_app.list_villages_by_player_id(player_id).await?;
     models.into_iter().map(|model| Ok(model.into())).collect()
-}
-
-async fn load_village_queues(
-    state: &AppState,
-    village_id: u32,
-) -> Result<VillageQueues, ApplicationError> {
-    state.game_app.get_village_queues(village_id).await
-}
-
-pub async fn village_queues_or_empty(state: &AppState, village_id: u32) -> VillageQueues {
-    match load_village_queues(state, village_id).await {
-        Ok(queues) => queues,
-        Err(err) => {
-            tracing::error!(
-                error = ?err,
-                village_id,
-                "Unable to load village queues"
-            );
-            VillageQueues::default()
-        }
-    }
-}
-
-async fn load_village_movements(
-    state: &AppState,
-    village_id: u32,
-) -> Result<VillageTroopMovements, ApplicationError> {
-    state.game_app.get_village_troop_movements(village_id).await
-}
-
-pub async fn village_movements_or_empty(
-    state: &AppState,
-    village_id: u32,
-) -> VillageTroopMovements {
-    match load_village_movements(state, village_id).await {
-        Ok(movements) => movements,
-        Err(err) => {
-            tracing::error!(
-                error = ?err,
-                village_id,
-                "Unable to load village troop movements"
-            );
-            VillageTroopMovements::default()
-        }
-    }
 }

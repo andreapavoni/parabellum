@@ -18,6 +18,7 @@ pub struct ReleaseReinforcements {
     pub home_village_id: u32,
     pub reinforcement_army: Army,
     pub units: TroopSet,
+    pub hero_id: Option<Uuid>,
     pub returns_at: DateTime<Utc>,
 }
 
@@ -47,6 +48,20 @@ impl Command for ReleaseReinforcements {
 
         let mut return_army = self.reinforcement_army.clone();
         return_army.update_units(&self.units);
+        match (self.hero_id, self.reinforcement_army.hero()) {
+            (Some(hero_id), Some(hero)) if hero.id == hero_id => {
+                return_army.set_hero(Some(hero));
+            }
+            (Some(hero_id), _) => {
+                return Err(as_domain_error(GameError::HeroNotAtHome {
+                    hero_id,
+                    village_id: self.stationed_village_id,
+                }));
+            }
+            (None, _) => {
+                return_army.set_hero(None);
+            }
+        }
 
         Ok(vec![VillageEvent::ReinforcementsReleased {
             action_id: self.action_id,

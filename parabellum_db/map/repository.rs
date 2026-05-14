@@ -33,16 +33,16 @@ impl MapRepository for PostgresMapRepository {
     ) -> Result<Valley, ApplicationError> {
         let query = match quadrant {
             MapQuadrant::NorthEast => {
-                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
             }
             MapQuadrant::SouthEast => {
-                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
             }
             MapQuadrant::SouthWest => {
-                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
             }
             MapQuadrant::NorthWest => {
-                "SELECT * FROM map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
             }
         };
 
@@ -59,11 +59,10 @@ impl MapRepository for PostgresMapRepository {
     }
 
     async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
-        let field = sqlx::query_as!(
-            db_models::MapField,
-            "SELECT * FROM map_fields WHERE id = $1",
-            id
+        let field = sqlx::query_as::<_, db_models::MapField>(
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE id = $1",
         )
+        .bind(id)
         .fetch_one(&self.pool)
         .await
         .map_err(|_| ApplicationError::Db(DbError::MapFieldNotFound(id as u32)))?;
@@ -92,17 +91,15 @@ impl MapRepository for PostgresMapRepository {
                 mf.player_id,
                 mf.position,
                 mf.topology,
-                v.id AS fallback_village_id,
-                v.player_id AS fallback_player_id,
-                v.name AS village_name,
-                v.population AS village_population,
+                rv.village_name AS village_name,
+                rv.population AS village_population,
                 p.username AS player_name,
                 p.tribe as tribe
-            FROM map_fields AS mf
-            LEFT JOIN villages AS v
-                ON v.id = mf.id
+            FROM rm_map_fields AS mf
+            LEFT JOIN rm_village AS rv
+                ON rv.village_id = mf.village_id
             LEFT JOIN players AS p
-                ON p.id = COALESCE(mf.player_id, v.player_id)
+                ON p.id = mf.player_id
             WHERE mf.id = ANY($1)
             ORDER BY array_position($1, mf.id)
             "#,
@@ -117,8 +114,8 @@ impl MapRepository for PostgresMapRepository {
             .map(|record| {
                 let db_field = db_models::MapField {
                     id: record.id,
-                    village_id: record.village_id.or(record.fallback_village_id),
-                    player_id: record.player_id.or(record.fallback_player_id),
+                    village_id: record.village_id,
+                    player_id: record.player_id,
                     position: record.position,
                     topology: record.topology,
                 };
@@ -134,6 +131,73 @@ impl MapRepository for PostgresMapRepository {
 
         Ok(fields)
     }
+
+    async fn get_region_tile_by_field_id(
+        &self,
+        field_id: i32,
+    ) -> Result<Option<MapRegionTile>, ApplicationError> {
+        let record = sqlx::query_as::<_, DbMapFieldWithOwner>(
+            r#"
+            SELECT
+                mf.id,
+                mf.village_id,
+                mf.player_id,
+                mf.position,
+                mf.topology,
+                rv.village_name AS village_name,
+                rv.population AS village_population,
+                p.username AS player_name,
+                p.tribe as tribe
+            FROM rm_map_fields AS mf
+            LEFT JOIN rm_village AS rv
+                ON rv.village_id = mf.village_id
+            LEFT JOIN players AS p
+                ON p.id = mf.player_id
+            WHERE mf.id = $1
+            "#,
+        )
+        .bind(field_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(record.map(|record| {
+            let db_field = db_models::MapField {
+                id: record.id,
+                village_id: record.village_id,
+                player_id: record.player_id,
+                position: record.position,
+                topology: record.topology,
+            };
+            MapRegionTile {
+                field: MapField::from(db_field),
+                village_name: record.village_name,
+                village_population: record.village_population,
+                player_name: record.player_name,
+                tribe: record.tribe.map(|t| t.into()),
+            }
+        }))
+    }
+
+    async fn is_unoccupied_valley(&self, field_id: i32) -> Result<bool, ApplicationError> {
+        let is_unoccupied_valley: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM rm_map_fields
+                WHERE id = $1
+                  AND village_id IS NULL
+                  AND topology @> '{"Valley":[4,4,4,6]}'
+            )
+            "#,
+        )
+        .bind(field_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(is_unoccupied_valley)
+    }
 }
 
 #[derive(Debug, FromRow)]
@@ -143,8 +207,6 @@ struct DbMapFieldWithOwner {
     player_id: Option<Uuid>,
     position: Value,
     topology: Value,
-    fallback_village_id: Option<i32>,
-    fallback_player_id: Option<Uuid>,
     village_name: Option<String>,
     village_population: Option<i32>,
     player_name: Option<String>,

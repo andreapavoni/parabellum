@@ -91,6 +91,7 @@ pub struct RecallReinforcementsRequest {
     pub village_id: u32,
     pub army_id: Uuid,
     pub units: TroopSet,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone)]
@@ -99,6 +100,7 @@ pub struct ReleaseReinforcementsRequest {
     pub village_id: u32,
     pub army_id: Uuid,
     pub units: TroopSet,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +131,21 @@ pub struct CancelMarketplaceOfferRequest {
     pub player_id: Uuid,
     pub village_id: u32,
     pub offer_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateHeroRequest {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReviveHeroRequest {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub reset: bool,
 }
 
 #[async_trait]
@@ -173,4 +190,6 @@ pub trait VillageCommandPort: Send + Sync {
         &self,
         request: CancelMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError>;
+    async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError>;
+    async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError>;
 }

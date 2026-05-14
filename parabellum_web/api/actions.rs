@@ -40,6 +40,7 @@ use crate::api::errors::ApiError;
 use crate::http::AppState;
 
 use super::authenticated_user;
+use super::error_mapping::map_application_error;
 
 const MAX_SLOT_ID: u8 = 40;
 const RALLY_POINT_SLOT: u8 = 39;
@@ -162,6 +163,7 @@ pub struct RecallTroopsRequest {
     pub village_id: u32,
     pub army_id: Uuid,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,6 +173,7 @@ pub struct ReleaseReinforcementsRequest {
     pub village_id: u32,
     pub army_id: Uuid,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -200,7 +203,7 @@ pub async fn add_building(
             building_name: payload.building_name,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -222,7 +225,7 @@ pub async fn upgrade_building(
             slot_id: payload.slot_id,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -258,7 +261,7 @@ pub async fn train_units(
             building_name: payload.building_name,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -281,7 +284,7 @@ pub async fn research_academy(
             unit: payload.unit_name,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -304,7 +307,7 @@ pub async fn research_smithy(
             unit: payload.unit_name,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -334,7 +337,7 @@ pub async fn send_resources(
             resources: ResourceGroup(payload.lumber, payload.clay, payload.iron, payload.crop),
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -371,7 +374,7 @@ pub async fn create_marketplace_offer(
             seek_resources,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -395,7 +398,7 @@ pub async fn accept_marketplace_offer(
             offer_id,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -419,7 +422,7 @@ pub async fn cancel_marketplace_offer(
             offer_id,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -474,7 +477,7 @@ pub async fn send_troops(
                 attack_type,
             })
             .await
-            .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+            .map_err(|err| map_application_error("action_failed", err))?;
 
         return Ok(Json(ActionResponse { success: true }));
     }
@@ -499,7 +502,7 @@ pub async fn send_troops(
                     },
                 })
                 .await
-                .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+                .map_err(|err| map_application_error("action_failed", err))?;
         }
         MovementKind::Reinforcement => {
             state
@@ -512,7 +515,7 @@ pub async fn send_troops(
                     hero_id: None,
                 })
                 .await
-                .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+                .map_err(|err| map_application_error("action_failed", err))?;
         }
     }
 
@@ -535,9 +538,10 @@ pub async fn recall_troops(
             village_id: payload.village_id,
             army_id: payload.army_id,
             units,
+            hero_id: payload.hero_id,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -558,9 +562,10 @@ pub async fn release_reinforcements(
             village_id: payload.village_id,
             army_id: payload.army_id,
             units,
+            hero_id: payload.hero_id,
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -585,7 +590,7 @@ pub async fn found_village(
             tribe: user.player.tribe.clone(),
         })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }

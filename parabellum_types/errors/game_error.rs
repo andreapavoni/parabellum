@@ -116,6 +116,12 @@ pub enum GameError {
     #[error("Hero {hero_id:?} not in the village {village_id}")]
     HeroNotAtHome { hero_id: Uuid, village_id: u32 },
 
+    #[error("Player already has a hero")]
+    HeroAlreadyExists,
+
+    #[error("Hero revival is already pending")]
+    HeroRevivalAlreadyPending,
+
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),
 

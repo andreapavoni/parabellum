@@ -10,6 +10,7 @@ use std::fmt;
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::EventPayload;
 use parabellum_game::models::army::Army;
+use parabellum_game::models::hero::Hero;
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::army::UnitName;
 use parabellum_types::battle::{AttackType, ScoutingTarget};
@@ -43,6 +44,28 @@ pub enum VillageEvent {
     },
     VillageArmyDetached {
         army: Army,
+    },
+    HeroCreated {
+        player_id: Uuid,
+        village_id: u32,
+        hero: Hero,
+    },
+    HeroRevivalScheduled {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        hero: Hero,
+        reset: bool,
+        revive_at: DateTime<Utc>,
+        cost: ResourceGroup,
+    },
+    HeroRevived {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        hero: Hero,
+        reset: bool,
+        revived_at: DateTime<Utc>,
     },
     ReinforcementSent {
         movement_id: Uuid,
@@ -340,6 +363,9 @@ impl fmt::Display for VillageEvent {
             VillageEvent::VillageConquered { .. } => "VillageConquered",
             VillageEvent::VillageResourcesSet { .. } => "VillageResourcesSet",
             VillageEvent::VillageArmyDetached { .. } => "VillageArmyDetached",
+            VillageEvent::HeroCreated { .. } => "HeroCreated",
+            VillageEvent::HeroRevivalScheduled { .. } => "HeroRevivalScheduled",
+            VillageEvent::HeroRevived { .. } => "HeroRevived",
             VillageEvent::ReinforcementSent { .. } => "ReinforcementSent",
             VillageEvent::ReinforcementArrived { .. } => "ReinforcementArrived",
             VillageEvent::ReinforcementsRecalled { .. } => "ReinforcementsRecalled",

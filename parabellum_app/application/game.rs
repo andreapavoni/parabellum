@@ -10,10 +10,11 @@ use crate::ports::{
     scheduler::SchedulerPort,
     villages::{
         AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-        CreateMarketplaceOfferRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
-        ResearchAcademyRequest, ResearchSmithyRequest, SendAttackRequest, SendReinforcementRequest,
-        SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
-        UpgradeBuildingRequest, VillageCommandPort,
+        CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
+        ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
+        ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
+        SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
+        VillageCommandPort,
     },
 };
 
@@ -182,6 +183,14 @@ impl GameApplication {
         self.villages_port().cancel_offer(request).await
     }
 
+    pub async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError> {
+        self.villages_port().create_hero(request).await
+    }
+
+    pub async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError> {
+        self.villages_port().revive_hero(request).await
+    }
+
     pub async fn get_marketplace_offer(
         &self,
         offer_id: Uuid,
@@ -282,13 +291,20 @@ impl GameApplication {
             .await
     }
 
-    pub async fn list_village_models_by_player_id(
+    pub async fn list_villages_by_player_id(
         &self,
         player_id: Uuid,
     ) -> Result<Vec<crate::villages::models::VillageModel>, ApplicationError> {
         self.queries_port()
-            .list_village_models_by_player_id(player_id)
+            .list_villages_by_player_id(player_id)
             .await
+    }
+
+    pub async fn get_village_model(
+        &self,
+        village_id: u32,
+    ) -> Result<crate::villages::models::VillageModel, ApplicationError> {
+        self.queries_port().get_village_model(village_id).await
     }
 
     pub async fn get_map_region(

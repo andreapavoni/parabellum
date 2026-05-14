@@ -3,7 +3,9 @@ use std::sync::Arc;
 use parabellum_app::{config::Config, ports::queries::VillageQueryPort};
 use parabellum_types::{common::Speed, map::Position, tribe::Tribe};
 
+use crate::identity::repositories::PostgresPlayerRepository;
 use crate::{adapters::VillageEsAdapter, es::VillageEsService};
+use parabellum_app::repository::PlayerRepository;
 
 use super::fixtures::{main_building, rally_point, resources, setup_village, with_test_pool};
 
@@ -22,19 +24,13 @@ async fn village_query_port_returns_expansion_culture_info() {
         )
         .await;
 
-        sqlx::query("UPDATE players SET culture_points = 321 WHERE id = $1")
-            .bind(player_id)
-            .execute(&pool)
+        let village = service.get_village(village_id).await.unwrap();
+        let player_repo = PostgresPlayerRepository::new(pool.clone());
+        let player = player_repo.get_by_id(player_id).await.unwrap();
+        let player_cp_production = player_repo
+            .get_total_culture_points_production(player_id)
             .await
             .unwrap();
-
-        sqlx::query(
-            "UPDATE rm_village SET culture_points = 77, culture_points_production = 13 WHERE village_id = $1",
-        )
-        .bind(village_id as i32)
-        .execute(&pool)
-        .await
-        .unwrap();
 
         let adapter = VillageEsAdapter::new(
             service,
@@ -52,11 +48,17 @@ async fn village_query_port_returns_expansion_culture_info() {
             .await
             .unwrap();
 
-        assert_eq!(info.player_culture_points, 321);
-        assert_eq!(info.player_culture_points_production, 13);
-        assert_eq!(info.village_culture_points, 77);
-        assert_eq!(info.village_culture_points_production, 13);
-        assert_eq!(info.next_cp_required, parabellum_game::models::culture_points::required_cp(Speed::X1, 2));
+        assert_eq!(info.player_culture_points, player.culture_points as u32);
+        assert_eq!(info.player_culture_points_production, player_cp_production);
+        assert_eq!(info.village_culture_points, village.culture_points);
+        assert_eq!(
+            info.village_culture_points_production,
+            village.culture_points_production
+        );
+        assert_eq!(
+            info.next_cp_required,
+            parabellum_game::models::culture_points::required_cp(Speed::X1, 2)
+        );
     })
     .await;
 }

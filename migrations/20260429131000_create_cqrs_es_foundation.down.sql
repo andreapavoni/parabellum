@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS rm_map_fields;
+DROP TABLE IF EXISTS rm_heroes;
 DROP TABLE IF EXISTS rm_armies;
 DROP TABLE IF EXISTS rm_report_reads;
 DROP TABLE IF EXISTS rm_reports;

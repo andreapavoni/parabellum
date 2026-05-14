@@ -1,5 +1,5 @@
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::VillageModelRepository;
+use parabellum_app::villages::repositories::VillageRepository;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
@@ -12,11 +12,11 @@ use sqlx::{FromRow, PgPool, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct PostgresVillageModelRepository {
+pub struct PostgresVillageRepository {
     pool: PgPool,
 }
 
-impl PostgresVillageModelRepository {
+impl PostgresVillageRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -170,7 +170,7 @@ impl From<Tribe> for DbTribe {
 }
 
 #[async_trait::async_trait]
-impl VillageModelRepository for PostgresVillageModelRepository {
+impl VillageRepository for PostgresVillageRepository {
     async fn list_by_player_id(
         &self,
         player_id: Uuid,
@@ -186,6 +186,33 @@ impl VillageModelRepository for PostgresVillageModelRepository {
             "#,
         )
         .bind(player_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn list_by_village_ids(
+        &self,
+        village_ids: &[u32],
+    ) -> Result<Vec<VillageModel>, ApplicationError> {
+        if village_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let ids: Vec<i32> = village_ids.iter().map(|id| *id as i32).collect();
+        let rows: Vec<DbVillageModelRow> = sqlx::query_as(
+            r#"
+            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                   population, loyalty, is_capital, culture_points, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants
+            FROM rm_village
+            WHERE village_id = ANY($1)
+            ORDER BY village_id ASC
+            "#,
+        )
+        .bind(ids)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;

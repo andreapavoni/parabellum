@@ -3,6 +3,7 @@ use mini_cqrs_es::{
     Aggregate, AggregateSnapshot, CqrsError, EventMetadata, EventStore, NewEvent, SnapshotStore,
     StoredEvent,
 };
+use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row, types::Json};
 use uuid::Uuid;
 
@@ -15,6 +16,72 @@ impl PostgresEventStore {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    pub async fn load_events_by_global_seq(
+        &self,
+        from_global_seq: i64,
+        to_global_seq: Option<i64>,
+        aggregate_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<StoredEvent>, CqrsError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT event_id, aggregate_type, aggregate_id, stream_version, event_type, payload, metadata, global_seq, occurred_at
+            FROM es_events
+            WHERE global_seq >= $1
+              AND ($2::BIGINT IS NULL OR global_seq <= $2)
+              AND ($3::TEXT IS NULL OR aggregate_id = $3)
+            ORDER BY global_seq ASC
+            LIMIT $4
+            "#,
+        )
+        .bind(from_global_seq)
+        .bind(to_global_seq)
+        .bind(aggregate_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        rows.into_iter().map(row_to_stored_event).collect()
+    }
+}
+
+fn row_to_stored_event(row: PgRow) -> Result<StoredEvent, CqrsError> {
+    let metadata_value = row
+        .try_get::<serde_json::Value, _>("metadata")
+        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+    let metadata: EventMetadata = serde_json::from_value(metadata_value)?;
+    let stream_version = row
+        .try_get::<i64, _>("stream_version")
+        .map_err(|e| CqrsError::EventStore(e.to_string()))? as u64;
+
+    Ok(StoredEvent {
+        id: row
+            .try_get("event_id")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        aggregate_id: row
+            .try_get("aggregate_id")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        aggregate_type: row
+            .try_get("aggregate_type")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        version: stream_version,
+        event_type: row
+            .try_get("event_type")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        payload: row
+            .try_get::<serde_json::Value, _>("payload")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        metadata,
+        global_sequence: Some(
+            row.try_get("global_seq")
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        ),
+        timestamp: row
+            .try_get("occurred_at")
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+    })
 }
 
 impl EventStore for PostgresEventStore {
@@ -130,42 +197,9 @@ impl EventStore for PostgresEventStore {
         let mut events = Vec::with_capacity(rows.len());
         let mut version = 0_u64;
         for row in rows {
-            let metadata_value = row
-                .try_get::<serde_json::Value, _>("metadata")
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            let metadata: EventMetadata = serde_json::from_value(metadata_value)?;
-
-            let stream_version =
-                row.try_get::<i64, _>("stream_version")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))? as u64;
-            version = stream_version;
-
-            events.push(StoredEvent {
-                id: row
-                    .try_get("event_id")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                aggregate_id: row
-                    .try_get("aggregate_id")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                aggregate_type: row
-                    .try_get("aggregate_type")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                version: stream_version,
-                event_type: row
-                    .try_get("event_type")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                payload: row
-                    .try_get::<serde_json::Value, _>("payload")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                metadata,
-                global_sequence: Some(
-                    row.try_get("global_seq")
-                        .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-                ),
-                timestamp: row
-                    .try_get("occurred_at")
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-            });
+            let event = row_to_stored_event(row)?;
+            version = event.version;
+            events.push(event);
         }
 
         Ok((events, version))

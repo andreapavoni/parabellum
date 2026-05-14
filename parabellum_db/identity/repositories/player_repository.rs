@@ -10,7 +10,7 @@ use parabellum_types::{
 
 use crate::db_types::{self as db_models};
 
-/// Implements PlayerRepository and operates on transactions.
+/// Implements PlayerRepository against identity + ES read-model tables.
 #[derive(Debug, Clone)]
 pub struct PostgresPlayerRepository {
     pool: PgPool,
@@ -105,10 +105,10 @@ impl PlayerRepository for PostgresPlayerRepository {
                 p.id as player_id,
                 p.username,
                 p.tribe as "tribe: _",
-                COUNT(v.id) as "village_count!: i64",
+                COUNT(v.village_id) as "village_count!: i64",
                 COALESCE(SUM(v.population), 0) as "population!: i64"
             FROM players p
-            LEFT JOIN villages v ON v.player_id = p.id
+            LEFT JOIN rm_village v ON v.player_id = p.id
             GROUP BY p.id, p.username
             ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC
             LIMIT $1 OFFSET $2
@@ -135,11 +135,11 @@ impl PlayerRepository for PostgresPlayerRepository {
     }
 
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
-        // Sum culture_points from all villages owned by this player
+        // Sum culture_points from all ES village read models owned by this player.
         let total_cp = sqlx::query!(
             r#"
             SELECT COALESCE(SUM(culture_points), 0) as "total!: i64"
-            FROM villages
+            FROM rm_village
             WHERE player_id = $1
             "#,
             player_id
@@ -170,11 +170,11 @@ impl PlayerRepository for PostgresPlayerRepository {
         &self,
         player_id: Uuid,
     ) -> Result<u32, ApplicationError> {
-        // Sum culture_points_production from all villages owned by this player
+        // Sum culture_points_production from all ES village read models owned by this player.
         let total_cpp = sqlx::query!(
             r#"
             SELECT COALESCE(SUM(culture_points_production), 0) as "total!: i64"
-            FROM villages
+            FROM rm_village
             WHERE player_id = $1
             "#,
             player_id

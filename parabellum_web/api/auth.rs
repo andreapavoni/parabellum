@@ -23,6 +23,7 @@ use parabellum_types::{
 use crate::{
     api::{
         dto::{SessionUserDto, session_user},
+        error_mapping::internal_error,
         errors::ApiError,
     },
     auth_metrics::{inc_auth_failure, inc_auth_success, inc_refresh_failure, inc_refresh_success},
@@ -147,7 +148,7 @@ pub async fn token_register(
         .game_app
         .get_user_by_email(&payload.email)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| internal_error("auth_register_load_account_failed", err))?;
     let current = current_user_by_ids(&state, account.id, None)
         .await
         .map_err(|_| ApiError::unauthorized("Authentication required"))?;
@@ -233,7 +234,7 @@ fn map_auth_error(error: ApplicationError) -> ApiError {
         | ApplicationError::Db(DbError::UserByEmailNotFound(_)) => {
             ApiError::unauthorized("Invalid email or password.")
         }
-        _ => ApiError::internal("Unable to authenticate the current session."),
+        _ => internal_error("auth_login_failed", error),
     }
 }
 
@@ -251,10 +252,10 @@ fn map_register_error(error: ApplicationError) -> ApiError {
             } else if err_msg.contains("null value in column") {
                 ApiError::unprocessable("Missing required registration fields.")
             } else {
-                ApiError::internal(db_err.to_string())
+                internal_error("auth_register_failed", db_err)
             }
         }
-        _ => ApiError::internal(error.to_string()),
+        _ => internal_error("auth_register_failed", error),
     }
 }
 
@@ -291,7 +292,9 @@ fn map_token_error(error: AuthTokenError) -> ApiError {
         AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh token expired"),
         AuthTokenError::SessionRevoked => ApiError::session_revoked("Refresh session revoked"),
         AuthTokenError::InvalidToken => ApiError::unauthorized("Invalid token"),
-        AuthTokenError::Database(err) | AuthTokenError::Internal(err) => ApiError::internal(err),
+        AuthTokenError::Database(err) | AuthTokenError::Internal(err) => {
+            internal_error("auth_token_validation_failed", err)
+        }
     }
 }
 

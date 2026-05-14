@@ -10,7 +10,7 @@ use parabellum_game::models::{
 };
 use parabellum_types::{
     army::{TroopSet, UnitName, UnitRole},
-    buildings::BuildingName,
+    buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::{AppError, ApplicationError, GameError},
     map::Position,
@@ -138,6 +138,24 @@ impl VillageState {
 
     pub fn player_id(&self) -> Uuid {
         self.village.player_id
+    }
+
+    pub fn tribe(&self) -> &Tribe {
+        &self.village.tribe
+    }
+
+    pub fn validate_hero_creation_requirements(&self) -> Result<(), ApplicationError> {
+        self.village
+            .validate_building_requirements(&[BuildingRequirement(BuildingName::HeroMansion, 1)])
+            .map_err(Into::into)
+    }
+
+    pub fn validate_can_deduct_resources(
+        &self,
+        resources: &parabellum_types::common::ResourceGroup,
+    ) -> Result<(), ApplicationError> {
+        let mut village = self.village.clone();
+        village.deduct_resources(resources).map_err(Into::into)
     }
 
     pub fn building_level(&self, name: BuildingName) -> u8 {

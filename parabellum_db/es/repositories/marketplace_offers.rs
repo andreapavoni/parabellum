@@ -8,11 +8,11 @@ use sqlx::{FromRow, PgPool, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct PostgresMarketplaceOfferRepository {
+pub struct PostgresMarketplaceRepository {
     pool: PgPool,
 }
 
-impl PostgresMarketplaceOfferRepository {
+impl PostgresMarketplaceRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -82,7 +82,7 @@ impl From<DbMarketplaceOfferRow> for MarketplaceOfferModel {
 }
 
 #[async_trait::async_trait]
-impl MarketplaceRepository for PostgresMarketplaceOfferRepository {
+impl MarketplaceRepository for PostgresMarketplaceRepository {
     async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"

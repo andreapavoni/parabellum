@@ -16,6 +16,29 @@ impl PostgresScheduledActionRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    pub async fn has_pending_hero_revival_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<bool, ApplicationError> {
+        let exists: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM rm_scheduled_actions
+                WHERE action_type = 'HeroRevival'
+                  AND status = 'pending'
+                  AND payload->>'player_id' = $1
+            )
+            "#,
+        )
+        .bind(player_id.to_string())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(exists)
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -291,6 +314,7 @@ enum DbScheduledActionType {
     TrainUnit,
     ResearchAcademy,
     ResearchSmithy,
+    HeroRevival,
 }
 
 impl From<DbScheduledActionStatus> for ScheduledActionStatus {
@@ -331,6 +355,7 @@ impl From<DbScheduledActionType> for ScheduledActionType {
             DbScheduledActionType::TrainUnit => Self::TrainUnit,
             DbScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             DbScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
+            DbScheduledActionType::HeroRevival => Self::HeroRevival,
         }
     }
 }
@@ -351,6 +376,7 @@ impl From<ScheduledActionType> for DbScheduledActionType {
             ScheduledActionType::TrainUnit => Self::TrainUnit,
             ScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             ScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
+            ScheduledActionType::HeroRevival => Self::HeroRevival,
         }
     }
 }

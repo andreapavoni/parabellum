@@ -36,8 +36,18 @@ impl EsScheduledActionWorker {
     }
 
     pub async fn process_due_once(&self) -> Result<usize, mini_cqrs_es::CqrsError> {
-        self.service
+        let processed = self
+            .service
             .process_due_actions(chrono::Utc::now(), self.batch_limit)
-            .await
+            .await?;
+        if processed > 0 {
+            info!(
+                action = "scheduler_tick_processed",
+                processed,
+                batch_limit = self.batch_limit,
+                "scheduled action worker tick processed actions"
+            );
+        }
+        Ok(processed)
     }
 }

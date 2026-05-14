@@ -201,10 +201,11 @@ pub trait VillageQueryPort: Send + Sync {
         page: i64,
         per_page: i64,
     ) -> Result<LeaderboardPage, ApplicationError>;
-    async fn list_village_models_by_player_id(
+    async fn list_villages_by_player_id(
         &self,
         player_id: Uuid,
     ) -> Result<Vec<VillageModel>, ApplicationError>;
+    async fn get_village_model(&self, village_id: u32) -> Result<VillageModel, ApplicationError>;
     async fn get_map_region(
         &self,
         center_x: i32,

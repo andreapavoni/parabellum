@@ -5,18 +5,18 @@ use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
-pub struct PostgresReportReadModelRepository {
+pub struct PostgresReportRepository {
     pool: PgPool,
 }
 
-impl PostgresReportReadModelRepository {
+impl PostgresReportRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait::async_trait]
-impl ReportRepository for PostgresReportReadModelRepository {
+impl ReportRepository for PostgresReportRepository {
     async fn add_projected(
         &self,
         report: &ProjectedReport,

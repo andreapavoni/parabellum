@@ -108,10 +108,7 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
             .unwrap();
         assert_eq!(second_processed, 0);
 
-        let models = service
-            .list_village_models_by_player_id(player_id)
-            .await
-            .unwrap();
+        let models = service.list_villages_by_player_id(player_id).await.unwrap();
         assert_eq!(models.len(), 2);
         assert!(models.iter().any(|v| v.village_id == village_id));
         assert!(models.iter().any(|v| v.village_id == second_village_id));
@@ -181,12 +178,10 @@ async fn village_es_service_trains_units_in_batched_sequence() {
             .get_village_training_queue(village_id)
             .await
             .unwrap();
-        assert_eq!(queue_after_first.len(), 2);
-        assert!(queue_after_first[0].execute_at <= queue_after_first[1].execute_at);
+        assert_eq!(queue_after_first.len(), 1);
 
         let second_due = queue_after_first
             .iter()
-            .filter(|a| a.status == ScheduledActionStatus::Pending)
             .map(|a| a.execute_at)
             .min()
             .expect("training queue should have one pending action after first completion");
@@ -214,7 +209,7 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(completed_training_after_second, 2);
         assert_eq!(pending_training_after_second, 0);
 
-        let village = service.get_village_model(village_id).await.unwrap();
+        let village = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&village, 0), 2);
     })
     .await;
@@ -277,7 +272,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
             .unwrap();
         assert_eq!(completed_smithy, 1);
 
-        let model = service.get_village_model(village_id).await.unwrap();
+        let model = service.get_village(village_id).await.unwrap();
         let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
         let idx = hydrated
             .tribe
@@ -355,7 +350,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         assert_eq!(academy_completed, 1);
         assert_eq!(academy_pending, 0);
 
-        let model = service.get_village_model(village_id).await.unwrap();
+        let model = service.get_village(village_id).await.unwrap();
         let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
         let idx = hydrated
             .tribe
@@ -405,7 +400,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
             .await
             .unwrap();
 
-        let source_after_schedule = service.get_village_model(village_id).await.unwrap();
+        let source_after_schedule = service.get_village(village_id).await.unwrap();
         assert_eq!(source_after_schedule.busy_merchants, 1);
         assert_eq!(source_after_schedule.stocks.lumber, 79_800);
         assert_eq!(source_after_schedule.stocks.clay, 79_950);
@@ -426,7 +421,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let processed_arrival = service.process_due_actions(due_arrival, 10).await.unwrap();
         assert_eq!(processed_arrival, 1);
 
-        let target_after_arrival = service.get_village_model(target_village_id).await.unwrap();
+        let target_after_arrival = service.get_village(target_village_id).await.unwrap();
         assert_eq!(target_after_arrival.stocks.lumber, 10_200);
         assert_eq!(target_after_arrival.stocks.clay, 10_050);
         assert_eq!(target_after_arrival.stocks.iron, 10_120);
@@ -435,7 +430,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let due_return = chrono::Utc::now() + chrono::Duration::minutes(15);
         let processed_return = service.process_due_actions(due_return, 10).await.unwrap();
         assert_eq!(processed_return, 1);
-        let source_after_return = service.get_village_model(village_id).await.unwrap();
+        let source_after_return = service.get_village(village_id).await.unwrap();
         assert_eq!(source_after_return.busy_merchants, 0);
     })
     .await;
@@ -606,7 +601,7 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             .await
             .unwrap();
 
-        let before_arrival = service.get_village_model(village_id).await.unwrap();
+        let before_arrival = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&before_arrival, 0), 0);
         assert_eq!(troops_sum(&before_arrival.deployed_armies, 0), 0);
 
@@ -616,7 +611,7 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             .unwrap();
         assert_eq!(first_processed, 1);
 
-        let after_arrival = service.get_village_model(village_id).await.unwrap();
+        let after_arrival = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&after_arrival, 0), 0);
         assert_eq!(troops_sum(&after_arrival.deployed_armies, 0), 1);
 
@@ -626,7 +621,7 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             .unwrap();
         assert_eq!(second_processed, 1);
 
-        let after_return = service.get_village_model(village_id).await.unwrap();
+        let after_return = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&after_return, 0), 1);
         assert_eq!(troops_sum(&after_return.deployed_armies, 0), 0);
     })
@@ -687,7 +682,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
         let returns_at = now + chrono::Duration::seconds(4);
-        let source = service.get_village_model(village_id).await.unwrap();
+        let source = service.get_village(village_id).await.unwrap();
         let mut arriving_army = source.army.clone().unwrap();
         arriving_army.update_units(&TroopSet::default());
         let arrival_action_id = Uuid::new_v4();
@@ -832,7 +827,7 @@ async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
             .await
             .unwrap();
 
-        let source_after_return = service.get_village_model(village_id).await.unwrap();
+        let source_after_return = service.get_village(village_id).await.unwrap();
         assert!(source_after_return.stocks.lumber <= source_after_return.stocks.warehouse_capacity);
         assert!(source_after_return.stocks.clay <= source_after_return.stocks.warehouse_capacity);
         assert!(source_after_return.stocks.iron <= source_after_return.stocks.warehouse_capacity);
@@ -1025,7 +1020,7 @@ async fn village_es_service_attack_bounty_respects_source_capacity() {
             .await
             .unwrap();
 
-        let after = service.get_village_model(village_id).await.unwrap();
+        let after = service.get_village(village_id).await.unwrap();
         assert!(after.stocks.lumber <= 800);
         assert!(after.stocks.clay <= 800);
         assert!(after.stocks.iron <= 800);
@@ -1135,7 +1130,7 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             .unwrap();
         assert_eq!(second_processed, 1);
 
-        let after_return = service.get_village_model(village_id).await.unwrap();
+        let after_return = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&after_return, 3), 1);
         assert_eq!(troops_sum(&after_return.deployed_armies, 3), 0);
     })

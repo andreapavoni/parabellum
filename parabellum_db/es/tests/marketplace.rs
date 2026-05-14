@@ -79,7 +79,7 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
             .expect("offer creation should succeed");
 
         let owner_after_create = service
-            .get_village_model(owner_village_id)
+            .get_village(owner_village_id)
             .await
             .expect("owner model should be readable");
         assert_eq!(owner_after_create.stocks.lumber, 79_000);
@@ -119,7 +119,7 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
         );
 
         let owner_after_accept = service
-            .get_village_model(owner_village_id)
+            .get_village(owner_village_id)
             .await
             .expect("owner model should be readable");
         assert_eq!(
@@ -129,7 +129,7 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
         assert_eq!(owner_after_accept.busy_merchants, 2);
 
         let acceptor_after_accept = service
-            .get_village_model(acceptor_village_id)
+            .get_village(acceptor_village_id)
             .await
             .expect("acceptor model should be readable");
         assert_eq!(acceptor_after_accept.stocks.iron, 79_100);
@@ -172,7 +172,7 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
             .expect("offer creation should succeed");
 
         let owner_after_create = service
-            .get_village_model(owner_village_id)
+            .get_village(owner_village_id)
             .await
             .expect("owner model should be readable after create");
         assert_eq!(owner_after_create.stocks.clay, 78_800);
@@ -191,7 +191,7 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
             .expect("offer cancellation should succeed");
 
         let owner_after_cancel = service
-            .get_village_model(owner_village_id)
+            .get_village(owner_village_id)
             .await
             .expect("owner model should be readable after cancel");
         assert_eq!(owner_after_cancel.stocks.clay, 80_000);

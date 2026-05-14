@@ -43,21 +43,26 @@ async fn setup_app() -> Result<
 
     setup_world_map(&db_pool, &config).await?;
 
-    let identity = Arc::new(IdentityService::new(db_pool.clone(), config.clone()));
     let village_service = VillageEsService::new(db_pool.clone());
-    let villages_adapter = Arc::new(VillageEsAdapter::new(
-        village_service.clone(),
-        config.clone(),
-    ));
-    let game_app = Arc::new(GameApplication::new(
+    let game_app = build_game_application(db_pool.clone(), config.clone(), village_service.clone());
+    let es_worker = Arc::new(EsScheduledActionWorker::new(village_service, 1000));
+
+    Ok((config, game_app, es_worker, db_pool))
+}
+
+fn build_game_application(
+    db_pool: PgPool,
+    config: Arc<Config>,
+    village_service: VillageEsService,
+) -> Arc<GameApplication> {
+    let identity = Arc::new(IdentityService::new(db_pool, config.clone()));
+    let villages_adapter = Arc::new(VillageEsAdapter::new(village_service, config));
+    Arc::new(GameApplication::new(
         identity,
         villages_adapter.clone(),
         villages_adapter.clone(),
         villages_adapter,
-    ));
-    let es_worker = Arc::new(EsScheduledActionWorker::new(village_service, 1000));
-
-    Ok((config, game_app, es_worker, db_pool))
+    ))
 }
 
 async fn setup_world_map(pool: &PgPool, config: &Config) -> Result<(), ApplicationError> {

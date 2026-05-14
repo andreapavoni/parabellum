@@ -3,12 +3,13 @@ use mini_cqrs_es::{Cqrs, CqrsError};
 use crate::villages::{
     AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
     CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteMerchantsArrival, CompleteMerchantsReturn,
-    CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch, CompleteTrainUnit,
-    CompleteUpgradeBuilding, ConquerVillage, CreateMarketplaceOffer, DowngradeBuilding,
-    FoundVillage, RecallReinforcements, ReinforcementArrived, ReleaseReinforcements,
-    ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
+    CompleteDowngradeBuilding, CompleteHeroRevival, CompleteMerchantsArrival,
+    CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
+    CompleteTrainUnit, CompleteUpgradeBuilding, ConquerVillage, CreateHero, CreateMarketplaceOffer,
+    DowngradeBuilding, FoundVillage, RecallReinforcements, ReinforcementArrived,
+    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
+    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
+    UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {
@@ -76,6 +77,32 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         command: &SendMerchantsTransfer,
     ) -> Result<u32, CqrsError> {
         self.cqrs.execute(&village_id, command).await
+    }
+
+    pub async fn create_hero(
+        &self,
+        village_id: u32,
+        command: &CreateHero,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute::<CreateHero>(&village_id, command).await
+    }
+
+    pub async fn revive_hero(
+        &self,
+        village_id: u32,
+        command: &ReviveHero,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute::<ReviveHero>(&village_id, command).await
+    }
+
+    pub async fn complete_hero_revival(
+        &self,
+        village_id: u32,
+        command: &CompleteHeroRevival,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<CompleteHeroRevival>(&village_id, command)
+            .await
     }
 
     pub async fn reinforcement_arrived(

@@ -42,7 +42,7 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
                 .unwrap();
         }
 
-        let source_before = service.get_village_model(source_village_id).await.unwrap();
+        let source_before = service.get_village(source_village_id).await.unwrap();
         assert_eq!(
             source_before.army.as_ref().map(|a| a.units().get(9)),
             Some(3)
@@ -69,7 +69,7 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
             .await
             .unwrap();
 
-        let source_after = service.get_village_model(source_village_id).await.unwrap();
+        let source_after = service.get_village(source_village_id).await.unwrap();
         let after = source_after.stocks.clone();
         assert_eq!(
             source_after
@@ -145,7 +145,7 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
             .await
             .unwrap();
 
-        let founded = service.get_village_model(target_field_id).await.unwrap();
+        let founded = service.get_village(target_field_id).await.unwrap();
         assert_eq!(founded.player_id, player_id);
         assert_eq!(founded.village_name, "Colony");
         assert_eq!(founded.position, target_position);
@@ -204,10 +204,7 @@ async fn village_es_service_settlers_arrival_on_occupied_target_is_cancelled() {
         .await
         .2;
 
-        let occupied_before = service
-            .get_village_model(occupied_village_id)
-            .await
-            .unwrap();
+        let occupied_before = service.get_village(occupied_village_id).await.unwrap();
 
         service
             .send_settlers(
@@ -233,10 +230,7 @@ async fn village_es_service_settlers_arrival_on_occupied_target_is_cancelled() {
             .unwrap();
         assert_eq!(processed, 1);
 
-        let occupied_after = service
-            .get_village_model(occupied_village_id)
-            .await
-            .unwrap();
+        let occupied_after = service.get_village(occupied_village_id).await.unwrap();
         assert_eq!(occupied_after.player_id, occupied_before.player_id);
         assert_eq!(occupied_after.village_name, occupied_before.village_name);
     })
@@ -333,7 +327,7 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             .unwrap();
         assert_eq!(processed_first, 1);
 
-        let founded = service.get_village_model(target_field_id).await.unwrap();
+        let founded = service.get_village(target_field_id).await.unwrap();
         assert_eq!(founded.player_id, player_a);
         assert_eq!(founded.village_name, "First Colony");
         assert_eq!(founded.tribe, Tribe::Roman);
@@ -344,7 +338,7 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             .unwrap();
         assert_eq!(processed_second, 1);
 
-        let founded_after_second = service.get_village_model(target_field_id).await.unwrap();
+        let founded_after_second = service.get_village(target_field_id).await.unwrap();
         assert_eq!(founded_after_second.player_id, player_a);
         assert_eq!(founded_after_second.village_name, "First Colony");
         assert_eq!(founded_after_second.tribe, Tribe::Roman);

@@ -326,17 +326,7 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
             .unwrap();
         assert!(reread.read_at.is_some());
 
-        let legacy_count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*)
-            FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = 'reports'
-            "#,
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(legacy_count, 0);
+        assert_eq!(reports[0].report_type, "battle");
     })
     .await;
 }
@@ -431,20 +421,19 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
             .await
             .unwrap();
 
-        let reinforcement_reports: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM rm_reports WHERE report_type = 'reinforcement'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let player_reports = service
+            .list_reports_for_player(attacker_player_id, 20)
+            .await
+            .unwrap();
+        let reinforcement_reports = player_reports
+            .iter()
+            .filter(|r| r.report_type == "reinforcement")
+            .count();
+        let merchant_reports = player_reports
+            .iter()
+            .filter(|r| r.report_type == "marketplace_delivery")
+            .count();
         assert_eq!(reinforcement_reports, 1);
-
-        let merchant_reports: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM rm_reports WHERE report_type = 'marketplace_delivery'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
         assert_eq!(merchant_reports, 1);
     })
     .await;

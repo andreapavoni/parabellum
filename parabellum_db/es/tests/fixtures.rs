@@ -78,6 +78,10 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM rm_heroes")
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM rm_scheduled_actions")
         .execute(pool)
         .await

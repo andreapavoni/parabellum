@@ -168,6 +168,28 @@ pub mod tests {
 
             Ok(region)
         }
+
+        async fn get_region_tile_by_field_id(
+            &self,
+            field_id: i32,
+        ) -> Result<Option<MapRegionTile>, ApplicationError> {
+            let fields = self.fields.lock().unwrap();
+            Ok(fields.get(&(field_id as u32)).map(|field| MapRegionTile {
+                field: field.clone(),
+                village_name: None,
+                village_population: None,
+                player_name: None,
+                tribe: None,
+            }))
+        }
+
+        async fn is_unoccupied_valley(&self, field_id: i32) -> Result<bool, ApplicationError> {
+            let fields = self.fields.lock().unwrap();
+            Ok(fields
+                .get(&(field_id as u32))
+                .map(|f| f.village_id.is_none())
+                .unwrap_or(false))
+        }
     }
 
     fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
