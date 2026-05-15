@@ -16,8 +16,8 @@ name = "parabellum-replay"
 path = "bin/parabellum_replay.rs"
 
 [[bin]]
-name = "parabellum-dev-seed"
-path = "bin/parabellum_dev_seed.rs"
+name = "parabellum-seed"
+path = "bin/parabellum_seed.rs"
 
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }

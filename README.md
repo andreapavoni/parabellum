@@ -66,11 +66,11 @@ Want to get the server running locally? Here’s how.
 5.  **(optional) Seed game data:**
     ```sh
     # Uses seed/game.json by default
-    cargo run -p parabellum_server --bin parabellum-dev-seed
+    cargo run -p parabellum_server --bin parabellum-seed
     ```
     You can also pass a custom data file and a username override:
     ```sh
-    cargo run -p parabellum_server --bin parabellum-dev-seed -- --file seed/dev.json --username andrea
+    cargo run -p parabellum_server --bin parabellum-seed -- --file seed/dev.json --username andrea
     ```
     The seeder creates (or reuses) a user/player and prepares one developed village according to the JSON file.
     Login defaults are deterministic: email is `<username>@example.com`, password is `<username>`.
@@ -224,7 +224,7 @@ The project is structured as a Cargo workspace with several distinct crates:
 * `parabellum_server`: The main binary executable. This is the entry point that ties everything together.
   - Binary entrypoints live in `parabellum_server/bin/`:
     - `parabellum` (server runtime)
-    - `parabellum-dev-seed` (development seed tool)
+    - `parabellum-seed` (seed tool)
     - `parabellum-replay` (event replay tool)
 
 ### Infrastructure
