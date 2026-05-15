@@ -342,6 +342,22 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
         assert_eq!(founded_after_second.player_id, player_a);
         assert_eq!(founded_after_second.village_name, "First Colony");
         assert_eq!(founded_after_second.tribe, Tribe::Roman);
+
+        let map_field = service.get_map_field(target_field_id).await.unwrap();
+        assert_eq!(map_field.id, target_field_id);
+        assert_eq!(map_field.village_id, Some(target_field_id));
+        assert_eq!(map_field.player_id, Some(player_a));
+
+        let map_tile = service
+            .get_map_region_tile_by_field_id(target_field_id)
+            .await
+            .unwrap()
+            .expect("founded village map tile should exist");
+        assert_eq!(map_tile.field.id, target_field_id);
+        assert_eq!(map_tile.field.village_id, Some(target_field_id));
+        assert_eq!(map_tile.field.player_id, Some(player_a));
+        assert_eq!(map_tile.village_name.as_deref(), Some("First Colony"));
+        assert_eq!(map_tile.tribe, Some(Tribe::Roman));
     })
     .await;
 }

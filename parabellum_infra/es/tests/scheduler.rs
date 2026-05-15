@@ -1397,6 +1397,18 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             .await
             .unwrap();
         assert_eq!(first_processed, 1);
+        let after_scout_arrival = service.get_village(village_id).await.unwrap();
+        assert_eq!(
+            troops_sum(&after_scout_arrival.deployed_armies, 3),
+            0,
+            "returning scout army must not be projected as deployed reinforcement"
+        );
+        let movements_after_scout_arrival = service
+            .get_village_troop_movements(village_id)
+            .await
+            .unwrap();
+        assert_eq!(movements_after_scout_arrival.incoming.len(), 1);
+        assert!(movements_after_scout_arrival.outgoing.is_empty());
 
         let second_processed = service
             .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)

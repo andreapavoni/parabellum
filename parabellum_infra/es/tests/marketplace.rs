@@ -219,3 +219,93 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn village_es_service_marketplace_offer_accept_closes_offer_and_rejects_cancel() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_owner_user_id, owner_player_id, owner_village_id) = setup_village(
+            &pool,
+            &service,
+            "owner-accept",
+            Position { x: 2, y: 2 },
+            Tribe::Roman,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_acceptor_user_id, acceptor_player_id, acceptor_village_id) = setup_village(
+            &pool,
+            &service,
+            "acceptor-accept",
+            Position { x: 12, y: 12 },
+            Tribe::Gaul,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .create_marketplace_offer(
+                owner_village_id,
+                &CreateMarketplaceOffer {
+                    player_id: owner_player_id,
+                    offer_resources: ResourceQuantity::new(ResourceKind::Iron, 1_000),
+                    seek_resources: ResourceQuantity::new(ResourceKind::Crop, 900),
+                },
+            )
+            .await
+            .unwrap();
+
+        let offer = service.get_open_marketplace_offers().await.unwrap()[0].clone();
+        service
+            .accept_marketplace_offer(
+                acceptor_village_id,
+                acceptor_player_id,
+                offer.offer_id,
+                Utc::now() + Duration::minutes(3),
+                Utc::now() + Duration::minutes(3),
+            )
+            .await
+            .unwrap();
+
+        let cancel_after_accept = service
+            .cancel_marketplace_offer(owner_village_id, owner_player_id, offer.offer_id)
+            .await;
+        assert!(
+            cancel_after_accept.is_err(),
+            "accepted offer must not be cancellable"
+        );
+
+        let offer_after_accept = service.get_marketplace_offer(offer.offer_id).await.unwrap();
+        assert_eq!(
+            offer_after_accept.status,
+            parabellum_app::villages::models::MarketplaceOfferStatus::Accepted
+        );
+        assert!(
+            service.get_open_marketplace_offers().await.unwrap().is_empty(),
+            "accepted offer must not remain in open marketplace list"
+        );
+
+        service
+            .process_due_actions(Utc::now() + Duration::minutes(20), 200)
+            .await
+            .unwrap();
+
+        let owner_after_roundtrip = service.get_village(owner_village_id).await.unwrap();
+        let acceptor_after_roundtrip = service.get_village(acceptor_village_id).await.unwrap();
+        assert_eq!(owner_after_roundtrip.busy_merchants, 0);
+        assert_eq!(acceptor_after_roundtrip.busy_merchants, 0);
+    })
+    .await;
+}

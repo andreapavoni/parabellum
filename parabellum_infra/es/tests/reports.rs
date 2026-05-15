@@ -218,6 +218,28 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
             .unwrap();
         assert_eq!(defender_reports.len(), 1);
         assert_eq!(defender_reports[0].id, attacker_reports[0].id);
+
+        service
+            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
+            .await
+            .unwrap();
+
+        let attacker_reports_after_return = service
+            .list_reports_for_player(attacker_player_id, 10)
+            .await
+            .unwrap();
+        let defender_reports_after_return = service
+            .list_reports_for_player(defender_player_id, 10)
+            .await
+            .unwrap();
+        assert_eq!(attacker_reports_after_return.len(), 1);
+        assert_eq!(defender_reports_after_return.len(), 1);
+
+        let source_after_return = service.get_village(source_village_id).await.unwrap();
+        assert!(
+            source_after_return.deployed_armies.is_empty(),
+            "attack return must not remain projected as deployed reinforcement"
+        );
     })
     .await;
 }
