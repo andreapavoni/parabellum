@@ -1,3 +1,9 @@
+//! Application service that orchestrates game use cases.
+//!
+//! `GameApplication` is the only entrypoint used by the HTTP layer.
+//! It composes identity, command, query, and scheduler ports and delegates
+//! each use case to the proper adapter implementation.
+
 use std::sync::Arc;
 
 use parabellum_types::common::{Player, User};
@@ -19,6 +25,7 @@ use crate::ports::{
 };
 
 #[derive(Clone)]
+/// High-level application facade for game, identity, and scheduler use cases.
 pub struct GameApplication {
     identity: Arc<dyn IdentityPort>,
     villages: Arc<dyn VillageCommandPort>,
@@ -27,6 +34,7 @@ pub struct GameApplication {
 }
 
 impl GameApplication {
+    /// Creates a new application facade from its required ports.
     pub fn new(
         identity: Arc<dyn IdentityPort>,
         villages: Arc<dyn VillageCommandPort>,

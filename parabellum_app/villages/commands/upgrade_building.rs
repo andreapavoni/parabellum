@@ -22,7 +22,7 @@ impl Command for UpgradeBuilding {
                 player_id: self.player_id,
             }));
         }
-        let (building_name, next_level, duration_secs) = aggregate
+        let (building_name, next_level, duration_secs, cost) = aggregate
             .village()
             .schedule_upgrade_building(self.slot_id, self.speed)
             .map_err(as_domain_error)?;
@@ -38,6 +38,7 @@ impl Command for UpgradeBuilding {
             building_name,
             level: next_level,
             speed: self.speed,
+            cost,
             execute_at,
         }])
     }
@@ -159,6 +160,7 @@ mod tests {
                 building_name: BuildingName::Granary,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(1),
             })
             .await;
@@ -171,6 +173,7 @@ mod tests {
                 building_name: BuildingName::Warehouse,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(2),
             })
             .await;
@@ -201,6 +204,7 @@ mod tests {
                 building_name: BuildingName::Cranny,
                 level: 3,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: first_eta,
             })
             .await;
@@ -214,9 +218,13 @@ mod tests {
         .await
         .unwrap();
 
-        let VillageEvent::BuildingUpgradeScheduled { execute_at, .. } = &events[0] else {
+        let VillageEvent::BuildingUpgradeScheduled {
+            execute_at, level, ..
+        } = &events[0]
+        else {
             panic!("expected BuildingUpgradeScheduled");
         };
         assert!(*execute_at > first_eta);
+        assert_eq!(*level, 4);
     }
 }

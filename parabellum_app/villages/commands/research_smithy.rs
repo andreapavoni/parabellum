@@ -23,7 +23,7 @@ impl Command for ResearchSmithy {
             }));
         }
 
-        let duration_secs = aggregate
+        let (duration_secs, cost) = aggregate
             .village()
             .schedule_smithy_research(self.unit.clone(), self.speed)
             .map_err(as_domain_error)?;
@@ -36,6 +36,7 @@ impl Command for ResearchSmithy {
             player_id: self.player_id,
             village_id: aggregate.aggregate_id(),
             unit: self.unit.clone(),
+            cost,
             execute_at,
         }])
     }

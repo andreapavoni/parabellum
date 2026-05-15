@@ -23,7 +23,7 @@ impl Command for AddBuilding {
                 player_id: self.player_id,
             }));
         }
-        let duration_secs = aggregate
+        let (duration_secs, cost) = aggregate
             .village()
             .schedule_add_building(self.slot_id, self.building_name.clone(), self.speed)
             .map_err(as_domain_error)?;
@@ -39,6 +39,7 @@ impl Command for AddBuilding {
             building_name: self.building_name.clone(),
             level: 1,
             speed: self.speed,
+            cost,
             execute_at,
         }])
     }
@@ -94,6 +95,7 @@ mod tests {
                 building_name: BuildingName::Cranny,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(1),
             })
             .await;
@@ -106,6 +108,7 @@ mod tests {
                 building_name: BuildingName::Granary,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(2),
             })
             .await;
@@ -136,6 +139,7 @@ mod tests {
                 building_name: BuildingName::Palace,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: Utc::now() + Duration::minutes(1),
             })
             .await;
@@ -167,6 +171,7 @@ mod tests {
                 building_name: BuildingName::Cranny,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: first_eta,
             })
             .await;

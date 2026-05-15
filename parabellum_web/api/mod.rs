@@ -10,6 +10,7 @@ pub mod dto;
 mod error_mapping;
 pub mod errors;
 pub mod game;
+pub mod openapi;
 mod helpers;
 
 pub use helpers::{authenticated_user, bearer_token};

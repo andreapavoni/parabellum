@@ -2,7 +2,7 @@
 members = [
     "parabellum_game",
     "parabellum_app",
-    "parabellum_db",
+    "parabellum_infra",
     "parabellum_server",
     "parabellum_types",
     "parabellum_web"

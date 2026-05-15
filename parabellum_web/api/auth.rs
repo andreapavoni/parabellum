@@ -93,6 +93,19 @@ pub async fn token_login(
     headers: HeaderMap,
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.email.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required login fields.")
+                .with_field_error("email", "Email is required"),
+        );
+    }
+    if payload.password.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required login fields.")
+                .with_field_error("password", "Password is required"),
+        );
+    }
+
     let account = state
         .game_app
         .authenticate_user(&payload.email, &payload.password)
@@ -129,6 +142,25 @@ pub async fn token_register(
     headers: HeaderMap,
     Json(payload): Json<TokenRegisterRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.username.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("username", "Username is required"),
+        );
+    }
+    if payload.email.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("email", "Email is required"),
+        );
+    }
+    if payload.password.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("password", "Password is required"),
+        );
+    }
+
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
     state
@@ -175,6 +207,13 @@ pub async fn token_refresh(
     headers: HeaderMap,
     Json(payload): Json<TokenRefreshRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.refresh_token.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Refresh token is required.")
+                .with_field_error("refresh_token", "Refresh token is required"),
+        );
+    }
+
     let (session, rotated_refresh_token) = state
         .token_service
         .rotate_refresh_session(
@@ -205,6 +244,13 @@ pub async fn token_logout(
     headers: HeaderMap,
     Json(payload): Json<TokenLogoutRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.refresh_token.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Refresh token is required.")
+                .with_field_error("refresh_token", "Refresh token is required"),
+        );
+    }
+
     state
         .token_service
         .revoke_refresh_session(&state.db_pool, &payload.refresh_token)
@@ -244,17 +290,17 @@ fn map_register_error(error: ApplicationError) -> ApiError {
             ApiError::unprocessable("Invalid password or internal password error.")
                 .with_field_error("password", "The password does not satisfy the server rules")
         }
-        ApplicationError::Db(db_err) => {
-            let err_msg = db_err.to_string();
-            if err_msg.contains("duplicate key value") || err_msg.contains("UNIQUE constraint") {
+        ApplicationError::Db(DbError::Database(sqlx::Error::Database(db))) => match db.code() {
+            Some(code) if code == "23505" => {
                 ApiError::conflict("An account with this email already exists.")
                     .with_field_error("email", "Email already exists")
-            } else if err_msg.contains("null value in column") {
-                ApiError::unprocessable("Missing required registration fields.")
-            } else {
-                internal_error("auth_register_failed", db_err)
             }
-        }
+            Some(code) if code == "23502" => {
+                ApiError::unprocessable("Missing required registration fields.")
+            }
+            _ => internal_error("auth_register_failed", db),
+        },
+        ApplicationError::Db(db_err) => internal_error("auth_register_failed", db_err),
         _ => internal_error("auth_register_failed", error),
     }
 }

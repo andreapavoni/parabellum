@@ -16,8 +16,11 @@ pub mod tests {
     };
 
     use crate::{
+        ports::{
+            identity::{PlayerRepository, UserRepository},
+            map::MapRepository,
+        },
         query_models::{MapRegionTile, PlayerLeaderboardEntry},
-        repository::{MapRepository, PlayerRepository, UserRepository},
     };
 
     #[derive(Default, Clone)]

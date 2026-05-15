@@ -33,6 +33,7 @@ use crate::{
             map_field, map_region, me_context, me_session, player_profile, report_detail, reports,
             stats, switch_village, village_overview, village_resources,
         },
+        openapi::openapi_spec,
     },
     auth_tokens::AuthTokenService,
     web::{health::health, spa::spa_shell},
@@ -114,6 +115,7 @@ impl WebRouter {
             .route("/reports/{id}", get(report_detail))
             .route("/players/{id}", get(player_profile))
             .route("/stats", get(stats))
+            .route("/openapi.json", get(openapi_spec))
             .fallback(api_not_found);
 
         let router = Router::new()

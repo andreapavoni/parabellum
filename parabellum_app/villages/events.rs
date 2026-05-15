@@ -262,6 +262,7 @@ pub enum VillageEvent {
         building_name: BuildingName,
         level: u8,
         speed: i8,
+        cost: ResourceGroup,
         execute_at: DateTime<Utc>,
     },
     BuildingUpgradeScheduled {
@@ -272,6 +273,7 @@ pub enum VillageEvent {
         building_name: BuildingName,
         level: u8,
         speed: i8,
+        cost: ResourceGroup,
         execute_at: DateTime<Utc>,
     },
     BuildingDowngradeScheduled {
@@ -319,6 +321,7 @@ pub enum VillageEvent {
         unit: UnitName,
         time_per_unit: i32,
         quantity_remaining: i32,
+        cost: ResourceGroup,
         execute_at: DateTime<Utc>,
     },
     UnitTrained {
@@ -333,6 +336,7 @@ pub enum VillageEvent {
         player_id: Uuid,
         village_id: u32,
         unit: UnitName,
+        cost: ResourceGroup,
         execute_at: DateTime<Utc>,
     },
     AcademyResearchCompleted {
@@ -346,6 +350,7 @@ pub enum VillageEvent {
         player_id: Uuid,
         village_id: u32,
         unit: UnitName,
+        cost: ResourceGroup,
         execute_at: DateTime<Utc>,
     },
     SmithyResearchCompleted {

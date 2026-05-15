@@ -30,7 +30,7 @@ impl Command for TrainUnits {
             )));
         }
 
-        let (slot_id, unit, time_per_unit) = aggregate
+        let (slot_id, unit, time_per_unit, cost) = aggregate
             .village()
             .schedule_train_units(
                 self.unit_idx,
@@ -52,6 +52,7 @@ impl Command for TrainUnits {
             unit,
             time_per_unit,
             quantity_remaining: self.quantity,
+            cost,
             execute_at,
         }])
     }
@@ -295,6 +296,7 @@ mod tests {
                 unit: UnitName::Settler,
                 time_per_unit: 60,
                 quantity_remaining: 3,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: Utc::now() + Duration::minutes(2),
             })
             .await;
@@ -326,6 +328,7 @@ mod tests {
                 unit: parabellum_types::army::UnitName::Legionnaire,
                 time_per_unit: 60,
                 quantity_remaining: 2,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: first_eta,
             })
             .await;

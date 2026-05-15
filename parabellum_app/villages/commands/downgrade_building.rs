@@ -169,6 +169,7 @@ mod tests {
                 building_name: BuildingName::Granary,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(1),
             })
             .await;
@@ -181,6 +182,7 @@ mod tests {
                 building_name: BuildingName::Warehouse,
                 level: 1,
                 speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: now + Duration::minutes(2),
             })
             .await;

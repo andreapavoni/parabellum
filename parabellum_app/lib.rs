@@ -23,7 +23,6 @@ pub mod auth;
 pub mod config;
 pub mod ports;
 pub mod query_models;
-pub mod repository;
 pub mod villages;
 
 // #[cfg(test)]

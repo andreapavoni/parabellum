@@ -35,6 +35,7 @@ pub struct VillageModel {
     pub academy_research: AcademyResearch,
     pub total_merchants: u8,
     pub busy_merchants: u8,
+    pub updated_at: DateTime<Utc>,
     pub parent_village_id: Option<u32>,
     pub army: Option<Army>,
     pub reinforcements: Vec<Army>,

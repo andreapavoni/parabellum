@@ -1,5 +1,3 @@
-use chrono::Utc;
-
 use super::models::VillageModel;
 
 impl From<VillageModel> for parabellum_game::models::village::Village {
@@ -24,7 +22,7 @@ impl From<VillageModel> for parabellum_game::models::village::Village {
             model.academy_research,
             model.culture_points,
             model.culture_points_production,
-            Utc::now(),
+            model.updated_at,
             model.parent_village_id,
         )
     }
@@ -63,6 +61,7 @@ mod tests {
             academy_research: academy.clone(),
             total_merchants: 0,
             busy_merchants: 0,
+            updated_at: chrono::Utc::now(),
             parent_village_id: None,
             army: None,
             reinforcements: vec![],

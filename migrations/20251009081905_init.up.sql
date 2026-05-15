@@ -18,15 +18,3 @@ CREATE TABLE players (
 );
 
 CREATE INDEX idx_players_user_id ON players (user_id);
-
-CREATE TABLE map_fields (
-    id INTEGER PRIMARY KEY,
-    village_id INTEGER NULL,
-    player_id UUID NULL REFERENCES players(id) ON DELETE SET NULL,
-    position JSONB NOT NULL,
-    topology JSONB NOT NULL,
-    UNIQUE(position)
-);
-
-CREATE INDEX idx_map_fields_village_id ON map_fields (village_id);
-CREATE INDEX idx_map_fields_player_id ON map_fields (player_id);

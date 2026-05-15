@@ -95,6 +95,15 @@ impl Default for VillageState {
 }
 
 impl VillageState {
+    fn deducted_cost(before: ResourceGroup, after: ResourceGroup) -> ResourceGroup {
+        ResourceGroup::new(
+            before.lumber().saturating_sub(after.lumber()),
+            before.clay().saturating_sub(after.clay()),
+            before.iron().saturating_sub(after.iron()),
+            before.crop().saturating_sub(after.crop()),
+        )
+    }
+
     pub fn founded(
         id: u32,
         name: String,
@@ -257,13 +266,17 @@ impl VillageState {
         slot_id: u8,
         building_name: BuildingName,
         speed: i8,
-    ) -> Result<i64, ApplicationError> {
+    ) -> Result<(i64, ResourceGroup), ApplicationError> {
         self.enforce_building_queue_capacity()?;
         self.ensure_add_queue_allows_building(&building_name)?;
         let mut village = self.village.clone();
+        let before = village.stored_resources();
         village
             .init_building_construction(slot_id, building_name, speed)
-            .map(|secs| secs as i64)
+            .map(|secs| {
+                let after = village.stored_resources();
+                (secs as i64, Self::deducted_cost(before, after))
+            })
             .map_err(Into::into)
     }
 
@@ -271,23 +284,33 @@ impl VillageState {
         &self,
         slot_id: u8,
         speed: i8,
-    ) -> Result<(BuildingName, u8, i64), ApplicationError> {
+    ) -> Result<(BuildingName, u8, i64, ResourceGroup), ApplicationError> {
         self.enforce_building_queue_capacity()?;
         let current = self
             .find_building_by_slot(slot_id)
             .ok_or(GameError::EmptySlot { slot_id })?;
+        let queued_upgrades_for_slot = self
+            .pending_building_actions
+            .iter()
+            .filter(|action| action.slot_id == slot_id)
+            .count() as u8;
         let max = get_building_data(&current.building.name)
             .map_err(ApplicationError::from)?
             .rules
             .max_level;
-        if current.building.level >= max {
+        let effective_level = current
+            .building
+            .level
+            .saturating_add(queued_upgrades_for_slot);
+        if effective_level >= max {
             return Err(GameError::BuildingMaxLevelReached.into());
         }
-        let next_level = current.building.level + 1;
+        let next_level = effective_level + 1;
         let target = Building::new(current.building.name.clone(), speed)
             .at_level(next_level, speed)
             .map_err(ApplicationError::from)?;
         let mut village = self.village.clone();
+        let before = village.stored_resources();
         let data = get_building_data(&current.building.name).map_err(ApplicationError::from)?;
         village
             .validate_building_requirements(data.rules.requirements)
@@ -295,11 +318,13 @@ impl VillageState {
         village
             .deduct_resources(&target.cost().resources)
             .map_err(ApplicationError::from)?;
+        let after = village.stored_resources();
         let duration_secs = target.calculate_build_time_secs(&speed, &self.main_building_level());
         Ok((
             current.building.name.clone(),
             next_level,
             duration_secs as i64,
+            Self::deducted_cost(before, after),
         ))
     }
 
@@ -377,12 +402,21 @@ impl VillageState {
         building_name: BuildingName,
         quantity: i32,
         speed: i8,
-    ) -> Result<(u8, UnitName, i32), ApplicationError> {
+    ) -> Result<(u8, UnitName, i32, ResourceGroup), ApplicationError> {
         self.validate_expansion_unit_training(unit_idx, quantity)?;
         let mut village = self.village.clone();
+        let before = village.stored_resources();
         village
             .init_unit_training(unit_idx, &building_name, quantity, speed)
-            .map(|(slot_id, unit_name, time_per_unit)| (slot_id, unit_name, time_per_unit as i32))
+            .map(|(slot_id, unit_name, time_per_unit)| {
+                let after = village.stored_resources();
+                (
+                    slot_id,
+                    unit_name,
+                    time_per_unit as i32,
+                    Self::deducted_cost(before, after),
+                )
+            })
             .map_err(Into::into)
     }
 
@@ -598,7 +632,7 @@ impl VillageState {
         &self,
         unit: UnitName,
         speed: i8,
-    ) -> Result<i64, ApplicationError> {
+    ) -> Result<(i64, ResourceGroup), ApplicationError> {
         if self.pending_academy_actions.len() >= 2 {
             return Err(AppError::QueueLimitReached { queue: "academy" }.into());
         }
@@ -615,9 +649,13 @@ impl VillageState {
         }
 
         let mut village = self.village.clone();
+        let before = village.stored_resources();
         village
             .init_academy_research(&unit, speed)
-            .map(|secs| secs as i64)
+            .map(|secs| {
+                let after = village.stored_resources();
+                (secs as i64, Self::deducted_cost(before, after))
+            })
             .map_err(Into::into)
     }
 
@@ -659,7 +697,7 @@ impl VillageState {
         &self,
         unit: UnitName,
         speed: i8,
-    ) -> Result<i64, ApplicationError> {
+    ) -> Result<(i64, ResourceGroup), ApplicationError> {
         if self.pending_smithy_actions.len() >= 2 {
             return Err(AppError::QueueLimitReached { queue: "smithy" }.into());
         }
@@ -676,9 +714,13 @@ impl VillageState {
         }
 
         let mut village = self.village.clone();
+        let before = village.stored_resources();
         village
             .init_smithy_research(&unit, speed)
-            .map(|secs| secs as i64)
+            .map(|secs| {
+                let after = village.stored_resources();
+                (secs as i64, Self::deducted_cost(before, after))
+            })
             .map_err(Into::into)
     }
 

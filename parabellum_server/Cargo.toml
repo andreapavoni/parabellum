@@ -9,16 +9,20 @@ keywords = { workspace = true }
 
 [[bin]]
 name = "parabellum"
-path = "main.rs"
+path = "bin/parabellum.rs"
 
 [[bin]]
 name = "parabellum-replay"
-path = "replay.rs"
+path = "bin/parabellum_replay.rs"
+
+[[bin]]
+name = "parabellum-dev-seed"
+path = "bin/parabellum_dev_seed.rs"
 
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }
-parabellum_db = { path = "../parabellum_db" }
+parabellum_infra = { path = "../parabellum_infra" }
 parabellum_app = { path = "../parabellum_app" }
 parabellum_web = { path = "../parabellum_web" }
 

@@ -1,5 +1,6 @@
 use chrono::Duration;
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
+use parabellum_types::common::ResourceGroup;
 use parabellum_types::{army::UnitName, errors::AppError};
 use uuid::Uuid;
 
@@ -50,6 +51,7 @@ impl Command for CompleteTrainUnit {
                 unit: self.unit.clone(),
                 time_per_unit: self.time_per_unit,
                 quantity_remaining: remaining_after,
+                cost: ResourceGroup::new(0, 0, 0, 0),
                 execute_at: self.execute_at + Duration::seconds(self.time_per_unit.max(1) as i64),
             });
         }

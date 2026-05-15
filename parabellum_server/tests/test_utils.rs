@@ -8,7 +8,7 @@ pub mod tests {
     use uuid::Uuid;
 
     use parabellum_app::{application::GameApplication, config::Config};
-    use parabellum_db::{
+    use parabellum_infra::{
         adapters::VillageEsAdapter, bootstrap_world_map, es::VillageEsService,
         identity::IdentityService,
     };

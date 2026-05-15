@@ -12,6 +12,9 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
         ApplicationError::Db(db_err) => match db_err {
             DbError::VillageNotFound(_) => ApiError::not_found("Village not found"),
             DbError::PlayerNotFound(_) => ApiError::not_found("Player not found"),
+            DbError::ArmyNotFound(_) => ApiError::not_found("Army not found"),
+            DbError::HeroNotFound(_) => ApiError::not_found("Hero not found"),
+            DbError::MarketplaceOfferNotFound(_) => ApiError::not_found("Marketplace offer not found"),
             DbError::MapFieldNotFound(_) => ApiError::not_found("Map field not found"),
             DbError::UserByIdNotFound(_) | DbError::UserByEmailNotFound(_) => {
                 ApiError::not_found("User not found")
