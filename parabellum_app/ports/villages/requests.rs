@@ -1,9 +1,7 @@
-use async_trait::async_trait;
 use parabellum_types::army::{TroopSet, UnitName};
 use parabellum_types::battle::{AttackType, ScoutingTarget};
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::{ResourceGroup, ResourceQuantity};
-use parabellum_types::errors::ApplicationError;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
@@ -146,50 +144,4 @@ pub struct ReviveHeroRequest {
     pub player_id: Uuid,
     pub village_id: u32,
     pub reset: bool,
-}
-
-#[async_trait]
-pub trait VillageCommandPort: Send + Sync {
-    async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError>;
-    async fn upgrade_building(
-        &self,
-        request: UpgradeBuildingRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn train_units(&self, request: TrainUnitsRequest) -> Result<(), ApplicationError>;
-    async fn research_academy(
-        &self,
-        request: ResearchAcademyRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn research_smithy(&self, request: ResearchSmithyRequest)
-    -> Result<(), ApplicationError>;
-    async fn send_reinforcement(
-        &self,
-        request: SendReinforcementRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn send_attack(&self, request: SendAttackRequest) -> Result<(), ApplicationError>;
-    async fn send_scout(&self, request: SendScoutRequest) -> Result<(), ApplicationError>;
-    async fn send_settlers(&self, request: SendSettlersRequest) -> Result<(), ApplicationError>;
-    async fn recall_reinforcements(
-        &self,
-        request: RecallReinforcementsRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn release_reinforcements(
-        &self,
-        request: ReleaseReinforcementsRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn send_resources(&self, request: SendResourcesRequest) -> Result<(), ApplicationError>;
-    async fn create_offer(
-        &self,
-        request: CreateMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn accept_offer(
-        &self,
-        request: AcceptMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn cancel_offer(
-        &self,
-        request: CancelMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError>;
-    async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError>;
-    async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError>;
 }

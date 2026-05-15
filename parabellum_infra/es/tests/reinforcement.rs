@@ -266,6 +266,15 @@ async fn village_es_service_recall_reinforcements_supports_partial_split() {
         let target_after_recall = service.get_village(target_village_id).await.unwrap();
         assert_eq!(troops_sum(&source_after_recall.deployed_armies, 0), 1);
         assert_eq!(troops_sum(&target_after_recall.reinforcements, 0), 1);
+        let source_movements_after_recall = service
+            .get_village_troop_movements(source_village_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            source_movements_after_recall.incoming.len(),
+            1,
+            "partial recall should project one incoming return movement for home village"
+        );
 
         service
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(30), 10)
@@ -386,6 +395,15 @@ async fn village_es_service_release_reinforcements_supports_partial_split() {
         let target_after_release = service.get_village(target_village_id).await.unwrap();
         assert_eq!(troops_sum(&source_after_release.deployed_armies, 0), 1);
         assert_eq!(troops_sum(&target_after_release.reinforcements, 0), 1);
+        let source_movements_after_release = service
+            .get_village_troop_movements(source_village_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            source_movements_after_release.incoming.len(),
+            1,
+            "partial release should project one incoming return movement for home village"
+        );
     })
     .await;
 }

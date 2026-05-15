@@ -579,7 +579,6 @@ pub async fn building_detail(
                     0
                 };
                 let available_slots = max_slots.saturating_sub(child_villages_count as u8);
-                let settlers_at_home = user.village.count_settlers_at_home();
                 let settler_idx = user
                     .village
                     .tribe
@@ -592,6 +591,11 @@ pub async fn building_detail(
                     .map_err(|err| {
                         map_application_error("unable_to_load_village_army_state", err)
                     })?;
+                let settlers_at_home = army_state
+                    .home_army
+                    .as_ref()
+                    .map(|a| a.units().get(settler_idx))
+                    .unwrap_or(0);
                 let settlers_deployed: u32 = army_state
                     .deployed_armies
                     .iter()

@@ -444,11 +444,15 @@ impl VillageEsService {
         &self,
         village_id: u32,
     ) -> Result<VillageArmyStateView, CqrsError> {
+        // Read-model ownership contract:
+        // - rm_armies is canonical for army state queries
+        // - rm_village troop fields are not used as query authority
         let repo = PostgresArmyRepository::new(self.pool.clone());
         let home_army = repo
             .get_home_army(village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
         let reinforcements = repo
             .list_stationed_armies(village_id)
             .await

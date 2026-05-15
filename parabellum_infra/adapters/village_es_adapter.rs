@@ -17,7 +17,7 @@ use parabellum_app::{
             ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
             ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
             SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
-            VillageCommandPort,
+            VillageCommandsPort,
         },
     },
     villages::{
@@ -96,7 +96,7 @@ impl VillageEsAdapter {
 }
 
 #[async_trait]
-impl VillageCommandPort for VillageEsAdapter {
+impl VillageCommandsPort for VillageEsAdapter {
     async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {
         self.service
             .add_building(
@@ -482,7 +482,7 @@ impl VillageCommandPort for VillageEsAdapter {
         Ok(())
     }
 
-    async fn create_offer(
+    async fn create_marketplace_offer(
         &self,
         request: CreateMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
@@ -500,7 +500,7 @@ impl VillageCommandPort for VillageEsAdapter {
         Ok(())
     }
 
-    async fn accept_offer(
+    async fn accept_marketplace_offer(
         &self,
         request: AcceptMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
@@ -550,7 +550,7 @@ impl VillageCommandPort for VillageEsAdapter {
         Ok(())
     }
 
-    async fn cancel_offer(
+    async fn cancel_marketplace_offer(
         &self,
         request: CancelMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {

@@ -248,6 +248,18 @@ async fn village_es_service_trains_units_in_batched_sequence() {
                 .unwrap_or(0),
             2
         );
+
+        let home_rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM rm_armies WHERE village_id = $1 AND state = 'home'",
+        )
+        .bind(village_id as i32)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            home_rows, 1,
+            "training projection must keep exactly one canonical home army row"
+        );
     })
     .await;
 }
@@ -849,7 +861,17 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
 
         let after_arrival = service.get_village(village_id).await.unwrap();
         assert_eq!(army_units(&after_arrival, 0), 0);
-        assert_eq!(troops_sum(&after_arrival.deployed_armies, 0), 1);
+        assert_eq!(
+            troops_sum(&after_arrival.deployed_armies, 0),
+            0,
+            "returning attack army must not be projected as deployed reinforcement"
+        );
+        let movements_after_arrival = service
+            .get_village_troop_movements(village_id)
+            .await
+            .unwrap();
+        assert_eq!(movements_after_arrival.incoming.len(), 1);
+        assert!(movements_after_arrival.outgoing.is_empty());
 
         let second_processed = service
             .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
@@ -1176,7 +1198,23 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
             )
             .await
             .unwrap();
-        assert_eq!(pending_returns, 1);
+        assert_eq!(pending_returns, 0);
+
+        let movements_after_arrival = service
+            .get_village_troop_movements(village_id)
+            .await
+            .unwrap();
+        assert!(
+            movements_after_arrival.outgoing.is_empty()
+                && movements_after_arrival.incoming.is_empty(),
+            "wipeout should not leave lingering troop movements"
+        );
+
+        let source_army_state = service.get_village_army_state_view(village_id).await.unwrap();
+        assert!(
+            source_army_state.deployed_armies.is_empty(),
+            "wipeout should not leave deployed armies"
+        );
     })
     .await;
 }

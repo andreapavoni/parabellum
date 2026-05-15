@@ -97,6 +97,21 @@ impl PostgresArmyRepository {
 #[async_trait::async_trait]
 impl ArmyRepository for PostgresArmyRepository {
     async fn upsert_home(&self, army: &Army, player_id: Uuid) -> Result<(), ApplicationError> {
+        // Keep exactly one canonical home army row per village.
+        sqlx::query(
+            r#"
+            DELETE FROM rm_armies
+            WHERE village_id = $1
+              AND state = 'home'
+              AND army_id <> $2
+            "#,
+        )
+        .bind(army.village_id as i32)
+        .bind(army.id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
         self.upsert(army, army.village_id, player_id, "home").await
     }
 
@@ -132,6 +147,7 @@ impl ArmyRepository for PostgresArmyRepository {
             WHERE village_id = $1
               AND current_village_id = $1
               AND state = 'home'
+            ORDER BY updated_at DESC
             LIMIT 1
             "#,
         )
@@ -168,7 +184,7 @@ impl ArmyRepository for PostgresArmyRepository {
             SELECT payload
             FROM rm_armies
             WHERE village_id = $1
-              AND state IN ('stationed', 'moving')
+              AND state = 'stationed'
               AND current_village_id <> $1
             ORDER BY updated_at DESC
             "#,

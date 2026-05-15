@@ -261,12 +261,17 @@ pub async fn village_resources(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let village = owned_village_by_id(&state, &user, village_id).await?;
+    let army_state = state
+        .game_app
+        .get_village_army_state_view(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_army_state", e))?;
     let queues = state
         .game_app
         .get_village_queues(village.id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
-    Ok(Json(village_resources_response(&village, &queues)))
+    Ok(Json(village_resources_response(&village, &queues, &army_state)))
 }
 
 /// Switches current village and rotates access token context when bearer is present.

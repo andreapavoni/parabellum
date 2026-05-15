@@ -20,7 +20,7 @@ use crate::ports::{
         ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
         ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
         SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
-        VillageCommandPort,
+        VillageCommandsPort,
     },
 };
 
@@ -28,7 +28,7 @@ use crate::ports::{
 /// High-level application facade for game, identity, and scheduler use cases.
 pub struct GameApplication {
     identity: Arc<dyn IdentityPort>,
-    villages: Arc<dyn VillageCommandPort>,
+    villages: Arc<dyn VillageCommandsPort>,
     queries: Arc<dyn VillageQueryPort>,
     scheduler: Arc<dyn SchedulerPort>,
 }
@@ -37,7 +37,7 @@ impl GameApplication {
     /// Creates a new application facade from its required ports.
     pub fn new(
         identity: Arc<dyn IdentityPort>,
-        villages: Arc<dyn VillageCommandPort>,
+        villages: Arc<dyn VillageCommandsPort>,
         queries: Arc<dyn VillageQueryPort>,
         scheduler: Arc<dyn SchedulerPort>,
     ) -> Self {
@@ -53,7 +53,7 @@ impl GameApplication {
         &self.identity
     }
 
-    pub(crate) fn villages_port(&self) -> &Arc<dyn VillageCommandPort> {
+    pub(crate) fn villages_port(&self) -> &Arc<dyn VillageCommandsPort> {
         &self.villages
     }
 
@@ -174,21 +174,21 @@ impl GameApplication {
         &self,
         request: CreateMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().create_offer(request).await
+        self.villages_port().create_marketplace_offer(request).await
     }
 
     pub async fn accept_marketplace_offer(
         &self,
         request: AcceptMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().accept_offer(request).await
+        self.villages_port().accept_marketplace_offer(request).await
     }
 
     pub async fn cancel_marketplace_offer(
         &self,
         request: CancelMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().cancel_offer(request).await
+        self.villages_port().cancel_marketplace_offer(request).await
     }
 
     pub async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError> {

@@ -20,6 +20,7 @@ use crate::establish_test_connection_pool;
 
 static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
 static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
+const TEST_DB_ADVISORY_LOCK_KEY: i64 = 9_842_771;
 
 pub async fn setup_pool() -> sqlx::PgPool {
     // Run embedded migrations once for the shared test database.
@@ -46,10 +47,26 @@ where
     F: FnOnce(sqlx::PgPool) -> Fut,
     Fut: std::future::Future<Output = T>,
 {
-    // DB mutex guarantees isolated integration-test state for shared IDs.
+    // In-process serialization.
     let _guard = TEST_DB_MUTEX.lock().await;
     let pool = setup_pool().await;
-    f(pool).await
+    // Cross-process serialization (multiple `cargo test` processes sharing TEST_DATABASE_URL).
+    let mut lock_conn = pool.acquire().await.expect("failed to acquire test lock connection");
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(TEST_DB_ADVISORY_LOCK_KEY)
+        .execute(&mut *lock_conn)
+        .await
+        .expect("failed to acquire test advisory lock");
+
+    let result = f(pool).await;
+
+    // Best-effort unlock; lock also auto-releases when `lock_conn` is dropped.
+    let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(TEST_DB_ADVISORY_LOCK_KEY)
+        .execute(&mut *lock_conn)
+        .await;
+
+    result
 }
 
 pub async fn reset_tables(pool: &sqlx::PgPool) {

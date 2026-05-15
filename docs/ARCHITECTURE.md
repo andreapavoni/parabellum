@@ -52,6 +52,23 @@ Parabellum is a multiplayer strategy game backend organized as a layered CQRS/ES
   - scheduler does not mutate state directly; it issues completion commands.
 - Read models are query sources (`rm_village`, `rm_armies`, `rm_village_movements`, `rm_reports`, `rm_map_fields`, etc.).
 
+## Read-Model Ownership Contract
+
+To avoid drift, each gameplay concern has exactly one canonical read-model owner:
+
+- `rm_armies`:
+  - canonical source for troop state (`home`, `stationed`, `moving`)
+  - canonical source for UI troop availability and army cards
+- `rm_village_movements`:
+  - canonical source for movement timeline (outgoing/incoming/return)
+- `rm_village`:
+  - canonical source for village economy/buildings/production/research
+  - `army`/`reinforcements`/`deployed_armies` fields are compatibility snapshots, not query authority
+
+Command-side rule:
+- `VillageAggregate` remains fully aware of army data for invariants and domain behavior.
+- Projectors materialize that state into read models with the ownership split above.
+
 ## Game World Data
 
 - `rm_map_fields` is the canonical world map table.

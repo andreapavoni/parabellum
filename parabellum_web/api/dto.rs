@@ -177,7 +177,7 @@ pub struct VillageResourcesResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-/// Stationed home-army troop entry for resources page.
+/// Troop entry aggregated for resources page.
 pub struct CurrentTroopDto {
     pub unit_name: String,
     pub count: u32,
@@ -387,18 +387,16 @@ fn resource_slots(
         .collect()
 }
 
-fn current_troops(village: &Village) -> Vec<CurrentTroopDto> {
-    let Some(army) = village.army() else {
-        return vec![];
-    };
-
-    army.units()
-        .units()
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, count)| {
+fn current_troops(
+    army_state: &parabellum_app::ports::queries::VillageArmyStateView,
+) -> Vec<CurrentTroopDto> {
+    // Troop counters are derived from rm_armies-backed state view
+    // (home + stationed reinforcements), not from rm_village snapshots.
+    let mut grouped: std::collections::BTreeMap<String, u32> = std::collections::BTreeMap::new();
+    let mut accumulate = |army: &parabellum_game::models::army::Army| {
+        for (idx, count) in army.units().units().iter().enumerate() {
             if *count == 0 {
-                return None;
+                continue;
             }
 
             let unit_name = army
@@ -407,12 +405,20 @@ fn current_troops(village: &Village) -> Vec<CurrentTroopDto> {
                 .get(idx)
                 .map(|unit| format!("{:?}", unit.name))
                 .unwrap_or_else(|| format!("Unit{}", idx + 1));
+            *grouped.entry(unit_name).or_insert(0) += *count;
+        }
+    };
 
-            Some(CurrentTroopDto {
-                unit_name,
-                count: *count,
-            })
-        })
+    if let Some(home) = &army_state.home_army {
+        accumulate(home);
+    }
+    for reinforcement in &army_state.reinforcements {
+        accumulate(reinforcement);
+    }
+
+    grouped
+        .into_iter()
+        .map(|(unit_name, count)| CurrentTroopDto { unit_name, count })
         .collect()
 }
 
@@ -432,6 +438,7 @@ pub fn village_overview_response(
 pub fn village_resources_response(
     village: &Village,
     queues: &parabellum_app::ports::queries::VillageQueues,
+    army_state: &parabellum_app::ports::queries::VillageArmyStateView,
 ) -> VillageResourcesResponse {
     let queue_views = building_queue_to_views(&queues.building);
     VillageResourcesResponse {
@@ -439,6 +446,6 @@ pub fn village_resources_response(
         village: village_summary(village),
         resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
-        current_troops: current_troops(village),
+        current_troops: current_troops(army_state),
     }
 }
