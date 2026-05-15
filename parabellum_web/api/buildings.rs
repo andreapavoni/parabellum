@@ -20,7 +20,7 @@ use parabellum_app::{
         AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem,
         VillageArmyStateView,
     },
-    query_models::VillageInfo,
+    read_models::VillageInfo,
     villages::models::ScheduledActionStatus,
 };
 use parabellum_game::models::{

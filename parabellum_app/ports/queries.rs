@@ -1,6 +1,6 @@
-use crate::query_models::MapRegionTile;
-use crate::query_models::PlayerLeaderboardEntry;
-use crate::query_models::VillageInfo;
+use crate::read_models::MapRegionTile;
+use crate::read_models::PlayerLeaderboardEntry;
+use crate::read_models::VillageInfo;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parabellum_game::models::army::Army;

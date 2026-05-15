@@ -310,13 +310,30 @@ async fn reserve_map_field(
     .await
     .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
     .rows_affected();
-    if updated != 1 {
-        return Err(ApplicationError::Unknown(format!(
+    if updated == 1 {
+        return Ok(());
+    }
+
+    // Idempotent path: map field can already be occupied by the same village
+    // as an effect of FoundVillage projection.
+    let row: Option<(Option<i32>, Option<Uuid>)> =
+        sqlx::query_as("SELECT village_id, player_id FROM rm_map_fields WHERE id = $1")
+            .bind(village_id as i32)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+    match row {
+        Some((Some(current_village_id), Some(current_player_id)))
+            if current_village_id == village_id as i32 && current_player_id == player_id =>
+        {
+            Ok(())
+        }
+        _ => Err(ApplicationError::Unknown(format!(
             "cannot reserve selected map field {}",
             village_id
-        )));
+        ))),
     }
-    Ok(())
 }
 
 

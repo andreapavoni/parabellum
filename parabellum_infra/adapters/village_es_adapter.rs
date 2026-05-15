@@ -709,7 +709,7 @@ impl VillageQueryPort for VillageEsAdapter {
     async fn get_village_info_by_ids(
         &self,
         village_ids: Vec<u32>,
-    ) -> Result<HashMap<u32, parabellum_app::query_models::VillageInfo>, ApplicationError> {
+    ) -> Result<HashMap<u32, parabellum_app::read_models::VillageInfo>, ApplicationError> {
         self.service
             .get_village_info_by_ids(village_ids)
             .await
@@ -765,7 +765,7 @@ impl VillageQueryPort for VillageEsAdapter {
         center_y: i32,
         radius: i32,
         world_size: i32,
-    ) -> Result<Vec<parabellum_app::query_models::MapRegionTile>, ApplicationError> {
+    ) -> Result<Vec<parabellum_app::read_models::MapRegionTile>, ApplicationError> {
         self.service
             .get_map_region(center_x, center_y, radius, world_size)
             .await
@@ -785,7 +785,7 @@ impl VillageQueryPort for VillageEsAdapter {
     async fn get_map_region_tile_by_field_id(
         &self,
         field_id: u32,
-    ) -> Result<Option<parabellum_app::query_models::MapRegionTile>, ApplicationError> {
+    ) -> Result<Option<parabellum_app::read_models::MapRegionTile>, ApplicationError> {
         self.service
             .get_map_region_tile_by_field_id(field_id)
             .await

@@ -7,10 +7,11 @@ pub mod actions;
 pub mod auth;
 pub mod buildings;
 pub mod dto;
-mod error_mapping;
 pub mod errors;
 pub mod game;
 pub mod openapi;
+
+mod error_mapping;
 mod helpers;
 
 pub use helpers::{authenticated_user, bearer_token};

@@ -1,7 +1,7 @@
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
 use parabellum_types::errors::ApplicationError;
 
-use crate::query_models::MapRegionTile;
+use crate::read_models::MapRegionTile;
 
 #[async_trait::async_trait]
 /// Read-only map port used by application services and HTTP queries.

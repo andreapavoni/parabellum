@@ -24,7 +24,7 @@ impl HeroRepository for PostgresHeroRepository {
         current_village_id: u32,
         state: &str,
     ) -> Result<(), ApplicationError> {
-        let tribe: crate::db_types::Tribe = hero.tribe.clone().into();
+        let tribe: crate::persistence::models::Tribe = hero.tribe.clone().into();
         sqlx::query(
             r#"
             INSERT INTO rm_heroes (
@@ -59,7 +59,7 @@ impl HeroRepository for PostgresHeroRepository {
         .bind(home_village_id as i32)
         .bind(current_village_id as i32)
         .bind(state)
-        .bind(tribe as crate::db_types::Tribe)
+        .bind(tribe as crate::persistence::models::Tribe)
         .bind(hero.level as i16)
         .bind(hero.health as i16)
         .bind(hero.experience as i32)
@@ -98,7 +98,7 @@ impl HeroRepository for PostgresHeroRepository {
             .map_err(|e| {
             ApplicationError::Db(DbError::Database(sqlx::Error::Decode(Box::new(e))))
         })?;
-        let tribe: crate::db_types::Tribe = row.get("tribe");
+        let tribe: crate::persistence::models::Tribe = row.get("tribe");
 
         Ok(Hero {
             id: row.get("hero_id"),
@@ -141,7 +141,7 @@ impl HeroRepository for PostgresHeroRepository {
             .map_err(|e| {
             ApplicationError::Db(DbError::Database(sqlx::Error::Decode(Box::new(e))))
         })?;
-        let tribe: crate::db_types::Tribe = row.get("tribe");
+        let tribe: crate::persistence::models::Tribe = row.get("tribe");
 
         Ok(Some(Hero {
             id: row.get("hero_id"),

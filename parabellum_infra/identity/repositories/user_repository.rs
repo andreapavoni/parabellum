@@ -5,7 +5,7 @@ use parabellum_app::ports::identity::UserRepository;
 use parabellum_types::common::User;
 use parabellum_types::errors::{ApplicationError, DbError};
 
-use crate::db_types as db_models;
+use crate::persistence::models as db_models;
 
 #[derive(Clone)]
 pub struct PostgresUserRepository {

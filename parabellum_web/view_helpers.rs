@@ -3,7 +3,7 @@ use parabellum_app::ports::queries::{
     BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
     VillageArmyStateView, VillageTroopMovements,
 };
-use parabellum_app::query_models::VillageInfo;
+use parabellum_app::read_models::VillageInfo;
 use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_types::{
     army::TroopSet, buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,

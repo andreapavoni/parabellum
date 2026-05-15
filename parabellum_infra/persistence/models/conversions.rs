@@ -4,7 +4,7 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::db_types::{self as db_models};
+use crate::persistence::models::{self as db_models};
 
 impl From<db_models::Tribe> for Tribe {
     fn from(db_tribe: db_models::Tribe) -> Self {

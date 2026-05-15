@@ -59,7 +59,7 @@ pub trait PlayerRepository: Send + Sync {
         &self,
         offset: i64,
         limit: i64,
-    ) -> Result<(Vec<crate::query_models::PlayerLeaderboardEntry>, i64), ApplicationError>;
+    ) -> Result<(Vec<crate::read_models::PlayerLeaderboardEntry>, i64), ApplicationError>;
 
     /// Updates player's total culture points by aggregating from all their villages.
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError>;

@@ -20,7 +20,7 @@ pub mod tests {
             identity::{PlayerRepository, UserRepository},
             map::MapRepository,
         },
-        query_models::{MapRegionTile, PlayerLeaderboardEntry},
+        read_models::{MapRegionTile, PlayerLeaderboardEntry},
     };
 
     #[derive(Default, Clone)]

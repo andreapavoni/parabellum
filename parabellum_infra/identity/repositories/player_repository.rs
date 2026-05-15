@@ -2,13 +2,13 @@ use parabellum_types::common::Player;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use parabellum_app::{ports::identity::PlayerRepository, query_models::PlayerLeaderboardEntry};
+use parabellum_app::{ports::identity::PlayerRepository, read_models::PlayerLeaderboardEntry};
 use parabellum_types::{
     Result,
     errors::{ApplicationError, DbError},
 };
 
-use crate::db_types::{self as db_models};
+use crate::persistence::models::{self as db_models};
 
 /// Implements PlayerRepository against identity + ES read-model tables.
 #[derive(Debug, Clone)]

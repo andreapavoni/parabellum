@@ -2,7 +2,7 @@ use serde_json::Value;
 use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};
 use uuid::Uuid;
 
-use parabellum_app::{ports::map::MapRepository, query_models::MapRegionTile};
+use parabellum_app::{ports::map::MapRepository, read_models::MapRegionTile};
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
 use parabellum_types::{
     errors::{
@@ -12,7 +12,7 @@ use parabellum_types::{
     map::Position,
 };
 
-use crate::db_types as db_models;
+use crate::persistence::models as db_models;
 
 #[derive(Clone)]
 pub struct PostgresMapRepository {

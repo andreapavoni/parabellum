@@ -271,7 +271,7 @@ impl GameApplication {
     pub async fn get_village_info_by_ids(
         &self,
         village_ids: Vec<u32>,
-    ) -> Result<std::collections::HashMap<u32, crate::query_models::VillageInfo>, ApplicationError>
+    ) -> Result<std::collections::HashMap<u32, crate::read_models::VillageInfo>, ApplicationError>
     {
         self.queries_port()
             .get_village_info_by_ids(village_ids)
@@ -321,7 +321,7 @@ impl GameApplication {
         center_y: i32,
         radius: i32,
         world_size: i32,
-    ) -> Result<Vec<crate::query_models::MapRegionTile>, ApplicationError> {
+    ) -> Result<Vec<crate::read_models::MapRegionTile>, ApplicationError> {
         self.queries_port()
             .get_map_region(center_x, center_y, radius, world_size)
             .await
@@ -337,7 +337,7 @@ impl GameApplication {
     pub async fn get_map_region_tile_by_field_id(
         &self,
         field_id: u32,
-    ) -> Result<Option<crate::query_models::MapRegionTile>, ApplicationError> {
+    ) -> Result<Option<crate::read_models::MapRegionTile>, ApplicationError> {
         self.queries_port()
             .get_map_region_tile_by_field_id(field_id)
             .await

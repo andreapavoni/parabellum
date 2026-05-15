@@ -23,7 +23,7 @@ use parabellum_app::ports::queries::{
     VillageArmyStateView, VillageQueues, VillageTroopMovements,
 };
 use parabellum_app::ports::{identity::PlayerRepository, map::MapRepository};
-use parabellum_app::query_models::{MapRegionTile, VillageInfo};
+use parabellum_app::read_models::{MapRegionTile, VillageInfo};
 use parabellum_app::villages::models::{
     MarketplaceOfferSnapshot, MarketplaceOfferStatus, ReportModel, ScheduledAction,
     ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType, VillageModel,

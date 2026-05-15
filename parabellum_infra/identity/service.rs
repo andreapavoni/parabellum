@@ -20,7 +20,7 @@ use parabellum_types::{
 };
 use sqlx::PgPool;
 
-use crate::db_types as db_models;
+use crate::persistence::models as db_models;
 use crate::es::VillageEsService;
 
 #[derive(Clone)]
@@ -57,7 +57,7 @@ impl IdentityService {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let tribe: crate::db_types::Tribe = req.tribe.clone().into();
+        let tribe: crate::persistence::models::Tribe = req.tribe.clone().into();
         sqlx::query(
             r#"
             INSERT INTO players (id, username, tribe, user_id, culture_points)
@@ -214,7 +214,7 @@ impl IdentityService {
             }
         };
 
-        let map_field = sqlx::query_as::<_, crate::db_types::MapField>(query)
+        let map_field = sqlx::query_as::<_, crate::persistence::models::MapField>(query)
             .fetch_one(&mut **tx)
             .await
             .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;
