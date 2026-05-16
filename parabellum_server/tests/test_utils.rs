@@ -1,47 +1,21 @@
 #[cfg(test)]
 pub mod tests {
-    use async_trait::async_trait;
     use axum::http::{HeaderValue, StatusCode};
     use parabellum_web::{AppState, WebRouter};
-    use rand::Rng;
     use reqwest::{Client, header, redirect::Policy};
-    use serde_json::Value;
     use sqlx::{PgPool, postgres::PgPoolOptions};
     use std::{env, net::TcpListener, sync::Arc, time::Duration};
     use uuid::Uuid;
 
-    use parabellum_app::{
-        app::AppBus,
-        auth::hash_password,
-        config::Config,
-        job_registry::AppJobRegistry,
-        jobs::worker::JobWorker,
-        uow::{UnitOfWork, UnitOfWorkProvider},
+    use parabellum_app::{application::GameApplication, config::Config};
+    use parabellum_infra::{
+        adapters::VillageEsAdapter, bootstrap_world_map, es::VillageEsService,
+        identity::IdentityService,
     };
-    use parabellum_db::{bootstrap_world_map, uow::PostgresUnitOfWorkProvider};
-    use parabellum_game::{
-        models::{army::Army, hero::Hero, village::Village},
-        test_utils::{
-            ArmyFactoryOptions, PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions,
-            army_factory, player_factory, valley_factory, village_factory,
-        },
-    };
-    use parabellum_types::{Result, army::TroopSet, errors::ApplicationError};
-    use parabellum_types::{
-        common::{Player, User},
-        map::Position,
-        tribe::Tribe,
-    };
-
-    #[allow(dead_code)]
-    #[derive(Debug, Clone)]
-    pub struct AuthTokens {
-        pub access_token: String,
-        pub refresh_token: String,
-    }
+    use parabellum_types::{Result, errors::ApplicationError};
 
     #[derive(Clone)]
-    struct IsolatedSchemaHandle {
+    pub struct IsolatedSchemaHandle {
         root_url: String,
         schema_name: String,
     }
@@ -65,29 +39,6 @@ pub mod tests {
                     });
                 }
             });
-        }
-    }
-
-    #[derive(Clone)]
-    pub struct TestUnitOfWorkProvider {
-        inner: PostgresUnitOfWorkProvider,
-        #[allow(dead_code)]
-        schema_handle: Arc<IsolatedSchemaHandle>,
-    }
-
-    impl TestUnitOfWorkProvider {
-        fn new(pool: PgPool, schema_handle: Arc<IsolatedSchemaHandle>) -> Self {
-            Self {
-                inner: PostgresUnitOfWorkProvider::new(pool),
-                schema_handle,
-            }
-        }
-    }
-
-    #[async_trait]
-    impl UnitOfWorkProvider for TestUnitOfWorkProvider {
-        async fn tx<'p>(&'p self) -> Result<Box<dyn UnitOfWork<'p> + 'p>, ApplicationError> {
-            self.inner.tx().await
         }
     }
 
@@ -140,41 +91,10 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_app(
-        world_map: bool,
-    ) -> Result<(
-        AppBus,
-        Arc<JobWorker>,
-        Arc<dyn UnitOfWorkProvider>,
-        Arc<Config>,
-    )> {
-        let config = Arc::new(Config::from_env());
-        let (pool, schema_handle) = create_isolated_test_pool().await?;
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(pool.clone(), schema_handle));
-
-        if world_map {
-            bootstrap_world_map(&pool, config.world_size).await?;
-        }
-
-        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
-        let app_registry = Arc::new(AppJobRegistry::new());
-        let worker = Arc::new(JobWorker::new(
-            uow_provider.clone(),
-            app_registry,
-            config.clone(),
-        ));
-
-        Ok((app_bus, worker, uow_provider, config))
-    }
-
-    #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<(Arc<dyn UnitOfWorkProvider>, String)> {
+    pub async fn setup_web_app() -> Result<(Arc<IsolatedSchemaHandle>, String)> {
         let (pool, schema_handle) = create_isolated_test_pool().await?;
         let config = Arc::new(Config::from_env());
         bootstrap_world_map(&pool, config.world_size).await?;
-        let uow_provider: Arc<dyn UnitOfWorkProvider> =
-            Arc::new(TestUnitOfWorkProvider::new(pool.clone(), schema_handle));
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
@@ -184,9 +104,17 @@ pub mod tests {
             .port();
         drop(listener);
 
-        let app_bus = AppBus::new(config.clone(), uow_provider.clone());
-        let app = Arc::new(app_bus);
-        let state = AppState::new(app, pool, &config);
+        let villages = Arc::new(VillageEsAdapter::new(
+            VillageEsService::new(pool.clone()),
+            config.clone(),
+        ));
+        let game_app = Arc::new(GameApplication::new(
+            Arc::new(IdentityService::new(pool.clone(), config.clone())),
+            villages.clone(),
+            villages.clone(),
+            villages,
+        ));
+        let state = AppState::new(game_app, pool, &config);
         tokio::spawn(WebRouter::serve(state.clone(), port));
 
         let base_url = format!("http://127.0.0.1:{port}");
@@ -208,7 +136,7 @@ pub mod tests {
             ));
         }
 
-        Ok((uow_provider, base_url))
+        Ok((schema_handle, base_url))
     }
 
     #[allow(dead_code)]
@@ -226,110 +154,5 @@ pub mod tests {
         let mut request_headers = header::HeaderMap::new();
         request_headers.insert(header::COOKIE, cookie);
         client.default_headers(request_headers).build().unwrap()
-    }
-
-    #[allow(dead_code)]
-    pub async fn login_tokens(
-        client: &Client,
-        base_url: &str,
-        email: &str,
-        password: &str,
-    ) -> AuthTokens {
-        let response = client
-            .post(format!("{base_url}/api/v1/auth/token/login"))
-            .header("content-type", "application/json")
-            .body(
-                serde_json::json!({
-                    "email": email,
-                    "password": password,
-                })
-                .to_string(),
-            )
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let payload: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
-
-        AuthTokens {
-            access_token: payload["accessToken"].as_str().unwrap().to_string(),
-            refresh_token: payload["refreshToken"].as_str().unwrap().to_string(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub async fn setup_player_party(
-        uow_provider: Arc<dyn UnitOfWorkProvider>,
-        position: Option<Position>,
-        tribe: Tribe,
-        units: TroopSet,
-        with_hero: bool,
-    ) -> Result<(Player, Village, Army, Option<Hero>, User)> {
-        let uow = uow_provider.tx().await?;
-        let player: Player;
-        let village: Village;
-        let army: Army;
-        let hero: Option<Hero>;
-        let user: User;
-        {
-            let player_repo = uow.players();
-            let village_repo = uow.villages();
-            let army_repo = uow.armies();
-            let hero_repo = uow.heroes();
-            let user_repo = uow.users();
-
-            let mut rng = rand::thread_rng();
-            let position = position.unwrap_or_else(|| {
-                let x = rng.gen_range(1..99);
-                let y = rng.gen_range(1..99);
-                Position { x, y }
-            });
-
-            let email = format!("parabellum-{}@example.com", rng.gen_range(1..99999));
-            user_repo
-                .save(email.clone(), hash_password("parabellum!")?)
-                .await?;
-            user = user_repo.get_by_email(&email).await?;
-
-            player = player_factory(PlayerFactoryOptions {
-                tribe: Some(tribe.clone()),
-                user_id: Some(user.id),
-                ..Default::default()
-            });
-            player_repo.save(&player).await?;
-
-            let valley = valley_factory(ValleyFactoryOptions {
-                position: Some(position),
-                ..Default::default()
-            });
-            village = village_factory(VillageFactoryOptions {
-                valley: Some(valley),
-                player: Some(player.clone()),
-                ..Default::default()
-            });
-            village_repo.save(&village).await?;
-
-            hero = if with_hero {
-                let hero = Hero::new(None, village.id, player.id, player.tribe.clone(), None);
-                hero_repo.save(&hero).await.unwrap();
-                Some(hero)
-            } else {
-                None
-            };
-
-            army = army_factory(ArmyFactoryOptions {
-                player_id: Some(player.id),
-                village_id: Some(village.id),
-                units: Some(units),
-                tribe: Some(tribe.clone()),
-                hero: hero.clone(),
-                ..Default::default()
-            });
-            army_repo.save(&army).await?;
-        }
-
-        uow.commit().await?;
-
-        Ok((player, village, army, hero, user))
     }
 }

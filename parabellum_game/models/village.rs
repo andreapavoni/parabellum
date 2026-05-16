@@ -175,7 +175,6 @@ impl Village {
         village
             .init_village_buildings(valley, server_speed)
             .unwrap();
-        village.update_merchants_count();
         village.update_state();
         village
     }
@@ -393,18 +392,18 @@ impl Village {
 
     /// Tries to deduct resources. Returns GameError::NotEnoughResources if funds are insufficient.
     pub fn deduct_resources(&mut self, cost: &ResourceGroup) -> Result<(), GameError> {
+        self.update_state();
         if !self.has_enough_resources(cost) {
             return Err(GameError::NotEnoughResources);
         }
         self.stocks.remove_resources(cost);
-        self.update_state();
         Ok(())
     }
 
     /// Stores resources in the village, respecting capacity.
     pub fn store_resources(&mut self, resources: &ResourceGroup) {
-        self.stocks.store(resources);
         self.update_state();
+        self.stocks.store(resources);
     }
 
     /// Returns a snapshot of the currently stored resources.
@@ -1112,14 +1111,6 @@ impl Village {
             self.stocks.crop = new_crop.floor() as i64;
         }
 
-        // Calculate culture points accumulation
-        // CPP is per 24 hours, so we need to calculate how many CP were generated in time_elapsed
-        if self.culture_points_production > 0 {
-            let cpp_per_second = self.culture_points_production as f64 / 86400.0; // 86400 seconds in 24 hours
-            let culture_points_delta = (cpp_per_second * time_elapsed).floor() as u32;
-            self.culture_points = self.culture_points.saturating_add(culture_points_delta);
-        }
-
         self.updated_at = now;
     }
 
@@ -1314,7 +1305,8 @@ mod tests {
     };
     use chrono::{Duration, Utc};
     use parabellum_types::{
-        buildings::BuildingName, errors::GameError, map::ValleyTopology, tribe::Tribe,
+        buildings::BuildingName, common::ResourceGroup, errors::GameError, map::ValleyTopology,
+        tribe::Tribe,
     };
 
     #[test]
@@ -1588,5 +1580,26 @@ mod tests {
             v.production.upkeep, 4,
             "Village upkeep with Main Building L3 upgrade should be 4"
         );
+    }
+
+    #[test]
+    fn test_deduct_resources_applies_elapsed_production_before_validation() {
+        let mut v = village_factory(VillageFactoryOptions {
+            ..Default::default()
+        });
+
+        // Start with empty stocks, then rewind time so production can accrue.
+        v.stocks = VillageStocks {
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
+            ..v.stocks
+        };
+        v.updated_at = Utc::now() - Duration::hours(2);
+
+        // Should pass because elapsed production is applied before availability check.
+        let cost = ResourceGroup::new(1, 1, 1, 1);
+        assert!(v.deduct_resources(&cost).is_ok());
     }
 }

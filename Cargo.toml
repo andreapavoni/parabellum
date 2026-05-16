@@ -2,7 +2,7 @@
 members = [
     "parabellum_game",
     "parabellum_app",
-    "parabellum_db",
+    "parabellum_infra",
     "parabellum_server",
     "parabellum_types",
     "parabellum_web"
@@ -41,15 +41,16 @@ consolidate-commits = true
 
 [workspace.package]
 description = "A Travian 3.x clone."
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Andrea Pavoni <andrea.pavoni@gmail.com>"]
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/andreapavoni/parabellum"
-keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game"]
-rust-version = "1.85"
+keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game", "cqrs-es"]
+rust-version = "1.95"
 
 [workspace.dependencies]
+mini_cqrs_es = "0.11.0"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }

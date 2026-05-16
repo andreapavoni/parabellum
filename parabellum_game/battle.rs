@@ -47,6 +47,7 @@ pub struct Battle {
     attacker_village: Village,
     defender_village: Village,
     catapult_targets: Option<[Building; 2]>,
+    conquer_permitted: bool,
 }
 
 impl Battle {
@@ -56,6 +57,7 @@ impl Battle {
         attacker_village: Village,
         defender_village: Village,
         catapult_targets: Option<[Building; 2]>,
+        conquer_permitted: bool,
     ) -> Self {
         Self {
             attack_type,
@@ -63,6 +65,7 @@ impl Battle {
             attacker_village,
             defender_village,
             catapult_targets,
+            conquer_permitted,
         }
     }
 
@@ -308,6 +311,26 @@ impl Battle {
             &self.defender_village.stored_resources(),
         );
 
+        let loyalty_before = self.defender_village.loyalty();
+        let has_residence_or_palace_after = defender_has_residence_or_palace_after_damage(
+            &self.defender_village,
+            &catapult_reports,
+        );
+        let surviving_chiefs = self
+            .attacker
+            .get_troop_count_by_role(parabellum_types::army::UnitRole::Chief)
+            .min(attacker_survivors.get(8));
+        let loyalty_reduction = if self.attack_type == AttackType::Normal
+            && self.conquer_permitted
+            && surviving_chiefs > 0
+            && !has_residence_or_palace_after
+        {
+            (surviving_chiefs as u8).saturating_mul(25)
+        } else {
+            0
+        };
+        let loyalty_after = loyalty_before.saturating_sub(loyalty_reduction);
+
         BattleReport {
             attack_type: self.attack_type.clone(),
             attacker: BattlePartyReport {
@@ -323,8 +346,8 @@ impl Battle {
             bounty: Some(bounty),
             wall_damage: wall_report,
             catapult_damage: catapult_reports,
-            loyalty_before: 100, // TODO: calculate loyalty
-            loyalty_after: 100,  // TODO: calculate loyalty
+            loyalty_before,
+            loyalty_after,
         }
     }
 
@@ -629,6 +652,21 @@ fn calculate_new_building_level(old_level: u8, mut damage: f64) -> u8 {
     current_level
 }
 
+fn defender_has_residence_or_palace_after_damage(
+    defender_village: &Village,
+    catapult_reports: &[BuildingDamageReport],
+) -> bool {
+    if let Some((building, building_name)) = defender_village.get_palace_or_residence() {
+        let maybe_after = catapult_reports
+            .iter()
+            .find(|report| report.name == building_name)
+            .map(|report| report.level_after)
+            .unwrap_or(building.level);
+        return maybe_after > 0;
+    }
+    false
+}
+
 /// Calculates the losses of the given army by a percentage,
 pub fn calculate_army_losses(army: &Army, percent: f64) -> (TroopSet, TroopSet) {
     let mut survivors = TroopSet::default();
@@ -685,6 +723,7 @@ mod tests {
             attacker_village,
             defender_village,
             None,
+            false,
         );
 
         let report = battle.calculate_battle();
@@ -784,6 +823,7 @@ mod tests {
             attacker_village,
             defender_village,
             None,
+            false,
         );
         let report = battle.calculate_battle();
         let defender_report = report.defender.expect("Defender report should exist");

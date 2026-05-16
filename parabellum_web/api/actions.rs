@@ -3,7 +3,7 @@
 //! This module contains command-style endpoints (build, train, send troops/resources,
 //! marketplace actions, research, reinforce/recall, and village founding).
 //! Handlers stay orchestration-only: validate request shape, resolve authenticated user,
-//! invoke `parabellum_app` command handlers, and map errors to API codes.
+//! invoke `GameApplication`, and map errors to API codes.
 
 use axum::{
     Json,
@@ -14,28 +14,25 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_app::{
-    command_handlers::{
-        AcceptMarketplaceOfferCommandHandler, AddBuildingCommandHandler,
-        AttackVillageCommandHandler, CancelMarketplaceOfferCommandHandler,
-        CreateMarketplaceOfferCommandHandler, FoundVillageCommandHandler,
-        RecallTroopsCommandHandler, ReinforceVillageCommandHandler,
-        ReleaseReinforcementsCommandHandler, ResearchAcademyCommandHandler,
-        ResearchSmithyCommandHandler, ScoutVillageCommandHandler, SendResourcesCommandHandler,
-        TrainUnitsCommandHandler, UpgradeBuildingCommandHandler,
-    },
-    cqrs::commands::{
-        AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
-        CreateMarketplaceOffer, FoundVillage, RecallTroops, ReinforceVillage,
-        ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ScoutVillage, SendResources,
-        TrainUnits, UpgradeBuilding,
-    },
+use parabellum_app::ports::villages::{
+    AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
+    CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
+    RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
+    ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
+    ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
+    ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
+    SendAttackRequest as SendAttackUseCaseRequest,
+    SendReinforcementRequest as SendReinforcementUseCaseRequest,
+    SendResourcesRequest as SendResourcesUseCaseRequest,
+    SendScoutRequest as SendScoutUseCaseRequest, SendSettlersRequest as SendSettlersUseCaseRequest,
+    TrainUnitsRequest as TrainUnitsUseCaseRequest,
+    UpgradeBuildingRequest as UpgradeBuildingUseCaseRequest,
 };
 use parabellum_types::{
     army::{TroopSet, UnitName},
     battle::{AttackType, ScoutingTarget},
     buildings::BuildingName,
-    common::ResourceGroup,
+    common::{ResourceGroup, ResourceKind, ResourceQuantity},
     map::Position,
 };
 
@@ -43,6 +40,7 @@ use crate::api::errors::ApiError;
 use crate::http::AppState;
 
 use super::authenticated_user;
+use super::error_mapping::map_application_error;
 
 const MAX_SLOT_ID: u8 = 40;
 const RALLY_POINT_SLOT: u8 = 39;
@@ -162,16 +160,20 @@ pub struct SendTroopsRequest {
 #[serde(rename_all = "camelCase")]
 /// Payload for recalling deployed units.
 pub struct RecallTroopsRequest {
+    pub village_id: u32,
     pub army_id: Uuid,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Payload for releasing reinforcements from a source village.
 pub struct ReleaseReinforcementsRequest {
-    pub source_village_id: u32,
+    pub village_id: u32,
+    pub army_id: Uuid,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -193,18 +195,15 @@ pub async fn add_building(
     ensure_slot(payload.slot_id)?;
 
     state
-        .app_bus
-        .execute(
-            AddBuilding {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                slot_id: payload.slot_id,
-                name: payload.building_name,
-            },
-            AddBuildingCommandHandler::new(),
-        )
+        .game_app
+        .add_building(AddBuildingUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            slot_id: payload.slot_id,
+            building_name: payload.building_name,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -219,17 +218,14 @@ pub async fn upgrade_building(
     ensure_slot(payload.slot_id)?;
 
     state
-        .app_bus
-        .execute(
-            UpgradeBuilding {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                slot_id: payload.slot_id,
-            },
-            UpgradeBuildingCommandHandler::new(),
-        )
+        .game_app
+        .upgrade_building(UpgradeBuildingUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            slot_id: payload.slot_id,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -256,19 +252,16 @@ pub async fn train_units(
     )?;
 
     state
-        .app_bus
-        .execute(
-            TrainUnits {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                unit_idx: payload.unit_idx,
-                quantity: payload.quantity,
-                building_name: payload.building_name,
-            },
-            TrainUnitsCommandHandler::new(),
-        )
+        .game_app
+        .train_units(TrainUnitsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            unit_idx: payload.unit_idx,
+            quantity: payload.quantity,
+            building_name: payload.building_name,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -284,16 +277,14 @@ pub async fn research_academy(
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Academy)?;
 
     state
-        .app_bus
-        .execute(
-            ResearchAcademy {
-                unit: payload.unit_name,
-                village_id: user.village.id,
-            },
-            ResearchAcademyCommandHandler::new(),
-        )
+        .game_app
+        .research_academy(ResearchAcademyUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            unit: payload.unit_name,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -309,16 +300,14 @@ pub async fn research_smithy(
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Smithy)?;
 
     state
-        .app_bus
-        .execute(
-            ResearchSmithy {
-                unit: payload.unit_name,
-                village_id: user.village.id,
-            },
-            ResearchSmithyCommandHandler::new(),
-        )
+        .game_app
+        .research_smithy(ResearchSmithyUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            unit: payload.unit_name,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -340,18 +329,15 @@ pub async fn send_resources(
     let target_village_id = target_position.to_id(state.world_size);
 
     state
-        .app_bus
-        .execute(
-            SendResources {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                target_village_id,
-                resources: ResourceGroup(payload.lumber, payload.clay, payload.iron, payload.crop),
-            },
-            SendResourcesCommandHandler::new(),
-        )
+        .game_app
+        .send_resources(SendResourcesUseCaseRequest {
+            player_id: user.player.id,
+            source_village_id: user.village.id,
+            target_village_id,
+            resources: ResourceGroup(payload.lumber, payload.clay, payload.iron, payload.crop),
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -366,28 +352,29 @@ pub async fn create_marketplace_offer(
     ensure_slot(payload.slot_id)?;
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Marketplace)?;
 
+    let offer_resources = parse_resource_quantity(
+        payload.offer_lumber,
+        payload.offer_clay,
+        payload.offer_iron,
+        payload.offer_crop,
+    )?;
+    let seek_resources = parse_resource_quantity(
+        payload.seek_lumber,
+        payload.seek_clay,
+        payload.seek_iron,
+        payload.seek_crop,
+    )?;
+
     state
-        .app_bus
-        .execute(
-            CreateMarketplaceOffer {
-                village_id: user.village.id,
-                offer_resources: ResourceGroup(
-                    payload.offer_lumber,
-                    payload.offer_clay,
-                    payload.offer_iron,
-                    payload.offer_crop,
-                ),
-                seek_resources: ResourceGroup(
-                    payload.seek_lumber,
-                    payload.seek_clay,
-                    payload.seek_iron,
-                    payload.seek_crop,
-                ),
-            },
-            CreateMarketplaceOfferCommandHandler::new(),
-        )
+        .game_app
+        .create_marketplace_offer(CreateMarketplaceOfferRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            offer_resources,
+            seek_resources,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -404,17 +391,14 @@ pub async fn accept_marketplace_offer(
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Marketplace)?;
 
     state
-        .app_bus
-        .execute(
-            AcceptMarketplaceOffer {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                offer_id,
-            },
-            AcceptMarketplaceOfferCommandHandler::new(),
-        )
+        .game_app
+        .accept_marketplace_offer(AcceptMarketplaceOfferRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            offer_id,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -431,17 +415,14 @@ pub async fn cancel_marketplace_offer(
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Marketplace)?;
 
     state
-        .app_bus
-        .execute(
-            CancelMarketplaceOffer {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                offer_id,
-            },
-            CancelMarketplaceOfferCommandHandler::new(),
-        )
+        .game_app
+        .cancel_marketplace_offer(CancelMarketplaceOfferRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            offer_id,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -457,10 +438,6 @@ pub async fn send_troops(
     ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::RallyPoint)?;
     ensure_rally_point_slot(payload.slot_id)?;
 
-    let home_army = user
-        .village
-        .army()
-        .ok_or_else(|| ApiError::unprocessable("No village army available"))?;
     let units = parse_troop_set(&payload.units)?;
 
     if units.units().iter().all(|value| *value == 0) {
@@ -490,21 +467,17 @@ pub async fn send_troops(
         };
 
         state
-            .app_bus
-            .execute(
-                ScoutVillage {
-                    player_id: user.player.id,
-                    village_id: user.village.id,
-                    army_id: home_army.id,
-                    units,
-                    target_village_id,
-                    target: scouting_target,
-                    attack_type,
-                },
-                ScoutVillageCommandHandler::new(),
-            )
+            .game_app
+            .send_scout(SendScoutUseCaseRequest {
+                player_id: user.player.id,
+                source_village_id: user.village.id,
+                target_village_id,
+                units,
+                target: scouting_target,
+                attack_type,
+            })
             .await
-            .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+            .map_err(|err| map_application_error("action_failed", err))?;
 
         return Ok(Json(ActionResponse { success: true }));
     }
@@ -514,43 +487,35 @@ pub async fn send_troops(
             let catapult_targets = parse_catapult_targets(payload.catapult_targets)?;
 
             state
-                .app_bus
-                .execute(
-                    AttackVillage {
-                        player_id: user.player.id,
-                        village_id: user.village.id,
-                        army_id: home_army.id,
-                        units,
-                        target_village_id,
-                        catapult_targets,
-                        hero_id: None,
-                        attack_type: match payload.movement {
-                            MovementKind::Attack => AttackType::Normal,
-                            MovementKind::Raid => AttackType::Raid,
-                            MovementKind::Reinforcement => AttackType::Normal,
-                        },
+                .game_app
+                .send_attack(SendAttackUseCaseRequest {
+                    player_id: user.player.id,
+                    source_village_id: user.village.id,
+                    target_village_id,
+                    units,
+                    hero_id: None,
+                    catapult_targets,
+                    attack_type: match payload.movement {
+                        MovementKind::Attack => AttackType::Normal,
+                        MovementKind::Raid => AttackType::Raid,
+                        MovementKind::Reinforcement => AttackType::Normal,
                     },
-                    AttackVillageCommandHandler::new(),
-                )
+                })
                 .await
-                .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+                .map_err(|err| map_application_error("action_failed", err))?;
         }
         MovementKind::Reinforcement => {
             state
-                .app_bus
-                .execute(
-                    ReinforceVillage {
-                        player_id: user.player.id,
-                        village_id: user.village.id,
-                        army_id: home_army.id,
-                        units,
-                        target_village_id,
-                        hero_id: None,
-                    },
-                    ReinforceVillageCommandHandler::new(),
-                )
+                .game_app
+                .send_reinforcement(SendReinforcementUseCaseRequest {
+                    player_id: user.player.id,
+                    source_village_id: user.village.id,
+                    target_village_id,
+                    units,
+                    hero_id: None,
+                })
                 .await
-                .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+                .map_err(|err| map_application_error("action_failed", err))?;
         }
     }
 
@@ -567,18 +532,16 @@ pub async fn recall_troops(
     let units = parse_troop_set(&payload.units)?;
 
     state
-        .app_bus
-        .execute(
-            RecallTroops {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                army_id: payload.army_id,
-                units,
-            },
-            RecallTroopsCommandHandler::new(),
-        )
+        .game_app
+        .recall_reinforcements(RecallReinforcementsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            army_id: payload.army_id,
+            units,
+            hero_id: payload.hero_id,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -593,18 +556,16 @@ pub async fn release_reinforcements(
     let units = parse_troop_set(&payload.units)?;
 
     state
-        .app_bus
-        .execute(
-            ReleaseReinforcements {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                source_village_id: payload.source_village_id,
-                units,
-            },
-            ReleaseReinforcementsCommandHandler::new(),
-        )
+        .game_app
+        .release_reinforcements(ReleaseReinforcementsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            army_id: payload.army_id,
+            units,
+            hero_id: payload.hero_id,
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -616,30 +577,20 @@ pub async fn found_village(
     Json(payload): Json<FoundVillageRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-
-    let home_army = user
-        .village
-        .army()
-        .ok_or_else(|| ApiError::unprocessable("No village army available"))?;
-    let units = parse_troop_set(&payload.units)?;
-
     state
-        .app_bus
-        .execute(
-            FoundVillage {
-                player_id: user.player.id,
-                village_id: user.village.id,
-                army_id: home_army.id,
-                units,
-                target_position: Position {
-                    x: payload.target_x,
-                    y: payload.target_y,
-                },
+        .game_app
+        .send_settlers(SendSettlersUseCaseRequest {
+            player_id: user.player.id,
+            source_village_id: user.village.id,
+            target_position: Position {
+                x: payload.target_x,
+                y: payload.target_y,
             },
-            FoundVillageCommandHandler::new(),
-        )
+            village_name: format!("{}'s Village", user.player.username),
+            tribe: user.player.tribe.clone(),
+        })
         .await
-        .map_err(|err| ApiError::unprocessable(err.to_string()))?;
+        .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
 }
@@ -702,4 +653,30 @@ fn parse_catapult_targets(
             "catapultTargets must contain exactly 2 building names",
         )),
     }
+}
+
+fn parse_resource_quantity(
+    lumber: u32,
+    clay: u32,
+    iron: u32,
+    crop: u32,
+) -> Result<ResourceQuantity, ApiError> {
+    let entries = [
+        (ResourceKind::Lumber, lumber),
+        (ResourceKind::Clay, clay),
+        (ResourceKind::Iron, iron),
+        (ResourceKind::Crop, crop),
+    ];
+    let mut non_zero = entries.into_iter().filter(|(_, quantity)| *quantity > 0);
+    let Some((resource, quantity)) = non_zero.next() else {
+        return Err(ApiError::unprocessable(
+            "Marketplace offers require exactly one non-zero resource type.",
+        ));
+    };
+    if non_zero.next().is_some() {
+        return Err(ApiError::unprocessable(
+            "Marketplace offers require exactly one non-zero resource type.",
+        ));
+    }
+    Ok(ResourceQuantity::new(resource, quantity as u64))
 }

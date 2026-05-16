@@ -13,14 +13,7 @@
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
-use parabellum_app::{
-    command_handlers::RegisterPlayerCommandHandler,
-    cqrs::{
-        commands::RegisterPlayer,
-        queries::{AuthenticateUser, GetUserByEmail},
-    },
-    queries_handlers::{AuthenticateUserHandler, GetUserByEmailHandler},
-};
+use parabellum_app::ports::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
     errors::{AppError, ApplicationError, DbError},
@@ -30,6 +23,7 @@ use parabellum_types::{
 use crate::{
     api::{
         dto::{SessionUserDto, session_user},
+        error_mapping::internal_error,
         errors::ApiError,
     },
     auth_metrics::{inc_auth_failure, inc_auth_success, inc_refresh_failure, inc_refresh_success},
@@ -99,15 +93,22 @@ pub async fn token_login(
     headers: HeaderMap,
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.email.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required login fields.")
+                .with_field_error("email", "Email is required"),
+        );
+    }
+    if payload.password.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required login fields.")
+                .with_field_error("password", "Password is required"),
+        );
+    }
+
     let account = state
-        .app_bus
-        .query(
-            AuthenticateUser {
-                email: payload.email,
-                password: payload.password,
-            },
-            AuthenticateUserHandler::new(),
-        )
+        .game_app
+        .authenticate_user(&payload.email, &payload.password)
         .await
         .map_err(|err| {
             inc_auth_failure();
@@ -141,34 +142,45 @@ pub async fn token_register(
     headers: HeaderMap,
     Json(payload): Json<TokenRegisterRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.username.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("username", "Username is required"),
+        );
+    }
+    if payload.email.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("email", "Email is required"),
+        );
+    }
+    if payload.password.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Missing required registration fields.")
+                .with_field_error("password", "Password is required"),
+        );
+    }
+
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
-
     state
-        .app_bus
-        .execute(
-            RegisterPlayer::new(
-                payload.username.clone(),
-                payload.email.clone(),
-                payload.password.clone(),
-                tribe,
-                quadrant,
-            ),
-            RegisterPlayerCommandHandler::new(),
-        )
+        .game_app
+        .register_player(RegisterPlayerRequest {
+            player_id: uuid::Uuid::new_v4(),
+            username: payload.username.clone(),
+            email: payload.email.clone(),
+            password: payload.password.clone(),
+            tribe,
+            quadrant,
+        })
         .await
         .map_err(map_register_error)?;
 
     let account = state
-        .app_bus
-        .query(
-            GetUserByEmail {
-                email: payload.email,
-            },
-            GetUserByEmailHandler::new(),
-        )
+        .game_app
+        .get_user_by_email(&payload.email)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| internal_error("auth_register_load_account_failed", err))?;
     let current = current_user_by_ids(&state, account.id, None)
         .await
         .map_err(|_| ApiError::unauthorized("Authentication required"))?;
@@ -195,6 +207,13 @@ pub async fn token_refresh(
     headers: HeaderMap,
     Json(payload): Json<TokenRefreshRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.refresh_token.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Refresh token is required.")
+                .with_field_error("refresh_token", "Refresh token is required"),
+        );
+    }
+
     let (session, rotated_refresh_token) = state
         .token_service
         .rotate_refresh_session(
@@ -225,6 +244,13 @@ pub async fn token_logout(
     headers: HeaderMap,
     Json(payload): Json<TokenLogoutRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if payload.refresh_token.trim().is_empty() {
+        return Err(
+            ApiError::unprocessable("Refresh token is required.")
+                .with_field_error("refresh_token", "Refresh token is required"),
+        );
+    }
+
     state
         .token_service
         .revoke_refresh_session(&state.db_pool, &payload.refresh_token)
@@ -254,7 +280,7 @@ fn map_auth_error(error: ApplicationError) -> ApiError {
         | ApplicationError::Db(DbError::UserByEmailNotFound(_)) => {
             ApiError::unauthorized("Invalid email or password.")
         }
-        _ => ApiError::internal("Unable to authenticate the current session."),
+        _ => internal_error("auth_login_failed", error),
     }
 }
 
@@ -264,18 +290,18 @@ fn map_register_error(error: ApplicationError) -> ApiError {
             ApiError::unprocessable("Invalid password or internal password error.")
                 .with_field_error("password", "The password does not satisfy the server rules")
         }
-        ApplicationError::Db(db_err) => {
-            let err_msg = db_err.to_string();
-            if err_msg.contains("duplicate key value") || err_msg.contains("UNIQUE constraint") {
+        ApplicationError::Db(DbError::Database(sqlx::Error::Database(db))) => match db.code() {
+            Some(code) if code == "23505" => {
                 ApiError::conflict("An account with this email already exists.")
                     .with_field_error("email", "Email already exists")
-            } else if err_msg.contains("null value in column") {
-                ApiError::unprocessable("Missing required registration fields.")
-            } else {
-                ApiError::internal(db_err.to_string())
             }
-        }
-        _ => ApiError::internal(error.to_string()),
+            Some(code) if code == "23502" => {
+                ApiError::unprocessable("Missing required registration fields.")
+            }
+            _ => internal_error("auth_register_failed", db),
+        },
+        ApplicationError::Db(db_err) => internal_error("auth_register_failed", db_err),
+        _ => internal_error("auth_register_failed", error),
     }
 }
 
@@ -312,7 +338,9 @@ fn map_token_error(error: AuthTokenError) -> ApiError {
         AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh token expired"),
         AuthTokenError::SessionRevoked => ApiError::session_revoked("Refresh session revoked"),
         AuthTokenError::InvalidToken => ApiError::unauthorized("Invalid token"),
-        AuthTokenError::Database(err) | AuthTokenError::Internal(err) => ApiError::internal(err),
+        AuthTokenError::Database(err) | AuthTokenError::Internal(err) => {
+            internal_error("auth_token_validation_failed", err)
+        }
     }
 }
 

@@ -15,25 +15,10 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use parabellum_app::{
-    command_handlers::MarkReportReadCommandHandler,
-    cqrs::{
-        commands::MarkReportRead,
-        queries::{
-            GetLeaderboard, GetMapField, GetMapRegion, GetPlayerById, GetReportForPlayer,
-            GetReportsForPlayer, GetVillageById, ListVillagesByPlayerId,
-        },
-    },
-    queries_handlers::{
-        GetLeaderboardHandler, GetMapFieldHandler, GetMapRegionHandler, GetPlayerByIdHandler,
-        GetReportForPlayerHandler, GetReportsForPlayerHandler, GetVillageByIdHandler,
-        ListVillagesByPlayerIdHandler,
-    },
-    repository::MapRegionTile,
-};
+use parabellum_app::read_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::village::Village;
-use parabellum_types::map::{Position, ValleyTopology};
+use parabellum_types::map::ValleyTopology;
 
 use crate::{
     api::{
@@ -46,9 +31,11 @@ use crate::{
         errors::ApiError,
     },
     http::AppState,
-    session::{CurrentUser, village_queues_or_empty},
+    session::CurrentUser,
 };
 
+use super::error_mapping::{internal_error, map_application_error};
+use super::helpers::map_token_error;
 use super::{authenticated_user, bearer_token};
 
 const LEADERBOARD_PAGE_SIZE: i64 = 20;
@@ -258,7 +245,11 @@ pub async fn village_overview(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = village_queues_or_empty(&state, village.id).await;
+    let queues = state
+        .game_app
+        .get_village_queues(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
     Ok(Json(village_overview_response(&village, &queues)))
 }
 
@@ -270,8 +261,17 @@ pub async fn village_resources(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = village_queues_or_empty(&state, village.id).await;
-    Ok(Json(village_resources_response(&village, &queues)))
+    let army_state = state
+        .game_app
+        .get_village_army_state_view(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_army_state", e))?;
+    let queues = state
+        .game_app
+        .get_village_queues(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
+    Ok(Json(village_resources_response(&village, &queues, &army_state)))
 }
 
 /// Switches current village and rotates access token context when bearer is present.
@@ -302,7 +302,7 @@ pub async fn switch_village(
         let claims = state
             .token_service
             .verify_access_token(token)
-            .map_err(|_| ApiError::unauthorized("Invalid bearer token"))?;
+            .map_err(map_token_error)?;
         state
             .token_service
             .update_refresh_session_village(
@@ -311,7 +311,7 @@ pub async fn switch_village(
                 payload.village_id,
             )
             .await
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| internal_error("unable_to_update_refresh_session_village", err))?;
         let (access_token, expires_in) = state
             .token_service
             .issue_access_token_with_context(
@@ -320,7 +320,7 @@ pub async fn switch_village(
                 payload.village_id,
                 claims.refresh_session_id,
             )
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| internal_error("unable_to_issue_access_token", err))?;
         response.access_token = Some(access_token);
         response.expires_in = Some(expires_in);
     }
@@ -338,16 +338,10 @@ pub async fn stats(
     let requested_page = params.page.unwrap_or(1).max(1);
 
     let mut data = state
-        .app_bus
-        .query(
-            GetLeaderboard {
-                page: requested_page,
-                per_page: LEADERBOARD_PAGE_SIZE,
-            },
-            GetLeaderboardHandler::new(),
-        )
+        .game_app
+        .get_leaderboard_page(requested_page, LEADERBOARD_PAGE_SIZE)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
 
     let total_pages = if data.total_players == 0 {
         1
@@ -359,16 +353,10 @@ pub async fn stats(
     if data.total_players > 0 && page > total_pages {
         page = total_pages;
         data = state
-            .app_bus
-            .query(
-                GetLeaderboard {
-                    page,
-                    per_page: LEADERBOARD_PAGE_SIZE,
-                },
-                GetLeaderboardHandler::new(),
-            )
+            .game_app
+            .get_leaderboard_page(page, LEADERBOARD_PAGE_SIZE)
             .await
-            .map_err(|err| ApiError::internal(err.to_string()))?;
+            .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
     }
 
     Ok(Json(StatsResponse {
@@ -404,19 +392,16 @@ pub async fn player_profile(
     let _user = authenticated_user(&state, &headers).await?;
 
     let player = state
-        .app_bus
-        .query(GetPlayerById { player_id }, GetPlayerByIdHandler::new())
+        .game_app
+        .get_player_by_id(player_id)
         .await
-        .map_err(|_| ApiError::not_found("Player not found"))?;
+        .map_err(|err| map_application_error("unable_to_load_player_profile", err))?;
 
     let villages = state
-        .app_bus
-        .query(
-            ListVillagesByPlayerId { player_id },
-            ListVillagesByPlayerIdHandler::new(),
-        )
+        .game_app
+        .list_villages_by_player_id(player_id)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_player_villages", err))?;
 
     Ok(Json(PlayerProfileResponse {
         server_time: Utc::now().timestamp(),
@@ -425,8 +410,8 @@ pub async fn player_profile(
         villages: villages
             .into_iter()
             .map(|village| PlayerVillageDto {
-                village_id: village.id,
-                name: village.name,
+                village_id: village.village_id,
+                name: village.village_name,
                 x: village.position.x,
                 y: village.position.y,
                 population: village.population as i32,
@@ -442,16 +427,10 @@ pub async fn reports(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let reports = state
-        .app_bus
-        .query(
-            GetReportsForPlayer {
-                player_id: user.player.id,
-                limit: 50,
-            },
-            GetReportsForPlayerHandler::new(),
-        )
+        .game_app
+        .list_reports_for_player(user.player.id, 50)
         .await
-        .unwrap_or_default();
+        .map_err(|err| map_application_error("unable_to_list_reports", err))?;
 
     Ok(Json(ReportsResponse {
         server_time: Utc::now().timestamp(),
@@ -467,27 +446,15 @@ pub async fn report_detail(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let report = state
-        .app_bus
-        .query(
-            GetReportForPlayer {
-                report_id,
-                player_id: user.player.id,
-            },
-            GetReportForPlayerHandler::new(),
-        )
+        .game_app
+        .get_report_for_player(report_id, user.player.id)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?
+        .map_err(|err| map_application_error("unable_to_load_report", err))?
         .ok_or_else(|| ApiError::not_found("Report not found"))?;
 
     let _ = state
-        .app_bus
-        .execute(
-            MarkReportRead {
-                report_id,
-                player_id: user.player.id,
-            },
-            MarkReportReadCommandHandler::new(),
-        )
+        .game_app
+        .mark_report_as_read(report_id, user.player.id)
         .await;
 
     Ok(Json(ReportDetailResponse {
@@ -510,20 +477,10 @@ pub async fn map_region(
     let center = wrap_point(center, state.world_size);
 
     let fields = state
-        .app_bus
-        .query(
-            GetMapRegion {
-                center: Position {
-                    x: center.x,
-                    y: center.y,
-                },
-                radius: MAP_REGION_RADIUS,
-                world_size: state.world_size,
-            },
-            GetMapRegionHandler::new(),
-        )
+        .game_app
+        .get_map_region(center.x, center.y, MAP_REGION_RADIUS, state.world_size)
         .await
-        .map_err(|err| ApiError::internal(err.to_string()))?;
+        .map_err(|err| map_application_error("unable_to_load_map_region", err))?;
 
     Ok(Json(MapRegionResponse {
         center,
@@ -540,32 +497,15 @@ pub async fn map_field(
 ) -> Result<impl IntoResponse, ApiError> {
     let _user = authenticated_user(&state, &headers).await?;
     let field = state
-        .app_bus
-        .query(GetMapField { field_id }, GetMapFieldHandler::new())
+        .game_app
+        .get_map_field(field_id)
         .await
-        .map_err(|_| ApiError::not_found("Map field not found"))?;
-
-    let village = match field.village_id {
-        Some(village_id) => state
-            .app_bus
-            .query(
-                GetVillageById { id: village_id },
-                GetVillageByIdHandler::new(),
-            )
-            .await
-            .ok(),
-        None => None,
-    };
-
-    let player_name = match field.player_id {
-        Some(player_id) => state
-            .app_bus
-            .query(GetPlayerById { player_id }, GetPlayerByIdHandler::new())
-            .await
-            .ok()
-            .map(|player| player.username),
-        None => None,
-    };
+        .map_err(|err| map_application_error("unable_to_load_map_field", err))?;
+    let region_tile = state
+        .game_app
+        .get_map_region_tile_by_field_id(field_id)
+        .await
+        .map_err(|err| map_application_error("unable_to_load_map_field_tile", err))?;
 
     let (tile_type, valley, oasis) = match field.topology {
         MapFieldTopology::Oasis(variant) => (TileType::Oasis, None, Some(format!("{variant:?}"))),
@@ -586,9 +526,9 @@ pub async fn map_field(
         tile_type,
         village_id: field.village_id,
         player_id: field.player_id,
-        village_name: village.as_ref().map(|it| it.name.clone()),
-        player_name,
-        village_population: village.map(|it| it.population as i32),
+        village_name: region_tile.as_ref().and_then(|t| t.village_name.clone()),
+        player_name: region_tile.as_ref().and_then(|t| t.player_name.clone()),
+        village_population: region_tile.and_then(|t| t.village_population),
         valley,
         oasis,
     }))
@@ -640,7 +580,7 @@ fn wrap_coordinate(value: i32, world_size: i32) -> i32 {
     normalized - world_size
 }
 
-fn map_report_summary(report: parabellum_app::cqrs::queries::ReportView) -> ReportListItemDto {
+fn map_report_summary(report: parabellum_app::villages::models::ReportModel) -> ReportListItemDto {
     ReportListItemDto {
         id: report.id,
         report_type: report.report_type,
@@ -655,18 +595,15 @@ async fn owned_village_by_id(
     user: &CurrentUser,
     village_id: u32,
 ) -> Result<Village, ApiError> {
-    if !user.villages.iter().any(|v| v.id == village_id) {
+    let village = state
+        .game_app
+        .get_village_model(village_id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village", e))?;
+    if village.player_id != user.player.id {
         return Err(ApiError::not_found(
             "Village not available for the current player",
         ));
     }
-
-    state
-        .app_bus
-        .query(
-            GetVillageById { id: village_id },
-            GetVillageByIdHandler::new(),
-        )
-        .await
-        .map_err(|_| ApiError::not_found("Village not found"))
+    Ok(village.into())
 }

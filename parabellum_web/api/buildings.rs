@@ -16,26 +16,23 @@ use chrono::Utc;
 use serde::Serialize;
 
 use parabellum_app::{
-    cqrs::queries::{
-        AcademyQueueItem, BuildingQueueItem, GetCulturePointsInfo, GetMarketplaceData,
-        GetVillageInfoByIds, SmithyQueueItem, TrainingQueueItem,
+    ports::queries::{
+        AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem,
+        VillageArmyStateView,
     },
-    jobs::JobStatus,
-    queries_handlers::{
-        GetCulturePointsInfoQueryHandler, GetMarketplaceDataHandler, GetVillageInfoByIdsHandler,
-    },
-    repository::VillageInfo,
+    read_models::VillageInfo,
+    villages::models::ScheduledActionStatus,
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
-    culture_points::required_cp,
     smithy::smithy_upgrade_cost_for_unit,
     village::VillageBuilding,
 };
 use parabellum_types::{
     army::{UnitGroup, UnitName},
     buildings::{BuildingName, BuildingRequirement},
-    common::{ResourceGroup, Speed},
+    common::ResourceGroup,
+    errors::ApplicationError,
 };
 
 use crate::{
@@ -44,7 +41,6 @@ use crate::{
         errors::ApiError,
     },
     http::AppState,
-    session::{village_movements_or_empty, village_queues_or_empty},
     view_helpers::{
         MerchantMovementDirection, building_description_paragraphs, prepare_global_offers,
         prepare_merchant_movements, prepare_own_offers, prepare_rally_point_cards,
@@ -52,6 +48,7 @@ use crate::{
 };
 
 use super::authenticated_user;
+use super::error_mapping::map_application_error;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -394,7 +391,11 @@ pub async fn building_detail(
     }
 
     let user = authenticated_user(&state, &headers).await?;
-    let queues = village_queues_or_empty(&state, user.village.id).await;
+    let queues = state
+        .game_app
+        .get_village_queues(user.village.id)
+        .await
+        .map_err(|err| map_application_error("unable_to_load_village_queues", err))?;
     let stored = user.village.stored_resources();
     let building_queue_capacity: usize =
         if matches!(user.village.tribe, parabellum_types::tribe::Tribe::Roman) {
@@ -545,23 +546,16 @@ pub async fn building_detail(
             }
             BuildingTypeDto::Expansion => {
                 let culture_points_info = state
-                    .app_bus
-                    .query(
-                        GetCulturePointsInfo {
-                            player_id: user.player.id,
-                        },
-                        GetCulturePointsInfoQueryHandler::new(),
-                    )
+                    .game_app
+                    .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
                     .await
-                    .ok();
-                let account_culture_points_production = culture_points_info
-                    .as_ref()
-                    .map(|info| info.account_culture_points_production)
-                    .unwrap_or(0);
-                let account_culture_points = culture_points_info
-                    .as_ref()
-                    .map(|info| info.account_culture_points)
-                    .unwrap_or(0);
+                    .map_err(|err| map_application_error("unable_to_load_expansion_info", err))?;
+                let account_culture_points_production =
+                    culture_points_info.player_culture_points_production;
+                let account_culture_points = culture_points_info.player_culture_points;
+                let village_culture_points_production =
+                    culture_points_info.village_culture_points_production;
+                let next_cp_required = culture_points_info.next_cp_required;
 
                 let training_units = training_options_for_group(
                     &user.village,
@@ -583,15 +577,25 @@ pub async fn building_detail(
                     0
                 };
                 let available_slots = max_slots.saturating_sub(child_villages_count as u8);
-                let settlers_at_home = user.village.count_settlers_at_home();
                 let settler_idx = user
                     .village
                     .tribe
                     .get_unit_idx_by_name(&UnitName::Settler)
                     .unwrap_or(9);
-                let settlers_deployed: u32 = user
-                    .village
-                    .deployed_armies()
+                let army_state = state
+                    .game_app
+                    .get_village_army_state_view(user.village.id)
+                    .await
+                    .map_err(|err| {
+                        map_application_error("unable_to_load_village_army_state", err)
+                    })?;
+                let settlers_at_home = army_state
+                    .home_army
+                    .as_ref()
+                    .map(|a| a.units().get(settler_idx))
+                    .unwrap_or(0);
+                let settlers_deployed: u32 = army_state
+                    .deployed_armies
                     .iter()
                     .map(|army| army.units().get(settler_idx))
                     .sum();
@@ -601,16 +605,6 @@ pub async fn building_detail(
                 } else {
                     0
                 };
-
-                let speed = match state.server_speed {
-                    1 => Speed::X1,
-                    2 => Speed::X2,
-                    3 => Speed::X3,
-                    5 => Speed::X5,
-                    10 => Speed::X10,
-                    _ => Speed::X1,
-                };
-                let next_cp_required = required_cp(speed, user.villages.len() + 1);
 
                 BuildingDetailDto {
                     slot_id,
@@ -635,7 +629,7 @@ pub async fn building_detail(
                         queue: training_queue,
                     }),
                     expansion: Some(ExpansionDetailDto {
-                        village_culture_points_production: user.village.culture_points_production,
+                        village_culture_points_production,
                         account_culture_points_production,
                         account_culture_points,
                         next_cp_required,
@@ -733,15 +727,12 @@ pub async fn building_detail(
             }
             BuildingTypeDto::Marketplace => {
                 let marketplace_data = state
-                    .app_bus
-                    .query(
-                        GetMarketplaceData {
-                            village_id: user.village.id,
-                        },
-                        GetMarketplaceDataHandler::new(),
-                    )
+                    .game_app
+                    .get_marketplace_data(user.village.id)
                     .await
-                    .map_err(|err| ApiError::internal(err.to_string()))?;
+                    .map_err(|err| {
+                    map_application_error("unable_to_load_marketplace_data", err)
+                })?;
 
                 let own_offers = prepare_own_offers(&marketplace_data)
                     .into_iter()
@@ -801,10 +792,10 @@ pub async fn building_detail(
                             }
                         },
                         kind: match movement.kind {
-                            parabellum_app::cqrs::queries::MerchantMovementKind::Going => {
+                            parabellum_app::ports::queries::MerchantMovementKind::Going => {
                                 MerchantMovementKindDto::Going
                             }
-                            parabellum_app::cqrs::queries::MerchantMovementKind::Return => {
+                            parabellum_app::ports::queries::MerchantMovementKind::Return => {
                                 MerchantMovementKindDto::Return
                             }
                         },
@@ -856,70 +847,93 @@ pub async fn building_detail(
                 }
             }
             BuildingTypeDto::RallyPoint => {
-                let movements = village_movements_or_empty(&state, user.village.id).await;
-                let village_info = fetch_village_info_for_rally_point(&state, &user.village).await;
-                let cards = prepare_rally_point_cards(&user.village, &movements, &village_info)
-                    .into_iter()
-                    .map(|card| {
-                        let (action, action_id) = match card.action_button {
-                            Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
-                                (Some(RallyActionDto::Recall), Some(army_id))
-                            }
-                            Some(crate::view_helpers::ArmyAction::Release { army_id }) => {
-                                (Some(RallyActionDto::Release), Some(army_id))
-                            }
-                            None => (None, None),
-                        };
-
-                        RallyCardDto {
-                            village_id: card.village_id,
-                            village_name: card.village_name,
-                            position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
-                            units: card.units.units().to_vec(),
-                            category: match card.category {
-                                crate::view_helpers::ArmyCategory::Stationed => {
-                                    RallyCardCategoryDto::Stationed
-                                }
-                                crate::view_helpers::ArmyCategory::Reinforcement => {
-                                    RallyCardCategoryDto::Reinforcement
-                                }
-                                crate::view_helpers::ArmyCategory::Deployed => {
-                                    RallyCardCategoryDto::Deployed
-                                }
-                                crate::view_helpers::ArmyCategory::Incoming => {
-                                    RallyCardCategoryDto::Incoming
-                                }
-                                crate::view_helpers::ArmyCategory::Outgoing => {
-                                    RallyCardCategoryDto::Outgoing
-                                }
-                            },
-                            movement_kind: card.movement_kind.map(|kind| match kind {
-                                crate::view_helpers::MovementKind::Attack => {
-                                    RallyMovementKindDto::Attack
-                                }
-                                crate::view_helpers::MovementKind::Raid => {
-                                    RallyMovementKindDto::Raid
-                                }
-                                crate::view_helpers::MovementKind::Reinforcement => {
-                                    RallyMovementKindDto::Reinforcement
-                                }
-                                crate::view_helpers::MovementKind::Return => {
-                                    RallyMovementKindDto::Return
-                                }
-                                crate::view_helpers::MovementKind::FoundVillage => {
-                                    RallyMovementKindDto::FoundVillage
-                                }
-                            }),
-                            arrival_time: card.arrival_time,
-                            action,
-                            action_id,
+                let movements = state
+                    .game_app
+                    .get_village_troop_movements(user.village.id)
+                    .await
+                    .map_err(|err| {
+                        map_application_error("unable_to_load_village_troop_movements", err)
+                    })?;
+                let army_state = state
+                    .game_app
+                    .get_village_army_state_view(user.village.id)
+                    .await
+                    .map_err(|err| {
+                        map_application_error("unable_to_load_village_army_state", err)
+                    })?;
+                let village_info = fetch_village_info_for_rally_point(&state, &army_state)
+                    .await
+                    .map_err(|err| {
+                        map_application_error("unable_to_load_rally_village_info", err)
+                    })?;
+                let cards = prepare_rally_point_cards(
+                    user.village.id,
+                    &user.village.name,
+                    &user.village.position,
+                    &user.village.tribe,
+                    &army_state,
+                    &movements,
+                    &village_info,
+                )
+                .into_iter()
+                .map(|card| {
+                    let (action, action_id) = match card.action_button {
+                        Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
+                            (Some(RallyActionDto::Recall), Some(army_id))
                         }
-                    })
-                    .collect();
+                        Some(crate::view_helpers::ArmyAction::Release { army_id }) => {
+                            (Some(RallyActionDto::Release), Some(army_id))
+                        }
+                        None => (None, None),
+                    };
 
-                let available_units = user
-                    .village
-                    .army()
+                    RallyCardDto {
+                        village_id: card.village_id,
+                        village_name: card.village_name,
+                        position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
+                        units: card.units.units().to_vec(),
+                        category: match card.category {
+                            crate::view_helpers::ArmyCategory::Stationed => {
+                                RallyCardCategoryDto::Stationed
+                            }
+                            crate::view_helpers::ArmyCategory::Reinforcement => {
+                                RallyCardCategoryDto::Reinforcement
+                            }
+                            crate::view_helpers::ArmyCategory::Deployed => {
+                                RallyCardCategoryDto::Deployed
+                            }
+                            crate::view_helpers::ArmyCategory::Incoming => {
+                                RallyCardCategoryDto::Incoming
+                            }
+                            crate::view_helpers::ArmyCategory::Outgoing => {
+                                RallyCardCategoryDto::Outgoing
+                            }
+                        },
+                        movement_kind: card.movement_kind.map(|kind| match kind {
+                            crate::view_helpers::MovementKind::Attack => {
+                                RallyMovementKindDto::Attack
+                            }
+                            crate::view_helpers::MovementKind::Raid => RallyMovementKindDto::Raid,
+                            crate::view_helpers::MovementKind::Reinforcement => {
+                                RallyMovementKindDto::Reinforcement
+                            }
+                            crate::view_helpers::MovementKind::Return => {
+                                RallyMovementKindDto::Return
+                            }
+                            crate::view_helpers::MovementKind::FoundVillage => {
+                                RallyMovementKindDto::FoundVillage
+                            }
+                        }),
+                        arrival_time: card.arrival_time,
+                        action,
+                        action_id,
+                    }
+                })
+                .collect();
+
+                let available_units = army_state
+                    .home_army
+                    .as_ref()
                     .map(|army| army.units().clone())
                     .unwrap_or_default();
                 let sendable_units = user
@@ -1080,34 +1094,27 @@ pub async fn building_detail(
 
 async fn fetch_village_info_for_rally_point(
     state: &AppState,
-    village: &parabellum_game::models::village::Village,
-) -> HashMap<u32, VillageInfo> {
+    army_state: &VillageArmyStateView,
+) -> Result<HashMap<u32, VillageInfo>, ApplicationError> {
     let mut village_ids = std::collections::HashSet::new();
 
-    for army in village.deployed_armies() {
+    for army in &army_state.deployed_armies {
         if let Some(dest_id) = army.current_map_field_id {
             village_ids.insert(dest_id);
         }
     }
 
-    for reinforcement in village.reinforcements() {
+    for reinforcement in &army_state.reinforcements {
         village_ids.insert(reinforcement.village_id);
     }
 
     if village_ids.is_empty() {
-        return HashMap::new();
+        return Ok(HashMap::new());
     }
 
     let ids: Vec<u32> = village_ids.into_iter().collect();
 
-    state
-        .app_bus
-        .query(
-            GetVillageInfoByIds { village_ids: ids },
-            GetVillageInfoByIdsHandler::new(),
-        )
-        .await
-        .unwrap_or_default()
+    state.game_app.get_village_info_by_ids(ids).await
 }
 
 fn resource_group_to_dto(resource: &ResourceGroup) -> ResourceAmountsDto {
@@ -1352,7 +1359,7 @@ fn academy_queue_for_slot(queue: &[AcademyQueueItem]) -> Vec<AcademyQueueItemDto
         .map(|item| AcademyQueueItemDto {
             unit_name: unit_key(&item.unit),
             time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
-            is_processing: item.status == JobStatus::Processing,
+            is_processing: item.status == ScheduledActionStatus::Processing,
         })
         .collect()
 }
@@ -1471,7 +1478,7 @@ fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
                 unit_name: unit_key(&item.unit),
                 target_level: *count,
                 time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
-                is_processing: item.status == JobStatus::Processing,
+                is_processing: item.status == ScheduledActionStatus::Processing,
             }
         })
         .collect()

@@ -13,6 +13,7 @@ path = "lib.rs"
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }
+mini_cqrs_es = { workspace = true }
 
 async-trait = { workspace = true }
 tracing = { workspace = true }

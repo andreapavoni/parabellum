@@ -3,9 +3,6 @@ use thiserror::Error;
 /// Errors for app logic.
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("No job handler for {0}")]
-    NoJobHandler(String),
-
     #[error("Wrong authentication credentials")]
     WrongAuthCredentials,
 
@@ -20,4 +17,7 @@ pub enum AppError {
 
     #[error("{queue} queue already contains {item}")]
     QueueItemAlreadyQueued { queue: &'static str, item: String },
+
+    #[error("Invalid aggregate target: expected village {expected}, got village {actual}")]
+    InvalidAggregateTarget { expected: u32, actual: u32 },
 }

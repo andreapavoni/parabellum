@@ -66,13 +66,14 @@ Want to get the server running locally? Here’s how.
 5.  **(optional) Seed game data:**
     ```sh
     # Uses seed/game.json by default
-    cargo run -p parabellum_server --bin seed_game
+    cargo run -p parabellum_server --bin parabellum-seed
     ```
-    You can also pass a custom data file:
+    You can also pass a custom data file and a username override:
     ```sh
-    cargo run -p parabellum_server --bin seed_game -- --file seed/dev.json
+    cargo run -p parabellum_server --bin parabellum-seed -- --file seed/dev.json --username andrea
     ```
-    The seeder is a standalone tool: it executes the provided file and fails on conflicts (for example, existing user/email).
+    The seeder creates (or reuses) a user/player and prepares one developed village according to the JSON file.
+    Login defaults are deterministic: email is `<username>@example.com`, password is `<username>`.
 
 6.  **Install frontend dependencies:**
     ```sh
@@ -102,6 +103,26 @@ The frontend is now a `Preact + Vite` SPA served by the Rust app, backed by JSON
 bun run build:release
 ```
 
+### Event Replay (Read Models)
+
+Parabellum persists game events and projects read models from those events.
+
+- **Dry-run replay**: inspect event streams and replay windows without mutating read models.
+- **Full replay**: apply events and rebuild read models for the selected target.
+
+```sh
+# default: --target all --mode dry-run --from 1
+cargo run -p parabellum_server --bin parabellum-replay
+
+# full replay for village projections only
+cargo run -p parabellum_server --bin parabellum-replay -- --target village --mode full
+
+# bounded window
+cargo run -p parabellum_server --bin parabellum-replay -- --from 1000 --to 2000
+```
+
+The replay entrypoint is provided by the server runtime and is intended for maintenance/operations tasks in development or controlled environments.
+
 ---
 
 ## Screenshots
@@ -118,8 +139,8 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 
 ### Implemented
 - [x] **Core Architecture**: A clean, command-based application structure.
-- [x] **Database**: A repository pattern for atomic database transactions.
-- [x] **Job System**: An async, persistent job queue.
+- [x] **Database**: Postgres persistence with SQLx adapters.
+- [x] **Scheduled Actions**: Event-driven scheduling and completion flow.
 - [x] **Game Data**: All static data for buildings, units, tribes, and smithy upgrades is defined.
 - [x] **Player**: Player registration.
 - [x] **Village**: Initial village founding.
@@ -201,25 +222,28 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 The project is structured as a Cargo workspace with several distinct crates:
 
 * `parabellum_server`: The main binary executable. This is the entry point that ties everything together.
+  - Binary entrypoints live in `parabellum_server/bin/`:
+    - `parabellum` (server runtime)
+    - `parabellum-seed` (seed tool)
+    - `parabellum-replay` (event replay tool)
 
 ### Infrastructure
 These packages provide the necessary tools to make the system working. They provide data persistence, communication interfaces, and they can be changed or added independently.
 
 * `parabellum_web`: The web delivery layer. It serves the JSON API, bearer-token auth endpoints (`/api/v1/auth/token/*` + `/api/v1/auth/refresh`), and the SPA shell/assets.
-* `parabellum_db`: The database layer. This provides the concrete implementation of the database repositories (using `sqlx` and Postgres).
+* `parabellum_infra`: The database layer. This provides the concrete implementation of the database repositories (using `sqlx` and Postgres).
 
 ### Domain
 These packages define the whole game engine. There aren't infrastructure details (like database, http server, etc...). Instead, there are static data (units, costs, times), game rules, validations, etc...
 
-* `parabellum_app`: The application layer. This is the "brain" of the project. It contains all the commands, queries, and handlers that orchestrate the game logic. It also manages the Job Queue system.
+* `parabellum_app`: The application layer. This is the "brain" of the project. It defines commands, queries, and ports that orchestrate game use cases.
 * `parabellum_game`: The core domain layer. This crate knows *nothing* about databases or web servers. It contains the pure game rules, models (Village, Army, Building), and logic (e.g., `battle.rs`).
-* `parabellum_core`: A shared crate for common code.
 * `parabellum_types`: Shared, simple data structures that are used by all other crates to avoid circular dependencies.
 
 ## Developer Documentation
 
-- Web/API crate guide: [`parabellum_web/README.md`](parabellum_web/README.md)
-- API module notes: [`parabellum_web/api/README.md`](parabellum_web/api/README.md)
+- Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- API contract matrix: [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md)
 - API test roadmap: [`parabellum_server/tests/API_TESTING_PLAN.md`](parabellum_server/tests/API_TESTING_PLAN.md)
 
 ---
@@ -255,4 +279,4 @@ Parabellum is open-source software licensed under the **MIT License**.
 
 ## Copyright
 
-A [pavonz](https://pavonz.com) joint. (c) 2023-2025.
+A [pavonz](https://pavonz.com) joint. (c) 2023-2026.

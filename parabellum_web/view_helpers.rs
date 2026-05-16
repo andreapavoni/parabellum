@@ -1,11 +1,10 @@
 use chrono::Utc;
-use parabellum_app::cqrs::queries::{
+use parabellum_app::ports::queries::{
     BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
-    VillageTroopMovements,
+    VillageArmyStateView, VillageTroopMovements,
 };
-use parabellum_app::jobs::JobStatus;
-use parabellum_app::repository::VillageInfo;
-use parabellum_game::models::village::Village;
+use parabellum_app::read_models::VillageInfo;
+use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_types::{
     army::TroopSet, buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
 };
@@ -83,7 +82,7 @@ pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueue
                 slot_id: item.slot_id,
                 building_name: item.building_name.clone(),
                 target_level: item.target_level,
-                is_processing: matches!(item.status, JobStatus::Processing),
+                is_processing: matches!(item.status, ScheduledActionStatus::Processing),
                 time_remaining: format_duration(remaining),
                 time_seconds: remaining,
                 queue_class: None,
@@ -102,20 +101,24 @@ pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueue
 ///
 /// The `village_info` map provides names and positions for villages referenced by armies.
 pub fn prepare_rally_point_cards(
-    village: &Village,
+    village_id: u32,
+    village_name: &str,
+    village_position: &Position,
+    village_tribe: &Tribe,
+    armies: &VillageArmyStateView,
     movements: &VillageTroopMovements,
     village_info: &HashMap<u32, VillageInfo>,
 ) -> Vec<ArmyCardData> {
     let mut cards = Vec::new();
 
     // 1. Stationed troops (home army)
-    if let Some(army) = village.army() {
+    if let Some(army) = &armies.home_army {
         cards.push(ArmyCardData {
-            village_id: village.id,
-            village_name: Some(village.name.clone()),
-            position: Some(village.position.clone()),
+            village_id,
+            village_name: Some(village_name.to_string()),
+            position: Some(village_position.clone()),
             units: army.units().clone(),
-            tribe: village.tribe.clone(),
+            tribe: village_tribe.clone(),
             category: ArmyCategory::Stationed,
             movement_kind: None,
             arrival_time: None,
@@ -124,8 +127,8 @@ pub fn prepare_rally_point_cards(
     }
 
     // 2. Deployed armies (own troops in other villages/oases)
-    for army in village.deployed_armies() {
-        let destination_id = army.current_map_field_id.unwrap_or(village.id);
+    for army in &armies.deployed_armies {
+        let destination_id = army.current_map_field_id.unwrap_or(village_id);
         let (destination_name, destination_position) = village_info
             .get(&destination_id)
             .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
@@ -147,7 +150,7 @@ pub fn prepare_rally_point_cards(
     }
 
     // 3. Reinforcements (troops from other players helping us)
-    for reinforcement in village.reinforcements() {
+    for reinforcement in &armies.reinforcements {
         let origin_id = reinforcement.village_id;
         let (origin_name, origin_position) = village_info
             .get(&origin_id)
@@ -343,8 +346,8 @@ pub fn prepare_own_offers(marketplace_data: &MarketplaceData) -> Vec<Marketplace
                 village_id: offer.village_id,
                 village_name: village_info.name.clone(),
                 position: village_info.position.clone(),
-                offer_resources: offer.offer_resources.clone(),
-                seek_resources: offer.seek_resources.clone(),
+                offer_resources: offer.offer_resources.into(),
+                seek_resources: offer.seek_resources.into(),
                 merchants_required: offer.merchants_required,
                 created_at: offer.created_at.timestamp(),
             }
@@ -368,8 +371,8 @@ pub fn prepare_global_offers(marketplace_data: &MarketplaceData) -> Vec<Marketpl
                 village_id: offer.village_id,
                 village_name: village_info.name.clone(),
                 position: village_info.position.clone(),
-                offer_resources: offer.offer_resources.clone(),
-                seek_resources: offer.seek_resources.clone(),
+                offer_resources: offer.offer_resources.into(),
+                seek_resources: offer.seek_resources.into(),
                 merchants_required: offer.merchants_required,
                 created_at: offer.created_at.timestamp(),
             }

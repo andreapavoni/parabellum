@@ -62,6 +62,12 @@ pub enum GameError {
     #[error("Village {village_id} not owned by player {player_id:?}")]
     VillageNotOwned { village_id: u32, player_id: Uuid },
 
+    #[error("Village {village_id} is already founded")]
+    VillageAlreadyFounded { village_id: u32 },
+
+    #[error("Village {village_id} cannot target itself")]
+    VillageCannotTargetItself { village_id: u32 },
+
     #[error("Hero {hero_id:?} not owned by player {player_id:?}")]
     HeroNotOwned { hero_id: Uuid, player_id: Uuid },
 
@@ -104,8 +110,17 @@ pub enum GameError {
     #[error("Invalid unit index: {0}")]
     InvalidUnitIndex(u8),
 
+    #[error("Invalid unit quantity: {0}")]
+    InvalidUnitQuantity(i32),
+
     #[error("Hero {hero_id:?} not in the village {village_id}")]
     HeroNotAtHome { hero_id: Uuid, village_id: u32 },
+
+    #[error("Player already has a hero")]
+    HeroAlreadyExists,
+
+    #[error("Hero revival is already pending")]
+    HeroRevivalAlreadyPending,
 
     #[error("Invalid valley with id {0}")]
     InvalidValley(u32),
