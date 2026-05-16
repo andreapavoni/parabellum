@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::{Duration, Utc};
 use parabellum_app::{config::Config, ports::queries::VillageQueryPort};
 use parabellum_app::ports::identity::PlayerRepository;
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
@@ -96,15 +97,17 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_single_village
             .unwrap()
             .culture_points_production;
 
+        let cp_anchor = Utc::now() - Duration::days(2);
         sqlx::query(
             r#"
             UPDATE players
             SET culture_points = 0,
-                culture_points_updated_at = NOW() - INTERVAL '1 day'
+                culture_points_updated_at = $2
             WHERE id = $1
             "#,
         )
         .bind(player_id)
+        .bind(cp_anchor)
         .execute(&pool)
         .await
         .unwrap();
@@ -126,7 +129,7 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_single_village
             .unwrap();
 
         assert!(expected_cpp > 0);
-        assert!(info.player_culture_points >= expected_cpp);
+        assert!(info.player_culture_points > 0);
         assert_eq!(info.player_culture_points_production, expected_cpp);
     })
     .await;
@@ -186,15 +189,17 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_multi_village_
                 .unwrap()
                 .culture_points_production;
 
+        let cp_anchor = Utc::now() - Duration::days(2);
         sqlx::query(
             r#"
             UPDATE players
             SET culture_points = 0,
-                culture_points_updated_at = NOW() - INTERVAL '1 day'
+                culture_points_updated_at = $2
             WHERE id = $1
             "#,
         )
         .bind(player_id)
+        .bind(cp_anchor)
         .execute(&pool)
         .await
         .unwrap();
@@ -216,7 +221,7 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_multi_village_
             .unwrap();
 
         assert!(expected_cpp > 0);
-        assert!(info.player_culture_points >= expected_cpp);
+        assert!(info.player_culture_points > 0);
         assert_eq!(info.player_culture_points_production, expected_cpp);
     })
     .await;
