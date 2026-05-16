@@ -3,6 +3,7 @@
 //! This consumer runs in the command transaction scope and must keep read-model
 //! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
+use parabellum_app::ports::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{
     MovementDirection, MovementType, ScheduledAction, ScheduledActionPayload,
@@ -13,6 +14,7 @@ use parabellum_app::villages::repositories::{
     VillageMovementRepository, VillageRepository,
 };
 use parabellum_game::battle::Battle;
+use parabellum_game::models::culture_points::required_cp;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
@@ -21,6 +23,7 @@ use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceGroup;
+use parabellum_types::common::Speed;
 use sqlx::PgPool;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -31,9 +34,11 @@ use crate::es::{
     PostgresScheduledActionRepository, PostgresVillageMovementRepository,
     PostgresVillageRepository,
 };
+use crate::identity::repositories::PostgresPlayerRepository;
 
 #[derive(Clone)]
 pub struct VillageProjector {
+    pool: PgPool,
     village: PostgresVillageRepository,
     armies: Arc<dyn ArmyRepository>,
     heroes: Arc<dyn HeroRepository>,
@@ -45,6 +50,7 @@ pub struct VillageProjector {
 impl VillageProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
+            pool: pool.clone(),
             village: PostgresVillageRepository::new(pool.clone()),
             armies: Arc::new(PostgresArmyRepository::new(pool.clone())),
             heroes: Arc::new(PostgresHeroRepository::new(pool.clone())),
@@ -89,6 +95,59 @@ impl VillageProjector {
             .buildings
             .iter()
             .any(|b| b.building.name == BuildingName::HeroMansion && b.building.level > 0)
+    }
+
+    async fn can_attempt_conquer(
+        &self,
+        source: &VillageModel,
+        target: &VillageModel,
+        attacking_army: &Army,
+    ) -> Result<bool, CqrsError> {
+        if target.is_capital {
+            return Ok(false);
+        }
+        if attacking_army.get_troop_count_by_role(parabellum_types::army::UnitRole::Chief) == 0 {
+            return Ok(false);
+        }
+
+        let source_village = Self::village_from_model(source);
+        let max_slots = source_village.max_foundation_slots() as usize;
+        if max_slots == 0 {
+            return Ok(false);
+        }
+
+        let player_villages = self
+            .village
+            .list_by_player_id(source.player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let used_slots = player_villages
+            .iter()
+            .filter(|v| v.parent_village_id == Some(source.village_id))
+            .count();
+        if used_slots >= max_slots {
+            return Ok(false);
+        }
+
+        let player_repo = PostgresPlayerRepository::new(self.pool.clone());
+        player_repo
+            .update_culture_points(source.player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let total_cp = player_repo
+            .get_by_id(source.player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+            .culture_points;
+        let needed_cp = required_cp(Speed::X1, player_villages.len() + 1);
+        Ok(total_cp >= needed_cp)
+    }
+
+    fn remove_chiefs_from_army(mut army: Army) -> Army {
+        let mut units = army.units().clone();
+        units.set(8, 0);
+        army.update_units(&units);
+        army
     }
 
     async fn deduct_village_resources(
@@ -136,6 +195,7 @@ impl EventConsumer for VillageProjector {
                 position,
                 tribe,
                 player_id,
+                parent_village_id,
                 buildings,
                 ..
             } => {
@@ -146,6 +206,7 @@ impl EventConsumer for VillageProjector {
                         &village_name,
                         &position,
                         tribe,
+                        parent_village_id,
                         &buildings,
                         &None,
                     )
@@ -160,13 +221,28 @@ impl EventConsumer for VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
-            VillageEvent::VillageConquered { player_id } => {
+            VillageEvent::VillageConquered {
+                player_id,
+                owner_village_id,
+            } => {
                 let village_id = event
                     .aggregate_id
                     .parse::<u32>()
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut conquered = self
+                    .village
+                    .get_by_village_id(village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                conquered.player_id = player_id;
+                conquered.parent_village_id = Some(owner_village_id);
+                conquered.loyalty = 100;
                 self.village
-                    .update_player_id(village_id, player_id)
+                    .replace_village_state(&conquered)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.village
+                    .set_map_occupancy(village_id, Some(village_id), Some(player_id))
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
@@ -909,6 +985,8 @@ impl EventConsumer for VillageProjector {
                     .get_by_village_id(target_village_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let can_attempt_conquer = attack_type == AttackType::Normal
+                    && self.can_attempt_conquer(&source, &target, &army).await?;
 
                 let attacker_village = Self::village_from_model(&source);
                 let mut defender_village = Self::village_from_model(&target);
@@ -942,6 +1020,7 @@ impl EventConsumer for VillageProjector {
                     attacker_village,
                     defender_village.clone(),
                     selected_targets,
+                    can_attempt_conquer,
                 );
                 let report = battle.calculate_battle();
                 let bounty = report
@@ -960,10 +1039,11 @@ impl EventConsumer for VillageProjector {
                 target_next.stocks = defender_village.stocks().clone();
                 target_next.army = defender_village.army().cloned();
                 target_next.reinforcements = defender_village.reinforcements().clone();
-                self.village
-                    .replace_village_state(&target_next)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let conquered = can_attempt_conquer && report.loyalty_after == 0;
+                if conquered {
+                    target_next.army = None;
+                    target_next.reinforcements = vec![];
+                }
 
                 // Keep rm_armies aligned with defender-side casualties:
                 // - home army is projected as `home` when present
@@ -1014,8 +1094,18 @@ impl EventConsumer for VillageProjector {
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
+                if conquered {
+                    self.armies
+                        .delete_by_home_village(target_village_id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
 
                 if attacker_army.immensity() == 0 {
+                    self.village
+                        .replace_village_state(&target_next)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                     if let Some(hero) = attacker_army.hero() {
                         self.heroes
                             .upsert(&hero, source_village_id, source_village_id, "home")
@@ -1024,6 +1114,34 @@ impl EventConsumer for VillageProjector {
                     }
                     return Ok(());
                 }
+
+                if conquered {
+                    let stationed_attacker = Self::remove_chiefs_from_army(attacker_army.clone());
+                    if stationed_attacker.immensity() > 0 {
+                        target_next.reinforcements.push(stationed_attacker.clone());
+                        self.armies
+                            .upsert_stationed(&stationed_attacker, target_village_id, player_id)
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                        let mut source_deployed = source.deployed_armies;
+                        source_deployed.push(stationed_attacker.clone());
+                        self.village
+                            .update_deployed_armies(source_village_id, &source_deployed)
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
+                    self.village
+                        .replace_village_state(&target_next)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    return Ok(());
+                }
+
+                self.village
+                    .replace_village_state(&target_next)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
                 let return_army = Army::new(
                     Some(movement_id),
@@ -1161,6 +1279,7 @@ impl EventConsumer for VillageProjector {
                     attacker_village,
                     defender_village,
                     None,
+                    false,
                 );
                 let report = battle.calculate_scout_battle(target.clone());
                 attacker_army.apply_battle_report(&report.attacker);

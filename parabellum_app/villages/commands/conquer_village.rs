@@ -8,6 +8,7 @@ use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_err
 pub struct ConquerVillage {
     pub player_id: Uuid,
     pub village_id: u32,
+    pub owner_village_id: u32,
 }
 
 impl Command for ConquerVillage {
@@ -22,6 +23,7 @@ impl Command for ConquerVillage {
         }
         Ok(vec![VillageEvent::VillageConquered {
             player_id: self.player_id,
+            owner_village_id: self.owner_village_id,
         }])
     }
 }

@@ -19,6 +19,7 @@ pub trait VillageRepository: Send + Sync {
         village_name: &str,
         position: &Position,
         tribe: Tribe,
+        parent_village_id: Option<u32>,
         buildings: &[parabellum_game::models::village::VillageBuilding],
         army: &Option<parabellum_game::models::army::Army>,
     ) -> Result<(), ApplicationError>;
@@ -243,6 +244,7 @@ pub trait ArmyRepository: Send + Sync {
         &self,
         army_id: Uuid,
     ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
+    async fn delete_by_home_village(&self, village_id: u32) -> Result<(), ApplicationError>;
 }
 
 #[async_trait::async_trait]

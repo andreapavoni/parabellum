@@ -382,6 +382,7 @@ async fn main() -> Result<(), ApplicationError> {
                 position: village_position.clone(),
                 tribe: seed.tribe.clone(),
                 player_id,
+                parent_village_id: None,
                 buildings,
             },
         )

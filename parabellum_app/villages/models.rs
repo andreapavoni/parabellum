@@ -29,7 +29,6 @@ pub struct VillageModel {
     pub population: u32,
     pub loyalty: u8,
     pub is_capital: bool,
-    pub culture_points: u32,
     pub culture_points_production: u32,
     pub smithy_upgrades: SmithyUpgrades,
     pub academy_research: AcademyResearch,

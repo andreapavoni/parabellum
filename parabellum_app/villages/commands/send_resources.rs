@@ -112,6 +112,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
+                parent_village_id: None,
                 buildings: village_with_marketplace(level),
             })
             .await;
@@ -132,6 +133,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
+                parent_village_id: None,
                 buildings: village_with_marketplace(0),
             })
             .await;

@@ -145,7 +145,6 @@ pub struct LeaderboardPage {
 
 #[derive(Debug, Clone)]
 pub struct ExpansionCultureInfo {
-    pub village_culture_points: u32,
     pub village_culture_points_production: u32,
     pub player_culture_points: u32,
     pub player_culture_points_production: u32,

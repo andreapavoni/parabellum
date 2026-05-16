@@ -14,6 +14,7 @@ pub struct FoundVillage {
     pub position: Position,
     pub tribe: Tribe,
     pub player_id: Uuid,
+    pub parent_village_id: Option<u32>,
     pub buildings: Vec<VillageBuilding>,
 }
 
@@ -33,6 +34,7 @@ impl Command for FoundVillage {
             position: self.position.clone(),
             tribe: self.tribe.clone(),
             player_id: self.player_id,
+            parent_village_id: self.parent_village_id,
             buildings: self.buildings.clone(),
         }])
     }
@@ -76,6 +78,7 @@ mod tests {
             position: Position { x: 0, y: 0 },
             tribe: Tribe::Roman,
             player_id,
+            parent_village_id: None,
             buildings: vec![rally_point(1)],
         }
         .handle(&aggregate)
@@ -90,6 +93,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
+                parent_village_id: None,
                 buildings: vec![rally_point(1)],
             }]
         );

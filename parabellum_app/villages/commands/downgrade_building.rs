@@ -125,6 +125,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe,
                 player_id,
+                parent_village_id: None,
                 buildings: vec![
                     VillageBuilding {
                         slot_id: 19,

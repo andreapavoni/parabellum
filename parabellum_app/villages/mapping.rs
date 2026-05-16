@@ -20,7 +20,7 @@ impl From<VillageModel> for parabellum_game::models::village::Village {
             model.smithy_upgrades,
             model.stocks,
             model.academy_research,
-            model.culture_points,
+            0,
             model.culture_points_production,
             model.updated_at,
             model.parent_village_id,
@@ -55,7 +55,6 @@ mod tests {
             population: 12,
             loyalty: 100,
             is_capital: true,
-            culture_points: 55,
             culture_points_production: 0,
             smithy_upgrades: [1, 2, 0, 0, 0, 0, 0, 0],
             academy_research: academy.clone(),
@@ -71,7 +70,7 @@ mod tests {
         let village = parabellum_game::models::village::Village::try_from(model).unwrap();
 
         assert_eq!(village.id, village_id);
-        assert_eq!(village.culture_points, 55);
+        assert_eq!(village.culture_points, 0);
         assert_eq!(village.culture_points_production, 0);
         assert_eq!(village.smithy()[0], 1);
         assert_eq!(village.smithy()[1], 2);

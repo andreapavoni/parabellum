@@ -236,6 +236,7 @@ impl EventConsumer for ReportProjector {
                 attacker_village.clone(),
                 defender_village.clone(),
                 None,
+                false,
             );
             let battle_report = battle.calculate_scout_battle(target.clone());
 
@@ -384,6 +385,7 @@ impl EventConsumer for ReportProjector {
             attacker_village.clone(),
             defender_village,
             selected_targets,
+            false,
         );
         let report = battle.calculate_battle();
         let bounty = report

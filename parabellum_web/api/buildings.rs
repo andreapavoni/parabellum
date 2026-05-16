@@ -113,7 +113,6 @@ pub enum BuildingTypeDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpansionDetailDto {
-    pub village_culture_points: u32,
     pub village_culture_points_production: u32,
     pub account_culture_points_production: u32,
     pub account_culture_points: u32,
@@ -554,7 +553,6 @@ pub async fn building_detail(
                 let account_culture_points_production =
                     culture_points_info.player_culture_points_production;
                 let account_culture_points = culture_points_info.player_culture_points;
-                let village_culture_points = culture_points_info.village_culture_points;
                 let village_culture_points_production =
                     culture_points_info.village_culture_points_production;
                 let next_cp_required = culture_points_info.next_cp_required;
@@ -631,7 +629,6 @@ pub async fn building_detail(
                         queue: training_queue,
                     }),
                     expansion: Some(ExpansionDetailDto {
-                        village_culture_points,
                         village_culture_points_production,
                         account_culture_points_production,
                         account_culture_points,

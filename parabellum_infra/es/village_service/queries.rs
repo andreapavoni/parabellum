@@ -126,16 +126,18 @@ impl VillageEsService {
         let player_repo = PostgresPlayerRepository::new(self.pool.clone());
         let village_repo = PostgresVillageRepository::new(self.pool.clone());
 
-        let player = player_repo
-            .get_by_id(player_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let player_culture_points_production = player_repo
-            .get_total_culture_points_production(player_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let villages = village_repo
             .list_by_player_id(player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let player_culture_points_production: u32 =
+            villages.iter().map(|v| v.culture_points_production).sum();
+        player_repo
+            .update_culture_points(player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let player = player_repo
+            .get_by_id(player_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let village = villages
@@ -154,9 +156,8 @@ impl VillageEsService {
         let next_cp_required = required_cp(speed, villages.len() + 1);
 
         Ok(ExpansionCultureInfo {
-            village_culture_points: village.culture_points,
             village_culture_points_production: village.culture_points_production,
-            player_culture_points: player.culture_points as u32,
+            player_culture_points: player.culture_points,
             player_culture_points_production,
             next_cp_required,
         })

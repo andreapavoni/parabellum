@@ -61,6 +61,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id: owner_id,
+                parent_village_id: None,
                 buildings: vec![],
             })
             .await;

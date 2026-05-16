@@ -97,6 +97,7 @@ impl IdentityService {
             position: village.position.clone(),
             tribe: village.tribe.clone(),
             player_id: village.player_id,
+            parent_village_id: None,
             buildings: village.buildings().clone(),
         };
 

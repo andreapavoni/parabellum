@@ -7,6 +7,7 @@ use parabellum_types::{
     Result,
     errors::{ApplicationError, DbError},
 };
+use sqlx::Row;
 
 use crate::persistence::models::{self as db_models};
 
@@ -135,10 +136,10 @@ impl PlayerRepository for PostgresPlayerRepository {
     }
 
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
-        // Sum culture_points from all ES village read models owned by this player.
-        let total_cp = sqlx::query!(
+        // Sum CPP/day across all villages owned by this player.
+        let total_cpp = sqlx::query!(
             r#"
-            SELECT COALESCE(SUM(culture_points), 0) as "total!: i64"
+            SELECT COALESCE(SUM(culture_points_production), 0) as "total!: i64"
             FROM rm_village
             WHERE player_id = $1
             "#,
@@ -149,16 +150,42 @@ impl PlayerRepository for PostgresPlayerRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
         .total;
 
-        // Update player's culture_points
-        sqlx::query!(
+        let player_row = sqlx::query(
+            r#"
+            SELECT culture_points, culture_points_updated_at
+            FROM players
+            WHERE id = $1
+            "#,
+        )
+        .bind(player_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let current_cp: i32 = player_row.get("culture_points");
+        let cp_updated_at: chrono::DateTime<chrono::Utc> = player_row.get("culture_points_updated_at");
+        let now = chrono::Utc::now();
+        let elapsed_secs = (now - cp_updated_at).num_seconds();
+
+        if elapsed_secs <= 0 || total_cpp <= 0 {
+            return Ok(());
+        }
+
+        let cp_delta = ((total_cpp as f64 / 86_400.0) * elapsed_secs as f64).floor() as i32;
+        if cp_delta <= 0 {
+            return Ok(());
+        }
+
+        sqlx::query(
             r#"
             UPDATE players
-            SET culture_points = $1
+            SET culture_points = $1,
+                culture_points_updated_at = NOW()
             WHERE id = $2
             "#,
-            total_cp as i32,
-            player_id
         )
+        .bind(current_cp.saturating_add(cp_delta))
+        .bind(player_id)
         .execute(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;

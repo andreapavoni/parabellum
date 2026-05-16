@@ -92,6 +92,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
+                parent_village_id: None,
                 buildings: vec![
                     VillageBuilding {
                         slot_id: 19,
@@ -134,6 +135,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe: Tribe::Roman,
                 player_id,
+                parent_village_id: None,
                 buildings: vec![
                     building(19, BuildingName::MainBuilding, 1, 1),
                     expansion_building,

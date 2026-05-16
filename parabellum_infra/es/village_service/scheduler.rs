@@ -99,6 +99,7 @@ pub(super) async fn execute_action(
                     position: target_position,
                     tribe,
                     player_id,
+                    parent_village_id: Some(source_village_id),
                     buildings: vec![],
                 };
                 if let Err(err) = service.found_village(target_village_id, &found).await {
@@ -209,7 +210,6 @@ pub(super) async fn execute_action(
             service
                 .complete_attack_arrival(source_village_id, &command)
                 .await?;
-
             let has_chief = army.units().get(8) > 0;
             if matches!(attack_type, parabellum_types::battle::AttackType::Normal) && has_chief {
                 let target = svc.get_village(target_village_id).await?;
@@ -217,6 +217,7 @@ pub(super) async fn execute_action(
                     let conquer = ConquerVillage {
                         player_id,
                         village_id: target_village_id,
+                        owner_village_id: source_village_id,
                     };
                     service.conquer_village(target_village_id, &conquer).await?;
                 }

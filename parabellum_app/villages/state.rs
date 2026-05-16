@@ -110,6 +110,7 @@ impl VillageState {
         position: Position,
         tribe: Tribe,
         player_id: Uuid,
+        parent_village_id: Option<u32>,
         buildings: Vec<VillageBuilding>,
     ) -> Self {
         let mut village = Village::from_persistence(
@@ -133,7 +134,7 @@ impl VillageState {
             0,
             0,
             Utc::now(),
-            None,
+            parent_village_id,
         );
         let _ = village.set_army(None);
         Self {

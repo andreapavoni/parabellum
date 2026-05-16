@@ -64,6 +64,7 @@ mod tests {
                 position: Position { x: 0, y: 0 },
                 tribe,
                 player_id: Uuid::new_v4(),
+                parent_village_id: None,
                 buildings: vec![VillageBuilding {
                     slot_id: 19,
                     building: Building {

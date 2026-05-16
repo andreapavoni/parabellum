@@ -63,7 +63,13 @@ To avoid drift, each gameplay concern has exactly one canonical read-model owner
   - canonical source for movement timeline (outgoing/incoming/return)
 - `rm_village`:
   - canonical source for village economy/buildings/production/research
+  - canonical source for village CPP/day (`culture_points_production`)
+  - village cumulative CP is not authoritative
   - `army`/`reinforcements`/`deployed_armies` fields are compatibility snapshots, not query authority
+
+- `players`:
+  - canonical source for cumulative culture points (`culture_points`)
+  - `culture_points` advances from elapsed time using summed village CPP/day
 
 Command-side rule:
 - `VillageAggregate` remains fully aware of army data for invariants and domain behavior.

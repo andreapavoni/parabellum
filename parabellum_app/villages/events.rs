@@ -29,10 +29,12 @@ pub enum VillageEvent {
         position: Position,
         tribe: Tribe,
         player_id: Uuid,
+        parent_village_id: Option<u32>,
         buildings: Vec<VillageBuilding>,
     },
     VillageConquered {
         player_id: Uuid,
+        owner_village_id: u32,
     },
     /// Emitted when resources are explicitly set through `SetVillageResources`.
     ///

@@ -252,6 +252,7 @@ pub async fn setup_village_for_player(
                 position,
                 tribe,
                 player_id,
+                parent_village_id: None,
                 buildings,
             },
         )
@@ -320,6 +321,7 @@ pub fn found_village_cmd(
         position,
         tribe: Tribe::Roman,
         player_id,
+        parent_village_id: None,
         buildings: vec![main_building(1), rally_point(1)],
     }
 }

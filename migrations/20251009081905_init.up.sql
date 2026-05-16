@@ -14,7 +14,8 @@ CREATE TABLE players (
     username VARCHAR(255) NOT NULL UNIQUE,
     tribe tribe NOT NULL,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    culture_points INTEGER NOT NULL DEFAULT 0
+    culture_points INTEGER NOT NULL DEFAULT 0,
+    culture_points_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_players_user_id ON players (user_id);

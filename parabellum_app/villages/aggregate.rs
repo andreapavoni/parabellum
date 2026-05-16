@@ -29,6 +29,7 @@ impl VillageAggregate {
                 parabellum_types::map::Position { x: 0, y: 0 },
                 parabellum_types::tribe::Tribe::Roman,
                 player_id,
+                None,
                 buildings,
             ),
         }
@@ -83,6 +84,7 @@ impl Aggregate for VillageAggregate {
                 position,
                 tribe,
                 player_id,
+                parent_village_id,
                 buildings,
             } => {
                 self.id = *village_id;
@@ -92,10 +94,11 @@ impl Aggregate for VillageAggregate {
                     position.clone(),
                     tribe.clone(),
                     *player_id,
+                    *parent_village_id,
                     buildings.clone(),
                 );
             }
-            VillageEvent::VillageConquered { player_id } => {
+            VillageEvent::VillageConquered { player_id, .. } => {
                 self.village.village.player_id = *player_id;
             }
             VillageEvent::VillageResourcesSet { resources, .. } => {

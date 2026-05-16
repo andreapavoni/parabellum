@@ -206,4 +206,13 @@ impl ArmyRepository for PostgresArmyRepository {
     ) -> Result<Option<(u32, Army)>, ApplicationError> {
         self.find_stationed_context(army_id).await
     }
+
+    async fn delete_by_home_village(&self, village_id: u32) -> Result<(), ApplicationError> {
+        sqlx::query("DELETE FROM rm_armies WHERE village_id = $1")
+            .bind(village_id as i32)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
 }

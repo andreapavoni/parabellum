@@ -62,7 +62,6 @@ CREATE TABLE rm_village (
     population INTEGER NOT NULL DEFAULT 2,
     loyalty SMALLINT NOT NULL DEFAULT 100 CHECK (loyalty >= 0 AND loyalty <= 100),
     is_capital BOOLEAN NOT NULL DEFAULT FALSE,
-    culture_points INTEGER NOT NULL DEFAULT 0,
     culture_points_production INTEGER NOT NULL DEFAULT 0,
     smithy_upgrades JSONB NOT NULL DEFAULT '{}'::jsonb,
     academy_research JSONB NOT NULL DEFAULT '{"researches":{}}'::jsonb,

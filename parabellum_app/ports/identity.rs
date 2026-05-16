@@ -61,7 +61,7 @@ pub trait PlayerRepository: Send + Sync {
         limit: i64,
     ) -> Result<(Vec<crate::read_models::PlayerLeaderboardEntry>, i64), ApplicationError>;
 
-    /// Updates player's total culture points by aggregating from all their villages.
+    /// Advances player's total culture points using elapsed time and aggregated village CPP/day.
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError>;
 
     /// Gets the total culture points production (CPP) per day for all player's villages.

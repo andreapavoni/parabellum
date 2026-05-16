@@ -1111,14 +1111,6 @@ impl Village {
             self.stocks.crop = new_crop.floor() as i64;
         }
 
-        // Calculate culture points accumulation
-        // CPP is per 24 hours, so we need to calculate how many CP were generated in time_elapsed
-        if self.culture_points_production > 0 {
-            let cpp_per_second = self.culture_points_production as f64 / 86400.0; // 86400 seconds in 24 hours
-            let culture_points_delta = (cpp_per_second * time_elapsed).floor() as u32;
-            self.culture_points = self.culture_points.saturating_add(culture_points_delta);
-        }
-
         self.updated_at = now;
     }
 
