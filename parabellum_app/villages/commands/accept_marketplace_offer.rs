@@ -11,7 +11,9 @@ use crate::villages::{
 /// Accepts an open marketplace offer.
 ///
 /// Owner-side resources/merchants must already be reserved on offer creation; this command only
-/// validates and reserves the accepting village side.
+/// validates acceptance and emits the acceptance fact.
+///
+/// Cross-stream merchant trip scheduling is orchestrated by service-layer workflow append.
 pub struct AcceptMarketplaceOffer {
     pub player_id: Uuid,
     pub offer: MarketplaceOfferSnapshot,
@@ -49,48 +51,18 @@ impl Command for AcceptMarketplaceOffer {
             .map_err(as_domain_error)?;
 
         let accepted_at = Utc::now();
-        let owner_trip_duration =
-            (self.owner_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
-        let accepting_trip_duration =
-            (self.accepting_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
 
-        Ok(vec![
-            VillageEvent::MarketplaceOfferAccepted {
-                offer_id: self.offer.offer_id,
-                owner_player_id: self.offer.owner_player_id,
-                owner_village_id: self.offer.owner_village_id,
-                accepting_player_id: self.player_id,
-                accepting_village_id,
-                offer_resources: self.offer.offer_resources,
-                seek_resources: self.offer.seek_resources,
-                owner_merchants_reserved: self.offer.merchants_reserved,
-                accepting_merchants_used,
-                accepted_at,
-            },
-            VillageEvent::MerchantsTripScheduled {
-                arrival_action_id: Uuid::new_v4(),
-                return_action_id: Uuid::new_v4(),
-                player_id: self.offer.owner_player_id,
-                source_village_id: self.offer.owner_village_id,
-                target_village_id: accepting_village_id,
-                resources: self.offer.offer_resources.into(),
-                merchants_used: self.offer.merchants_reserved,
-                resources_already_reserved: true,
-                arrives_at: self.owner_arrives_at,
-                returns_at: self.owner_arrives_at + owner_trip_duration,
-            },
-            VillageEvent::MerchantsTripScheduled {
-                arrival_action_id: Uuid::new_v4(),
-                return_action_id: Uuid::new_v4(),
-                player_id: self.player_id,
-                source_village_id: accepting_village_id,
-                target_village_id: self.offer.owner_village_id,
-                resources: self.offer.seek_resources.into(),
-                merchants_used: accepting_merchants_used,
-                resources_already_reserved: false,
-                arrives_at: self.accepting_arrives_at,
-                returns_at: self.accepting_arrives_at + accepting_trip_duration,
-            },
-        ])
+        Ok(vec![VillageEvent::MarketplaceOfferAccepted {
+            offer_id: self.offer.offer_id,
+            owner_player_id: self.offer.owner_player_id,
+            owner_village_id: self.offer.owner_village_id,
+            accepting_player_id: self.player_id,
+            accepting_village_id,
+            offer_resources: self.offer.offer_resources,
+            seek_resources: self.offer.seek_resources,
+            owner_merchants_reserved: self.offer.merchants_reserved,
+            accepting_merchants_used,
+            accepted_at,
+        }])
     }
 }

@@ -11,9 +11,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use mini_cqrs_es::anyhow::Result;
-use mini_cqrs_es::{CqrsError, QueryRunner};
+use mini_cqrs_es::{CqrsError, EventConsumers, EventMetadata, EventPayload, EventStore, NewEvent, QueryRunner};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::culture_points::required_cp;
+use parabellum_game::models::village::Village;
+use parabellum_types::buildings::BuildingName;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
@@ -37,15 +39,16 @@ use parabellum_app::villages::repositories::{
     ScheduledActionRepository, VillageMovementRepository, VillageRepository,
 };
 use parabellum_app::villages::{
-    AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
+    AddBuilding, AttackVillage, CancelMarketplaceOffer,
+    ApplyBattleOutcomeToVillage,
     CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteHeroRevival, CompleteMerchantsArrival,
+    CompleteDowngradeBuilding, CompleteHeroRevival,
     CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
-    CompleteTrainUnit, CompleteUpgradeBuilding, ConquerVillage, CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ReinforcementArrived,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
-    UpgradeBuilding, VillageService,
+    CompleteTrainUnit, CompleteUpgradeBuilding, CreateHero, CreateMarketplaceOffer,
+    DowngradeBuilding, FoundVillage, RecallReinforcements, ResolveAttackBattle,
+    ReinforcementArrived, ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero,
+    ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
+    TrainUnits, UpgradeBuilding, VillageService,
 };
 use parabellum_game::models::map::MapField;
 use parabellum_game::models::marketplace::MarketplaceOffer;
@@ -53,9 +56,10 @@ use parabellum_types::errors::{DbError, GameError};
 
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{
-    PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
+    PostgresArmyRepository, PostgresEventStore, PostgresHeroRepository, PostgresMarketplaceRepository,
     PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
-    PostgresVillageRepository, village_cqrs_runtime,
+    PostgresVillageRepository, ReportProjector, VillageProjector, WorkflowStreamAppend,
+    village_cqrs_runtime,
 };
 use crate::identity::repositories::PostgresPlayerRepository;
 use crate::map::PostgresMapRepository;
@@ -80,6 +84,51 @@ pub struct ReinforcementContext {
 }
 
 impl VillageEsService {
+    /// Converts unordered `(village_id, event)` facts into stream-grouped append
+    /// units with expected versions.
+    ///
+    /// Contract:
+    /// - grouping is by aggregate stream id (`village_id`)
+    /// - event order is preserved inside each stream group
+    /// - expected versions are loaded immediately before append preparation
+    ///
+    /// This is a local extraction seam for a future generic workflow builder in
+    /// `mini_cqrs_es`.
+    async fn build_village_workflow_appends(
+        &self,
+        workflow_events: Vec<(u32, parabellum_app::villages::VillageEvent)>,
+    ) -> Result<Vec<WorkflowStreamAppend>, CqrsError> {
+        let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+        let store = PostgresEventStore::new(self.pool.clone());
+        let mut grouped: Vec<(u32, Vec<NewEvent>)> = Vec::new();
+        for (aggregate_id, payload) in workflow_events {
+            let event = NewEvent {
+                event_type: payload.name(),
+                payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
+                metadata: EventMetadata::default(),
+                timestamp: chrono::Utc::now(),
+            };
+            if let Some((_, events)) = grouped.iter_mut().find(|(id, _)| *id == aggregate_id) {
+                events.push(event);
+            } else {
+                grouped.push((aggregate_id, vec![event]));
+            }
+        }
+
+        let mut streams = Vec::with_capacity(grouped.len());
+        for (aggregate_id, events) in grouped {
+            let (_, expected_version) = store
+                .load_events(aggregate_type, &aggregate_id.to_string())
+                .await?;
+            streams.push(WorkflowStreamAppend {
+                aggregate_id: aggregate_id.to_string(),
+                expected_version,
+                events,
+            });
+        }
+        Ok(streams)
+    }
+
     fn map_troop_movement_type(
         movement_type: parabellum_app::villages::models::MovementType,
     ) -> TroopMovementType {
@@ -333,6 +382,28 @@ impl VillageEsService {
             .await
     }
 
+    pub async fn resolve_attack_battle(
+        &self,
+        village_id: u32,
+        command: &ResolveAttackBattle,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.resolve_attack_battle(village_id, command).await
+    }
+
+    pub async fn apply_battle_outcome_to_village(
+        &self,
+        village_id: u32,
+        command: &ApplyBattleOutcomeToVillage,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service
+            .apply_battle_outcome_to_village(village_id, command)
+            .await
+    }
+
     pub async fn send_resources(
         &self,
         village_id: u32,
@@ -401,20 +472,122 @@ impl VillageEsService {
         else {
             return Err(CqrsError::domain(GameError::MarketplaceOfferNoLongerValid));
         };
+        if accepting_village_id == offer.owner_village_id
+            || accepting_player_id == offer.owner_player_id
+            || offer.offer_resources.quantity == 0
+            || offer.seek_resources.quantity == 0
+            || offer.offer_resources.resource == offer.seek_resources.resource
+        {
+            return Err(CqrsError::domain(GameError::InvalidMarketplaceOffer));
+        }
 
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service
-            .accept_marketplace_offer(
+        let accepting_model = self.get_village(accepting_village_id).await?;
+        if accepting_model.player_id != accepting_player_id {
+            return Err(CqrsError::domain(GameError::VillageNotOwned {
+                village_id: accepting_village_id,
+                player_id: accepting_player_id,
+            }));
+        }
+        let accepting_village = Village::try_from(accepting_model).map_err(CqrsError::domain)?;
+        let seek_group: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
+        if accepting_village
+            .get_building_by_name(&BuildingName::Marketplace)
+            .is_none_or(|slot| slot.building.level == 0)
+        {
+            return Err(CqrsError::domain(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Marketplace,
+                level: 1,
+            }));
+        }
+        if !accepting_village.has_enough_resources(&seek_group) {
+            return Err(CqrsError::domain(GameError::NotEnoughResources));
+        }
+        let capacity = accepting_village.tribe.merchant_stats().capacity;
+        if capacity == 0 {
+            return Err(CqrsError::domain(GameError::NotEnoughMerchants));
+        }
+        let total = seek_group.total();
+        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
+        let accepting_merchants_used = if total > 0 { needed.max(1) } else { 0 };
+        if accepting_merchants_used == 0
+            || accepting_merchants_used > accepting_village.available_merchants()
+        {
+            return Err(CqrsError::domain(GameError::NotEnoughMerchants));
+        }
+        let mut accepting_after = accepting_village.clone();
+        accepting_after
+            .deduct_resources(&seek_group)
+            .map_err(CqrsError::domain)?;
+        accepting_after.busy_merchants = accepting_after
+            .busy_merchants
+            .saturating_add(accepting_merchants_used);
+
+        let accepted_at = chrono::Utc::now();
+        let owner_trip_duration =
+            (owner_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
+        let accepting_trip_duration =
+            (accepting_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
+
+        self.append_village_workflow_events(vec![
+            (
                 accepting_village_id,
-                &AcceptMarketplaceOffer {
+                parabellum_app::villages::VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
+                    offer_id: offer.offer_id,
                     player_id: accepting_player_id,
-                    offer: Self::as_offer_snapshot(offer),
-                    owner_arrives_at,
-                    accepting_arrives_at,
+                    village_id: accepting_village_id,
+                    stocks: accepting_after.stocks().clone(),
+                    busy_merchants: accepting_after.busy_merchants,
+                    applied_at: accepted_at,
                 },
-            )
-            .await
+            ),
+            (
+                accepting_village_id,
+                parabellum_app::villages::VillageEvent::MarketplaceOfferAccepted {
+                    offer_id: offer.offer_id,
+                    owner_player_id: offer.owner_player_id,
+                    owner_village_id: offer.owner_village_id,
+                    accepting_player_id,
+                    accepting_village_id,
+                    offer_resources: offer.offer_resources,
+                    seek_resources: offer.seek_resources,
+                    owner_merchants_reserved: offer.merchants_reserved,
+                    accepting_merchants_used,
+                    accepted_at,
+                },
+            ),
+            (
+                offer.owner_village_id,
+                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
+                    arrival_action_id: uuid::Uuid::new_v4(),
+                    return_action_id: uuid::Uuid::new_v4(),
+                    player_id: offer.owner_player_id,
+                    source_village_id: offer.owner_village_id,
+                    target_village_id: accepting_village_id,
+                    resources: offer.offer_resources.into(),
+                    merchants_used: offer.merchants_reserved,
+                    resources_already_reserved: true,
+                    arrives_at: owner_arrives_at,
+                    returns_at: owner_arrives_at + owner_trip_duration,
+                },
+            ),
+            (
+                accepting_village_id,
+                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
+                    arrival_action_id: uuid::Uuid::new_v4(),
+                    return_action_id: uuid::Uuid::new_v4(),
+                    player_id: accepting_player_id,
+                    source_village_id: accepting_village_id,
+                    target_village_id: offer.owner_village_id,
+                    resources: offer.seek_resources.into(),
+                    merchants_used: accepting_merchants_used,
+                    resources_already_reserved: true,
+                    arrives_at: accepting_arrives_at,
+                    returns_at: accepting_arrives_at + accepting_trip_duration,
+                },
+            ),
+        ])
+        .await?;
+        Ok(accepting_village_id)
     }
 
     /// Executes the village resource utility command through the ES runtime.
@@ -513,10 +686,48 @@ impl VillageEsService {
                     "scheduled action completed"
                 );
             }
-            result?;
             processed += 1;
         }
         Ok(processed)
     }
 
+    /// Appends a cross-village workflow as one transactional event-store write.
+    ///
+    /// This is the strict-consistency primitive for multi-stream facts in the
+    /// village bounded context:
+    /// 1. group events by aggregate stream,
+    /// 2. load expected versions,
+    /// 3. append all grouped streams in one transaction,
+    /// 4. project resulting stored events in global-sequence order.
+    ///
+    /// If any stream version check conflicts, nothing is appended.
+    /// Appends multi-stream village workflow facts atomically, then projects them.
+    ///
+    /// Contract:
+    /// - all stream writes succeed or none are committed
+    /// - stream conflicts fail fast with `CqrsError::Conflict`
+    /// - projector dispatch runs only after a successful append
+    async fn append_village_workflow_events(
+        &self,
+        workflow_events: Vec<(u32, parabellum_app::villages::VillageEvent)>,
+    ) -> Result<(), CqrsError> {
+        if workflow_events.is_empty() {
+            return Ok(());
+        }
+
+        let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+        let store = PostgresEventStore::new(self.pool.clone());
+        let streams = self.build_village_workflow_appends(workflow_events).await?;
+
+        let mut stored = store.append_workflow_events(aggregate_type, &streams).await?;
+        stored.sort_by_key(|event| event.global_sequence.unwrap_or(i64::MAX));
+
+        let consumers = EventConsumers::new()
+            .with(ReportProjector::new(self.pool.clone()))
+            .with(VillageProjector::new(self.pool.clone()));
+        for event in &stored {
+            consumers.process(event).await?;
+        }
+        Ok(())
+    }
 }

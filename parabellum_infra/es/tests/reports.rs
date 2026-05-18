@@ -245,6 +245,165 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
 }
 
 #[tokio::test]
+async fn village_es_service_attack_projects_reinforcement_owner_audience() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_attacker_user_id, attacker_player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let (_defender_user_id, defender_player_id, target_village_id) = setup_village(
+            &pool,
+            &service,
+            "Target",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let (_reinforcer_user_id, reinforcer_player_id, reinforcer_village_id) = setup_village(
+            &pool,
+            &service,
+            "Reinforcer",
+            Position { x: 4, y: 4 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                source_village_id,
+                &TrainUnits {
+                    player_id: attacker_player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .train_units(
+                reinforcer_village_id,
+                &TrainUnits {
+                    player_id: reinforcer_player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 200)
+            .await
+            .unwrap();
+
+        let reinforcement_arrival = chrono::Utc::now() + chrono::Duration::seconds(2);
+        service
+            .send_reinforcement(
+                reinforcer_village_id,
+                &SendReinforcement {
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id: reinforcer_player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    arrives_at: reinforcement_arrival,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(reinforcement_arrival + chrono::Duration::seconds(1), 50)
+            .await
+            .unwrap();
+
+        let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
+        let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
+        service
+            .send_attack(
+                source_village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id: attacker_player_id,
+                    target_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 50)
+            .await
+            .unwrap();
+
+        let attacker_reports = service
+            .list_reports_for_player(attacker_player_id, 10)
+            .await
+            .unwrap();
+        let defender_reports = service
+            .list_reports_for_player(defender_player_id, 10)
+            .await
+            .unwrap();
+        let reinforcer_reports = service
+            .list_reports_for_player(reinforcer_player_id, 10)
+            .await
+            .unwrap();
+
+        let attacker_battle = attacker_reports
+            .iter()
+            .find(|report| report.report_type == "battle")
+            .expect("attacker must receive battle report");
+        let defender_battle = defender_reports
+            .iter()
+            .find(|report| report.report_type == "battle")
+            .expect("defender must receive battle report");
+        let reinforcer_battle = reinforcer_reports
+            .iter()
+            .find(|report| report.report_type == "battle")
+            .expect("reinforcement owner must receive battle report");
+        assert_eq!(attacker_battle.id, defender_battle.id);
+        assert_eq!(attacker_battle.id, reinforcer_battle.id);
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());

@@ -20,8 +20,8 @@ use parabellum_types::{
 };
 use sqlx::PgPool;
 
-use crate::persistence::models as db_models;
 use crate::es::VillageEsService;
+use crate::persistence::models as db_models;
 
 #[derive(Clone)]
 /// Core registration service that persists identity/player data and initializes

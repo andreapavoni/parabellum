@@ -7,6 +7,17 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row, types::Json};
 use uuid::Uuid;
 
+#[derive(Clone, Debug)]
+/// One stream append unit inside a workflow transaction.
+///
+/// `expected_version` is checked before inserts. Any mismatch aborts the whole
+/// workflow append with `CqrsError::Conflict`.
+pub struct WorkflowStreamAppend {
+    pub aggregate_id: String,
+    pub expected_version: u64,
+    pub events: Vec<NewEvent>,
+}
+
 #[derive(Debug, Clone)]
 pub struct PostgresEventStore {
     pool: PgPool,
@@ -44,6 +55,104 @@ impl PostgresEventStore {
         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
         rows.into_iter().map(row_to_stored_event).collect()
+    }
+
+    /// Atomically appends a workflow spanning multiple streams.
+    ///
+    /// Contract:
+    /// - checks each stream `expected_version` inside the same DB transaction
+    /// - returns `CqrsError::Conflict` on first mismatch (fail fast)
+    /// - commits only if all streams are valid and all inserts succeed
+    /// - never produces partial cross-stream writes
+    pub async fn append_workflow_events(
+        &self,
+        aggregate_type: &str,
+        streams: &[WorkflowStreamAppend],
+    ) -> Result<Vec<StoredEvent>, CqrsError> {
+        // Workflow boundary: all stream version checks and all inserts happen in
+        // one DB transaction. We fail fast on the first conflict and commit only
+        // if every stream append is valid.
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        for stream in streams {
+            let current_version: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(MAX(stream_version), 0)
+                FROM es_events
+                WHERE aggregate_type = $1 AND aggregate_id = $2
+                "#,
+            )
+            .bind(aggregate_type)
+            .bind(&stream.aggregate_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+            let actual_version = current_version as u64;
+            if actual_version != stream.expected_version {
+                return Err(CqrsError::Conflict {
+                    expected_version: stream.expected_version,
+                    actual_version,
+                });
+            }
+        }
+
+        let mut stored = Vec::new();
+        for stream in streams {
+            for (idx, event) in stream.events.iter().enumerate() {
+                let version = stream.expected_version + idx as u64 + 1;
+                let event_id = Uuid::new_v4().to_string();
+                let row = sqlx::query(
+                    r#"
+                    INSERT INTO es_events (
+                        event_id,
+                        aggregate_type,
+                        aggregate_id,
+                        stream_version,
+                        event_type,
+                        payload,
+                        metadata,
+                        occurred_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING global_seq, occurred_at
+                    "#,
+                )
+                .bind(&event_id)
+                .bind(aggregate_type)
+                .bind(&stream.aggregate_id)
+                .bind(version as i64)
+                .bind(&event.event_type)
+                .bind(Json(&event.payload))
+                .bind(Json(&event.metadata))
+                .bind(event.timestamp)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+                stored.push(StoredEvent {
+                    id: event_id,
+                    aggregate_id: stream.aggregate_id.clone(),
+                    aggregate_type: aggregate_type.to_string(),
+                    version,
+                    event_type: event.event_type.clone(),
+                    payload: event.payload.clone(),
+                    metadata: event.metadata.clone(),
+                    global_sequence: Some(row.get::<i64, _>("global_seq")),
+                    timestamp: row.get("occurred_at"),
+                });
+            }
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        Ok(stored)
     }
 }
 

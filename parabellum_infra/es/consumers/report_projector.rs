@@ -5,10 +5,7 @@ use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::repositories::{
     ProjectedReport, ReportRepository, VillageRepository,
 };
-use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
-use parabellum_game::models::buildings::Building;
-use parabellum_game::models::village::Village;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::reports::{
     BattlePartyPayload, BattleReportPayload, MarketplaceDeliveryReportPayload,
@@ -35,10 +32,6 @@ impl ReportProjector {
             reports: PostgresReportRepository::new(pool.clone()),
             players: PostgresPlayerRepository::new(pool),
         }
-    }
-
-    fn village_from_model(model: &VillageModel) -> Village {
-        Village::try_from(model.clone()).expect("VillageModel to Village conversion must succeed")
     }
 
     async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
@@ -200,14 +193,11 @@ impl EventConsumer for ReportProjector {
                 )
                 .await;
         }
-        if let VillageEvent::ScoutArrived {
+        if let VillageEvent::ScoutBattleResolved {
             player_id,
             source_village_id,
             target_village_id,
-            army_id,
-            army,
-            target,
-            attack_type,
+            report,
             ..
         } = &domain_event
         {
@@ -218,36 +208,14 @@ impl EventConsumer for ReportProjector {
                 return Ok(());
             };
 
-            let attacker_village = Self::village_from_model(&source);
-            let defender_village = Self::village_from_model(&target_village);
-            let attacker_army = Army::new(
-                Some(*army_id),
-                army.village_id,
-                army.current_map_field_id,
-                army.player_id,
-                army.tribe.clone(),
-                army.units(),
-                army.smithy(),
-                army.hero(),
-            );
-            let battle = Battle::new(
-                attack_type.clone(),
-                attacker_army,
-                attacker_village.clone(),
-                defender_village.clone(),
-                None,
-                false,
-            );
-            let battle_report = battle.calculate_scout_battle(target.clone());
-
             let attacker_payload = BattlePartyPayload {
-                tribe: army.tribe.clone(),
-                army_before: battle_report.attacker.army_before.units().clone(),
-                survivors: battle_report.attacker.survivors.clone(),
-                losses: battle_report.attacker.losses,
+                tribe: report.attacker.army_before.tribe.clone(),
+                army_before: report.attacker.army_before.units().clone(),
+                survivors: report.attacker.survivors.clone(),
+                losses: report.attacker.losses.clone(),
             };
-            let scouting_success = battle_report.scouting.as_ref().is_some_and(|_| {
-                battle_report
+            let scouting_success = report.scouting.as_ref().is_some_and(|_| {
+                report
                     .attacker
                     .survivors
                     .units()
@@ -256,19 +224,14 @@ impl EventConsumer for ReportProjector {
             });
 
             let payload = ReportPayload::Battle(BattleReportPayload {
-                attack_type: attack_type.clone(),
+                attack_type: report.attack_type.clone(),
                 attacker_player: self.player_username(*player_id).await?,
                 attacker_village: source.village_name.clone(),
                 attacker_position: source.position.clone(),
                 defender_player: self.player_username(target_village.player_id).await?,
                 defender_village: target_village.village_name.clone(),
                 defender_position: target_village.position.clone(),
-                success: battle_report
-                    .attacker
-                    .survivors
-                    .units()
-                    .iter()
-                    .any(|&u| u > 0),
+                success: report.attacker.survivors.units().iter().any(|&u| u > 0),
                 bounty: ResourceGroup::new(0, 0, 0, 0),
                 attacker: Some(attacker_payload),
                 defender: if scouting_success {
@@ -303,13 +266,13 @@ impl EventConsumer for ReportProjector {
                 } else {
                     vec![]
                 },
-                scouting: battle_report.scouting.clone(),
+                scouting: report.scouting.clone(),
                 wall_damage: None,
                 catapult_damage: vec![],
             });
 
             let mut audiences = vec![*player_id];
-            if let Some(scouting) = &battle_report.scouting
+            if let Some(scouting) = &report.scouting
                 && scouting.was_detected
                 && target_village.player_id != *player_id
             {
@@ -332,15 +295,17 @@ impl EventConsumer for ReportProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()));
         }
-
-        let VillageEvent::AttackArrived {
+        if let VillageEvent::ScoutArrived {
+            ..
+        } = &domain_event
+        {
+            return Ok(());
+        }
+        let VillageEvent::AttackBattleResolved {
             player_id,
             source_village_id,
             target_village_id,
-            army_id,
-            army,
-            attack_type,
-            catapult_targets,
+            report,
             ..
         } = domain_event
         else {
@@ -354,40 +319,6 @@ impl EventConsumer for ReportProjector {
             return Ok(());
         };
 
-        let attacker_village = Self::village_from_model(&source);
-        let defender_village = Self::village_from_model(&target);
-        let attacker_army = Army::new(
-            Some(army_id),
-            army.village_id,
-            army.current_map_field_id,
-            army.player_id,
-            army.tribe.clone(),
-            army.units(),
-            army.smithy(),
-            army.hero(),
-        );
-
-        let mut selected_targets: Vec<Building> = Vec::new();
-        for name in catapult_targets {
-            match defender_village.get_building_by_name(&name) {
-                Some(slot) => selected_targets.push(slot.building.clone()),
-                None => {
-                    if let Some(random) = defender_village.get_random_buildings(1).pop() {
-                        selected_targets.push(random);
-                    }
-                }
-            }
-        }
-        let selected_targets = selected_targets.try_into().ok();
-        let battle = Battle::new(
-            attack_type.clone(),
-            attacker_army,
-            attacker_village.clone(),
-            defender_village,
-            selected_targets,
-            false,
-        );
-        let report = battle.calculate_battle();
         let bounty = report
             .bounty
             .clone()
@@ -421,7 +352,7 @@ impl EventConsumer for ReportProjector {
             })
             .collect();
         let payload = ReportPayload::Battle(BattleReportPayload {
-            attack_type,
+            attack_type: report.attack_type.clone(),
             attacker_player: self.player_username(player_id).await?,
             attacker_village: source.village_name.clone(),
             attacker_position: source.position.clone(),
@@ -441,6 +372,12 @@ impl EventConsumer for ReportProjector {
         let mut audiences = vec![player_id];
         if target.player_id != player_id {
             audiences.push(target.player_id);
+        }
+        for reinforcement in &report.reinforcements {
+            let owner = reinforcement.army_before.player_id;
+            if !audiences.contains(&owner) {
+                audiences.push(owner);
+            }
         }
         self.reports
             .add_projected(

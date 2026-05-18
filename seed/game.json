@@ -1,5 +1,5 @@
 {
-  "username": "woot",
+  "username": "farmo",
   "tribe": "Teuton",
   "quadrant": "NorthEast",
   "resourceFieldsTargetLevel": 10,
@@ -12,27 +12,27 @@
     {
       "slotId": 20,
       "name": "IronFoundry",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 21,
       "name": "Sawmill",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 22,
       "name": "Brickyard",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 23,
       "name": "GrainMill",
-      "level": 10
+      "level": 5
     },
     {
       "slotId": 24,
       "name": "Bakery",
-      "level": 10
+      "level": 5
     },
     {
       "slotId": 39,
@@ -42,17 +42,17 @@
     {
       "slotId": 25,
       "name": "Marketplace",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 26,
       "name": "Barracks",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 27,
       "name": "Academy",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 28,
@@ -77,12 +77,17 @@
     {
       "slotId": 32,
       "name": "Stable",
-      "level": 10
+      "level": 20
     },
     {
       "slotId": 33,
       "name": "Workshop",
-      "level": 10
+      "level": 20
+    },
+    {
+      "slotId": 34,
+      "name": "HeroMansion",
+      "level": 20
     }
   ],
   "resources": [

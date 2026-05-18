@@ -3,9 +3,9 @@ use std::{fs, path::PathBuf};
 use parabellum_app::auth::hash_password;
 use parabellum_app::config::Config;
 use parabellum_app::villages::{FoundVillage, SetVillageResources};
-use parabellum_infra::{bootstrap_world_map, es::VillageEsService, establish_connection_pool};
 use parabellum_game::models::map::{MapFieldTopology, MapQuadrant};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
+use parabellum_infra::{bootstrap_world_map, es::VillageEsService, establish_connection_pool};
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
@@ -91,7 +91,10 @@ fn seed_inputs_from_args() -> (PathBuf, Option<String>) {
     }
 }
 
-fn village_buildings(config_speed: i8, seed: &SeedFile) -> Result<Vec<VillageBuilding>, ApplicationError> {
+fn village_buildings(
+    config_speed: i8,
+    seed: &SeedFile,
+) -> Result<Vec<VillageBuilding>, ApplicationError> {
     let speed = seed.speed.unwrap_or(config_speed);
     let mut buildings = Vec::with_capacity(seed.buildings.len());
     for item in &seed.buildings {
@@ -169,10 +172,11 @@ async fn select_unoccupied_valley(
         .begin()
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-    let row: (i32, sqlx::types::Json<Position>) = sqlx::query_as(query)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    let row: (i32, sqlx::types::Json<Position>) =
+        sqlx::query_as(query)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
     tx.commit()
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -230,7 +234,10 @@ async fn ensure_migrations_and_map(
     Ok(())
 }
 
-async fn ensure_map_field_is_free(pool: &sqlx::PgPool, village_id: u32) -> Result<(), ApplicationError> {
+async fn ensure_map_field_is_free(
+    pool: &sqlx::PgPool,
+    village_id: u32,
+) -> Result<(), ApplicationError> {
     let occupied: bool =
         sqlx::query_scalar("SELECT village_id IS NOT NULL FROM rm_map_fields WHERE id = $1")
             .bind(village_id as i32)
@@ -252,11 +259,12 @@ async fn create_identity(
     email: &str,
     tribe: &Tribe,
 ) -> Result<(Uuid, Uuid), ApplicationError> {
-    let existing_user_id: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-        .bind(email)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    let existing_user_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+            .bind(email)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
     let user_id = if let Some(id) = existing_user_id {
         id
@@ -336,7 +344,6 @@ async fn reserve_map_field(
     }
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), ApplicationError> {
     let (path, username_override) = seed_inputs_from_args();
@@ -376,9 +383,7 @@ async fn main() -> Result<(), ApplicationError> {
         .found_village(
             village_id,
             &FoundVillage {
-                village_name: seed
-                    .village_name
-                    .unwrap_or(village_name.clone()),
+                village_name: seed.village_name.unwrap_or(village_name.clone()),
                 position: village_position.clone(),
                 tribe: seed.tribe.clone(),
                 player_id,

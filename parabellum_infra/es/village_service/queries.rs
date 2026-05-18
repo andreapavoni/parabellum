@@ -143,7 +143,9 @@ impl VillageEsService {
         let village = villages
             .iter()
             .find(|v| v.village_id == village_id)
-            .ok_or_else(|| CqrsError::EventStore(DbError::VillageNotFound(village_id).to_string()))?;
+            .ok_or_else(|| {
+                CqrsError::EventStore(DbError::VillageNotFound(village_id).to_string())
+            })?;
 
         let speed = match server_speed {
             1 => parabellum_types::common::Speed::X1,
@@ -241,7 +243,8 @@ impl VillageEsService {
         let mut building = Vec::new();
         let building_actions = self.get_village_building_queue(village_id).await?;
         for action in building_actions {
-            let Ok(payload) = serde_json::from_value::<ScheduledActionPayload>(action.payload) else {
+            let Ok(payload) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
                 continue;
             };
             let (slot_id, building_name, target_level) = match payload {
@@ -285,7 +288,8 @@ impl VillageEsService {
                 quantity_remaining,
                 time_per_unit,
                 ..
-            }) = serde_json::from_value::<ScheduledActionPayload>(action.payload) else {
+            }) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            else {
                 continue;
             };
             training.push(TrainingQueueItem {

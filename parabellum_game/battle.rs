@@ -15,7 +15,7 @@ use parabellum_types::{
 
 use crate::models::{army::Army, buildings::Building, village::Village};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BattlePartyReport {
     pub army_before: Army,
     pub survivors: TroopSet,
@@ -24,7 +24,7 @@ pub struct BattlePartyReport {
     pub loss_percentage: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BattleReport {
     pub attack_type: AttackType,
     pub attacker: BattlePartyReport,

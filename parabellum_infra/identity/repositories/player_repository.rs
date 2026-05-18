@@ -163,7 +163,8 @@ impl PlayerRepository for PostgresPlayerRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let current_cp: i32 = player_row.get("culture_points");
-        let cp_updated_at: chrono::DateTime<chrono::Utc> = player_row.get("culture_points_updated_at");
+        let cp_updated_at: chrono::DateTime<chrono::Utc> =
+            player_row.get("culture_points_updated_at");
         let now = chrono::Utc::now();
         let elapsed_secs = (now - cp_updated_at).num_seconds();
 

@@ -52,6 +52,37 @@ Parabellum is a multiplayer strategy game backend organized as a layered CQRS/ES
   - scheduler does not mutate state directly; it issues completion commands.
 - Read models are query sources (`rm_village`, `rm_armies`, `rm_village_movements`, `rm_reports`, `rm_map_fields`, etc.).
 
+## Workflow Transaction Boundary
+
+For cross-village facts (multi-stream workflows), infrastructure uses a dedicated
+transactional append boundary:
+
+1. collect workflow domain events grouped by target aggregate stream,
+2. load each stream expected version,
+3. append all grouped streams in one DB transaction (`es_events`),
+4. project resulting stored events in `global_seq` order.
+
+Current usage:
+- attack battle resolution appends:
+  - `AttackBattleResolved` on source village stream
+  - `BattleOutcomeAppliedToVillage` on target village stream
+- merchants arrival appends:
+  - `MerchantsArrived` on source village stream
+  - `MerchantTransferAppliedToVillage` on target village stream
+- marketplace offer acceptance appends:
+  - `MarketplaceOfferAcceptanceAppliedToVillage` on accepting village stream
+  - `MarketplaceOfferAccepted` on accepting village stream
+  - owner `MerchantsTripScheduled` on owner village stream
+  - accepting `MerchantsTripScheduled` on accepting village stream
+- marketplace create/cancel reservation effects:
+  - `MarketplaceOfferReservationAppliedToVillage` carries owner stocks/merchant reservation state
+  - `MarketplaceOfferReservationReleasedFromVillage` carries owner refund/merchant release state
+
+Failure semantics:
+- fail fast on any stream conflict (`CqrsError::Conflict`)
+- no partial append across streams
+- projector processing runs only after successful append
+
 ## Read-Model Ownership Contract
 
 To avoid drift, each gameplay concern has exactly one canonical read-model owner:
@@ -92,4 +123,5 @@ Command-side rule:
 
 - HTTP API is served under `/api/v1`.
 - Contracts and error envelopes are documented in [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md).
+- Workflow fact contracts are documented in [`docs/EVENT_CONTRACTS.md`](docs/EVENT_CONTRACTS.md).
 - Machine-readable contract entrypoint: `GET /api/v1/openapi.json`.

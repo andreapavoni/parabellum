@@ -271,7 +271,11 @@ pub async fn village_resources(
         .get_village_queues(village.id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
-    Ok(Json(village_resources_response(&village, &queues, &army_state)))
+    Ok(Json(village_resources_response(
+        &village,
+        &queues,
+        &army_state,
+    )))
 }
 
 /// Switches current village and rotates access token context when bearer is present.

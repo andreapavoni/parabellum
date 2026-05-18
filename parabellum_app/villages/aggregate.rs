@@ -152,6 +152,8 @@ impl Aggregate for VillageAggregate {
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
+            VillageEvent::AttackBattleResolved { .. } => {}
+            VillageEvent::BattleOutcomeAppliedToVillage { .. } => {}
             VillageEvent::ArmyReturned { army, bounty, .. } => {
                 let _ = self.village.merge_units_home(army.units());
                 if let Some(bounty) = bounty {
@@ -160,6 +162,7 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::ScoutSent { .. } => {}
             VillageEvent::ScoutArrived { .. } => {}
+            VillageEvent::ScoutBattleResolved { .. } => {}
             VillageEvent::MerchantsTripScheduled {
                 resources,
                 merchants_used,
@@ -173,6 +176,7 @@ impl Aggregate for VillageAggregate {
                 }
             }
             VillageEvent::MerchantsArrived { .. } => {}
+            VillageEvent::MerchantTransferAppliedToVillage { .. } => {}
             VillageEvent::MerchantsReturned { merchants_used, .. } => {
                 self.village.apply_merchant_return(*merchants_used);
             }
@@ -186,6 +190,7 @@ impl Aggregate for VillageAggregate {
                     .village
                     .apply_merchant_departure(&resources, *merchants_reserved);
             }
+            VillageEvent::MarketplaceOfferReservationAppliedToVillage { .. } => {}
             VillageEvent::MarketplaceOfferCanceled {
                 owner_village_id,
                 offer_resources,
@@ -199,18 +204,43 @@ impl Aggregate for VillageAggregate {
                     self.village.apply_merchant_return(*merchants_reserved);
                 }
             }
+            VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {}
             VillageEvent::MarketplaceOfferAccepted {
-                accepting_village_id,
-                seek_resources,
-                accepting_merchants_used,
+                ..
+            } => {}
+            VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
+                village_id,
+                stocks,
+                busy_merchants,
                 ..
             } => {
-                if *accepting_village_id == self.id {
-                    let resources: parabellum_types::common::ResourceGroup =
-                        (*seek_resources).into();
-                    let _ = self
-                        .village
-                        .apply_merchant_departure(&resources, *accepting_merchants_used);
+                if *village_id == self.id {
+                    let current = self.village.village.stored_resources();
+                    let desired = parabellum_types::common::ResourceGroup::new(
+                        stocks.lumber,
+                        stocks.clay,
+                        stocks.iron,
+                        stocks.crop.max(0) as u32,
+                    );
+                    let delta_add = parabellum_types::common::ResourceGroup::new(
+                        desired.lumber().saturating_sub(current.lumber()),
+                        desired.clay().saturating_sub(current.clay()),
+                        desired.iron().saturating_sub(current.iron()),
+                        desired.crop().saturating_sub(current.crop()),
+                    );
+                    let delta_sub = parabellum_types::common::ResourceGroup::new(
+                        current.lumber().saturating_sub(desired.lumber()),
+                        current.clay().saturating_sub(desired.clay()),
+                        current.iron().saturating_sub(desired.iron()),
+                        current.crop().saturating_sub(desired.crop()),
+                    );
+                    if delta_add.total() > 0 {
+                        self.village.village.store_resources(&delta_add);
+                    }
+                    if delta_sub.total() > 0 {
+                        let _ = self.village.village.deduct_resources(&delta_sub);
+                    }
+                    self.village.village.busy_merchants = *busy_merchants;
                 }
             }
             VillageEvent::BuildingConstructionScheduled {

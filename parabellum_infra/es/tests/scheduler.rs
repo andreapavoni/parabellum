@@ -3,8 +3,8 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_app::villages::{
-    AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
-    SendReinforcement, SetVillageResources, TrainUnits, UpgradeBuilding, CompleteTrainUnit,
+    AttackVillage, CompleteTrainUnit, ResearchAcademy, ResearchSmithy, ScoutVillage,
+    SendMerchantsTransfer, SendReinforcement, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::{
@@ -126,6 +126,62 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
         assert_eq!(models.len(), 2);
         assert!(models.iter().any(|v| v.village_id == village_id));
         assert!(models.iter().any(|v| v.village_id == second_village_id));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn scheduler_batch_failure_does_not_leave_actions_processing() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Village A",
+            Position { x: 41, y: 9 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), barracks(1), warehouse(20), granary(20)],
+            resources(20_000, 20_000, 20_000, 20_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+
+        sqlx::query(
+            r#"
+            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
+            VALUES ($1, 'TrainUnit', NOW() - interval '5 minutes', '{}'::jsonb, 'pending')
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 100)
+            .await
+            .unwrap();
+
+        let processing_count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint FROM rm_scheduled_actions WHERE status = 'processing'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(processing_count.0, 0);
     })
     .await;
 }
@@ -998,6 +1054,154 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
 }
 
 #[tokio::test]
+async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_aligned() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_attacker_user_id, attacker_player_id, attacker_village_id) = setup_village(
+            &pool,
+            &service,
+            "Attacker",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_defender_user_id, _defender_player_id, defender_village_id) = setup_village(
+            &pool,
+            &service,
+            "Defender",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_reinforcer_user_id, reinforcer_player_id, reinforcer_village_id) = setup_village(
+            &pool,
+            &service,
+            "Reinforcer",
+            Position { x: 4, y: 4 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                attacker_village_id,
+                &TrainUnits {
+                    player_id: attacker_player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .train_units(
+                reinforcer_village_id,
+                &TrainUnits {
+                    player_id: reinforcer_player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 200)
+            .await
+            .unwrap();
+
+        let reinforcement_arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
+        service
+            .send_reinforcement(
+                reinforcer_village_id,
+                &SendReinforcement {
+                    movement_id: Uuid::new_v4(),
+                    army_id: Uuid::new_v4(),
+                    player_id: reinforcer_player_id,
+                    target_village_id: defender_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    arrives_at: reinforcement_arrives_at,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(reinforcement_arrives_at + chrono::Duration::seconds(1), 50)
+            .await
+            .unwrap();
+
+        let reinforcer_before = service.get_village(reinforcer_village_id).await.unwrap();
+        assert_eq!(troops_sum(&reinforcer_before.deployed_armies, 0), 1);
+        let defender_before = service.get_village(defender_village_id).await.unwrap();
+        assert_eq!(troops_sum(&defender_before.reinforcements, 0), 1);
+
+        let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
+        let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
+        service
+            .send_attack(
+                attacker_village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id: attacker_player_id,
+                    target_village_id: defender_village_id,
+                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 50)
+            .await
+            .unwrap();
+
+        let reinforcer_after = service.get_village(reinforcer_village_id).await.unwrap();
+        let defender_after = service.get_village(defender_village_id).await.unwrap();
+        let defender_reinforcement_units_for_owner: u32 = defender_after
+            .reinforcements
+            .iter()
+            .filter(|army| army.village_id == reinforcer_village_id)
+            .map(|army| army.units().get(0))
+            .sum();
+        assert_eq!(
+            troops_sum(&reinforcer_after.deployed_armies, 0),
+            defender_reinforcement_units_for_owner,
+            "owner deployed snapshot must match post-battle reinforcement snapshot on target",
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
@@ -1214,7 +1418,10 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
             "wipeout should not leave lingering troop movements"
         );
 
-        let source_army_state = service.get_village_army_state_view(village_id).await.unwrap();
+        let source_army_state = service
+            .get_village_army_state_view(village_id)
+            .await
+            .unwrap();
         assert!(
             source_army_state.deployed_armies.is_empty(),
             "wipeout should not leave deployed armies"

@@ -51,7 +51,10 @@ where
     let _guard = TEST_DB_MUTEX.lock().await;
     let pool = setup_pool().await;
     // Cross-process serialization (multiple `cargo test` processes sharing TEST_DATABASE_URL).
-    let mut lock_conn = pool.acquire().await.expect("failed to acquire test lock connection");
+    let mut lock_conn = pool
+        .acquire()
+        .await
+        .expect("failed to acquire test lock connection");
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(TEST_DB_ADVISORY_LOCK_KEY)
         .execute(&mut *lock_conn)

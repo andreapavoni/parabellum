@@ -94,16 +94,12 @@ pub async fn token_login(
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     if payload.email.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Missing required login fields.")
-                .with_field_error("email", "Email is required"),
-        );
+        return Err(ApiError::unprocessable("Missing required login fields.")
+            .with_field_error("email", "Email is required"));
     }
     if payload.password.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Missing required login fields.")
-                .with_field_error("password", "Password is required"),
-        );
+        return Err(ApiError::unprocessable("Missing required login fields.")
+            .with_field_error("password", "Password is required"));
     }
 
     let account = state
@@ -208,10 +204,8 @@ pub async fn token_refresh(
     Json(payload): Json<TokenRefreshRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     if payload.refresh_token.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Refresh token is required.")
-                .with_field_error("refresh_token", "Refresh token is required"),
-        );
+        return Err(ApiError::unprocessable("Refresh token is required.")
+            .with_field_error("refresh_token", "Refresh token is required"));
     }
 
     let (session, rotated_refresh_token) = state
@@ -245,10 +239,8 @@ pub async fn token_logout(
     Json(payload): Json<TokenLogoutRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     if payload.refresh_token.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Refresh token is required.")
-                .with_field_error("refresh_token", "Refresh token is required"),
-        );
+        return Err(ApiError::unprocessable("Refresh token is required.")
+            .with_field_error("refresh_token", "Refresh token is required"));
     }
 
     state

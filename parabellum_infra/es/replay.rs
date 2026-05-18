@@ -129,7 +129,7 @@ impl ReplayService {
         let to_global_seq = self.resolve_upper_bound(request.to_global_seq).await?;
         self.reset_projection_target(request.target).await?;
 
-        let village_projector = VillageProjector::new(self.pool.clone());
+        let village_projector = VillageProjector::new_with_options(self.pool.clone(), false);
         let report_projector = ReportProjector::new(self.pool.clone());
 
         let mut summary = ReplaySummary::default();
@@ -157,13 +157,13 @@ impl ReplayService {
                     continue;
                 }
 
-                if matches!(request.target, ReplayTarget::Village | ReplayTarget::All) {
-                    village_projector.process(event).await?;
-                }
                 if matches!(request.target, ReplayTarget::Reports | ReplayTarget::All)
                     && is_report_event(&event.get_payload::<VillageEvent>()?)
                 {
                     report_projector.process(event).await?;
+                }
+                if matches!(request.target, ReplayTarget::Village | ReplayTarget::All) {
+                    village_projector.process(event).await?;
                 }
 
                 summary.applied += 1;
@@ -225,10 +225,6 @@ impl ReplayService {
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            sqlx::query("DELETE FROM rm_scheduled_actions")
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             sqlx::query("DELETE FROM rm_village")
                 .execute(&mut *tx)
                 .await
@@ -278,7 +274,7 @@ fn is_report_event(event: &VillageEvent) -> bool {
         event,
         VillageEvent::ReinforcementArrived { .. }
             | VillageEvent::MerchantsArrived { .. }
-            | VillageEvent::ScoutArrived { .. }
-            | VillageEvent::AttackArrived { .. }
+            | VillageEvent::ScoutBattleResolved { .. }
+            | VillageEvent::AttackBattleResolved { .. }
     )
 }

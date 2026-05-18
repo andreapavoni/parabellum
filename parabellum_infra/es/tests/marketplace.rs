@@ -293,7 +293,11 @@ async fn village_es_service_marketplace_offer_accept_closes_offer_and_rejects_ca
             parabellum_app::villages::models::MarketplaceOfferStatus::Accepted
         );
         assert!(
-            service.get_open_marketplace_offers().await.unwrap().is_empty(),
+            service
+                .get_open_marketplace_offers()
+                .await
+                .unwrap()
+                .is_empty(),
             "accepted offer must not remain in open marketplace list"
         );
 

@@ -11,11 +11,11 @@ pub(crate) mod lock_keys;
 mod replay;
 mod repositories;
 mod runtime;
-mod village_service;
 mod stores;
 mod stream;
 #[cfg(test)]
 mod tests;
+mod village_service;
 mod worker;
 
 pub use mini_cqrs_es::{
@@ -33,7 +33,7 @@ pub use repositories::{
     PostgresVillageRepository,
 };
 pub use runtime::{VillageCqrsRuntime, village_cqrs_runtime};
-pub use village_service::VillageEsService;
-pub use stores::{PostgresEventStore, PostgresSnapshotStore};
+pub use stores::{PostgresEventStore, PostgresSnapshotStore, WorkflowStreamAppend};
 pub use stream::{VILLAGE_STREAM_TYPE, village_stream_id};
+pub use village_service::VillageEsService;
 pub use worker::EsScheduledActionWorker;
