@@ -3,7 +3,7 @@
 //! This module is intentionally split by concern:
 //! - `mod.rs`: command dispatch + scheduler tick orchestration
 //! - `queries.rs`: read/query helpers consumed by adapters/web layer
-//! - `scheduler.rs`: deterministic completion-command execution from scheduled payloads
+//! - `scheduler.rs`: deterministic fact-driven scheduled workflow progression
 //!
 //! Public API remains centered on `VillageEsService`.
 
@@ -11,7 +11,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use mini_cqrs_es::anyhow::Result;
-use mini_cqrs_es::{CqrsError, EventConsumers, EventMetadata, EventPayload, EventStore, NewEvent, QueryRunner};
+use mini_cqrs_es::{CqrsError, EventMetadata, EventPayload, EventStore, NewEvent, QueryRunner};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::culture_points::required_cp;
 use parabellum_game::models::village::Village;
@@ -41,12 +41,9 @@ use parabellum_app::villages::repositories::{
 use parabellum_app::villages::{
     AddBuilding, AttackVillage, CancelMarketplaceOffer,
     ApplyBattleOutcomeToVillage,
-    CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteHeroRevival,
-    CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
-    CompleteTrainUnit, CompleteUpgradeBuilding, CreateHero, CreateMarketplaceOffer,
+    CreateHero, CreateMarketplaceOffer,
     DowngradeBuilding, FoundVillage, RecallReinforcements, ResolveAttackBattle,
-    ReinforcementArrived, ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero,
+    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero,
     ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
     TrainUnits, UpgradeBuilding, VillageService,
 };
@@ -66,6 +63,8 @@ use crate::map::PostgresMapRepository;
 
 mod queries;
 mod scheduler;
+
+const SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS: i64 = 120;
 
 #[derive(Debug, Clone)]
 /// ES orchestration facade for village command, scheduler, and read helper flows.
@@ -163,6 +162,35 @@ impl VillageEsService {
         Self { pool }
     }
 
+    async fn materialize_current_resources_for_command(
+        &self,
+        village_id: u32,
+        player_id: uuid::Uuid,
+    ) -> Result<(), CqrsError> {
+        let current = self.get_village(village_id).await?;
+        if current.player_id != player_id {
+            return Err(CqrsError::domain(GameError::VillageNotOwned {
+                village_id,
+                player_id,
+            }));
+        }
+        let resources = parabellum_types::common::ResourceGroup::new(
+            current.stocks.lumber,
+            current.stocks.clay,
+            current.stocks.iron,
+            current.stocks.crop.max(0) as u32,
+        );
+        self.set_village_resources(
+            village_id,
+            &SetVillageResources {
+                player_id,
+                resources,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn found_village(
         &self,
         village_id: u32,
@@ -228,6 +256,8 @@ impl VillageEsService {
         village_id: u32,
         command: &SendSettlers,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.send_settlers(village_id, command).await
@@ -285,6 +315,8 @@ impl VillageEsService {
         village_id: u32,
         command: &AddBuilding,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.add_building(village_id, command).await
@@ -295,6 +327,8 @@ impl VillageEsService {
         village_id: u32,
         command: &UpgradeBuilding,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.upgrade_building(village_id, command).await
@@ -315,19 +349,11 @@ impl VillageEsService {
         village_id: u32,
         command: &TrainUnits,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.train_units(village_id, command).await
-    }
-
-    pub async fn complete_train_unit(
-        &self,
-        village_id: u32,
-        command: &CompleteTrainUnit,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service.complete_train_unit(village_id, command).await
     }
 
     pub async fn research_academy(
@@ -335,6 +361,8 @@ impl VillageEsService {
         village_id: u32,
         command: &ResearchAcademy,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.research_academy(village_id, command).await
@@ -345,41 +373,11 @@ impl VillageEsService {
         village_id: u32,
         command: &ResearchSmithy,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.research_smithy(village_id, command).await
-    }
-
-    pub async fn complete_add_building(
-        &self,
-        village_id: u32,
-        command: &CompleteAddBuilding,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service.complete_add_building(village_id, command).await
-    }
-
-    pub async fn complete_upgrade_building(
-        &self,
-        village_id: u32,
-        command: &CompleteUpgradeBuilding,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service.complete_upgrade_building(village_id, command).await
-    }
-
-    pub async fn complete_downgrade_building(
-        &self,
-        village_id: u32,
-        command: &CompleteDowngradeBuilding,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service
-            .complete_downgrade_building(village_id, command)
-            .await
     }
 
     pub async fn resolve_attack_battle(
@@ -409,6 +407,8 @@ impl VillageEsService {
         village_id: u32,
         command: &SendMerchantsTransfer,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.send_resources(village_id, command).await
@@ -419,6 +419,8 @@ impl VillageEsService {
         village_id: u32,
         command: &CreateMarketplaceOffer,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.create_marketplace_offer(village_id, command).await
@@ -459,6 +461,8 @@ impl VillageEsService {
         owner_arrives_at: chrono::DateTime<chrono::Utc>,
         accepting_arrives_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(accepting_village_id, accepting_player_id)
+            .await?;
         let offers = PostgresMarketplaceRepository::new(self.pool.clone());
         let Some(offer) = offers
             .claim_open_for_accept(
@@ -601,7 +605,7 @@ impl VillageEsService {
         service.set_village_resources(village_id, command).await
     }
 
-    /// Executes due scheduled actions by dispatching completion commands.
+    /// Executes due scheduled actions by appending canonical workflow facts.
     ///
     /// Status transitions are persisted for each action (`completed` or `failed`).
     pub async fn process_due_actions(
@@ -627,7 +631,23 @@ impl VillageEsService {
             return Ok(0);
         }
 
-        let actions = PostgresScheduledActionRepository::new(self.pool.clone())
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        let stale_before =
+            before_or_equal - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
+        let requeued = repo
+            .requeue_stale_processing(stale_before)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        if requeued > 0 {
+            warn!(
+                action = "scheduler_requeue_stale_processing",
+                requeued,
+                stale_before = %stale_before,
+                "requeued stale processing scheduled actions to pending"
+            );
+        }
+
+        let actions = repo
             .take_due_pending(before_or_equal, limit)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
@@ -719,15 +739,25 @@ impl VillageEsService {
         let store = PostgresEventStore::new(self.pool.clone());
         let streams = self.build_village_workflow_appends(workflow_events).await?;
 
-        let mut stored = store.append_workflow_events(aggregate_type, &streams).await?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let mut stored = store
+            .append_workflow_events_in_tx(&mut tx, aggregate_type, &streams)
+            .await?;
         stored.sort_by_key(|event| event.global_sequence.unwrap_or(i64::MAX));
 
-        let consumers = EventConsumers::new()
-            .with(ReportProjector::new(self.pool.clone()))
-            .with(VillageProjector::new(self.pool.clone()));
+        let village_projector = VillageProjector::new(self.pool.clone());
+        let report_projector = ReportProjector::new(self.pool.clone());
         for event in &stored {
-            consumers.process(event).await?;
+            village_projector.process_in_tx(&mut tx, event).await?;
+            report_projector.process_in_tx(&mut tx, event).await?;
         }
+        tx.commit()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         Ok(())
     }
 }

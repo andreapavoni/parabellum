@@ -1,7 +1,7 @@
 use parabellum_app::villages::repositories::HeroRepository;
 use parabellum_game::models::hero::{Hero, HeroResourceFocus};
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -13,12 +13,10 @@ impl PostgresHeroRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
 
-#[async_trait::async_trait]
-impl HeroRepository for PostgresHeroRepository {
-    async fn upsert(
+    pub async fn upsert_in_tx(
         &self,
+        tx: &mut Transaction<'_, Postgres>,
         hero: &Hero,
         home_village_id: u32,
         current_village_id: u32,
@@ -72,10 +70,33 @@ impl HeroRepository for PostgresHeroRepository {
         .bind(hero.regeneration_points as i16)
         .bind(hero.resources_points as i16)
         .bind(hero.unassigned_points as i16)
-        .execute(&self.pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl HeroRepository for PostgresHeroRepository {
+    async fn upsert(
+        &self,
+        hero: &Hero,
+        home_village_id: u32,
+        current_village_id: u32,
+        state: &str,
+    ) -> Result<(), ApplicationError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.upsert_in_tx(&mut tx, hero, home_village_id, current_village_id, state)
+            .await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 

@@ -360,7 +360,7 @@ impl VillageState {
         ))
     }
 
-    pub fn register_building_action(
+    pub fn record_building_action_scheduled(
         &mut self,
         action_id: Uuid,
         slot_id: u8,
@@ -375,7 +375,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_building_action(&mut self, action_id: Uuid) {
+    pub fn mark_building_action_consumed(&mut self, action_id: Uuid) {
         self.pending_building_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -562,7 +562,7 @@ impl VillageState {
         self.village.busy_merchants = self.village.busy_merchants.saturating_sub(merchants_used);
     }
 
-    pub fn register_training_action(
+    pub fn record_training_action_scheduled(
         &mut self,
         action_id: Uuid,
         slot_id: u8,
@@ -579,7 +579,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_training_action(&mut self, action_id: Uuid) {
+    pub fn mark_training_action_consumed(&mut self, action_id: Uuid) {
         self.pending_training_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -660,7 +660,7 @@ impl VillageState {
             .map_err(Into::into)
     }
 
-    pub fn register_academy_action(
+    pub fn record_academy_action_scheduled(
         &mut self,
         action_id: Uuid,
         unit: UnitName,
@@ -673,7 +673,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_academy_action(&mut self, action_id: Uuid) {
+    pub fn mark_academy_action_consumed(&mut self, action_id: Uuid) {
         self.pending_academy_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -690,7 +690,10 @@ impl VillageState {
         ready_at + chrono::Duration::seconds(duration_secs.max(1))
     }
 
-    pub fn complete_academy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+    pub fn apply_academy_research_completed(
+        &mut self,
+        unit: UnitName,
+    ) -> Result<(), ApplicationError> {
         self.village.research_academy(unit).map_err(Into::into)
     }
 
@@ -725,7 +728,7 @@ impl VillageState {
             .map_err(Into::into)
     }
 
-    pub fn register_smithy_action(
+    pub fn record_smithy_action_scheduled(
         &mut self,
         action_id: Uuid,
         unit: UnitName,
@@ -738,7 +741,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_smithy_action(&mut self, action_id: Uuid) {
+    pub fn mark_smithy_action_consumed(&mut self, action_id: Uuid) {
         self.pending_smithy_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -755,7 +758,10 @@ impl VillageState {
         ready_at + chrono::Duration::seconds(duration_secs.max(1))
     }
 
-    pub fn complete_smithy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+    pub fn apply_smithy_research_completed(
+        &mut self,
+        unit: UnitName,
+    ) -> Result<(), ApplicationError> {
         self.village.upgrade_smithy(unit).map_err(Into::into)
     }
 

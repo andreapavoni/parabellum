@@ -143,6 +143,7 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}
+            VillageEvent::ReinforcementAppliedToVillage { .. } => {}
             VillageEvent::ReinforcementsRecalled { .. } => {}
             VillageEvent::ReinforcementsReleased { .. } => {}
             VillageEvent::SettlersSent { .. } => {
@@ -151,6 +152,7 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
+            VillageEvent::AttackArrivalScheduled { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
             VillageEvent::AttackBattleResolved { .. } => {}
             VillageEvent::BattleOutcomeAppliedToVillage { .. } => {}
@@ -252,7 +254,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_building_action(
+                self.village.record_building_action_scheduled(
                     *action_id,
                     *slot_id,
                     building_name.clone(),
@@ -268,7 +270,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_building_action(
+                self.village.record_building_action_scheduled(
                     *action_id,
                     *slot_id,
                     building_name.clone(),
@@ -281,7 +283,7 @@ impl Aggregate for VillageAggregate {
                 building_name,
                 execute_at,
                 ..
-            } => self.village.register_building_action(
+            } => self.village.record_building_action_scheduled(
                 *action_id,
                 *slot_id,
                 building_name.clone(),
@@ -295,7 +297,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -307,7 +309,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -319,7 +321,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -333,7 +335,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_training_action(
+                self.village.record_training_action_scheduled(
                     *action_id,
                     *slot_id,
                     unit.clone(),
@@ -347,7 +349,7 @@ impl Aggregate for VillageAggregate {
                 quantity_trained,
                 ..
             } => {
-                self.village.complete_training_action(*action_id);
+                self.village.mark_training_action_consumed(*action_id);
                 let _ = self.village.train_units(unit.clone(), *quantity_trained);
             }
             VillageEvent::AcademyResearchScheduled {
@@ -359,13 +361,13 @@ impl Aggregate for VillageAggregate {
             } => {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village
-                    .register_academy_action(*action_id, unit.clone(), *execute_at);
+                    .record_academy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
             VillageEvent::AcademyResearchCompleted {
                 action_id, unit, ..
             } => {
-                self.village.complete_academy_action(*action_id);
-                let _ = self.village.complete_academy_research(unit.clone());
+                self.village.mark_academy_action_consumed(*action_id);
+                let _ = self.village.apply_academy_research_completed(unit.clone());
             }
             VillageEvent::SmithyResearchScheduled {
                 action_id,
@@ -376,13 +378,13 @@ impl Aggregate for VillageAggregate {
             } => {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village
-                    .register_smithy_action(*action_id, unit.clone(), *execute_at);
+                    .record_smithy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
             VillageEvent::SmithyResearchCompleted {
                 action_id, unit, ..
             } => {
-                self.village.complete_smithy_action(*action_id);
-                let _ = self.village.complete_smithy_research(unit.clone());
+                self.village.mark_smithy_action_consumed(*action_id);
+                let _ = self.village.apply_smithy_research_completed(unit.clone());
             }
         }
     }

@@ -53,7 +53,15 @@ Reports are communication read-model artifacts, not canonical domain events.
 - canonical workflow facts remain the source of truth
 - report projector derives user-facing reports from canonical facts
 
-### 5) Production/upkeep policy
+### 5) Operational queue recovery is explicit
+
+`rm_scheduled_actions` is treated as operational runtime state with explicit recovery semantics:
+
+1. stale `processing` rows are requeued to `pending` by scheduler tick pre-pass,
+2. each claimed action is terminalized to `completed` or `failed`,
+3. replay does not rehydrate or mutate operational queue state.
+
+### 6) Production/upkeep policy
 
 After workflow outcomes:
 
@@ -99,20 +107,12 @@ Applies to:
 - attack workflow uses atomic source+target append
 - canonical attack facts are projected to read models and reports
 
-## Follow-up Work
+## Current Enforcement
 
-1. migrate merchants/marketplace to same workflow boundary
-2. define explicit canonical merchant workflow fact shape
-3. add conflict/rollback tests for workflow append boundary
-4. remove legacy single-stream assumptions where still present
-
-## Applied Increment (2026-05-17)
-
-1. Merchant arrival completion command path was retired in favor of scheduler-driven multi-stream facts (`MerchantsArrived` + `MerchantTransferAppliedToVillage`).
-2. Marketplace acceptance now emits an explicit state-application fact:
-   1. `MarketplaceOfferAcceptanceAppliedToVillage`
-   2. projector applies stock + busy-merchant materialization from that payload
-3. Workflow append preparation/building was extracted behind a dedicated service helper seam for future `mini_cqrs_es` extraction.
+1. Scheduler progression is fact-driven for delayed workflows.
+2. Cross-stream state changes are emitted as atomic multi-stream workflow facts.
+3. Projectors materialize read models from fact payloads and do not recompute domain decisions.
+4. Replay rebuilds projections only and does not mutate operational scheduler queue state.
 
 ## Implemented in Code
 

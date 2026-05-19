@@ -1,15 +1,21 @@
+use chrono::{Duration, Utc};
+use parabellum_app::villages::CreateMarketplaceOffer;
 use parabellum_types::{map::Position, tribe::Tribe};
-use parabellum_app::villages::{AttackVillage, CompleteTrainUnit};
+use parabellum_app::villages::{AttackVillage, ResearchAcademy, TrainUnits};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::army::{TroopSet, UnitName};
 use parabellum_types::battle::AttackType;
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::common::{ResourceKind, ResourceQuantity};
 use uuid::Uuid;
 
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{ReplayMode, ReplayRequest, ReplayService, ReplayTarget, VillageEsService};
 
-use super::fixtures::{main_building, resources, setup_village, with_test_pool};
+use super::fixtures::{
+    academy, granary, main_building, marketplace, resources, setup_village, warehouse,
+    with_test_pool,
+};
 
 #[tokio::test]
 async fn replay_dry_run_applies_village_events_without_writes() {
@@ -248,6 +254,127 @@ async fn replay_full_mode_preserves_operational_scheduled_actions() {
 }
 
 #[tokio::test]
+async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_owner_user_id, owner_player_id, owner_village_id) = setup_village(
+            &pool,
+            &service,
+            "Replay Market Owner",
+            Position { x: 0, y: 0 },
+            Tribe::Gaul,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(800_000, 800_000, 800_000, 800_000),
+        )
+        .await;
+        let (_acceptor_user_id, acceptor_player_id, acceptor_village_id) = setup_village(
+            &pool,
+            &service,
+            "Replay Market Acceptor",
+            Position { x: 5, y: 5 },
+            Tribe::Roman,
+            vec![
+                main_building(10),
+                warehouse(20),
+                granary(20),
+                marketplace(10),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .create_marketplace_offer(
+                owner_village_id,
+                &CreateMarketplaceOffer {
+                    player_id: owner_player_id,
+                    offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
+                    seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                },
+            )
+            .await
+            .unwrap();
+
+        let offer = service.get_open_marketplace_offers().await.unwrap()[0].clone();
+        service
+            .accept_marketplace_offer(
+                acceptor_village_id,
+                acceptor_player_id,
+                offer.offer_id,
+                Utc::now() + Duration::seconds(2),
+                Utc::now() + Duration::seconds(2),
+            )
+            .await
+            .unwrap();
+
+        service
+            .process_due_actions(Utc::now() + Duration::seconds(3), 100)
+            .await
+            .unwrap();
+
+        let owner_before = service.get_village(owner_village_id).await.unwrap();
+        let acceptor_before = service.get_village(acceptor_village_id).await.unwrap();
+        let offer_before = service.get_marketplace_offer(offer.offer_id).await.unwrap();
+        let queue_counts_before: (i64, i64, i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+              COUNT(*)::bigint,
+              COUNT(*) FILTER (WHERE status = 'pending')::bigint,
+              COUNT(*) FILTER (WHERE status = 'processing')::bigint,
+              COUNT(*) FILTER (WHERE status = 'completed')::bigint
+            FROM rm_scheduled_actions
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let replay = ReplayService::new(pool.clone());
+        replay
+            .replay(ReplayRequest {
+                target: ReplayTarget::Village,
+                mode: ReplayMode::Full,
+                from_global_seq: 1,
+                to_global_seq: None,
+                aggregate_id: None,
+            })
+            .await
+            .unwrap();
+
+        let owner_after = service.get_village(owner_village_id).await.unwrap();
+        let acceptor_after = service.get_village(acceptor_village_id).await.unwrap();
+        let offer_after = service.get_marketplace_offer(offer.offer_id).await.unwrap();
+        let queue_counts_after: (i64, i64, i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+              COUNT(*)::bigint,
+              COUNT(*) FILTER (WHERE status = 'pending')::bigint,
+              COUNT(*) FILTER (WHERE status = 'processing')::bigint,
+              COUNT(*) FILTER (WHERE status = 'completed')::bigint
+            FROM rm_scheduled_actions
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(owner_after.stocks, owner_before.stocks);
+        assert_eq!(owner_after.busy_merchants, owner_before.busy_merchants);
+        assert_eq!(acceptor_after.stocks, acceptor_before.stocks);
+        assert_eq!(acceptor_after.busy_merchants, acceptor_before.busy_merchants);
+        assert_eq!(offer_after.status, offer_before.status);
+        assert_eq!(queue_counts_after, queue_counts_before);
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn replay_full_mode_rebuilds_attack_outcome_window_deterministically() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
@@ -267,6 +394,19 @@ async fn replay_full_mode_rebuilds_attack_outcome_window_deterministically() {
                         .at_level(20, 1)
                         .unwrap(),
                 },
+                VillageBuilding {
+                    slot_id: 28,
+                    building: Building::new(BuildingName::GreatWarehouse, 1)
+                        .at_level(20, 1)
+                        .unwrap(),
+                },
+                VillageBuilding {
+                    slot_id: 29,
+                    building: Building::new(BuildingName::GreatGranary, 1)
+                        .at_level(20, 1)
+                        .unwrap(),
+                },
+                academy(20),
                 super::fixtures::warehouse(20),
                 super::fixtures::granary(20),
             ],
@@ -294,39 +434,37 @@ async fn replay_full_mode_rebuilds_attack_outcome_window_deterministically() {
             .unwrap();
 
         service
-            .complete_train_unit(
+            .research_academy(
                 source_village_id,
-                &CompleteTrainUnit {
-                    action_id: Uuid::new_v4(),
+                &ResearchAcademy {
                     player_id,
-                    village_id: source_village_id,
-                    slot_id: 19,
-                    unit: UnitName::Legionnaire,
-                    time_per_unit: 1,
-                    quantity_remaining: 1,
-                    execute_at: chrono::Utc::now(),
+                    unit: UnitName::Senator,
+                    speed: 1,
                 },
             )
             .await
             .unwrap();
-        for _ in 0..4 {
-            service
-                .complete_train_unit(
-                    source_village_id,
-                    &CompleteTrainUnit {
-                        action_id: Uuid::new_v4(),
-                        player_id,
-                        village_id: source_village_id,
-                        slot_id: 26,
-                        unit: UnitName::Senator,
-                        time_per_unit: 1,
-                        quantity_remaining: 1,
-                        execute_at: chrono::Utc::now(),
-                    },
-                )
-                .await
-                .unwrap();
-        }
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::days(7), 400)
+            .await
+            .unwrap();
+        service
+            .train_units(
+                source_village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 8,
+                    building_name: BuildingName::Palace,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::days(7), 400)
+            .await
+            .unwrap();
 
         let now = chrono::Utc::now();
         service
@@ -338,7 +476,7 @@ async fn replay_full_mode_rebuilds_attack_outcome_window_deterministically() {
                     return_action_id: Uuid::new_v4(),
                     player_id,
                     target_village_id,
-                    units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 4, 0]),
+                    units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
                     catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],

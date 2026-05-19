@@ -5,7 +5,7 @@ use parabellum_types::errors::ApplicationError;
 #[async_trait]
 /// Port for scheduled action execution.
 ///
-/// Implementations fetch due actions and execute completion commands
+/// Implementations fetch due actions and append canonical workflow facts
 /// atomically through the CQRS/ES runtime.
 pub trait SchedulerPort: Send + Sync {
     /// Processes scheduled actions due at or before `before_or_equal`.

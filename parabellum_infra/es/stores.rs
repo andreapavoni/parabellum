@@ -4,7 +4,7 @@ use mini_cqrs_es::{
     StoredEvent,
 };
 use sqlx::postgres::PgRow;
-use sqlx::{PgPool, Row, types::Json};
+use sqlx::{PgPool, Postgres, Row, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -78,6 +78,23 @@ impl PostgresEventStore {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
+        let stored = self
+            .append_workflow_events_in_tx(&mut tx, aggregate_type, streams)
+            .await?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        Ok(stored)
+    }
+
+    pub async fn append_workflow_events_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        aggregate_type: &str,
+        streams: &[WorkflowStreamAppend],
+    ) -> Result<Vec<StoredEvent>, CqrsError> {
         for stream in streams {
             let current_version: i64 = sqlx::query_scalar(
                 r#"
@@ -88,7 +105,7 @@ impl PostgresEventStore {
             )
             .bind(aggregate_type)
             .bind(&stream.aggregate_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
@@ -130,7 +147,7 @@ impl PostgresEventStore {
                 .bind(Json(&event.payload))
                 .bind(Json(&event.metadata))
                 .bind(event.timestamp)
-                .fetch_one(&mut *tx)
+                .fetch_one(&mut **tx)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
@@ -147,11 +164,6 @@ impl PostgresEventStore {
                 });
             }
         }
-
-        tx.commit()
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-
         Ok(stored)
     }
 }

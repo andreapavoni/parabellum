@@ -1,7 +1,7 @@
 use parabellum_app::villages::models::{MovementDirection, VillageMovement};
 use parabellum_app::villages::repositories::VillageMovementRepository;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{PgPool, Row, types::Json};
+use sqlx::{PgPool, Postgres, Row, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -13,16 +13,16 @@ impl PostgresVillageMovementRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
 
-#[async_trait::async_trait]
-impl VillageMovementRepository for PostgresVillageMovementRepository {
-    async fn upsert(&self, movement: &VillageMovement) -> Result<(), ApplicationError> {
+    pub async fn upsert_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        movement: &VillageMovement,
+    ) -> Result<(), ApplicationError> {
         let village_id = match movement.direction {
             MovementDirection::Incoming => movement.target_village_id,
             MovementDirection::Outgoing => movement.origin_village_id,
         };
-
         sqlx::query(
             r#"
             INSERT INTO rm_village_movements (
@@ -47,10 +47,43 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
         .bind(movement.target_village_id as i32)
         .bind(movement.arrives_at)
         .bind(Json(movement))
-        .execute(&self.pool)
+        .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
 
+    pub async fn delete_by_movement_id_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        movement_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            DELETE FROM rm_village_movements
+            WHERE movement_id = $1
+            "#,
+        )
+        .bind(movement_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl VillageMovementRepository for PostgresVillageMovementRepository {
+    async fn upsert(&self, movement: &VillageMovement) -> Result<(), ApplicationError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.upsert_in_tx(&mut tx, movement).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 
@@ -82,17 +115,15 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
     }
 
     async fn delete_by_movement_id(&self, movement_id: Uuid) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            DELETE FROM rm_village_movements
-            WHERE movement_id = $1
-            "#,
-        )
-        .bind(movement_id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.delete_by_movement_id_in_tx(&mut tx, movement_id).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 }

@@ -313,18 +313,3 @@ pub fn rally_point(level: u8) -> VillageBuilding {
         },
     }
 }
-
-pub fn found_village_cmd(
-    player_id: Uuid,
-    village_name: &str,
-    position: parabellum_types::map::Position,
-) -> parabellum_app::villages::FoundVillage {
-    parabellum_app::villages::FoundVillage {
-        village_name: village_name.to_string(),
-        position,
-        tribe: Tribe::Roman,
-        player_id,
-        parent_village_id: None,
-        buildings: vec![main_building(1), rally_point(1)],
-    }
-}

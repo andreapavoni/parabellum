@@ -1,6 +1,7 @@
 use parabellum_app::villages::models::ReportModel;
 use parabellum_app::villages::repositories::{ProjectedReport, ReportRepository};
 use parabellum_types::errors::{ApplicationError, DbError};
+use sqlx::postgres::PgQueryResult;
 use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
@@ -13,20 +14,13 @@ impl PostgresReportRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
 
-#[async_trait::async_trait]
-impl ReportRepository for PostgresReportRepository {
-    async fn add_projected(
+    pub async fn add_projected_in_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         report: &ProjectedReport,
         audience_player_ids: &[Uuid],
-    ) -> Result<(), ApplicationError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    ) -> Result<Uuid, ApplicationError> {
         let report_id = Uuid::new_v4();
 
         sqlx::query(
@@ -42,20 +36,39 @@ impl ReportRepository for PostgresReportRepository {
         .bind(report.actor_village_id.map(|v| v as i32))
         .bind(report.target_player_id)
         .bind(report.target_village_id.map(|v| v as i32))
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         for player_id in audience_player_ids {
-            sqlx::query(
+            let _result: PgQueryResult = sqlx::query(
                 "INSERT INTO rm_report_reads (report_id, player_id, read_at) VALUES ($1, $2, NULL)",
             )
             .bind(report_id)
             .bind(player_id)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         }
+
+        Ok(report_id)
+    }
+}
+
+#[async_trait::async_trait]
+impl ReportRepository for PostgresReportRepository {
+    async fn add_projected(
+        &self,
+        report: &ProjectedReport,
+        audience_player_ids: &[Uuid],
+    ) -> Result<(), ApplicationError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.add_projected_in_tx(&mut tx, report, audience_player_ids)
+            .await?;
 
         tx.commit()
             .await
