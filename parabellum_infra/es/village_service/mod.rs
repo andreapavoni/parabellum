@@ -39,11 +39,9 @@ use parabellum_app::villages::repositories::{
     ScheduledActionRepository, VillageMovementRepository, VillageRepository,
 };
 use parabellum_app::villages::{
-    AddBuilding, AttackVillage, CancelMarketplaceOffer,
-    ApplyBattleOutcomeToVillage,
-    CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ResolveAttackBattle,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero,
+    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer, CreateHero,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
+    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero,
     ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
     TrainUnits, UpgradeBuilding, VillageService,
 };
@@ -53,10 +51,10 @@ use parabellum_types::errors::{DbError, GameError};
 
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{
-    PostgresArmyRepository, PostgresEventStore, PostgresHeroRepository, PostgresMarketplaceRepository,
-    PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
-    PostgresVillageRepository, ReportProjector, VillageProjector, WorkflowStreamAppend,
-    village_cqrs_runtime,
+    PostgresArmyRepository, PostgresEventStore, PostgresHeroRepository,
+    PostgresMarketplaceRepository, PostgresReportRepository, PostgresScheduledActionRepository,
+    PostgresVillageMovementRepository, PostgresVillageRepository, ReportProjector,
+    VillageProjector, WorkflowStreamAppend, village_cqrs_runtime,
 };
 use crate::identity::repositories::PostgresPlayerRepository;
 use crate::map::PostgresMapRepository;
@@ -632,8 +630,8 @@ impl VillageEsService {
         }
 
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
-        let stale_before =
-            before_or_equal - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
+        let stale_before = before_or_equal
+            - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
         let requeued = repo
             .requeue_stale_processing(stale_before)
             .await

@@ -52,7 +52,10 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
             .unwrap();
 
         let after_add = service.get_village(village_id).await.unwrap();
-        assert_eq!(building_level(&after_add, 22, BuildingName::Cranny), Some(1));
+        assert_eq!(
+            building_level(&after_add, 22, BuildingName::Cranny),
+            Some(1)
+        );
 
         service
             .upgrade_building(
@@ -71,7 +74,10 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
             .unwrap();
 
         let after_upgrade = service.get_village(village_id).await.unwrap();
-        assert_eq!(building_level(&after_upgrade, 22, BuildingName::Cranny), Some(2));
+        assert_eq!(
+            building_level(&after_upgrade, 22, BuildingName::Cranny),
+            Some(2)
+        );
 
         service
             .downgrade_building(

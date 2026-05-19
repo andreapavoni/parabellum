@@ -66,14 +66,14 @@ impl Command for CreateMarketplaceOffer {
         let offer_id = Uuid::new_v4();
         Ok(vec![
             VillageEvent::MarketplaceOfferCreated {
-            offer_id,
-            owner_player_id: self.player_id,
-            owner_village_id: village_id,
-            offer_resources: self.offer_resources,
-            seek_resources: self.seek_resources,
-            merchants_reserved,
-            created_at: now,
-        },
+                offer_id,
+                owner_player_id: self.player_id,
+                owner_village_id: village_id,
+                offer_resources: self.offer_resources,
+                seek_resources: self.seek_resources,
+                merchants_reserved,
+                created_at: now,
+            },
             VillageEvent::MarketplaceOfferReservationAppliedToVillage {
                 offer_id,
                 owner_player_id: self.player_id,

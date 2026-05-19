@@ -14,12 +14,12 @@
 //!   canonical fact(s) -> append via `append_village_workflow_events`.
 
 use super::*;
+use parabellum_app::villages::VillageEvent;
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::Village;
-use parabellum_app::villages::VillageEvent;
 use parabellum_types::army::UnitRole;
 
 struct ComputedAttackOutcome {
@@ -225,16 +225,14 @@ pub(super) async fn execute_action(
             let hero_alone_transfer = army.hero().is_some()
                 && army.units().immensity() == 0
                 && source.player_id == target.player_id
-                && source
-                    .buildings
-                    .iter()
-                    .any(|b| b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
-                        && b.building.level > 0)
-                && target
-                    .buildings
-                    .iter()
-                    .any(|b| b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
-                        && b.building.level > 0);
+                && source.buildings.iter().any(|b| {
+                    b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
+                        && b.building.level > 0
+                })
+                && target.buildings.iter().any(|b| {
+                    b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
+                        && b.building.level > 0
+                });
             svc.append_village_workflow_events(vec![
                 (
                     source_village_id,
@@ -501,7 +499,7 @@ pub(super) async fn execute_action(
                 returns_at,
             );
             svc.append_village_workflow_events(vec![(source_village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::ScoutArrival {
             action_id,
@@ -553,7 +551,7 @@ pub(super) async fn execute_action(
                 ),
                 (source_village_id, outcome.fact),
             ])
-                .await?;
+            .await?;
         }
         ScheduledActionPayload::MerchantsArrival {
             action_id,
@@ -598,7 +596,7 @@ pub(super) async fn execute_action(
                 returns_at,
             );
             svc.append_village_workflow_events(vec![(source_village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::AddBuilding {
             village_id,
@@ -618,7 +616,7 @@ pub(super) async fn execute_action(
                 speed,
             );
             svc.append_village_workflow_events(vec![(village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::UpgradeBuilding {
             village_id,
@@ -638,7 +636,7 @@ pub(super) async fn execute_action(
                 speed,
             );
             svc.append_village_workflow_events(vec![(village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::DowngradeBuilding {
             village_id,
@@ -658,7 +656,7 @@ pub(super) async fn execute_action(
                 speed,
             );
             svc.append_village_workflow_events(vec![(village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::TrainUnit {
             action_id,
@@ -690,9 +688,10 @@ pub(super) async fn execute_action(
             player_id,
             unit,
         } => {
-            let fact = build_academy_research_completed_fact(action_id, player_id, village_id, unit);
+            let fact =
+                build_academy_research_completed_fact(action_id, player_id, village_id, unit);
             svc.append_village_workflow_events(vec![(village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::ResearchSmithy {
             action_id,
@@ -702,7 +701,7 @@ pub(super) async fn execute_action(
         } => {
             let fact = build_smithy_research_completed_fact(action_id, player_id, village_id, unit);
             svc.append_village_workflow_events(vec![(village_id, fact)])
-            .await?;
+                .await?;
         }
         ScheduledActionPayload::HeroRevival {
             action_id,
@@ -714,16 +713,20 @@ pub(super) async fn execute_action(
         } => {
             let village = svc.get_village(village_id).await?;
             if village.player_id != player_id {
-                return Err(CqrsError::domain(parabellum_types::errors::GameError::VillageNotOwned {
-                    village_id,
-                    player_id,
-                }));
+                return Err(CqrsError::domain(
+                    parabellum_types::errors::GameError::VillageNotOwned {
+                        village_id,
+                        player_id,
+                    },
+                ));
             }
             if hero.player_id != player_id {
-                return Err(CqrsError::domain(parabellum_types::errors::GameError::HeroNotOwned {
-                    hero_id: hero.id,
-                    player_id,
-                }));
+                return Err(CqrsError::domain(
+                    parabellum_types::errors::GameError::HeroNotOwned {
+                        hero_id: hero.id,
+                        player_id,
+                    },
+                ));
             }
 
             let mut revived_hero = hero;

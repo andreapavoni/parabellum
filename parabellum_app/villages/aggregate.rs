@@ -207,9 +207,7 @@ impl Aggregate for VillageAggregate {
                 }
             }
             VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {}
-            VillageEvent::MarketplaceOfferAccepted {
-                ..
-            } => {}
+            VillageEvent::MarketplaceOfferAccepted { .. } => {}
             VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
                 village_id,
                 stocks,

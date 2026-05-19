@@ -44,21 +44,24 @@ impl Command for CancelMarketplaceOffer {
             .busy_merchants
             .saturating_sub(self.offer.merchants_reserved);
 
-        Ok(vec![VillageEvent::MarketplaceOfferCanceled {
-            offer_id: self.offer.offer_id,
-            owner_player_id: self.player_id,
-            owner_village_id: village_id,
-            offer_resources: self.offer.offer_resources,
-            merchants_reserved: self.offer.merchants_reserved,
-            canceled_at: now,
-        }, VillageEvent::MarketplaceOfferReservationReleasedFromVillage {
-            offer_id: self.offer.offer_id,
-            owner_player_id: self.player_id,
-            owner_village_id: village_id,
-            merchants_reserved: self.offer.merchants_reserved,
-            owner_stocks,
-            owner_busy_merchants,
-            released_at: now,
-        }])
+        Ok(vec![
+            VillageEvent::MarketplaceOfferCanceled {
+                offer_id: self.offer.offer_id,
+                owner_player_id: self.player_id,
+                owner_village_id: village_id,
+                offer_resources: self.offer.offer_resources,
+                merchants_reserved: self.offer.merchants_reserved,
+                canceled_at: now,
+            },
+            VillageEvent::MarketplaceOfferReservationReleasedFromVillage {
+                offer_id: self.offer.offer_id,
+                owner_player_id: self.player_id,
+                owner_village_id: village_id,
+                merchants_reserved: self.offer.merchants_reserved,
+                owner_stocks,
+                owner_busy_merchants,
+                released_at: now,
+            },
+        ])
     }
 }

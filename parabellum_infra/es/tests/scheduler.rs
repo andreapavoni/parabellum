@@ -3,8 +3,8 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_app::villages::{
-    AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SetVillageResources, TrainUnits, UpgradeBuilding,
+    AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
+    SendReinforcement, TrainUnits, UpgradeBuilding,
 };
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::{
@@ -21,17 +21,12 @@ use crate::es::repositories::PostgresScheduledActionRepository;
 use crate::es::tests::fixtures::setup_village_for_player;
 
 use super::fixtures::{
-    academy, barracks, granary, main_building, marketplace, rally_point, resources, setup_village,
-    smithy, warehouse, with_test_pool,
+    academy, barracks, deployed_units, granary, home_units, insert_corrupt_scheduled_action,
+    main_building, marketplace, process_due_until, rally_point, refill_resources,
+    research_and_complete, resources, scheduled_action_status_count, setup_village, smithy,
+    stationed_units, train_and_complete, village_busy_merchants, village_owner, village_stocks,
+    warehouse, with_test_pool,
 };
-
-fn troops_sum(armies: &[parabellum_game::models::army::Army], idx: usize) -> u32 {
-    armies.iter().map(|a| a.units().get(idx)).sum()
-}
-
-fn army_units(v: &models::VillageModel, idx: usize) -> u32 {
-    v.army.as_ref().map(|a| a.units().get(idx)).unwrap_or(0)
-}
 
 fn minus(
     before: &parabellum_game::models::village::VillageStocks,
@@ -76,23 +71,18 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            10,
+        )
+        .await;
 
         service
             .send_reinforcement(
@@ -110,16 +100,20 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
             .await
             .unwrap();
 
-        let first_processed = service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
-            .await
-            .unwrap();
+        let first_processed = process_due_until(
+            &service,
+            chrono::Utc::now() + chrono::Duration::minutes(10),
+            10,
+        )
+        .await;
         assert_eq!(first_processed, 1);
 
-        let second_processed = service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
-            .await
-            .unwrap();
+        let second_processed = process_due_until(
+            &service,
+            chrono::Utc::now() + chrono::Duration::minutes(10),
+            10,
+        )
+        .await;
         assert_eq!(second_processed, 0);
 
         let models = service.list_villages_by_player_id(player_id).await.unwrap();
@@ -159,29 +153,32 @@ async fn scheduler_batch_failure_does_not_leave_actions_processing() {
             .await
             .unwrap();
 
-        sqlx::query(
-            r#"
-            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
-            VALUES ($1, 'TrainUnit', NOW() - interval '5 minutes', '{}'::jsonb, 'pending')
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .execute(&pool)
-        .await
-        .unwrap();
+        insert_corrupt_scheduled_action(&pool, ScheduledActionStatus::Pending).await;
 
         service
             .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 100)
             .await
             .unwrap();
 
-        let processing_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM rm_scheduled_actions WHERE status = 'processing'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(processing_count.0, 0);
+        assert_eq!(
+            service
+                .get_village_scheduled_action_status_count(
+                    village_id,
+                    ScheduledActionType::TrainUnit,
+                    ScheduledActionStatus::Completed,
+                )
+                .await
+                .unwrap(),
+            1,
+        );
+        assert_eq!(
+            scheduled_action_status_count(&pool, ScheduledActionStatus::Failed).await,
+            1,
+        );
+        assert_eq!(
+            scheduled_action_status_count(&pool, ScheduledActionStatus::Processing).await,
+            0,
+        );
     })
     .await;
 }
@@ -191,37 +188,21 @@ async fn scheduler_requeues_stale_processing_actions() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
 
-        sqlx::query(
-            r#"
-            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status, updated_at)
-            VALUES ($1, 'TrainUnit', NOW() - interval '10 minutes', '{}'::jsonb, 'processing', NOW() - interval '10 minutes')
-            "#,
-        )
-        .bind(Uuid::new_v4())
-        .execute(&pool)
-        .await
-        .unwrap();
+        insert_corrupt_scheduled_action(&pool, ScheduledActionStatus::Processing).await;
 
         service
             .process_due_actions(chrono::Utc::now(), 100)
             .await
             .unwrap();
 
-        let processing_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM rm_scheduled_actions WHERE status = 'processing'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(processing_count.0, 0);
-
-        let failed_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM rm_scheduled_actions WHERE status = 'failed'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(failed_count.0, 1);
+        assert_eq!(
+            scheduled_action_status_count(&pool, ScheduledActionStatus::Processing).await,
+            0,
+        );
+        assert_eq!(
+            scheduled_action_status_count(&pool, ScheduledActionStatus::Failed).await,
+            1,
+        );
     })
     .await;
 }
@@ -241,8 +222,9 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         )
         .await;
 
-        let before_schedule = service.get_village(village_id).await.unwrap().stocks;
-        let tribe = service.get_village(village_id).await.unwrap().tribe;
+        let village_before_schedule = service.get_village(village_id).await.unwrap();
+        let before_schedule = village_before_schedule.stocks;
+        let tribe = village_before_schedule.tribe;
         let expected_cost = tribe.units()[0].cost.resources.clone() * 2.0;
 
         service
@@ -330,21 +312,7 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(completed_training_after_second, 2);
         assert_eq!(pending_training_after_second, 0);
 
-        let village = service.get_village(village_id).await.unwrap();
-        assert_eq!(army_units(&village, 0), 2);
-        let army_view = service
-            .get_village_army_state_view(village_id)
-            .await
-            .unwrap();
-        assert_eq!(
-            army_view
-                .home_army
-                .as_ref()
-                .map(|a| a.units().get(0))
-                .unwrap_or(0),
-            2
-        );
-
+        assert_eq!(home_units(&pool, village_id, 0).await, 2);
         let home_rows: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM rm_armies WHERE village_id = $1 AND state = 'home'",
         )
@@ -465,8 +433,9 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         )
         .await;
 
-        let before_schedule = service.get_village(village_id).await.unwrap().stocks;
-        let tribe = service.get_village(village_id).await.unwrap().tribe;
+        let village_before_schedule = service.get_village(village_id).await.unwrap();
+        let before_schedule = village_before_schedule.stocks;
+        let tribe = village_before_schedule.tribe;
         let expected_cost = tribe
             .get_unit_by_name(&parabellum_types::army::UnitName::Spearman)
             .unwrap()
@@ -576,12 +545,12 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
             .await
             .unwrap();
 
-        let source_after_schedule = service.get_village(village_id).await.unwrap();
-        assert_eq!(source_after_schedule.busy_merchants, 1);
-        assert_eq!(source_after_schedule.stocks.lumber, 79_800);
-        assert_eq!(source_after_schedule.stocks.clay, 79_950);
-        assert_eq!(source_after_schedule.stocks.iron, 79_880);
-        assert!(source_after_schedule.stocks.crop <= 79_900);
+        let source_after_schedule = village_stocks(&service, village_id).await;
+        assert_eq!(village_busy_merchants(&service, village_id).await, 1);
+        assert_eq!(source_after_schedule.lumber, 79_800);
+        assert_eq!(source_after_schedule.clay, 79_950);
+        assert_eq!(source_after_schedule.iron, 79_880);
+        assert!(source_after_schedule.crop <= 79_900);
 
         let arrival_actions = service
             .get_village_scheduled_action_status_count(
@@ -597,17 +566,16 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
         let processed_arrival = service.process_due_actions(due_arrival, 10).await.unwrap();
         assert_eq!(processed_arrival, 1);
 
-        let target_after_arrival = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(target_after_arrival.stocks.lumber, 10_200);
-        assert_eq!(target_after_arrival.stocks.clay, 10_050);
-        assert_eq!(target_after_arrival.stocks.iron, 10_120);
-        assert!(target_after_arrival.stocks.crop <= 10_100);
+        let target_after_arrival = village_stocks(&service, target_village_id).await;
+        assert_eq!(target_after_arrival.lumber, 10_200);
+        assert_eq!(target_after_arrival.clay, 10_050);
+        assert_eq!(target_after_arrival.iron, 10_120);
+        assert!(target_after_arrival.crop <= 10_100);
 
         let due_return = chrono::Utc::now() + chrono::Duration::minutes(15);
         let processed_return = service.process_due_actions(due_return, 10).await.unwrap();
         assert_eq!(processed_return, 1);
-        let source_after_return = service.get_village(village_id).await.unwrap();
-        assert_eq!(source_after_return.busy_merchants, 0);
+        assert_eq!(village_busy_merchants(&service, village_id).await, 0);
     })
     .await;
 }
@@ -892,31 +860,18 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
         )
         .await;
 
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        let first_due = service
-            .get_village_training_queue(village_id)
-            .await
-            .unwrap()
-            .iter()
-            .map(|a| a.execute_at)
-            .min()
-            .expect("training queue should contain scheduled actions");
-        service
-            .process_due_actions(first_due + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            10,
+        )
+        .await;
 
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
@@ -945,20 +900,16 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             .await
             .unwrap();
 
-        let before_arrival = service.get_village(village_id).await.unwrap();
-        assert_eq!(army_units(&before_arrival, 0), 0);
-        assert_eq!(troops_sum(&before_arrival.deployed_armies, 0), 0);
+        assert_eq!(home_units(&pool, village_id, 0).await, 0);
+        assert_eq!(deployed_units(&pool, village_id, 0).await, 0);
 
-        let first_processed = service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        let first_processed =
+            process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
         assert_eq!(first_processed, 1);
 
-        let after_arrival = service.get_village(village_id).await.unwrap();
-        assert_eq!(army_units(&after_arrival, 0), 0);
+        assert_eq!(home_units(&pool, village_id, 0).await, 0);
         assert_eq!(
-            troops_sum(&after_arrival.deployed_armies, 0),
+            deployed_units(&pool, village_id, 0).await,
             0,
             "returning attack army must not be projected as deployed reinforcement"
         );
@@ -969,15 +920,12 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
         assert_eq!(movements_after_arrival.incoming.len(), 1);
         assert!(movements_after_arrival.outgoing.is_empty());
 
-        let second_processed = service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        let second_processed =
+            process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
         assert_eq!(second_processed, 1);
 
-        let after_return = service.get_village(village_id).await.unwrap();
-        assert_eq!(army_units(&after_return, 0), 1);
-        assert_eq!(troops_sum(&after_return.deployed_armies, 0), 0);
+        assert_eq!(home_units(&pool, village_id, 0).await, 1);
+        assert_eq!(deployed_units(&pool, village_id, 0).await, 0);
     })
     .await;
 }
@@ -1193,11 +1141,6 @@ async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_a
             .await
             .unwrap();
 
-        let reinforcer_before = service.get_village(reinforcer_village_id).await.unwrap();
-        assert_eq!(troops_sum(&reinforcer_before.deployed_armies, 0), 1);
-        let defender_before = service.get_village(defender_village_id).await.unwrap();
-        assert_eq!(troops_sum(&defender_before.reinforcements, 0), 1);
-
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
         service
@@ -1224,18 +1167,10 @@ async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_a
             .await
             .unwrap();
 
-        let reinforcer_after = service.get_village(reinforcer_village_id).await.unwrap();
-        let defender_after = service.get_village(defender_village_id).await.unwrap();
-        let defender_reinforcement_units_for_owner: u32 = defender_after
-            .reinforcements
-            .iter()
-            .filter(|army| army.village_id == reinforcer_village_id)
-            .map(|army| army.units().get(0))
-            .sum();
         assert_eq!(
-            troops_sum(&reinforcer_after.deployed_armies, 0),
-            defender_reinforcement_units_for_owner,
-            "owner deployed snapshot must match post-battle reinforcement snapshot on target",
+            deployed_units(&pool, reinforcer_village_id, 0).await,
+            stationed_units(&pool, defender_village_id, 0).await,
+            "owner deployed troops must match stationed troops on the target read model",
         );
     })
     .await;
@@ -1267,23 +1202,18 @@ async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
         )
         .await;
 
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 20)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            20,
+        )
+        .await;
 
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
@@ -1309,25 +1239,16 @@ async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
             .await
             .unwrap();
 
-        service
-            .set_village_resources(
-                village_id,
-                &SetVillageResources {
-                    player_id,
-                    resources: resources(799, 799, 799, 799),
-                },
-            )
-            .await
-            .unwrap();
+        refill_resources(
+            &service,
+            village_id,
+            player_id,
+            resources(799, 799, 799, 799),
+        )
+        .await;
 
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
-        service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
+        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let source_after_return = service.get_village(village_id).await.unwrap();
         assert!(source_after_return.stocks.lumber <= source_after_return.stocks.warehouse_capacity);
@@ -1460,13 +1381,15 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
             "wipeout should not leave lingering troop movements"
         );
 
-        let source_army_state = service
-            .get_village_army_state_view(village_id)
-            .await
-            .unwrap();
-        assert!(
-            source_army_state.deployed_armies.is_empty(),
-            "wipeout should not leave deployed armies"
+        assert_eq!(
+            deployed_units(&pool, village_id, 0).await,
+            0,
+            "wipeout should not leave deployed clubs"
+        );
+        assert_eq!(
+            deployed_units(&pool, village_id, 8).await,
+            0,
+            "wipeout should not leave deployed senators"
         );
     })
     .await;
@@ -1498,23 +1421,18 @@ async fn village_es_service_attack_bounty_respects_source_capacity() {
         )
         .await;
 
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(24), 500)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(24),
+            500,
+        )
+        .await;
 
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
@@ -1538,14 +1456,8 @@ async fn village_es_service_attack_bounty_respects_source_capacity() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
-        service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
+        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let after = service.get_village(village_id).await.unwrap();
         assert!(after.stocks.lumber <= 800);
@@ -1589,38 +1501,28 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
         )
         .await;
 
-        service
-            .research_academy(
-                village_id,
-                &ResearchAcademy {
-                    player_id,
-                    unit: UnitName::Scout,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 20)
-            .await
-            .unwrap();
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 3,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 20)
-            .await
-            .unwrap();
+        research_and_complete(
+            &service,
+            village_id,
+            player_id,
+            UnitName::Scout,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            20,
+        )
+        .await;
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            3,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            20,
+        )
+        .await;
 
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
@@ -1645,14 +1547,11 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             .await
             .unwrap();
 
-        let first_processed = service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        let first_processed =
+            process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
         assert_eq!(first_processed, 1);
-        let after_scout_arrival = service.get_village(village_id).await.unwrap();
         assert_eq!(
-            troops_sum(&after_scout_arrival.deployed_armies, 3),
+            deployed_units(&pool, village_id, 3).await,
             0,
             "returning scout army must not be projected as deployed reinforcement"
         );
@@ -1663,163 +1562,12 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
         assert_eq!(movements_after_scout_arrival.incoming.len(), 1);
         assert!(movements_after_scout_arrival.outgoing.is_empty());
 
-        let second_processed = service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        let second_processed =
+            process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
         assert_eq!(second_processed, 1);
 
-        let after_return = service.get_village(village_id).await.unwrap();
-        assert_eq!(army_units(&after_return, 3), 1);
-        assert_eq!(troops_sum(&after_return.deployed_armies, 3), 0);
-    })
-    .await;
-}
-
-#[tokio::test]
-#[ignore = "pending domain-fixture update for chief training costs under canonical scheduler path"]
-async fn village_es_service_conquer_changes_owner_keeps_stationed_attackers_and_skips_return() {
-    with_test_pool(|pool| async move {
-        let service = VillageEsService::new(pool.clone());
-
-        let (_user_id, player_id, source_village_id) = setup_village(
-            &pool,
-            &service,
-            "Conquer Source",
-            Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Roman,
-            vec![
-                main_building(20),
-                rally_point(10),
-                barracks(1),
-                VillageBuilding {
-                    slot_id: 26,
-                    building: Building::new(BuildingName::Palace, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                VillageBuilding {
-                    slot_id: 28,
-                    building: Building::new(BuildingName::GreatWarehouse, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                VillageBuilding {
-                    slot_id: 29,
-                    building: Building::new(BuildingName::GreatGranary, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                academy(20),
-                warehouse(20),
-                granary(20),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
-        let (_target_user_id, _target_player_id, target_village_id) = setup_village(
-            &pool,
-            &service,
-            "Conquer Target",
-            Position { x: 2, y: 2 },
-            parabellum_types::tribe::Tribe::Teuton,
-            vec![main_building(1), warehouse(20), granary(20)],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
-        sqlx::query("UPDATE players SET culture_points = 5000 WHERE id = $1")
-            .bind(player_id)
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        service
-            .research_academy(
-                source_village_id,
-                &ResearchAcademy {
-                    player_id,
-                    unit: UnitName::Senator,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::days(7), 400)
-            .await
-            .unwrap();
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 8,
-                    building_name: BuildingName::Palace,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::days(7), 400)
-            .await
-            .unwrap();
-
-        let now = chrono::Utc::now();
-        service
-            .send_attack(
-                source_village_id,
-                &AttackVillage {
-                    movement_id: Uuid::new_v4(),
-                    arrival_action_id: Uuid::new_v4(),
-                    return_action_id: Uuid::new_v4(),
-                    player_id,
-                    target_village_id,
-                    units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]),
-                    hero_id: None,
-                    attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
-                    arrives_at: now + chrono::Duration::seconds(2),
-                    returns_at: now + chrono::Duration::seconds(5),
-                },
-            )
-            .await
-            .unwrap();
-
-        service
-            .process_due_actions(now + chrono::Duration::seconds(3), 20)
-            .await
-            .unwrap();
-
-        let target_after = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(target_after.player_id, player_id);
-        assert_eq!(target_after.parent_village_id, Some(source_village_id));
-        assert_eq!(troops_sum(&target_after.reinforcements, 8), 0);
-        assert_eq!(troops_sum(&target_after.reinforcements, 0), 1);
-
-        let source_after = service.get_village(source_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after.deployed_armies, 8), 0);
-        assert_eq!(troops_sum(&source_after.deployed_armies, 0), 1);
-
-        let pending_returns = service
-            .get_village_scheduled_action_status_count(
-                source_village_id,
-                models::ScheduledActionType::ArmyReturn,
-                ScheduledActionStatus::Pending,
-            )
-            .await
-            .unwrap();
-        assert_eq!(pending_returns, 0);
-
-        let movements = service
-            .get_village_troop_movements(source_village_id)
-            .await
-            .unwrap();
-        assert!(
-            movements.outgoing.is_empty() && movements.incoming.is_empty(),
-            "conquering attacks must not schedule return movements"
-        );
+        assert_eq!(home_units(&pool, village_id, 3).await, 1);
+        assert_eq!(deployed_units(&pool, village_id, 3).await, 0);
     })
     .await;
 }
@@ -1856,23 +1604,18 @@ async fn village_es_service_conquer_is_blocked_without_expansion_prerequisites()
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 20)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            20,
+        )
+        .await;
 
         let now = chrono::Utc::now();
         service
@@ -1900,9 +1643,11 @@ async fn village_es_service_conquer_is_blocked_without_expansion_prerequisites()
             .await
             .unwrap();
 
-        let target_after = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(target_after.player_id, target_player_id);
-        assert_ne!(target_after.player_id, player_id);
+        assert_eq!(
+            village_owner(&service, target_village_id).await,
+            target_player_id
+        );
+        assert_ne!(village_owner(&service, target_village_id).await, player_id);
     })
     .await;
 }

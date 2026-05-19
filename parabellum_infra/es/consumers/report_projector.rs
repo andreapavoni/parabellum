@@ -129,16 +129,17 @@ impl ReportProjector {
                 let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
                     return Ok(());
                 };
-                let payload = ReportPayload::MarketplaceDelivery(MarketplaceDeliveryReportPayload {
-                    sender_player: self.player_username(source.player_id).await?,
-                    sender_village: source.village_name.clone(),
-                    sender_position: source.position.clone(),
-                    receiver_player: self.player_username(target.player_id).await?,
-                    receiver_village: target.village_name.clone(),
-                    receiver_position: target.position.clone(),
-                    resources: resources.clone(),
-                    merchants_used,
-                });
+                let payload =
+                    ReportPayload::MarketplaceDelivery(MarketplaceDeliveryReportPayload {
+                        sender_player: self.player_username(source.player_id).await?,
+                        sender_village: source.village_name.clone(),
+                        sender_position: source.position.clone(),
+                        receiver_player: self.player_username(target.player_id).await?,
+                        receiver_village: target.village_name.clone(),
+                        receiver_position: target.position.clone(),
+                        resources: resources.clone(),
+                        merchants_used,
+                    });
                 let mut audiences = vec![player_id];
                 if target.player_id != player_id {
                     audiences.push(target.player_id);

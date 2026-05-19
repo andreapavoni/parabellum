@@ -1,6 +1,5 @@
 use parabellum_app::villages::{
-    AttackVillage, ResearchAcademy, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    TrainUnits,
+    AttackVillage, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
 };
 use parabellum_types::{
     army::{TroopSet, UnitName},
@@ -12,11 +11,12 @@ use parabellum_types::{
 };
 use uuid::Uuid;
 
-use crate::es::{VillageEsService, tests::fixtures::setup_village_for_player};
+use crate::es::VillageEsService;
 
 use super::fixtures::{
-    academy, barracks, granary, main_building, rally_point, resources, setup_village, warehouse,
-    with_test_pool,
+    academy, barracks, deployed_units, granary, main_building, process_due_until, rally_point,
+    research_and_complete, resources, setup_village, setup_village_for_player, train_and_complete,
+    warehouse, with_test_pool,
 };
 
 #[tokio::test]
@@ -51,23 +51,18 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
         )
         .await;
 
-        service
-            .train_units(
-                village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -91,10 +86,7 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
             .await
             .unwrap();
 
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let reports = service
             .list_reports_for_player(player_id, 10)
@@ -105,10 +97,7 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
         assert_eq!(reports[0].actor_village_id, Some(village_id));
         assert_eq!(reports[0].target_village_id, Some(second_village_id));
 
-        service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let reports_after_return = service
             .list_reports_for_player(player_id, 10)
@@ -152,23 +141,18 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -192,10 +176,7 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
             .await
             .unwrap();
 
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -219,10 +200,7 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
         assert_eq!(defender_reports.len(), 1);
         assert_eq!(defender_reports[0].id, attacker_reports[0].id);
 
-        service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports_after_return = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -235,10 +213,10 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
         assert_eq!(attacker_reports_after_return.len(), 1);
         assert_eq!(defender_reports_after_return.len(), 1);
 
-        let source_after_return = service.get_village(source_village_id).await.unwrap();
-        assert!(
-            source_after_return.deployed_armies.is_empty(),
-            "attack return must not remain projected as deployed reinforcement"
+        assert_eq!(
+            deployed_units(&pool, source_village_id, 0).await,
+            0,
+            "attack return must not remain projected as deployed reinforcement",
         );
     })
     .await;
@@ -294,36 +272,30 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .train_units(
-                reinforcer_village_id,
-                &TrainUnits {
-                    player_id: reinforcer_player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 200)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            200,
+        )
+        .await;
+        train_and_complete(
+            &service,
+            reinforcer_village_id,
+            reinforcer_player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            200,
+        )
+        .await;
 
         let reinforcement_arrival = chrono::Utc::now() + chrono::Duration::seconds(2);
         service
@@ -341,10 +313,12 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(reinforcement_arrival + chrono::Duration::seconds(1), 50)
-            .await
-            .unwrap();
+        process_due_until(
+            &service,
+            reinforcement_arrival + chrono::Duration::seconds(1),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -367,10 +341,7 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 50)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 50).await;
 
         let attacker_reports = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -435,23 +406,18 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -475,10 +441,7 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
             .await
             .unwrap();
 
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let reports = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -545,23 +508,18 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let reinforcement_arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         service
@@ -579,10 +537,12 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(reinforcement_arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(
+            &service,
+            reinforcement_arrives_at + chrono::Duration::seconds(1),
+            10,
+        )
+        .await;
 
         let merchants_arrive_at = chrono::Utc::now() + chrono::Duration::seconds(4);
         service
@@ -597,10 +557,12 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(merchants_arrive_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(
+            &service,
+            merchants_arrive_at + chrono::Duration::seconds(1),
+            10,
+        )
+        .await;
 
         let player_reports = service
             .list_reports_for_player(attacker_player_id, 20)
@@ -652,23 +614,18 @@ async fn village_es_service_reinforcement_reports_one_audience_for_same_player()
         )
         .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id,
-                    unit_idx: 0,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        train_and_complete(
+            &service,
+            source_village_id,
+            player_id,
+            0,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         service
@@ -686,10 +643,7 @@ async fn village_es_service_reinforcement_reports_one_audience_for_same_player()
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let reports = service
             .list_reports_for_player(player_id, 10)
@@ -736,38 +690,28 @@ async fn village_es_service_scout_projects_battle_report() {
         )
         .await;
 
-        service
-            .research_academy(
-                source_village_id,
-                &ResearchAcademy {
-                    player_id: attacker_player_id,
-                    unit: UnitName::Scout,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 200)
-            .await
-            .unwrap();
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 3,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(3), 50)
-            .await
-            .unwrap();
+        research_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            UnitName::Scout,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(2),
+            200,
+        )
+        .await;
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            3,
+            BuildingName::Barracks,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::hours(3),
+            50,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -790,10 +734,7 @@ async fn village_es_service_scout_projects_battle_report() {
             .await
             .unwrap();
 
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -815,10 +756,7 @@ async fn village_es_service_scout_projects_battle_report() {
             .unwrap();
         assert_eq!(defender_reports.len(), 0);
 
-        service
-            .process_due_actions(returns_at + chrono::Duration::seconds(1), 10)
-            .await
-            .unwrap();
+        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports_after_return = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -868,101 +806,53 @@ async fn village_es_service_detected_scout_reports_to_defender_player() {
         )
         .await;
 
-        service
-            .research_academy(
-                source_village_id,
-                &ResearchAcademy {
-                    player_id: attacker_player_id,
-                    unit: UnitName::Scout,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .research_academy(
-                target_village_id,
-                &ResearchAcademy {
-                    player_id: defender_player_id,
-                    unit: UnitName::Scout,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        let source_academy_due_at = service
-            .get_village_academy_queue(source_village_id)
-            .await
-            .unwrap()
-            .iter()
-            .map(|a| a.execute_at)
-            .max()
-            .expect("source academy research should be queued");
-        let target_academy_due_at = service
-            .get_village_academy_queue(target_village_id)
-            .await
-            .unwrap()
-            .iter()
-            .map(|a| a.execute_at)
-            .max()
-            .expect("target academy research should be queued");
-        service
-            .process_due_actions(
-                source_academy_due_at.max(target_academy_due_at) + chrono::Duration::seconds(1),
-                200,
-            )
-            .await
-            .unwrap();
+        let research_due_by = chrono::Utc::now() + chrono::Duration::hours(2);
+        research_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            UnitName::Scout,
+            1,
+            research_due_by,
+            200,
+        )
+        .await;
+        research_and_complete(
+            &service,
+            target_village_id,
+            defender_player_id,
+            UnitName::Scout,
+            1,
+            research_due_by,
+            200,
+        )
+        .await;
 
-        service
-            .train_units(
-                source_village_id,
-                &TrainUnits {
-                    player_id: attacker_player_id,
-                    unit_idx: 3,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        service
-            .train_units(
-                target_village_id,
-                &TrainUnits {
-                    player_id: defender_player_id,
-                    unit_idx: 3,
-                    building_name: BuildingName::Barracks,
-                    quantity: 1,
-                    speed: 1,
-                },
-            )
-            .await
-            .unwrap();
-        let source_training_due_at = service
-            .get_village_training_queue(source_village_id)
-            .await
-            .unwrap()
-            .iter()
-            .map(|a| a.execute_at)
-            .max()
-            .expect("source scout training should be queued");
-        let target_training_due_at = service
-            .get_village_training_queue(target_village_id)
-            .await
-            .unwrap()
-            .iter()
-            .map(|a| a.execute_at)
-            .max()
-            .expect("target scout training should be queued");
-        service
-            .process_due_actions(
-                source_training_due_at.max(target_training_due_at) + chrono::Duration::seconds(1),
-                200,
-            )
-            .await
-            .unwrap();
+        let train_due_by = chrono::Utc::now() + chrono::Duration::hours(3);
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            3,
+            BuildingName::Barracks,
+            1,
+            1,
+            train_due_by,
+            200,
+        )
+        .await;
+        train_and_complete(
+            &service,
+            target_village_id,
+            defender_player_id,
+            3,
+            BuildingName::Barracks,
+            1,
+            1,
+            train_due_by,
+            200,
+        )
+        .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -984,10 +874,7 @@ async fn village_es_service_detected_scout_reports_to_defender_player() {
             )
             .await
             .unwrap();
-        service
-            .process_due_actions(arrives_at + chrono::Duration::seconds(1), 20)
-            .await
-            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 20).await;
 
         let attacker_reports = service
             .list_reports_for_player(attacker_player_id, 10)

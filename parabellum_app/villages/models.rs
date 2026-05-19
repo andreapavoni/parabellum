@@ -10,6 +10,8 @@ use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceQuantity;
 use parabellum_types::reports::ReportPayload;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use parabellum_game::models::army::Army;
@@ -137,6 +139,32 @@ pub enum ScheduledActionStatus {
     Processing,
     Completed,
     Failed,
+}
+
+impl fmt::Display for ScheduledActionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = match self {
+            Self::Pending => "pending",
+            Self::Processing => "processing",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        };
+        f.write_str(value)
+    }
+}
+
+impl FromStr for ScheduledActionStatus {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "processing" => Ok(Self::Processing),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            _ => Err("invalid scheduled action status"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

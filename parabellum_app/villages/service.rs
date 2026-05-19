@@ -1,12 +1,11 @@
 use mini_cqrs_es::{Cqrs, CqrsError};
 
 use crate::villages::{
-    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer,
-    CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ResolveAttackBattle,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero,
-    ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
-    TrainUnits, UpgradeBuilding,
+    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
+    CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
+    RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
+    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {

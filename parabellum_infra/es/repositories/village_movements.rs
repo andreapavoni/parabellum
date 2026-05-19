@@ -120,7 +120,8 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
             .begin()
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        self.delete_by_movement_id_in_tx(&mut tx, movement_id).await?;
+        self.delete_by_movement_id_in_tx(&mut tx, movement_id)
+            .await?;
         tx.commit()
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
