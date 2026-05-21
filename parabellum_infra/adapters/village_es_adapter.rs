@@ -27,7 +27,7 @@ use parabellum_app::{
     },
 };
 use parabellum_types::{
-    errors::{ApplicationError, GameError},
+    errors::{AppError, ApplicationError, DbError, GameError},
     map::Position,
 };
 
@@ -80,16 +80,62 @@ impl VillageEsAdapter {
         position.to_id(self.config.world_size as i32)
     }
 
+    /// Maps CQRS/runtime failures to stable app-layer error categories.
+    ///
+    /// Why this exists:
+    /// - HTTP contract mapping is done from `ApplicationError` variants.
+    /// - Leaving CQRS failures as opaque `Unknown` turns client-visible `4xx`
+    ///   conditions into `500`.
+    ///
+    /// Policy:
+    /// - stream/version conflicts -> app conflict bucket
+    /// - recognized marketplace/hero domain violations -> typed `GameError`
+    /// - everything else remains `Unknown` and is treated as internal
     fn map_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
+        if matches!(err, mini_cqrs_es::CqrsError::Conflict { .. }) {
+            return ApplicationError::App(AppError::QueueItemAlreadyQueued {
+                queue: "cqrs",
+                item: "aggregate_version".to_string(),
+            });
+        }
         let msg = err.to_string();
-        if msg.contains("player already has an alive hero") {
+        let normalized = msg.to_ascii_lowercase();
+        if normalized.contains("player already has an alive hero") {
             return ApplicationError::Game(GameError::HeroAlreadyExists);
         }
-        if msg.contains("hero revival already pending") {
+        if normalized.contains("hero revival already pending") {
             return ApplicationError::Game(GameError::HeroRevivalAlreadyPending);
         }
-        if msg.contains("cannot revive while an alive hero exists") {
+        if normalized.contains("cannot revive while an alive hero exists") {
             return ApplicationError::Game(GameError::HeroAlreadyExists);
+        }
+        if normalized.contains("invalid marketplace offer") {
+            return ApplicationError::Game(GameError::InvalidMarketplaceOffer);
+        }
+        if normalized.contains("offerer marketplace no longer valid")
+            || normalized.contains("offer is no longer valid")
+        {
+            return ApplicationError::Game(GameError::MarketplaceOfferNoLongerValid);
+        }
+        ApplicationError::Unknown(msg)
+    }
+
+    /// Maps read/query failures that currently cross the ES boundary as
+    /// stringly `CqrsError::EventStore` payloads.
+    ///
+    /// Keep this intentionally narrow: only map well-known not-found cases to
+    /// typed DB errors so web layer can return stable `404` contracts.
+    fn map_query_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
+        let msg = err.to_string();
+        let normalized = msg.to_ascii_lowercase();
+        if normalized.contains("mapfield with id") && normalized.contains("not found") {
+            return ApplicationError::Db(DbError::MapFieldNotFound(0));
+        }
+        if normalized.contains("marketplace offer with id") && normalized.contains("not found") {
+            return ApplicationError::Db(DbError::MarketplaceOfferNotFound(Uuid::nil()));
+        }
+        if normalized.contains("village with id") && normalized.contains("not found") {
+            return ApplicationError::Db(DbError::VillageNotFound(0));
         }
         ApplicationError::Unknown(msg)
     }
@@ -109,7 +155,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -127,7 +173,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -136,12 +182,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.source_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let target = self
             .service
             .get_village(request.target_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let travel_secs = source.position.calculate_travel_time_secs(
             target.position,
             source.tribe.merchant_stats().speed,
@@ -162,7 +208,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -179,7 +225,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -197,7 +243,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -215,7 +261,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -227,12 +273,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.source_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let target = self
             .service
             .get_village(request.target_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let speed = Self::movement_speed(&source.tribe, &request.units);
         let arrives_at = chrono::Utc::now() + self.compute_travel_duration(&source, &target, speed);
 
@@ -250,7 +296,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -259,12 +305,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.source_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let target = self
             .service
             .get_village(request.target_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let speed = Self::movement_speed(&source.tribe, &request.units);
         let one_way = self.compute_travel_duration(&source, &target, speed);
         let arrives_at = chrono::Utc::now() + one_way;
@@ -288,7 +334,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -297,12 +343,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.source_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let target = self
             .service
             .get_village(request.target_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let speed = Self::movement_speed(&source.tribe, &request.units);
         let one_way = self.compute_travel_duration(&source, &target, speed);
         let arrives_at = chrono::Utc::now() + one_way;
@@ -325,7 +371,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -334,7 +380,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.source_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let settlers_speed = source.tribe.units().get(9).map(|u| u.speed).unwrap_or(1);
         let travel_secs = source.position.calculate_travel_time_secs(
             request.target_position.clone(),
@@ -349,7 +395,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .is_unoccupied_valley(target_field_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         if !target_is_empty_valley {
             return Err(parabellum_types::errors::GameError::InvalidValley(target_field_id).into());
         }
@@ -370,7 +416,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -382,7 +428,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .find_reinforcement_context(request.army_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         if context.home_village_id != request.village_id {
             return Err(ApplicationError::Unknown(
                 "Reinforcement army does not belong to provided home village".to_string(),
@@ -393,12 +439,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(context.stationed_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let home = self
             .service
             .get_village(request.village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let reinforcement_army = context.army;
 
         let returns_at = chrono::Utc::now()
@@ -424,7 +470,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -436,7 +482,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .find_reinforcement_context(request.army_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         if context.home_village_id != request.village_id {
             return Err(ApplicationError::Unknown(
                 "Reinforcement army does not belong to provided home village".to_string(),
@@ -447,12 +493,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(context.stationed_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let home = self
             .service
             .get_village(request.village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_query_cqrs_error)?;
         let reinforcement_army = context.army;
 
         let returns_at = chrono::Utc::now()
@@ -478,7 +524,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -496,7 +542,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 },
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -508,17 +554,35 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_marketplace_offer(request.offer_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(|_| {
+                ApplicationError::Db(DbError::MarketplaceOfferNotFound(request.offer_id))
+            })?;
         let owner = self
             .service
             .get_village(offer.owner_village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(|e| {
+                let mapped = Self::map_query_cqrs_error(e);
+                match mapped {
+                    ApplicationError::Db(DbError::VillageNotFound(_)) => {
+                        ApplicationError::Db(DbError::VillageNotFound(offer.owner_village_id))
+                    }
+                    other => other,
+                }
+            })?;
         let accepting = self
             .service
             .get_village(request.village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(|e| {
+                let mapped = Self::map_query_cqrs_error(e);
+                match mapped {
+                    ApplicationError::Db(DbError::VillageNotFound(_)) => {
+                        ApplicationError::Db(DbError::VillageNotFound(request.village_id))
+                    }
+                    other => other,
+                }
+            })?;
 
         let owner_secs = owner.position.calculate_travel_time_secs(
             accepting.position.clone(),
@@ -546,7 +610,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                 accepting_arrives_at,
             )
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -554,10 +618,18 @@ impl VillageCommandsPort for VillageEsAdapter {
         &self,
         request: CancelMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
+        let _offer = self
+            .service
+            .get_marketplace_offer(request.offer_id)
+            .await
+            .map_err(|_| {
+                ApplicationError::Db(DbError::MarketplaceOfferNotFound(request.offer_id))
+            })?;
+
         self.service
             .cancel_marketplace_offer(request.village_id, request.player_id, request.offer_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
 
@@ -633,7 +705,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_marketplace_offer(offer_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::MarketplaceOfferNotFound(offer_id)))
     }
 
     async fn list_reports_for_player(
@@ -644,7 +716,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .list_reports_for_player(player_id, limit)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_report_for_player(
@@ -655,7 +727,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_report_for_player(report_id, player_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn mark_report_as_read(
@@ -666,14 +738,14 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .mark_report_as_read(report_id, player_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, ApplicationError> {
         self.service
             .get_village_queues(village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
     }
 
     async fn get_village_troop_movements(
@@ -683,7 +755,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_village_troop_movements(village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
     }
 
     async fn get_marketplace_data(
@@ -693,7 +765,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_marketplace_data(village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
     }
 
     async fn get_village_army_state_view(
@@ -703,7 +775,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_village_army_state_view(village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
     }
 
     async fn get_village_info_by_ids(
@@ -713,7 +785,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_village_info_by_ids(village_ids)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_expansion_culture_info(
@@ -725,7 +797,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_expansion_culture_info(player_id, village_id, server_speed)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_leaderboard_page(
@@ -736,7 +808,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_leaderboard_page(page, per_page)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn list_villages_by_player_id(
@@ -746,7 +818,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .list_villages_by_player_id(player_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_village_model(
@@ -756,7 +828,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
     }
 
     async fn get_map_region(
@@ -769,17 +841,22 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_map_region(center_x, center_y, radius, world_size)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_map_field(
         &self,
         field_id: u32,
     ) -> Result<parabellum_game::models::map::MapField, ApplicationError> {
-        self.service
-            .get_map_field(field_id)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+        self.service.get_map_field(field_id).await.map_err(|e| {
+            let mapped = Self::map_query_cqrs_error(e);
+            match mapped {
+                ApplicationError::Db(DbError::MapFieldNotFound(_)) => {
+                    ApplicationError::Db(DbError::MapFieldNotFound(field_id))
+                }
+                other => other,
+            }
+        })
     }
 
     async fn get_map_region_tile_by_field_id(
@@ -789,7 +866,7 @@ impl VillageQueryPort for VillageEsAdapter {
         self.service
             .get_map_region_tile_by_field_id(field_id)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_query_cqrs_error)
     }
 }
 
@@ -803,6 +880,6 @@ impl SchedulerPort for VillageEsAdapter {
         self.service
             .process_due_actions(before_or_equal, limit)
             .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+            .map_err(Self::map_cqrs_error)
     }
 }

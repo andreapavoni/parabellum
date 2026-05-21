@@ -14,26 +14,25 @@ use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{ReplayMode, ReplayRequest, ReplayService, ReplayTarget, VillageEsService};
 
 use super::fixtures::{
-    academy, deployed_units, granary, insert_corrupt_scheduled_action, main_building, marketplace,
-    process_due_until, refill_resources, research_and_complete, resources,
-    scheduled_action_status_count, setup_village, stationed_units, train_and_complete, warehouse,
-    with_test_pool,
+    EsScenario, academy, deployed_units, granary, insert_corrupt_scheduled_action, main_building,
+    marketplace, refill_resources, research_and_complete, resources, scheduled_action_status_count,
+    stationed_units, train_and_complete, warehouse, with_test_pool,
 };
 
 #[tokio::test]
 async fn replay_dry_run_applies_village_events_without_writes() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        setup_village(
-            &pool,
-            &service,
-            "Replay Village",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
+        let scenario = EsScenario::new(&pool, &service);
+        scenario
+            .village(
+                "Replay Village",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
 
         let replay = ReplayService::new(pool);
         let summary = replay
@@ -61,16 +60,16 @@ async fn replay_dry_run_applies_village_events_without_writes() {
 async fn replay_dry_run_reports_skip_non_report_events() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        setup_village(
-            &pool,
-            &service,
-            "Replay Village",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
+        let scenario = EsScenario::new(&pool, &service);
+        scenario
+            .village(
+                "Replay Village",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
 
         let replay = ReplayService::new(pool);
         let summary = replay
@@ -95,16 +94,16 @@ async fn replay_dry_run_reports_skip_non_report_events() {
 async fn replay_full_mode_rebuilds_village_projection() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        let (_, _, village_id) = setup_village(
-            &pool,
-            &service,
-            "Replay Village",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
+        let scenario = EsScenario::new(&pool, &service);
+        let (_, _, village_id) = scenario
+            .village(
+                "Replay Village",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
 
         sqlx::query("DELETE FROM rm_village WHERE village_id = $1")
             .bind(village_id as i32)
@@ -138,26 +137,25 @@ async fn replay_full_mode_rebuilds_village_projection() {
 async fn replay_dry_run_filters_by_aggregate_id() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        let (_, _, village_id_a) = setup_village(
-            &pool,
-            &service,
-            "Replay Village A",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
-        setup_village(
-            &pool,
-            &service,
-            "Replay Village B",
-            Position { x: 1, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
+        let scenario = EsScenario::new(&pool, &service);
+        let (_, _, village_id_a) = scenario
+            .village(
+                "Replay Village A",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
+        scenario
+            .village(
+                "Replay Village B",
+                Position { x: 1, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
 
         let replay = ReplayService::new(pool);
         let summary = replay
@@ -209,16 +207,16 @@ async fn process_due_actions_returns_zero_when_execution_lock_is_held() {
 async fn replay_full_mode_preserves_operational_scheduled_actions() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        setup_village(
-            &pool,
-            &service,
-            "Replay Village",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![main_building(1)],
-            resources(800, 800, 800, 800),
-        )
-        .await;
+        let scenario = EsScenario::new(&pool, &service);
+        scenario
+            .village(
+                "Replay Village",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![main_building(1)],
+                resources(800, 800, 800, 800),
+            )
+            .await;
 
         insert_corrupt_scheduled_action(&pool, ScheduledActionStatus::Pending).await;
 
@@ -246,37 +244,36 @@ async fn replay_full_mode_preserves_operational_scheduled_actions() {
 async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
+        let scenario = EsScenario::new(&pool, &service);
 
-        let (_owner_user_id, owner_player_id, owner_village_id) = setup_village(
-            &pool,
-            &service,
-            "Replay Market Owner",
-            Position { x: 0, y: 0 },
-            Tribe::Gaul,
-            vec![
-                main_building(10),
-                warehouse(20),
-                granary(20),
-                marketplace(10),
-            ],
-            resources(800_000, 800_000, 800_000, 800_000),
-        )
-        .await;
-        let (_acceptor_user_id, acceptor_player_id, acceptor_village_id) = setup_village(
-            &pool,
-            &service,
-            "Replay Market Acceptor",
-            Position { x: 5, y: 5 },
-            Tribe::Roman,
-            vec![
-                main_building(10),
-                warehouse(20),
-                granary(20),
-                marketplace(10),
-            ],
-            resources(800_000, 800_000, 800_000, 800_000),
-        )
-        .await;
+        let (_owner_user_id, owner_player_id, owner_village_id) = scenario
+            .village(
+                "Replay Market Owner",
+                Position { x: 0, y: 0 },
+                Tribe::Gaul,
+                vec![
+                    main_building(10),
+                    warehouse(20),
+                    granary(20),
+                    marketplace(10),
+                ],
+                resources(800_000, 800_000, 800_000, 800_000),
+            )
+            .await;
+        let (_acceptor_user_id, acceptor_player_id, acceptor_village_id) = scenario
+            .village(
+                "Replay Market Acceptor",
+                Position { x: 5, y: 5 },
+                Tribe::Roman,
+                vec![
+                    main_building(10),
+                    warehouse(20),
+                    granary(20),
+                    marketplace(10),
+                ],
+                resources(800_000, 800_000, 800_000, 800_000),
+            )
+            .await;
 
         service
             .create_marketplace_offer(
@@ -302,10 +299,9 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
             .await
             .unwrap();
 
-        service
-            .process_due_actions(Utc::now() + Duration::seconds(3), 100)
-            .await
-            .unwrap();
+        scenario
+            .process_until(Utc::now() + Duration::seconds(3), 100)
+            .await;
 
         let owner_before = service.get_village(owner_village_id).await.unwrap();
         let acceptor_before = service.get_village(acceptor_village_id).await.unwrap();
@@ -370,55 +366,54 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
 async fn replay_full_mode_is_idempotent_for_attack_outcome_window() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
+        let scenario = EsScenario::new(&pool, &service);
 
-        let (_user_id, player_id, source_village_id) = setup_village(
-            &pool,
-            &service,
-            "Replay Conquer Source",
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![
-                main_building(20),
-                super::fixtures::rally_point(10),
-                VillageBuilding {
-                    slot_id: 26,
-                    building: Building::new(BuildingName::Palace, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                VillageBuilding {
-                    slot_id: 28,
-                    building: Building::new(BuildingName::GreatWarehouse, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                VillageBuilding {
-                    slot_id: 29,
-                    building: Building::new(BuildingName::GreatGranary, 1)
-                        .at_level(20, 1)
-                        .unwrap(),
-                },
-                academy(20),
-                super::fixtures::warehouse(20),
-                super::fixtures::granary(20),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
-        let (_target_user_id, _target_player_id, target_village_id) = setup_village(
-            &pool,
-            &service,
-            "Replay Conquer Target",
-            Position { x: 2, y: 2 },
-            Tribe::Teuton,
-            vec![
-                main_building(1),
-                super::fixtures::warehouse(20),
-                super::fixtures::granary(20),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
+        let (_user_id, player_id, source_village_id) = scenario
+            .village(
+                "Replay Conquer Source",
+                Position { x: 0, y: 0 },
+                Tribe::Roman,
+                vec![
+                    main_building(20),
+                    super::fixtures::rally_point(10),
+                    VillageBuilding {
+                        slot_id: 26,
+                        building: Building::new(BuildingName::Palace, 1)
+                            .at_level(20, 1)
+                            .unwrap(),
+                    },
+                    VillageBuilding {
+                        slot_id: 28,
+                        building: Building::new(BuildingName::GreatWarehouse, 1)
+                            .at_level(20, 1)
+                            .unwrap(),
+                    },
+                    VillageBuilding {
+                        slot_id: 29,
+                        building: Building::new(BuildingName::GreatGranary, 1)
+                            .at_level(20, 1)
+                            .unwrap(),
+                    },
+                    academy(20),
+                    super::fixtures::warehouse(20),
+                    super::fixtures::granary(20),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
+        let (_target_user_id, _target_player_id, target_village_id) = scenario
+            .village(
+                "Replay Conquer Target",
+                Position { x: 2, y: 2 },
+                Tribe::Teuton,
+                vec![
+                    main_building(1),
+                    super::fixtures::warehouse(20),
+                    super::fixtures::granary(20),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
         sqlx::query("UPDATE players SET culture_points = 5000 WHERE id = $1")
             .bind(player_id)
             .execute(&pool)
@@ -476,7 +471,9 @@ async fn replay_full_mode_is_idempotent_for_attack_outcome_window() {
             )
             .await
             .unwrap();
-        process_due_until(&service, now + chrono::Duration::seconds(3), 20).await;
+        scenario
+            .process_until(now + chrono::Duration::seconds(3), 20)
+            .await;
 
         let rows = sqlx::query_as::<_, (String, String, i64)>(
             r#"

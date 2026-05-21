@@ -37,8 +37,52 @@ async fn login(
         .unwrap()
 }
 
+async fn login_access_token(
+    client: &reqwest::Client,
+    base_url: &str,
+    email: &str,
+    password: &str,
+) -> String {
+    let resp = login(client, base_url, email, password).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = serde_json::from_str(&resp.text().await.unwrap()).unwrap();
+    str_field(&body, &["access_token", "accessToken"])
+        .unwrap()
+        .to_string()
+}
+
 fn str_field<'a>(body: &'a Value, keys: &[&str]) -> Option<&'a str> {
     keys.iter().find_map(|key| body.get(*key)?.as_str())
+}
+
+fn find_offer_id(value: &Value) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            if let Some(id) = map
+                .get("offerId")
+                .or_else(|| map.get("offer_id"))
+                .and_then(Value::as_str)
+            {
+                return Some(id.to_string());
+            }
+            map.values().find_map(find_offer_id)
+        }
+        Value::Array(items) => items.iter().find_map(find_offer_id),
+        _ => None,
+    }
+}
+
+async fn assert_error_code(response: reqwest::Response, status: StatusCode, code: &str) {
+    let actual = response.status();
+    let text = response.text().await.unwrap();
+    assert_eq!(actual, status, "unexpected status body: {text}");
+    let body: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["code"], code);
+    assert!(body["message"].is_string());
+}
+
+async fn assert_unauthorized(response: reqwest::Response) {
+    assert_error_code(response, StatusCode::UNAUTHORIZED, "unauthorized").await;
 }
 
 #[tokio::test]
@@ -287,5 +331,370 @@ async fn auth_login_invalid_credentials_is_unauthorized() -> Result<(), Applicat
     let body: Value = serde_json::from_str(&login_text).unwrap();
     assert_eq!(body["code"], "unauthorized");
     assert_ne!(body["message"], "");
+    Ok(())
+}
+
+#[tokio::test]
+async fn openapi_contract_is_available() -> Result<(), ApplicationError> {
+    let (_schema, base_url) = setup_web_app().await?;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("{base_url}/api/v1/openapi.json"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    assert_eq!(body["openapi"], "3.1.0");
+    assert!(body["paths"].is_object());
+    Ok(())
+}
+
+#[tokio::test]
+async fn protected_matrix_endpoints_require_bearer_token() -> Result<(), ApplicationError> {
+    let (_schema, base_url) = setup_web_app().await?;
+    let client = reqwest::Client::new();
+
+    let checks: Vec<(&str, String, Option<Value>)> = vec![
+        ("GET", "/api/v1/me/session".to_string(), None),
+        ("GET", "/api/v1/stats".to_string(), None),
+        ("GET", "/api/v1/villages/1/resources".to_string(), None),
+        ("GET", "/api/v1/buildings/1".to_string(), None),
+        ("GET", "/api/v1/map/region".to_string(), None),
+        ("GET", "/api/v1/map/fields/1".to_string(), None),
+        ("GET", "/api/v1/reports".to_string(), None),
+        ("GET", format!("/api/v1/reports/{}", Uuid::new_v4()), None),
+        (
+            "GET",
+            "/api/v1/players/00000000-0000-0000-0000-000000000001".to_string(),
+            None,
+        ),
+    ];
+
+    for (method, path, body) in checks {
+        let url = format!("{base_url}{path}");
+        let req = match method {
+            "GET" => client.get(url),
+            "POST" => client.post(url).header("content-type", "application/json"),
+            _ => unreachable!(),
+        };
+        let req = if let Some(payload) = body {
+            req.body(payload.to_string())
+        } else {
+            req
+        };
+        assert_unauthorized(req.send().await.unwrap()).await;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn contract_gap_register_invalid_password_should_be_422() -> Result<(), ApplicationError> {
+    let (_schema, base_url) = setup_web_app().await?;
+    let client = reqwest::Client::new();
+    let (username, email, _) = unique_identity();
+
+    let response = client
+        .post(format!("{base_url}/api/v1/auth/token/register"))
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "username": username,
+                "email": email,
+                "password": "short",
+                "tribe": "Teuton",
+                "quadrant": "NorthEast"
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(
+        response,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "validation_error",
+    )
+    .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn contract_gap_register_duplicate_email_should_be_409() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let (username, _, password) = unique_identity();
+
+    let second = client
+        .post(format!("{base_url}/api/v1/auth/token/register"))
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "username": username,
+                "email": seeded.email,
+                "password": password,
+                "tribe": "Roman",
+                "quadrant": "SouthWest"
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(second, StatusCode::CONFLICT, "conflict").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn reports_detail_unknown_id_returns_not_found_with_valid_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .get(format!("{base_url}/api/v1/reports/{}", Uuid::new_v4()))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn reports_detail_malformed_id_returns_bad_request_before_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url) = setup_web_app().await?;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("{base_url}/api/v1/reports/not-a-uuid"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    Ok(())
+}
+
+#[tokio::test]
+async fn map_field_unknown_id_returns_not_found_with_valid_auth() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .get(format!("{base_url}/api/v1/map/fields/999999999"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn map_region_partial_coordinates_returns_bad_request() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .get(format!("{base_url}/api/v1/map/region?x=10"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::BAD_REQUEST, "bad_request").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn village_overview_unknown_id_returns_not_found_with_valid_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .get(format!("{base_url}/api/v1/villages/999999999/overview"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn village_resources_unknown_id_returns_not_found_with_valid_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .get(format!("{base_url}/api/v1/villages/999999999/resources"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn marketplace_accept_unknown_offer_returns_not_found_with_valid_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .post(format!(
+            "{base_url}/api/v1/marketplace/offers/{}/accept",
+            Uuid::new_v4()
+        ))
+        .bearer_auth(token)
+        .header("content-type", "application/json")
+        .body(json!({ "slotId": 28 }).to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn marketplace_cancel_unknown_offer_returns_not_found_with_valid_auth()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .post(format!(
+            "{base_url}/api/v1/marketplace/offers/{}/cancel",
+            Uuid::new_v4()
+        ))
+        .bearer_auth(token)
+        .header("content-type", "application/json")
+        .body(json!({ "slotId": 28 }).to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn train_units_zero_quantity_returns_validation_error() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+
+    let response = client
+        .post(format!("{base_url}/api/v1/army/train"))
+        .bearer_auth(token)
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "slotId": 1,
+                "unitIdx": 0,
+                "quantity": 0,
+                "buildingName": "Barracks"
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(
+        response,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "validation_error",
+    )
+    .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn marketplace_offer_owner_accept_returns_conflict() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let owner_token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let owner_market_slot = 28;
+
+    let create_offer = client
+        .post(format!("{base_url}/api/v1/marketplace/offers"))
+        .bearer_auth(&owner_token)
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "slotId": owner_market_slot,
+                "offerLumber": 100,
+                "offerClay": 0,
+                "offerIron": 0,
+                "offerCrop": 0,
+                "seekLumber": 0,
+                "seekClay": 0,
+                "seekIron": 90,
+                "seekCrop": 0
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+    let create_offer_status = create_offer.status();
+    let create_offer_text = create_offer.text().await.unwrap();
+    assert_eq!(
+        create_offer_status,
+        StatusCode::OK,
+        "create offer failed: {create_offer_text}"
+    );
+
+    let owner_market = client
+        .get(format!("{base_url}/api/v1/buildings/{owner_market_slot}"))
+        .bearer_auth(&owner_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(owner_market.status(), StatusCode::OK);
+    let owner_market_body: Value =
+        serde_json::from_str(&owner_market.text().await.unwrap()).unwrap();
+    let offer_id =
+        find_offer_id(&owner_market_body).expect("offer id should exist after offer creation");
+
+    let owner_accept = client
+        .post(format!(
+            "{base_url}/api/v1/marketplace/offers/{offer_id}/accept"
+        ))
+        .bearer_auth(owner_token)
+        .header("content-type", "application/json")
+        .body(json!({ "slotId": owner_market_slot }).to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_error_code(owner_accept, StatusCode::CONFLICT, "conflict").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn extractor_first_precedence_returns_422_before_auth_for_invalid_body()
+-> Result<(), ApplicationError> {
+    let (_schema, base_url) = setup_web_app().await?;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(format!("{base_url}/api/v1/buildings/upgrade"))
+        .header("content-type", "application/json")
+        .body(json!({ "notSlotId": 26 }).to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     Ok(())
 }

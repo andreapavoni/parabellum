@@ -10,11 +10,16 @@ pub mod tests {
 
     use parabellum_app::auth::hash_password;
     use parabellum_app::{application::GameApplication, config::Config};
-    use parabellum_game::models::{map::Valley, village::Village};
+    use parabellum_game::models::{
+        buildings::Building,
+        map::Valley,
+        village::{Village, VillageBuilding},
+    };
     use parabellum_infra::{
         adapters::VillageEsAdapter, bootstrap_world_map, es::VillageEsService,
         identity::IdentityService,
     };
+    use parabellum_types::buildings::BuildingName;
     use parabellum_types::common::Player;
     use parabellum_types::map::Position;
     use parabellum_types::map::ValleyTopology;
@@ -104,12 +109,24 @@ pub mod tests {
         Ok((isolated_pool, handle))
     }
 
-    #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<(Arc<IsolatedSchemaHandle>, String)> {
-        let (pool, schema_handle) = create_isolated_test_pool().await?;
-        let config = Arc::new(Config::from_env());
-        bootstrap_world_map(&pool, config.world_size).await?;
+    fn build_game_app(pool: &PgPool, config: Arc<Config>) -> Arc<GameApplication> {
+        let villages = Arc::new(VillageEsAdapter::new(
+            VillageEsService::new(pool.clone()),
+            config.clone(),
+        ));
+        Arc::new(GameApplication::new(
+            Arc::new(IdentityService::new(pool.clone(), config.clone())),
+            villages.clone(),
+            villages.clone(),
+            villages,
+        ))
+    }
 
+    async fn start_web_server(
+        game_app: Arc<GameApplication>,
+        pool: PgPool,
+        config: Arc<Config>,
+    ) -> Result<String> {
         let listener = TcpListener::bind("127.0.0.1:0")
             .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
         let port = listener
@@ -118,18 +135,8 @@ pub mod tests {
             .port();
         drop(listener);
 
-        let villages = Arc::new(VillageEsAdapter::new(
-            VillageEsService::new(pool.clone()),
-            config.clone(),
-        ));
-        let game_app = Arc::new(GameApplication::new(
-            Arc::new(IdentityService::new(pool.clone(), config.clone())),
-            villages.clone(),
-            villages.clone(),
-            villages,
-        ));
         let state = AppState::new(game_app, pool, &config);
-        tokio::spawn(WebRouter::serve(state.clone(), port));
+        tokio::spawn(WebRouter::serve(state, port));
 
         let base_url = format!("http://127.0.0.1:{port}");
         let client = reqwest::Client::new();
@@ -149,6 +156,16 @@ pub mod tests {
                 "Web test app did not become ready".to_string(),
             ));
         }
+        Ok(base_url)
+    }
+
+    #[allow(dead_code)]
+    pub async fn setup_web_app() -> Result<(Arc<IsolatedSchemaHandle>, String)> {
+        let (pool, schema_handle) = create_isolated_test_pool().await?;
+        let config = Arc::new(Config::from_env());
+        bootstrap_world_map(&pool, config.world_size).await?;
+        let game_app = build_game_app(&pool, config.clone());
+        let base_url = start_web_server(game_app, pool, config).await?;
 
         Ok((schema_handle, base_url))
     }
@@ -159,25 +176,7 @@ pub mod tests {
         let (pool, schema_handle) = create_isolated_test_pool().await?;
         let config = Arc::new(Config::from_env());
         bootstrap_world_map(&pool, config.world_size).await?;
-
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-        let port = listener
-            .local_addr()
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?
-            .port();
-        drop(listener);
-
-        let villages = Arc::new(VillageEsAdapter::new(
-            VillageEsService::new(pool.clone()),
-            config.clone(),
-        ));
-        let game_app = Arc::new(GameApplication::new(
-            Arc::new(IdentityService::new(pool.clone(), config.clone())),
-            villages.clone(),
-            villages.clone(),
-            villages,
-        ));
+        let game_app = build_game_app(&pool, config.clone());
 
         let short = &Uuid::new_v4().simple().to_string()[..10];
         let seeded = SeededAuthUser {
@@ -236,6 +235,19 @@ pub mod tests {
             config.world_size as i32,
             config.speed,
         );
+        let mut seeded_buildings = village.buildings().clone();
+        seeded_buildings.push(VillageBuilding {
+            slot_id: 28,
+            building: Building::new(BuildingName::Marketplace, 1),
+        });
+        seeded_buildings.push(VillageBuilding {
+            slot_id: 29,
+            building: Building::new(BuildingName::Warehouse, 1),
+        });
+        seeded_buildings.push(VillageBuilding {
+            slot_id: 30,
+            building: Building::new(BuildingName::Granary, 1),
+        });
         VillageEsService::new(pool.clone())
             .found_village(
                 village_id as u32,
@@ -245,7 +257,7 @@ pub mod tests {
                     tribe: Tribe::Teuton,
                     player_id,
                     parent_village_id: None,
-                    buildings: village.buildings().clone(),
+                    buildings: seeded_buildings,
                 },
             )
             .await
@@ -275,7 +287,7 @@ pub mod tests {
             ));
         }
 
-        let state = AppState::new(game_app, pool, &config);
+        let state = AppState::new(game_app.clone(), pool.clone(), &config);
         current_user_by_ids(&state, auth_user.id, None)
             .await
             .map_err(|_| {
@@ -283,27 +295,9 @@ pub mod tests {
                     "seeded auth fixture cannot resolve current user context".to_string(),
                 )
             })?;
-        tokio::spawn(WebRouter::serve(state.clone(), port));
+        let base_url = start_web_server(game_app, pool, config).await?;
 
-        let base_url = format!("http://127.0.0.1:{port}");
         let client = reqwest::Client::new();
-        let health_url = format!("{base_url}/health");
-        let mut ready = false;
-        for _ in 0..40 {
-            if let Ok(response) = client.get(&health_url).send().await
-                && response.status() == StatusCode::OK
-            {
-                ready = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        if !ready {
-            return Err(ApplicationError::Unknown(
-                "Web test app did not become ready".to_string(),
-            ));
-        }
-
         let login_probe = client
             .post(format!("{base_url}/api/v1/auth/token/login"))
             .header("content-type", "application/json")

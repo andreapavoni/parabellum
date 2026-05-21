@@ -14,55 +14,55 @@ use uuid::Uuid;
 use crate::es::VillageEsService;
 
 use super::fixtures::{
-    academy, barracks, deployed_units, granary, main_building, process_due_until, rally_point,
-    research_and_complete, resources, setup_village, setup_village_for_player, train_and_complete,
-    warehouse, with_test_pool,
+    EsScenario, academy, barracks, deployed_units, granary, main_building, process_due_until,
+    rally_point, research_and_complete, resources, setup_village, setup_village_for_player,
+    train_and_complete, warehouse, with_test_pool,
 };
 
 #[tokio::test]
 async fn village_es_service_attack_projects_single_audience_report_for_same_player() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
+        let scenario = EsScenario::new(&pool, &service);
 
-        let (_user_id, player_id, village_id) = setup_village(
-            &pool,
-            &service,
-            "Source",
-            Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Teuton,
-            vec![
-                main_building(1),
-                rally_point(1),
-                barracks(1),
-                warehouse(20),
-                granary(20),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
-        let second_village_id = setup_village_for_player(
-            &service,
-            player_id,
-            "Target",
-            Position { x: 2, y: 2 },
-            parabellum_types::tribe::Tribe::Teuton,
-            vec![main_building(1), warehouse(20), granary(20)],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
+        let (_user_id, player_id, village_id) = scenario
+            .village(
+                "Source",
+                Position { x: 0, y: 0 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![
+                    main_building(1),
+                    rally_point(1),
+                    barracks(1),
+                    warehouse(20),
+                    granary(20),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
+        let second_village_id = scenario
+            .village_for_player(
+                player_id,
+                "Target",
+                Position { x: 2, y: 2 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![main_building(1), warehouse(20), granary(20)],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
 
-        train_and_complete(
-            &service,
-            village_id,
-            player_id,
-            0,
-            BuildingName::Barracks,
-            1,
-            1,
-            chrono::Utc::now() + chrono::Duration::hours(3),
-            50,
-        )
-        .await;
+        scenario
+            .train_and_complete(
+                village_id,
+                player_id,
+                0,
+                BuildingName::Barracks,
+                1,
+                1,
+                chrono::Utc::now() + chrono::Duration::hours(3),
+                50,
+            )
+            .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -86,7 +86,9 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
             .await
             .unwrap();
 
-        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
+        scenario
+            .process_until(arrives_at + chrono::Duration::seconds(1), 10)
+            .await;
 
         let reports = service
             .list_reports_for_player(player_id, 10)
@@ -97,7 +99,9 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
         assert_eq!(reports[0].actor_village_id, Some(village_id));
         assert_eq!(reports[0].target_village_id, Some(second_village_id));
 
-        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
+        scenario
+            .process_until(returns_at + chrono::Duration::seconds(1), 10)
+            .await;
 
         let reports_after_return = service
             .list_reports_for_player(player_id, 10)
@@ -112,47 +116,46 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
 async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
+        let scenario = EsScenario::new(&pool, &service);
 
-        let (_attacker_user_id, attacker_player_id, source_village_id) = setup_village(
-            &pool,
-            &service,
-            "Source",
-            Position { x: 0, y: 0 },
-            parabellum_types::tribe::Tribe::Teuton,
-            vec![
-                main_building(1),
-                rally_point(1),
-                barracks(1),
-                warehouse(20),
-                granary(20),
-            ],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
+        let (_attacker_user_id, attacker_player_id, source_village_id) = scenario
+            .village(
+                "Source",
+                Position { x: 0, y: 0 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![
+                    main_building(1),
+                    rally_point(1),
+                    barracks(1),
+                    warehouse(20),
+                    granary(20),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
 
-        let (_defender_user_id, defender_player_id, target_village_id) = setup_village(
-            &pool,
-            &service,
-            "Target",
-            Position { x: 2, y: 2 },
-            parabellum_types::tribe::Tribe::Teuton,
-            vec![main_building(1), warehouse(20), granary(20)],
-            resources(80_000, 80_000, 80_000, 80_000),
-        )
-        .await;
+        let (_defender_user_id, defender_player_id, target_village_id) = scenario
+            .village(
+                "Target",
+                Position { x: 2, y: 2 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![main_building(1), warehouse(20), granary(20)],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
 
-        train_and_complete(
-            &service,
-            source_village_id,
-            attacker_player_id,
-            0,
-            BuildingName::Barracks,
-            1,
-            1,
-            chrono::Utc::now() + chrono::Duration::hours(3),
-            50,
-        )
-        .await;
+        scenario
+            .train_and_complete(
+                source_village_id,
+                attacker_player_id,
+                0,
+                BuildingName::Barracks,
+                1,
+                1,
+                chrono::Utc::now() + chrono::Duration::hours(3),
+                50,
+            )
+            .await;
 
         let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
         let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
@@ -176,7 +179,9 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
             .await
             .unwrap();
 
-        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
+        scenario
+            .process_until(arrives_at + chrono::Duration::seconds(1), 10)
+            .await;
 
         let attacker_reports = service
             .list_reports_for_player(attacker_player_id, 10)
@@ -200,7 +205,9 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
         assert_eq!(defender_reports.len(), 1);
         assert_eq!(defender_reports[0].id, attacker_reports[0].id);
 
-        process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
+        scenario
+            .process_until(returns_at + chrono::Duration::seconds(1), 10)
+            .await;
 
         let attacker_reports_after_return = service
             .list_reports_for_player(attacker_player_id, 10)

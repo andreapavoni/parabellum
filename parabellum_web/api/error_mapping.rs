@@ -31,6 +31,9 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
             GameError::VillageNotOwned { .. } => {
                 ApiError::not_found("Village not available for the current player")
             }
+            GameError::InvalidMarketplaceOffer | GameError::MarketplaceOfferNoLongerValid => {
+                ApiError::conflict(game_err.to_string())
+            }
             GameError::InvalidValley(_) | GameError::TargetOccupied => {
                 ApiError::unprocessable("Target field is not available")
             }

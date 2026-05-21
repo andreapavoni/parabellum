@@ -27,6 +27,87 @@ static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
 static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
 const TEST_DB_ADVISORY_LOCK_KEY: i64 = 9_842_771;
 
+pub struct EsScenario<'a> {
+    pub pool: &'a sqlx::PgPool,
+    pub service: &'a VillageEsService,
+}
+
+impl<'a> EsScenario<'a> {
+    pub fn new(pool: &'a sqlx::PgPool, service: &'a VillageEsService) -> Self {
+        Self { pool, service }
+    }
+
+    pub async fn village(
+        &self,
+        village_name: &str,
+        position: Position,
+        tribe: Tribe,
+        buildings: Vec<VillageBuilding>,
+        resources: ResourceGroup,
+    ) -> (Uuid, Uuid, u32) {
+        setup_village(
+            self.pool,
+            self.service,
+            village_name,
+            position,
+            tribe,
+            buildings,
+            resources,
+        )
+        .await
+    }
+
+    pub async fn village_for_player(
+        &self,
+        player_id: Uuid,
+        village_name: &str,
+        position: Position,
+        tribe: Tribe,
+        buildings: Vec<VillageBuilding>,
+        resources: ResourceGroup,
+    ) -> u32 {
+        setup_village_for_player(
+            self.service,
+            player_id,
+            village_name,
+            position,
+            tribe,
+            buildings,
+            resources,
+        )
+        .await
+    }
+
+    pub async fn train_and_complete(
+        &self,
+        village_id: u32,
+        player_id: Uuid,
+        unit_idx: u8,
+        building_name: BuildingName,
+        quantity: i32,
+        speed: i8,
+        due_by: chrono::DateTime<chrono::Utc>,
+        process_limit: i64,
+    ) {
+        train_and_complete(
+            self.service,
+            village_id,
+            player_id,
+            unit_idx,
+            building_name,
+            quantity,
+            speed,
+            due_by,
+            process_limit,
+        )
+        .await;
+    }
+
+    pub async fn process_until(&self, until: chrono::DateTime<chrono::Utc>, limit: i64) -> usize {
+        process_due_until(self.service, until, limit).await
+    }
+}
+
 pub async fn setup_pool() -> sqlx::PgPool {
     // Run embedded migrations once for the shared test database.
     let pool = establish_test_connection_pool()

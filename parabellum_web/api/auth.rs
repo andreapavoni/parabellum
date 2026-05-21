@@ -156,6 +156,10 @@ pub async fn token_register(
                 .with_field_error("password", "Password is required"),
         );
     }
+    if !is_valid_registration_password(&payload.password) {
+        return Err(ApiError::unprocessable("Invalid password.")
+            .with_field_error("password", "The password does not satisfy the server rules"));
+    }
 
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
@@ -362,4 +366,13 @@ fn client_ip(headers: &HeaderMap) -> Option<std::net::IpAddr> {
         .and_then(|v| v.split(',').next())
         .map(str::trim)?;
     raw.parse::<std::net::IpAddr>().ok()
+}
+
+fn is_valid_registration_password(password: &str) -> bool {
+    if password.len() < 8 {
+        return false;
+    }
+    let has_alpha = password.chars().any(|c| c.is_ascii_alphabetic());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    has_alpha && has_digit
 }
