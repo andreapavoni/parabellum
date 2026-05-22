@@ -27,28 +27,37 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
             }
             _ => internal_error(context, db_err),
         },
-        ApplicationError::Game(game_err) => match game_err {
-            GameError::VillageNotOwned { .. } => {
+        ApplicationError::Game(game_err) => {
+            tracing::warn!(context = context, error = %game_err, "api domain error");
+            match game_err {
+                GameError::VillageNotOwned { .. } => {
                 ApiError::not_found("Village not available for the current player")
+                }
+                GameError::InvalidMarketplaceOffer | GameError::MarketplaceOfferNoLongerValid => {
+                    ApiError::conflict(game_err.to_string())
+                }
+                GameError::InvalidValley(_) | GameError::TargetOccupied => {
+                    ApiError::unprocessable("Target field is not available")
+                }
+                _ => ApiError::unprocessable(game_err.to_string()),
             }
-            GameError::InvalidMarketplaceOffer | GameError::MarketplaceOfferNoLongerValid => {
-                ApiError::conflict(game_err.to_string())
+        }
+        ApplicationError::App(app_err) => {
+            tracing::warn!(context = context, error = %app_err, "api application error");
+            match app_err {
+                AppError::WrongAuthCredentials | AppError::PasswordError => {
+                    ApiError::unauthorized("Invalid credentials")
+                }
+                AppError::QueueLimitReached { .. } | AppError::QueueItemAlreadyQueued { .. } => {
+                    ApiError::conflict(app_err.to_string())
+                }
+                AppError::InvalidAggregateTarget { .. } => ApiError::bad_request(app_err.to_string()),
+                _ => internal_error(context, app_err),
             }
-            GameError::InvalidValley(_) | GameError::TargetOccupied => {
-                ApiError::unprocessable("Target field is not available")
-            }
-            _ => ApiError::unprocessable(game_err.to_string()),
-        },
-        ApplicationError::App(app_err) => match app_err {
-            AppError::WrongAuthCredentials | AppError::PasswordError => {
-                ApiError::unauthorized("Invalid credentials")
-            }
-            AppError::QueueLimitReached { .. } | AppError::QueueItemAlreadyQueued { .. } => {
-                ApiError::conflict(app_err.to_string())
-            }
-            AppError::InvalidAggregateTarget { .. } => ApiError::bad_request(app_err.to_string()),
-            _ => internal_error(context, app_err),
-        },
+        }
+        ApplicationError::Unknown(message) => {
+            internal_error(context, ApplicationError::Unknown(message))
+        }
         other => internal_error(context, other),
     }
 }

@@ -26,14 +26,20 @@ mod train_units;
 mod upgrade_building;
 
 use mini_cqrs_es::CqrsError;
-use std::fmt::Display;
+use std::error::Error;
 
-pub(super) fn as_domain_error<E: Display>(err: E) -> CqrsError {
-    CqrsError::domain(err)
+pub(super) fn as_domain_error<E>(err: E) -> CqrsError
+where
+    E: Error + Send + Sync + 'static,
+{
+    CqrsError::domain_source(err)
 }
 
-pub(super) fn as_invariant_error<E: Display>(err: E) -> CqrsError {
-    CqrsError::invariant(err)
+pub(super) fn as_invariant_error<E>(err: E) -> CqrsError
+where
+    E: Error + Send + Sync + 'static,
+{
+    CqrsError::invariant_source(err)
 }
 
 pub use accept_marketplace_offer::AcceptMarketplaceOffer;

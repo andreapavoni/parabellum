@@ -208,6 +208,12 @@ pub(super) async fn execute_action(
     _service: &VillageService<'_, crate::es::VillageCqrsRuntime>,
     action: &parabellum_app::villages::models::ScheduledAction,
 ) -> Result<(), CqrsError> {
+    tracing::debug!(
+        action_id = %action.id,
+        execute_at = %action.execute_at,
+        action_type = ?action.action_type,
+        "executing scheduled action"
+    );
     let payload: ScheduledActionPayload =
         serde_json::from_value(action.payload.clone()).map_err(CqrsError::Serialization)?;
     match payload {
@@ -281,7 +287,7 @@ pub(super) async fn execute_action(
                     .bind(target_village_id as i32)
                     .fetch_one(&svc.pool)
                     .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    .map_err(CqrsError::domain_source)?;
             let can_found = if field_exists {
                 let claim = sqlx::query_scalar::<_, i64>(
                     r#"
@@ -296,7 +302,7 @@ pub(super) async fn execute_action(
                 .bind(player_id)
                 .fetch_one(&svc.pool)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
                 claim > 0
             } else {
                 true
@@ -334,12 +340,19 @@ pub(super) async fn execute_action(
                 ])
                 .await?;
             } else {
+                tracing::warn!(
+                    action_id = %action_id,
+                    player_id = %player_id,
+                    source_village_id,
+                    target_village_id,
+                    "settlers arrival target unavailable, scheduling army return"
+                );
                 let army_repo: Arc<dyn ArmyRepository> =
                     Arc::new(PostgresArmyRepository::new(svc.pool.clone()));
                 let army = army_repo
                     .get_moving_army(army_id)
                     .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    .map_err(CqrsError::domain_source)?;
                 let source = svc.get_village(source_village_id).await?;
                 let cfg = parabellum_app::config::Config::from_env();
                 let travel_secs = source.position.calculate_travel_time_secs(
@@ -384,7 +397,7 @@ pub(super) async fn execute_action(
                         status: ScheduledActionStatus::Pending,
                     })
                     .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    .map_err(CqrsError::domain_source)?;
             }
         }
         ScheduledActionPayload::AttackArrival {
@@ -713,7 +726,7 @@ pub(super) async fn execute_action(
         } => {
             let village = svc.get_village(village_id).await?;
             if village.player_id != player_id {
-                return Err(CqrsError::domain(
+                return Err(CqrsError::domain_source(
                     parabellum_types::errors::GameError::VillageNotOwned {
                         village_id,
                         player_id,
@@ -721,7 +734,7 @@ pub(super) async fn execute_action(
                 ));
             }
             if hero.player_id != player_id {
-                return Err(CqrsError::domain(
+                return Err(CqrsError::domain_source(
                     parabellum_types::errors::GameError::HeroNotOwned {
                         hero_id: hero.id,
                         player_id,
@@ -768,18 +781,20 @@ async fn build_attack_outcome_command(
     let target_home_army = army_repo
         .get_home_army(target_village_id)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
     let target_reinforcements = army_repo
         .list_stationed_armies(target_village_id)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
     target.army = target_home_army;
     target.reinforcements = target_reinforcements;
     let can_attempt_conquer = attack_type == parabellum_types::battle::AttackType::Normal
         && can_attempt_conquer(svc, &source, &target, &army).await?;
 
-    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain)?;
-    let mut defender_village = Village::try_from(target.clone()).map_err(CqrsError::domain)?;
+    let attacker_village =
+        Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let mut defender_village =
+        Village::try_from(target.clone()).map_err(CqrsError::domain_source)?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
         Some(army_id),
@@ -955,8 +970,10 @@ async fn build_scout_outcome_fact(
 ) -> Result<ComputedScoutOutcome, CqrsError> {
     let source = svc.get_village(source_village_id).await?;
     let target_village_model = svc.get_village(target_village_id).await?;
-    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain)?;
-    let defender_village = Village::try_from(target_village_model).map_err(CqrsError::domain)?;
+    let attacker_village =
+        Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let defender_village =
+        Village::try_from(target_village_model).map_err(CqrsError::domain_source)?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
         Some(army_id),
@@ -1024,7 +1041,7 @@ async fn can_attempt_conquer(
         return Ok(false);
     }
 
-    let source_village = Village::try_from(source.clone()).map_err(CqrsError::domain)?;
+    let source_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
     let max_slots = source_village.max_foundation_slots() as usize;
     if max_slots == 0 {
         return Ok(false);
@@ -1034,7 +1051,7 @@ async fn can_attempt_conquer(
     let player_villages = village_repo
         .list_by_player_id(source.player_id)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
     let used_slots = player_villages
         .iter()
         .filter(|v| v.parent_village_id == Some(source.village_id))
@@ -1047,11 +1064,11 @@ async fn can_attempt_conquer(
     player_repo
         .update_culture_points(source.player_id)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
     let total_cp = player_repo
         .get_by_id(source.player_id)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?
+        .map_err(CqrsError::domain_source)?
         .culture_points;
     let needed_cp = required_cp(
         parabellum_types::common::Speed::X1,

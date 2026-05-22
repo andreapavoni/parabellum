@@ -52,7 +52,7 @@ impl PostgresEventStore {
         .bind(limit)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
 
         rows.into_iter().map(row_to_stored_event).collect()
     }
@@ -76,7 +76,7 @@ impl PostgresEventStore {
             .pool
             .begin()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let stored = self
             .append_workflow_events_in_tx(&mut tx, aggregate_type, streams)
@@ -84,7 +84,7 @@ impl PostgresEventStore {
 
         tx.commit()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         Ok(stored)
     }
@@ -107,7 +107,7 @@ impl PostgresEventStore {
             .bind(&stream.aggregate_id)
             .fetch_one(&mut **tx)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
             let actual_version = current_version as u64;
             if actual_version != stream.expected_version {
@@ -149,7 +149,7 @@ impl PostgresEventStore {
                 .bind(event.timestamp)
                 .fetch_one(&mut **tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
 
                 stored.push(StoredEvent {
                     id: event_id,
@@ -171,37 +171,37 @@ impl PostgresEventStore {
 fn row_to_stored_event(row: PgRow) -> Result<StoredEvent, CqrsError> {
     let metadata_value = row
         .try_get::<serde_json::Value, _>("metadata")
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
     let metadata: EventMetadata = serde_json::from_value(metadata_value)?;
     let stream_version = row
         .try_get::<i64, _>("stream_version")
-        .map_err(|e| CqrsError::EventStore(e.to_string()))? as u64;
+        .map_err(CqrsError::domain_source)? as u64;
 
     Ok(StoredEvent {
         id: row
             .try_get("event_id")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
         aggregate_id: row
             .try_get("aggregate_id")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
         aggregate_type: row
             .try_get("aggregate_type")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
         version: stream_version,
         event_type: row
             .try_get("event_type")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
         payload: row
             .try_get::<serde_json::Value, _>("payload")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
         metadata,
         global_sequence: Some(
             row.try_get("global_seq")
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+                .map_err(CqrsError::domain_source)?,
         ),
         timestamp: row
             .try_get("occurred_at")
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            .map_err(CqrsError::domain_source)?,
     })
 }
 
@@ -217,7 +217,7 @@ impl EventStore for PostgresEventStore {
             .pool
             .begin()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let current_version: i64 = sqlx::query_scalar(
             r#"
@@ -230,7 +230,7 @@ impl EventStore for PostgresEventStore {
         .bind(aggregate_id)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
 
         let actual_version = current_version as u64;
         if actual_version != expected_version {
@@ -270,7 +270,7 @@ impl EventStore for PostgresEventStore {
             .bind(event.timestamp)
             .fetch_one(&mut *tx)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
             stored.push(StoredEvent {
                 id: event_id,
@@ -287,7 +287,7 @@ impl EventStore for PostgresEventStore {
 
         tx.commit()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         Ok(stored)
     }
@@ -309,7 +309,7 @@ impl EventStore for PostgresEventStore {
         .bind(aggregate_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
 
         if rows.is_empty() {
             return Ok((Vec::new(), 0));

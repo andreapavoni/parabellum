@@ -1,9 +1,19 @@
 use async_trait::async_trait;
+use parabellum_game::models::village::VillageBuilding;
 use parabellum_game::models::map::MapQuadrant;
-use parabellum_types::common::{Player, User};
+use parabellum_types::common::{Player, ResourceGroup, User};
 use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+pub struct InitialVillageSetup {
+    pub village_name: Option<String>,
+    pub resource_fields_target_level: u8,
+    pub buildings: Vec<VillageBuilding>,
+    pub resources: Option<ResourceGroup>,
+    pub speed: Option<i8>,
+}
 
 #[derive(Debug, Clone)]
 pub struct RegisterPlayerRequest {
@@ -13,6 +23,7 @@ pub struct RegisterPlayerRequest {
     pub password: String,
     pub tribe: Tribe,
     pub quadrant: MapQuadrant,
+    pub initial_village: Option<InitialVillageSetup>,
 }
 
 #[async_trait]

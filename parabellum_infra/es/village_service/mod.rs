@@ -167,7 +167,7 @@ impl VillageEsService {
     ) -> Result<(), CqrsError> {
         let current = self.get_village(village_id).await?;
         if current.player_id != player_id {
-            return Err(CqrsError::domain(GameError::VillageNotOwned {
+            return Err(CqrsError::domain_source(GameError::VillageNotOwned {
                 village_id,
                 player_id,
             }));
@@ -267,9 +267,7 @@ impl VillageEsService {
         command: &CreateHero,
     ) -> Result<u32, CqrsError> {
         if self.player_has_alive_hero(command.player_id).await? {
-            return Err(CqrsError::Domain(
-                "player already has an alive hero".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroAlreadyExists));
         }
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
@@ -285,14 +283,10 @@ impl VillageEsService {
             .player_has_pending_hero_revival(command.player_id)
             .await?
         {
-            return Err(CqrsError::Domain(
-                "hero revival already pending".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroRevivalAlreadyPending));
         }
         if self.player_has_alive_hero(command.player_id).await? {
-            return Err(CqrsError::Domain(
-                "cannot revive while an alive hero exists".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroAlreadyExists));
         }
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
@@ -305,7 +299,7 @@ impl VillageEsService {
         map_repo
             .is_unoccupied_valley(field_id as i32)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn add_building(
@@ -435,7 +429,7 @@ impl VillageEsService {
             || offer.owner_village_id != village_id
             || offer.owner_player_id != player_id
         {
-            return Err(CqrsError::domain("invalid marketplace offer cancellation"));
+            return Err(CqrsError::domain_source(GameError::InvalidMarketplaceOffer));
         }
 
         let runtime = village_cqrs_runtime(self.pool.clone());
@@ -470,9 +464,9 @@ impl VillageEsService {
                 chrono::Utc::now(),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+            .map_err(CqrsError::domain_source)?
         else {
-            return Err(CqrsError::domain(GameError::MarketplaceOfferNoLongerValid));
+            return Err(CqrsError::domain_source(GameError::MarketplaceOfferNoLongerValid));
         };
         if accepting_village_id == offer.owner_village_id
             || accepting_player_id == offer.owner_player_id
@@ -480,33 +474,34 @@ impl VillageEsService {
             || offer.seek_resources.quantity == 0
             || offer.offer_resources.resource == offer.seek_resources.resource
         {
-            return Err(CqrsError::domain(GameError::InvalidMarketplaceOffer));
+            return Err(CqrsError::domain_source(GameError::InvalidMarketplaceOffer));
         }
 
         let accepting_model = self.get_village(accepting_village_id).await?;
         if accepting_model.player_id != accepting_player_id {
-            return Err(CqrsError::domain(GameError::VillageNotOwned {
+            return Err(CqrsError::domain_source(GameError::VillageNotOwned {
                 village_id: accepting_village_id,
                 player_id: accepting_player_id,
             }));
         }
-        let accepting_village = Village::try_from(accepting_model).map_err(CqrsError::domain)?;
+        let accepting_village =
+            Village::try_from(accepting_model).map_err(CqrsError::domain_source)?;
         let seek_group: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
         if accepting_village
             .get_building_by_name(&BuildingName::Marketplace)
             .is_none_or(|slot| slot.building.level == 0)
         {
-            return Err(CqrsError::domain(GameError::BuildingRequirementsNotMet {
+            return Err(CqrsError::domain_source(GameError::BuildingRequirementsNotMet {
                 building: BuildingName::Marketplace,
                 level: 1,
             }));
         }
         if !accepting_village.has_enough_resources(&seek_group) {
-            return Err(CqrsError::domain(GameError::NotEnoughResources));
+            return Err(CqrsError::domain_source(GameError::NotEnoughResources));
         }
         let capacity = accepting_village.tribe.merchant_stats().capacity;
         if capacity == 0 {
-            return Err(CqrsError::domain(GameError::NotEnoughMerchants));
+            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
         }
         let total = seek_group.total();
         let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
@@ -514,12 +509,12 @@ impl VillageEsService {
         if accepting_merchants_used == 0
             || accepting_merchants_used > accepting_village.available_merchants()
         {
-            return Err(CqrsError::domain(GameError::NotEnoughMerchants));
+            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
         }
         let mut accepting_after = accepting_village.clone();
         accepting_after
             .deduct_resources(&seek_group)
-            .map_err(CqrsError::domain)?;
+            .map_err(CqrsError::domain_source)?;
         accepting_after.busy_merchants = accepting_after
             .busy_merchants
             .saturating_add(accepting_merchants_used);
@@ -615,12 +610,12 @@ impl VillageEsService {
             .pool
             .acquire()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let acquired = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .fetch_one(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if !acquired {
             info!(
                 action = "scheduler_skip_locked",
@@ -635,7 +630,7 @@ impl VillageEsService {
         let requeued = repo
             .requeue_stale_processing(stale_before)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if requeued > 0 {
             warn!(
                 action = "scheduler_requeue_stale_processing",
@@ -648,7 +643,7 @@ impl VillageEsService {
         let actions = repo
             .take_due_pending(before_or_equal, limit)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let claimed = actions.len();
         if claimed > 0 {
             info!(
@@ -665,7 +660,7 @@ impl VillageEsService {
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .execute(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         result
     }
 
@@ -687,7 +682,7 @@ impl VillageEsService {
             };
             repo.update_status(action.id, next_status)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             if let Err(err) = &result {
                 warn!(
                     action = "scheduler_action_failed",
@@ -741,7 +736,7 @@ impl VillageEsService {
             .pool
             .begin()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut stored = store
             .append_workflow_events_in_tx(&mut tx, aggregate_type, &streams)
             .await?;
@@ -755,7 +750,7 @@ impl VillageEsService {
         }
         tx.commit()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(())
     }
 }

@@ -934,7 +934,7 @@ impl VillageRepository for PostgresVillageRepository {
     }
 
     async fn get_by_village_id(&self, village_id: u32) -> Result<VillageModel, ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
+        let row: Option<DbVillageModelRow> = sqlx::query_as(
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
@@ -944,9 +944,10 @@ impl VillageRepository for PostgresVillageRepository {
             "#,
         )
         .bind(village_id as i32)
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row = row.ok_or(DbError::VillageNotFound(village_id))?;
 
         let model: VillageModel = row.try_into()?;
         self.refresh_for_read(model).await

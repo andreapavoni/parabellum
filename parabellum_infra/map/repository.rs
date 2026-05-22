@@ -23,6 +23,19 @@ impl PostgresMapRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    pub async fn find_unoccupied_valley_for_update(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        quadrant: &MapQuadrant,
+    ) -> Result<Valley, ApplicationError> {
+        let query = random_unoccupied_valley_for_update_query(quadrant);
+        let random_unoccupied_field: db_models::MapField = sqlx::query_as(query)
+            .fetch_one(&mut **tx)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;
+        map_field_to_valley(random_unoccupied_field)
+    }
 }
 
 #[async_trait::async_trait]
@@ -31,31 +44,14 @@ impl MapRepository for PostgresMapRepository {
         &self,
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError> {
-        let query = match quadrant {
-            MapQuadrant::NorthEast => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
-            }
-            MapQuadrant::SouthEast => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
-            }
-            MapQuadrant::SouthWest => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
-            }
-            MapQuadrant::NorthWest => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
-            }
-        };
+        let query = random_unoccupied_valley_query(quadrant);
 
         let random_unoccupied_field: db_models::MapField = sqlx::query_as(query)
             .fetch_one(&self.pool)
             .await
             .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;
 
-        let game_map_field: MapField = random_unoccupied_field.into();
-        let valley = Valley::try_from(game_map_field.clone())
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(game_map_field.id)))?;
-
-        Ok(valley)
+        map_field_to_valley(random_unoccupied_field)
     }
 
     async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
@@ -187,6 +183,7 @@ impl MapRepository for PostgresMapRepository {
                 FROM rm_map_fields
                 WHERE id = $1
                   AND village_id IS NULL
+                  AND player_id IS NULL
                   AND topology @> '{"Valley":[4,4,4,6]}'
             )
             "#,
@@ -198,6 +195,46 @@ impl MapRepository for PostgresMapRepository {
 
         Ok(is_unoccupied_valley)
     }
+}
+
+pub(crate) fn random_unoccupied_valley_query(quadrant: &MapQuadrant) -> &'static str {
+    match quadrant {
+        MapQuadrant::NorthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+        }
+        MapQuadrant::SouthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+        }
+        MapQuadrant::SouthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+        }
+        MapQuadrant::NorthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+        }
+    }
+}
+
+pub(crate) fn random_unoccupied_valley_for_update_query(quadrant: &MapQuadrant) -> &'static str {
+    match quadrant {
+        MapQuadrant::NorthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::SouthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::SouthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::NorthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+    }
+}
+
+fn map_field_to_valley(field: db_models::MapField) -> Result<Valley, ApplicationError> {
+    let game_map_field: MapField = field.into();
+    Valley::try_from(game_map_field.clone())
+        .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(game_map_field.id)))
 }
 
 #[derive(Debug, FromRow)]

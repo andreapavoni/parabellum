@@ -11,7 +11,16 @@ async fn main() -> Result<(), ApplicationError> {
     setup_logging();
 
     let args = ReplayCliArgs::from_env_args(env::args().collect())?;
+    tracing::info!(
+        target = ?args.target,
+        mode = ?args.mode,
+        from_global_seq = args.from_global_seq,
+        to_global_seq = args.to_global_seq,
+        aggregate_id = args.aggregate_id.as_deref().unwrap_or(""),
+        "starting replay CLI"
+    );
     let pool = establish_connection_pool().await?;
+    tracing::info!("running database migrations for replay");
     sqlx::migrate!("../migrations")
         .run(&pool)
         .await

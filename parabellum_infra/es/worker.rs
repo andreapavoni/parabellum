@@ -23,7 +23,7 @@ impl EsScheduledActionWorker {
     pub fn run(self: Arc<Self>) {
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_secs(1));
-            info!("ES scheduled action worker started.");
+            info!(batch_limit = self.batch_limit, "scheduler worker started");
 
             loop {
                 interval.tick().await;

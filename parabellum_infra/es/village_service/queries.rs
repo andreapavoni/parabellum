@@ -14,7 +14,7 @@ impl VillageEsService {
         let movements = repo
             .list_by_village_id(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let mut outgoing = Vec::new();
         let mut incoming = Vec::new();
@@ -76,7 +76,7 @@ impl VillageEsService {
         let repo = PostgresVillageRepository::new(self.pool.clone());
         repo.get_by_village_id(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_hero(
@@ -86,7 +86,7 @@ impl VillageEsService {
         let repo = PostgresHeroRepository::new(self.pool.clone());
         repo.get_by_id(hero_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn player_has_alive_hero(&self, player_id: uuid::Uuid) -> Result<bool, CqrsError> {
@@ -94,7 +94,7 @@ impl VillageEsService {
             Arc::new(PostgresHeroRepository::new(self.pool.clone()));
         repo.has_alive_for_player(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn player_has_pending_hero_revival(
@@ -104,7 +104,7 @@ impl VillageEsService {
         PostgresScheduledActionRepository::new(self.pool.clone())
             .has_pending_hero_revival_for_player(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn list_villages_by_player_id(
@@ -114,7 +114,7 @@ impl VillageEsService {
         let repo = PostgresVillageRepository::new(self.pool.clone());
         repo.list_by_player_id(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_expansion_culture_info(
@@ -129,22 +129,22 @@ impl VillageEsService {
         let villages = village_repo
             .list_by_player_id(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let player_culture_points_production: u32 =
             villages.iter().map(|v| v.culture_points_production).sum();
         player_repo
             .update_culture_points(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let player = player_repo
             .get_by_id(player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let village = villages
             .iter()
             .find(|v| v.village_id == village_id)
             .ok_or_else(|| {
-                CqrsError::EventStore(DbError::VillageNotFound(village_id).to_string())
+                CqrsError::domain_source(DbError::VillageNotFound(village_id))
             })?;
 
         let speed = match server_speed {
@@ -174,7 +174,7 @@ impl VillageEsService {
         if let Some((stationed_village_id, army)) = army_repo
             .find_stationed_context_by_army_id(army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+            .map_err(CqrsError::domain_source)?
         {
             return Ok(ReinforcementContext {
                 stationed_village_id,
@@ -195,7 +195,7 @@ impl VillageEsService {
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
         repo.list_active_by_village_and_type(village_id, ScheduledActionType::TrainUnit)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_village_building_queue(
@@ -212,7 +212,7 @@ impl VillageEsService {
             let mut typed = repo
                 .list_active_by_village_and_type(village_id, action_type)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             actions.append(&mut typed);
         }
         actions.sort_by_key(|it| it.execute_at);
@@ -226,7 +226,7 @@ impl VillageEsService {
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
         repo.list_active_by_village_and_type(village_id, ScheduledActionType::ResearchSmithy)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_village_academy_queue(
@@ -236,7 +236,7 @@ impl VillageEsService {
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
         repo.list_active_by_village_and_type(village_id, ScheduledActionType::ResearchAcademy)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, CqrsError> {
@@ -355,7 +355,7 @@ impl VillageEsService {
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
         repo.count_by_village_and_type(village_id, action_type, status_filter)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_open_marketplace_offers(
@@ -403,11 +403,11 @@ impl VillageEsService {
         let outgoing_merchants = marketplace_repo
             .list_active_outgoing(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let incoming_merchants = marketplace_repo
             .list_active_incoming(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let village_ids = all_open_models
             .iter()
@@ -456,16 +456,16 @@ impl VillageEsService {
         let home_army = repo
             .get_home_army(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let reinforcements = repo
             .list_stationed_armies(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let deployed_armies = repo
             .list_deployed_armies(village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(VillageArmyStateView {
             home_army,
             reinforcements,
@@ -485,7 +485,7 @@ impl VillageEsService {
         let villages = repo
             .list_by_village_ids(&village_ids)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         Ok(villages
             .into_iter()
@@ -514,7 +514,7 @@ impl VillageEsService {
         let (entries, total_players) = repo
             .leaderboard_page(offset, per_page)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(LeaderboardPage {
             entries,
             total_players,
@@ -531,14 +531,14 @@ impl VillageEsService {
         let repo = PostgresMapRepository::new(self.pool.clone());
         repo.get_region(center_x, center_y, radius, world_size)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_map_field(&self, field_id: u32) -> Result<MapField, CqrsError> {
         let repo = PostgresMapRepository::new(self.pool.clone());
         repo.get_field_by_id(field_id as i32)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_map_region_tile_by_field_id(
@@ -548,7 +548,7 @@ impl VillageEsService {
         let repo = PostgresMapRepository::new(self.pool.clone());
         repo.get_region_tile_by_field_id(field_id as i32)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn list_reports_for_player(
@@ -591,7 +591,7 @@ impl VillageEsService {
         let repo = PostgresReportRepository::new(self.pool.clone());
         repo.mark_as_read(report_id, player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_village_scheduled_action_status_count(

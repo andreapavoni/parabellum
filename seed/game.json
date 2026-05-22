@@ -1,99 +1,27 @@
 {
-  "username": "farmo",
-  "tribe": "Teuton",
-  "quadrant": "NorthEast",
-  "resourceFieldsTargetLevel": 10,
-  "buildings": [
+  "players": [
     {
-      "slotId": 19,
-      "name": "MainBuilding",
-      "level": 20
-    },
-    {
-      "slotId": 20,
-      "name": "IronFoundry",
-      "level": 20
-    },
-    {
-      "slotId": 21,
-      "name": "Sawmill",
-      "level": 20
-    },
-    {
-      "slotId": 22,
-      "name": "Brickyard",
-      "level": 20
-    },
-    {
-      "slotId": 23,
-      "name": "GrainMill",
-      "level": 5
-    },
-    {
-      "slotId": 24,
-      "name": "Bakery",
-      "level": 5
-    },
-    {
-      "slotId": 39,
-      "name": "RallyPoint",
-      "level": 1
-    },
-    {
-      "slotId": 25,
-      "name": "Marketplace",
-      "level": 20
-    },
-    {
-      "slotId": 26,
-      "name": "Barracks",
-      "level": 20
-    },
-    {
-      "slotId": 27,
-      "name": "Academy",
-      "level": 20
-    },
-    {
-      "slotId": 28,
-      "name": "Smithy",
-      "level": 10
-    },
-    {
-      "slotId": 29,
-      "name": "Warehouse",
-      "level": 20
-    },
-    {
-      "slotId": 30,
-      "name": "Granary",
-      "level": 20
-    },
-    {
-      "slotId": 31,
-      "name": "Residence",
-      "level": 10
-    },
-    {
-      "slotId": 32,
-      "name": "Stable",
-      "level": 20
-    },
-    {
-      "slotId": 33,
-      "name": "Workshop",
-      "level": 20
-    },
-    {
-      "slotId": 34,
-      "name": "HeroMansion",
-      "level": 20
+      "username": "titus",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
     }
-  ],
-  "resources": [
-    80000,
-    80000,
-    80000,
-    80000
   ]
 }

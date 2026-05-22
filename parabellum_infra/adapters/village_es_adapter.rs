@@ -89,55 +89,81 @@ impl VillageEsAdapter {
     ///
     /// Policy:
     /// - stream/version conflicts -> app conflict bucket
-    /// - recognized marketplace/hero domain violations -> typed `GameError`
+    /// - domain/invariant source errors -> downcast into typed app/domain errors
+    /// - string domain/invariant payloads (legacy paths) -> minimal compatibility mapping
     /// - everything else remains `Unknown` and is treated as internal
     fn map_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
-        if matches!(err, mini_cqrs_es::CqrsError::Conflict { .. }) {
-            return ApplicationError::App(AppError::QueueItemAlreadyQueued {
-                queue: "cqrs",
-                item: "aggregate_version".to_string(),
-            });
-        }
-        let msg = err.to_string();
-        let normalized = msg.to_ascii_lowercase();
-        if normalized.contains("player already has an alive hero") {
-            return ApplicationError::Game(GameError::HeroAlreadyExists);
-        }
-        if normalized.contains("hero revival already pending") {
-            return ApplicationError::Game(GameError::HeroRevivalAlreadyPending);
-        }
-        if normalized.contains("cannot revive while an alive hero exists") {
-            return ApplicationError::Game(GameError::HeroAlreadyExists);
-        }
-        if normalized.contains("invalid marketplace offer") {
-            return ApplicationError::Game(GameError::InvalidMarketplaceOffer);
-        }
-        if normalized.contains("offerer marketplace no longer valid")
-            || normalized.contains("offer is no longer valid")
-        {
-            return ApplicationError::Game(GameError::MarketplaceOfferNoLongerValid);
-        }
-        ApplicationError::Unknown(msg)
+        match err {
+            mini_cqrs_es::CqrsError::Conflict { .. } => {
+                return ApplicationError::App(AppError::QueueItemAlreadyQueued {
+                    queue: "cqrs",
+                    item: "aggregate_version".to_string(),
+                });
+            }
+            mini_cqrs_es::CqrsError::DomainSource(source)
+            | mini_cqrs_es::CqrsError::CommandInvariantSource(source) => {
+                let source = match source.downcast::<GameError>() {
+                    Ok(game_error) => return ApplicationError::Game(*game_error),
+                    Err(source) => source,
+                };
+                let source = match source.downcast::<AppError>() {
+                    Ok(app_error) => return ApplicationError::App(*app_error),
+                    Err(source) => source,
+                };
+                let source = match source.downcast::<ApplicationError>() {
+                    Ok(app_error) => return *app_error,
+                    Err(source) => source,
+                };
+                return ApplicationError::Unknown(source.to_string());
+            }
+            mini_cqrs_es::CqrsError::Domain(msg)
+            | mini_cqrs_es::CqrsError::CommandInvariant(msg) => {
+                return ApplicationError::Unknown(format!(
+                    "unexpected stringly cqrs domain/invariant error: {msg}"
+                ));
+            }
+            mini_cqrs_es::CqrsError::Other(other) => {
+                if let Some(game_error) = other.chain().find_map(|cause| cause.downcast_ref::<GameError>()) {
+                    return ApplicationError::Game(game_error.clone());
+                }
+                if let Some(app_error) = other.chain().find_map(|cause| cause.downcast_ref::<AppError>()) {
+                    return ApplicationError::App(app_error.clone());
+                }
+                return ApplicationError::Unknown(other.to_string());
+            }
+            other => return ApplicationError::Unknown(other.to_string()),
+        };
     }
 
     /// Maps read/query failures that currently cross the ES boundary as
-    /// stringly `CqrsError::EventStore` payloads.
+    /// typed source errors.
     ///
     /// Keep this intentionally narrow: only map well-known not-found cases to
     /// typed DB errors so web layer can return stable `404` contracts.
     fn map_query_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
-        let msg = err.to_string();
-        let normalized = msg.to_ascii_lowercase();
-        if normalized.contains("mapfield with id") && normalized.contains("not found") {
-            return ApplicationError::Db(DbError::MapFieldNotFound(0));
+        match err {
+            mini_cqrs_es::CqrsError::DomainSource(source)
+            | mini_cqrs_es::CqrsError::CommandInvariantSource(source) => {
+                let source = match source.downcast::<ApplicationError>() {
+                    Ok(app_error) => return *app_error,
+                    Err(source) => source,
+                };
+                let source = match source.downcast::<DbError>() {
+                    Ok(db_error) => return ApplicationError::Db(*db_error),
+                    Err(source) => source,
+                };
+                let source = match source.downcast::<GameError>() {
+                    Ok(game_error) => return ApplicationError::Game(*game_error),
+                    Err(source) => source,
+                };
+                let source = match source.downcast::<AppError>() {
+                    Ok(app_error) => return ApplicationError::App(*app_error),
+                    Err(source) => source,
+                };
+                return ApplicationError::Unknown(source.to_string());
+            }
+            other => ApplicationError::Unknown(other.to_string()),
         }
-        if normalized.contains("marketplace offer with id") && normalized.contains("not found") {
-            return ApplicationError::Db(DbError::MarketplaceOfferNotFound(Uuid::nil()));
-        }
-        if normalized.contains("village with id") && normalized.contains("not found") {
-            return ApplicationError::Db(DbError::VillageNotFound(0));
-        }
-        ApplicationError::Unknown(msg)
     }
 }
 
@@ -187,7 +213,12 @@ impl VillageCommandsPort for VillageEsAdapter {
             .service
             .get_village(request.target_village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)?;
+            .map_err(|err| match Self::map_query_cqrs_error(err) {
+                ApplicationError::Db(DbError::VillageNotFound(_)) => {
+                    ApplicationError::Game(GameError::InvalidValley(request.target_village_id))
+                }
+                other => other,
+            })?;
         let travel_secs = source.position.calculate_travel_time_secs(
             target.position,
             source.tribe.merchant_stats().speed,

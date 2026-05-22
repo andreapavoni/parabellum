@@ -1,26 +1,29 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tracing::warn;
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use parabellum_app::{
     auth::hash_password,
     config::Config,
     ports::identity::{IdentityPort, RegisterPlayerRequest},
-    villages::FoundVillage,
+    villages::{FoundVillage, SetVillageResources},
 };
 use parabellum_game::models::{
+    buildings::Building,
     map::{MapQuadrant, Valley},
-    village::Village,
+    village::{Village, VillageBuilding},
 };
 use parabellum_types::{
+    buildings::BuildingName,
     common::{Player, User},
     errors::{AppError, ApplicationError, DbError},
 };
 use sqlx::PgPool;
 
 use crate::es::VillageEsService;
+use crate::map::repository::random_unoccupied_valley_for_update_query;
 use crate::persistence::models as db_models;
 
 #[derive(Clone)]
@@ -37,6 +40,13 @@ impl IdentityService {
     }
 
     async fn register(&self, req: RegisterPlayerRequest) -> Result<(), ApplicationError> {
+        info!(
+            player_id = %req.player_id,
+            username = %req.username,
+            email = %req.email,
+            quadrant = ?req.quadrant,
+            "starting player registration"
+        );
         let password_hash = hash_password(&req.password)?;
         let mut tx = self
             .pool
@@ -75,6 +85,13 @@ impl IdentityService {
         let valley = self
             .select_unoccupied_valley(&mut tx, &req.quadrant)
             .await?;
+        debug!(
+            player_id = %req.player_id,
+            village_id = valley.id,
+            x = valley.position.x,
+            y = valley.position.y,
+            "selected initial unoccupied valley"
+        );
         let player = Player {
             id: req.player_id,
             username: req.username.clone(),
@@ -91,28 +108,29 @@ impl IdentityService {
             self.config.speed,
         );
 
+        let server_speed = req.initial_village.as_ref().and_then(|s| s.speed).unwrap_or(self.config.speed);
+        let (village_name, buildings) = village_setup_from_request(&req, &village, server_speed)?;
         let village_id = village.id;
         let found = FoundVillage {
-            village_name: village.name.clone(),
+            village_name,
             position: village.position.clone(),
             tribe: village.tribe.clone(),
             player_id: village.player_id,
             parent_village_id: None,
-            buildings: village.buildings().clone(),
+            buildings,
         };
 
-        // Reserve the selected map field in the canonical world map before
-        // releasing the transaction lock.
+        // Soft-reserve the selected map field with player ownership while
+        // keeping village_id NULL until FoundVillage projection writes rm_village.
         let updated = sqlx::query(
             r#"
             UPDATE rm_map_fields
-            SET village_id = $1, player_id = $2
-            WHERE id = $3 AND village_id IS NULL
+            SET player_id = $2
+            WHERE id = $1 AND village_id IS NULL AND player_id IS NULL
             "#,
         )
         .bind(village_id as i32)
         .bind(req.player_id)
-        .bind(village_id as i32)
         .execute(&mut *tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -133,6 +151,13 @@ impl IdentityService {
             .await
             .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
         {
+            warn!(
+                user_id = %user_id,
+                player_id = %req.player_id,
+                village_id,
+                error = %e,
+                "registration failed during initial village foundation; starting cleanup"
+            );
             // Registration must be all-or-nothing. If village foundation fails
             // after identity commit, rollback identity + map reservation.
             if let Err(cleanup_err) = self
@@ -149,6 +174,26 @@ impl IdentityService {
             }
             return Err(e);
         }
+
+        if let Some(resources) = req.initial_village.as_ref().and_then(|s| s.resources.clone()) {
+            VillageEsService::new(self.pool.clone())
+                .set_village_resources(
+                    village_id,
+                    &SetVillageResources {
+                        player_id: req.player_id,
+                        resources,
+                    },
+                )
+                .await
+                .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
+        }
+
+        info!(
+            user_id = %user_id,
+            player_id = %req.player_id,
+            village_id,
+            "player registration completed"
+        );
 
         Ok(())
     }
@@ -168,8 +213,8 @@ impl IdentityService {
         sqlx::query(
             r#"
             UPDATE rm_map_fields
-            SET village_id = NULL, player_id = NULL
-            WHERE id = $1 AND player_id = $2
+            SET player_id = NULL
+            WHERE id = $1 AND village_id IS NULL AND player_id = $2
             "#,
         )
         .bind(village_id as i32)
@@ -200,20 +245,7 @@ impl IdentityService {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError> {
-        let query = match quadrant {
-            MapQuadrant::NorthEast => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
-            }
-            MapQuadrant::SouthEast => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
-            }
-            MapQuadrant::SouthWest => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
-            }
-            MapQuadrant::NorthWest => {
-                "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
-            }
-        };
+        let query = random_unoccupied_valley_for_update_query(quadrant);
 
         let map_field = sqlx::query_as::<_, crate::persistence::models::MapField>(query)
             .fetch_one(&mut **tx)
@@ -287,6 +319,70 @@ impl IdentityService {
         .map_err(|_| ApplicationError::Db(DbError::PlayerNotFound(player_id)))?;
         Ok(rec.into())
     }
+}
+
+fn village_setup_from_request(
+    req: &RegisterPlayerRequest,
+    village: &Village,
+    speed: i8,
+) -> Result<(String, Vec<VillageBuilding>), ApplicationError> {
+    let Some(setup) = &req.initial_village else {
+        return Ok((village.name.clone(), village.buildings().clone()));
+    };
+
+    let village_name = setup
+        .village_name
+        .clone()
+        .unwrap_or_else(|| village.name.clone());
+    let mut buildings = village.buildings().clone();
+
+    if setup.resource_fields_target_level > 0 {
+        for vb in &mut buildings {
+            if vb.slot_id <= 18 {
+                vb.building = Building::new(vb.building.name.clone(), speed)
+                    .at_level(setup.resource_fields_target_level, speed)
+                    .map_err(ApplicationError::from)?;
+            }
+        }
+    }
+
+    for override_building in &setup.buildings {
+        if override_building.slot_id <= 18 {
+            continue;
+        }
+        let normalized = VillageBuilding {
+            slot_id: override_building.slot_id,
+            building: Building::new(override_building.building.name.clone(), speed)
+                .at_level(override_building.building.level, speed)
+                .map_err(ApplicationError::from)?,
+        };
+        upsert_building(&mut buildings, normalized);
+    }
+
+    ensure_rally_point_minimum(&mut buildings, speed)?;
+    Ok((village_name, buildings))
+}
+
+fn upsert_building(buildings: &mut Vec<VillageBuilding>, building: VillageBuilding) {
+    if let Some(existing) = buildings.iter_mut().find(|b| b.slot_id == building.slot_id) {
+        *existing = building;
+        return;
+    }
+    buildings.push(building);
+}
+
+fn ensure_rally_point_minimum(buildings: &mut Vec<VillageBuilding>, speed: i8) -> Result<(), ApplicationError> {
+    if buildings.iter().any(|b| b.slot_id == 39) {
+        return Ok(());
+    }
+    let rally = Building::new(BuildingName::RallyPoint, speed)
+        .at_level(1, speed)
+        .map_err(ApplicationError::from)?;
+    buildings.push(VillageBuilding {
+        slot_id: 39,
+        building: rally,
+    });
+    Ok(())
 }
 
 #[async_trait]

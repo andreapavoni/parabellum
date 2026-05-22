@@ -73,6 +73,7 @@ impl WebRouter {
         rust_i18n::set_locale("en-EN");
         // rust_i18n::set_locale("it-IT");
 
+        tracing::info!("ensuring auth refresh schema");
         state
             .token_service
             .ensure_refresh_schema(&state.db_pool)
@@ -134,10 +135,7 @@ impl WebRouter {
             ApplicationError::Infrastructure(err)
         })?;
 
-        tracing::info!(
-            "HTTP Server started, listening on http://{}",
-            addr.to_string()
-        );
+        tracing::info!(address = %addr, "http server started");
         axum::serve(listener, router).await.map_err(infra_error)?;
 
         Ok(())
@@ -145,6 +143,7 @@ impl WebRouter {
 }
 
 fn infra_error(e: Error) -> ApplicationError {
+    tracing::error!(error = %e, "http server terminated with error");
     let err = format!("{:#?}", e);
     ApplicationError::Infrastructure(err)
 }

@@ -12,6 +12,7 @@
 
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use parabellum_app::ports::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
@@ -108,6 +109,7 @@ pub async fn token_login(
         .await
         .map_err(|err| {
             inc_auth_failure();
+            warn!(email = %payload.email, error = %err, "token login failed");
             map_auth_error(err)
         })?;
 
@@ -129,6 +131,7 @@ pub async fn token_login(
         .issue_token_pair(&current, refresh_session.id, refresh_token)
         .map_err(map_token_error)?;
     inc_auth_success();
+    info!(user_id = %current.account.id, player_id = %current.player.id, "token login succeeded");
     Ok(Json(token_response(pair, &current)))
 }
 
@@ -161,6 +164,13 @@ pub async fn token_register(
             .with_field_error("password", "The password does not satisfy the server rules"));
     }
 
+    info!(
+        username = %payload.username,
+        email = %payload.email,
+        tribe = %payload.tribe,
+        quadrant = %payload.quadrant,
+        "token registration requested"
+    );
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
     state
@@ -172,9 +182,13 @@ pub async fn token_register(
             password: payload.password.clone(),
             tribe,
             quadrant,
+            initial_village: None,
         })
         .await
-        .map_err(map_register_error)?;
+        .map_err(|err| {
+            warn!(email = %payload.email, error = %err, "token registration failed");
+            map_register_error(err)
+        })?;
 
     let account = state
         .game_app
@@ -198,6 +212,12 @@ pub async fn token_register(
         .token_service
         .issue_token_pair(&current, refresh_session.id, refresh_token)
         .map_err(map_token_error)?;
+    info!(
+        user_id = %current.account.id,
+        player_id = %current.player.id,
+        village_id = current.village.id,
+        "token registration succeeded"
+    );
     Ok(Json(token_response(pair, &current)))
 }
 
@@ -223,6 +243,7 @@ pub async fn token_refresh(
         .await
         .map_err(|err| {
             inc_refresh_failure();
+            warn!(error = %err, "token refresh failed");
             map_token_error(err)
         })?;
     let current = current_user_by_ids(&state, session.user_id, Some(session.current_village_id))
@@ -233,6 +254,7 @@ pub async fn token_refresh(
         .issue_token_pair(&current, session.id, rotated_refresh_token)
         .map_err(map_token_error)?;
     inc_refresh_success();
+    info!(user_id = %current.account.id, player_id = %current.player.id, "token refresh succeeded");
     Ok(Json(token_response(pair, &current)))
 }
 

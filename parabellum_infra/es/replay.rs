@@ -1,6 +1,7 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::villages::VillageEvent;
 use sqlx::PgPool;
+use tracing::{info, warn};
 
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{PostgresEventStore, ReportProjector, VillageProjector};
@@ -53,6 +54,14 @@ impl ReplayService {
     }
 
     pub async fn replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
+        info!(
+            mode = ?request.mode,
+            target = ?request.target,
+            from_global_seq = request.from_global_seq,
+            to_global_seq = request.to_global_seq,
+            aggregate_id = request.aggregate_id.as_deref().unwrap_or(""),
+            "replay requested"
+        );
         match request.mode {
             ReplayMode::DryRun => self.dry_run(request).await,
             ReplayMode::Full => self.full_replay(request).await,
@@ -104,13 +113,14 @@ impl ReplayService {
             .pool
             .acquire()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let acquired = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .fetch_one(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if !acquired {
+            warn!("replay lock already held by another process");
             return Err(CqrsError::EventStore(
                 "replay lock already held by another process".to_string(),
             ));
@@ -121,13 +131,15 @@ impl ReplayService {
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .execute(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
+        info!("replay lock released");
         replay_result
     }
 
     async fn run_full_replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
         let to_global_seq = self.resolve_upper_bound(request.to_global_seq).await?;
         self.reset_projection_target(request.target).await?;
+        info!(target = ?request.target, "replay projections reset");
 
         let village_projector = VillageProjector::new_with_options(self.pool.clone(), false);
         let report_projector = ReportProjector::new(self.pool.clone());
@@ -186,7 +198,7 @@ impl ReplayService {
         let upper = sqlx::query_scalar::<_, Option<i64>>("SELECT MAX(global_seq) FROM es_events")
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(upper)
     }
 
@@ -195,49 +207,49 @@ impl ReplayService {
             .pool
             .begin()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         if matches!(target, ReplayTarget::Reports | ReplayTarget::All) {
             sqlx::query("DELETE FROM rm_report_reads")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_reports")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         if matches!(target, ReplayTarget::Village | ReplayTarget::All) {
             sqlx::query("DELETE FROM rm_marketplace_offers")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_village_movements")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_armies")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_heroes")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_village")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             sqlx::query("UPDATE rm_map_fields SET village_id = NULL, player_id = NULL")
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         tx.commit()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     fn update_sequence_bounds(&self, summary: &mut ReplaySummary, event: &StoredEvent) {
