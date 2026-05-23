@@ -23,7 +23,7 @@ use parabellum_types::{
 use sqlx::PgPool;
 
 use crate::es::VillageEsService;
-use crate::map::repository::random_unoccupied_valley_for_update_query;
+use crate::map::repository::random_unoccupied_4446_valley_for_update_query;
 use crate::persistence::models as db_models;
 
 #[derive(Clone)]
@@ -245,7 +245,7 @@ impl IdentityService {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         quadrant: &MapQuadrant,
     ) -> Result<Valley, ApplicationError> {
-        let query = random_unoccupied_valley_for_update_query(quadrant);
+        let query = random_unoccupied_4446_valley_for_update_query(quadrant);
 
         let map_field = sqlx::query_as::<_, crate::persistence::models::MapField>(query)
             .fetch_one(&mut **tx)
@@ -257,8 +257,12 @@ impl IdentityService {
             .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(game_map_field.id)))
     }
 
-    async fn authenticate(&self, email: &str, password: &str) -> Result<User, ApplicationError> {
-        let user = self.get_user_by_email(email).await?;
+    async fn authenticate(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<User, ApplicationError> {
+        let user = self.user_by_username(username).await?;
         parabellum_app::auth::verify_password(user.password_hash(), password)
             .map_err(|_| ApplicationError::App(AppError::WrongAuthCredentials))?;
         Ok(user)
@@ -277,6 +281,22 @@ impl IdentityService {
         .fetch_one(&self.pool)
         .await
         .map_err(|_| ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string())))?;
+        Ok(rec.into())
+    }
+
+    async fn user_by_username(&self, username: &str) -> Result<User, ApplicationError> {
+        let rec = sqlx::query_as::<_, db_models::User>(
+            r#"
+            SELECT u.id, u.email, u.password_hash
+            FROM users u
+            JOIN players p ON p.user_id = u.id
+            WHERE p.username = $1
+            "#,
+        )
+        .bind(username)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| ApplicationError::Db(DbError::UserByUsernameNotFound(username.to_string())))?;
         Ok(rec.into())
     }
 
@@ -360,6 +380,7 @@ fn village_setup_from_request(
     }
 
     ensure_rally_point_minimum(&mut buildings, speed)?;
+    normalize_buildings_by_slot(&mut buildings);
     Ok((village_name, buildings))
 }
 
@@ -385,6 +406,21 @@ fn ensure_rally_point_minimum(buildings: &mut Vec<VillageBuilding>, speed: i8) -
     Ok(())
 }
 
+fn normalize_buildings_by_slot(buildings: &mut Vec<VillageBuilding>) {
+    let mut normalized = Vec::with_capacity(buildings.len());
+    for building in buildings.drain(..) {
+        if let Some(existing) = normalized
+            .iter_mut()
+            .find(|b: &&mut VillageBuilding| b.slot_id == building.slot_id)
+        {
+            *existing = building;
+        } else {
+            normalized.push(building);
+        }
+    }
+    *buildings = normalized;
+}
+
 #[async_trait]
 impl IdentityPort for IdentityService {
     async fn register_player(
@@ -396,10 +432,10 @@ impl IdentityPort for IdentityService {
 
     async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError> {
-        self.authenticate(email, password).await
+        self.authenticate(username, password).await
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<User, ApplicationError> {

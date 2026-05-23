@@ -1,6 +1,7 @@
 import type { VillageResourcesResponse } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
+import { UnitSpriteByName } from "@/components/UnitSprite";
 import { unitLabel } from "@/lib/labels";
 
 export function ResourcesPage({
@@ -36,7 +37,10 @@ export function ResourcesPage({
           <div class="text-xs space-y-2">
             {data.currentTroops.map((troop) => (
               <div class="flex justify-between border-b border-gray-100 pb-2" key={troop.unitName}>
-                <span>{unitLabel(troop.unitName)}</span>
+                <span class="inline-flex items-center gap-2">
+                  <UnitSpriteByName unitName={troop.unitName} label={unitLabel(troop.unitName)} />
+                  <span>{unitLabel(troop.unitName)}</span>
+                </span>
                 <span class="font-bold text-gray-900">{troop.count}</span>
               </div>
             ))}

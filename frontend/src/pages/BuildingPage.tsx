@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { buildingLabel, unitLabel } from "@/lib/labels";
+import { UnitSprite } from "@/components/UnitSprite";
 import type {
   AcademyResearchOption,
   BuildingPageResponse,
   EmptySlotBuildOption,
+  MovementPreviewResponse,
   MarketplaceOffer,
   ResourceAmounts,
   RallyCard,
@@ -81,6 +83,12 @@ function LiveCountdown({
   }, [remaining, onElapsed]);
 
   return <span class="font-mono">{formatDuration(remaining)}</span>;
+}
+
+function secondsUntil(timestamp: string) {
+  const targetMs = new Date(timestamp).getTime();
+  if (Number.isNaN(targetMs)) return 0;
+  return Math.max(0, Math.floor((targetMs - Date.now()) / 1000));
 }
 
 function formatRelativeTime(timestamp: number) {
@@ -477,7 +485,8 @@ function AcademyOptionCard({
   const [error, setError] = useState<string | null>(null);
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.academy?.queueFull ?? false;
-  const canResearch = affordable && !queueFull && !submitting;
+  const blockedByRequirements = option.missingRequirements.length > 0;
+  const canResearch = affordable && !queueFull && !submitting && !blockedByRequirements;
 
   return (
     <div class="border rounded-md p-4 bg-white space-y-3">
@@ -516,6 +525,14 @@ function AcademyOptionCard({
       </button>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Research queue is full</div> : null}
+      {blockedByRequirements ? (
+        <div class="text-xs text-amber-700">
+          Requires:{" "}
+          {option.missingRequirements
+            .map((req) => `${buildingLabel(req.buildingName)} ${req.requiredLevel}`)
+            .join(", ")}
+        </div>
+      ) : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
     </div>
   );
@@ -829,7 +846,7 @@ function MarketplaceSection({
                       <td class="py-2 pr-4">{movement.merchantsUsed}</td>
                       <td class="py-2 font-mono text-gray-600">
                         <LiveCountdown
-                          seconds={movement.timeRemainingSecs}
+                          seconds={secondsUntil(movement.arrivesAt)}
                           onElapsed={() => {
                             void onMutate();
                           }}
@@ -934,11 +951,14 @@ function RallyPointSection({
   const initialTargetY = Number(query.get("target_y") ?? "0") || 0;
   const [targetX, setTargetX] = useState(initialTargetX);
   const [targetY, setTargetY] = useState(initialTargetY);
-  const [movement, setMovement] = useState<"attack" | "raid" | "scout" | "reinforcement" | "found_village">(
-    "attack",
-  );
+  const [movement, setMovement] = useState<"attack" | "raid" | "reinforcement">("attack");
   const [scoutingTarget, setScoutingTarget] = useState<"resources" | "defenses">("resources");
+  const [catapultTarget1, setCatapultTarget1] = useState("MainBuilding");
+  const [catapultTarget2, setCatapultTarget2] = useState("Warehouse");
   const [units, setUnits] = useState<Record<number, number>>({});
+  const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!detail.rallyPoint) return null;
@@ -950,11 +970,22 @@ function RallyPointSection({
 
   const isScoutUnitName = (name: string) =>
     name === "Scout" || name === "Pathfinder" || name === "EquitesLegati";
+  const isCatapultUnitName = (name: string) =>
+    name === "Catapult" || name === "FireCatapult" || name === "Trebuchet" || name === "Ballista";
 
-  const selectedNonScoutUnits = detail.rallyPoint.sendableUnits.filter((unit) => {
+  const selectedScoutUnits = detail.rallyPoint.sendableUnits.filter((unit) => {
     const selected = units[unit.unitIdx] ?? 0;
-    return selected > 0 && !isScoutUnitName(unit.name);
+    return selected > 0 && isScoutUnitName(unit.name);
   });
+  const selectedCatapultUnits = detail.rallyPoint.sendableUnits
+    .filter((unit) => isCatapultUnitName(unit.name))
+    .reduce((sum, unit) => sum + (units[unit.unitIdx] ?? 0), 0);
+  const isScoutDetected = preview?.detectedKind === "scout_only";
+  const showScoutingTargetChoice =
+    movement !== "reinforcement" && !!preview?.supportsScoutingTargetChoice;
+  const showCatapultTargets =
+    movement === "attack" && !isScoutDetected && !!preview?.hasCatapultUnits;
+  const catapultTargetSelectionCount = selectedCatapultUnits <= 1 ? 1 : 2;
 
   const fullUnitsFromCard = (card: RallyCard) => card.units.map((value) => Number(value ?? 0));
 
@@ -979,16 +1010,19 @@ function RallyPointSection({
                           ) : null}
                         </div>
                         {card.position ? <p class="text-sm text-gray-600 mt-1">({card.position.x}, {card.position.y})</p> : null}
-                        {card.arrivalTime ? (
-                          <p class="text-sm text-gray-500 mt-1 font-mono">
-                            ⏱️{" "}
-                            <LiveCountdown
-                              seconds={card.arrivalTime}
-                              onElapsed={() => {
-                                void onMutate();
-                              }}
-                            />
-                          </p>
+                        {card.arrivesAt ? (
+                          <div class="mt-1 space-y-1 text-sm text-gray-500">
+                            <p class="font-mono">
+                              ⏱️{" "}
+                              <LiveCountdown
+                                seconds={secondsUntil(card.arrivesAt)}
+                                onElapsed={() => {
+                                  void onMutate();
+                                }}
+                              />
+                            </p>
+                            <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
+                          </div>
                         ) : null}
                       </div>
                       <span class="text-xs px-2 py-1 rounded font-medium whitespace-nowrap bg-gray-100 text-gray-800">{card.category}</span>
@@ -996,6 +1030,15 @@ function RallyPointSection({
 
                     <div class="overflow-x-auto">
                       <table class="w-full border-collapse">
+                        <thead>
+                          <tr>
+                            {card.units.map((_, idx) => (
+                              <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
+                                <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
                         <tbody>
                           <tr>
                             {card.units.map((count, idx) => (
@@ -1013,7 +1056,11 @@ function RallyPointSection({
                         type="button"
                         class="inline-block px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded"
                         onClick={async () => {
-                          await api.recallTroops({ armyId: card.actionId!, units: fullUnitsFromCard(card) });
+                          await api.recallTroops({
+                            villageId: detail.villageId,
+                            armyId: card.actionId!,
+                            units: fullUnitsFromCard(card),
+                          });
                           await onMutate();
                         }}
                       >
@@ -1059,37 +1106,13 @@ function RallyPointSection({
           </label>
           <label class="text-sm text-gray-600">
             Movement type
-            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "scout" | "reinforcement" | "found_village")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "reinforcement")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
               <option value="attack">Attack</option>
               <option value="raid">Raid</option>
-              <option value="scout">Scout</option>
               <option value="reinforcement">Reinforcement</option>
-              <option value="found_village">Found village</option>
             </select>
           </label>
         </div>
-        {movement === "found_village" ? (
-          <p class="text-xs text-gray-500">
-            Select settlers and send them to an empty valley to found a new village.
-          </p>
-        ) : null}
-        {movement === "scout" ? (
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="text-sm text-gray-600">
-              Scouting target
-              <select
-                value={scoutingTarget}
-                onChange={(e) =>
-                  setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
-                }
-                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
-              >
-                <option value="resources">Resources + troops</option>
-                <option value="defenses">Residence/Palace + Walls + troops</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
         <div class="space-y-2">
           <div class="text-sm text-gray-500 uppercase">Select units</div>
           {detail.rallyPoint.sendableUnits.map((unit) => (
@@ -1121,45 +1144,150 @@ function RallyPointSection({
 
         <button
           type="button"
-          class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded"
+          disabled={previewing || sending}
           onClick={async () => {
             setError(null);
+            setPreview(null);
             try {
-              if (movement === "found_village") {
-                await api.foundVillage({
-                  targetX,
-                  targetY,
-                  units: toUnitsArray(),
-                });
-              } else if (movement === "scout") {
-                if (selectedNonScoutUnits.length > 0) {
-                  throw new Error("Only scout units can be sent with Scout movement.");
-                }
-                await api.sendTroops({
-                  slotId: detail.slotId,
-                  targetX,
-                  targetY,
-                  movement: "attack",
-                  scoutingTarget,
-                  units: toUnitsArray(),
-                });
-              } else {
-                await api.sendTroops({
-                  slotId: detail.slotId,
-                  targetX,
-                  targetY,
-                  movement,
-                  units: toUnitsArray(),
-                });
-              }
-              await onMutate();
+              setPreviewing(true);
+              const result = await api.previewTroops({
+                targetX,
+                targetY,
+                movement,
+                units: toUnitsArray(),
+              });
+              setPreview(result);
             } catch (err) {
               setError((err as Error).message);
+            } finally {
+              setPreviewing(false);
             }
           }}
         >
-          {movement === "found_village" ? "Found village" : movement === "scout" ? "Send scouts" : "Send troops"}
+          {previewing ? "Calculating..." : "Preview movement"}
         </button>
+        {preview ? (
+          <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+            <div>
+              Arrives at: <span class="font-semibold">{new Date(preview.arrivesAt).toLocaleString()}</span>
+            </div>
+            <div>
+              Time remaining: <span class="font-semibold">{formatDuration(secondsUntil(preview.arrivesAt))}</span>
+            </div>
+            <div>
+              Detected movement:{" "}
+              <span class="font-semibold">
+                {preview.detectedKind === "scout_only"
+                  ? `Scout-only (${movement === "raid" ? "Raid" : "Attack"})`
+                  : preview.detectedKind === "reinforcement"
+                    ? "Reinforcement"
+                    : "Attack/Raid"}
+              </span>
+            </div>
+            {showScoutingTargetChoice ? (
+              <div class="grid gap-2">
+                <label class="text-sm text-gray-700">
+                  Scouting target
+                  <select
+                    value={scoutingTarget}
+                    onChange={(e) =>
+                      setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
+                    }
+                    class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                  >
+                    <option value="resources">Resources + troops</option>
+                    <option value="defenses">Residence/Palace + Walls + troops</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            {showCatapultTargets ? (
+              <div class="grid gap-2">
+                <div class="text-xs text-gray-700">
+                  Catapults detected: select {catapultTargetSelectionCount === 1 ? "one target building" : "up to two target buildings"}.
+                </div>
+                <label class="text-sm text-gray-700">
+                  Catapult target #1
+                  <select
+                    value={catapultTarget1}
+                    onChange={(e) => setCatapultTarget1((e.target as HTMLSelectElement).value)}
+                    class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                  >
+                    <option value="MainBuilding">Main Building</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Granary">Granary</option>
+                    <option value="RallyPoint">Rally Point</option>
+                    <option value="Barracks">Barracks</option>
+                    <option value="Stable">Stable</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Academy">Academy</option>
+                    <option value="Residence">Residence</option>
+                    <option value="Palace">Palace</option>
+                    <option value="Smithy">Smithy</option>
+                  </select>
+                </label>
+                {catapultTargetSelectionCount > 1 ? (
+                  <label class="text-sm text-gray-700">
+                    Catapult target #2
+                    <select
+                      value={catapultTarget2}
+                      onChange={(e) => setCatapultTarget2((e.target as HTMLSelectElement).value)}
+                      class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                    >
+                      <option value="MainBuilding">Main Building</option>
+                      <option value="Warehouse">Warehouse</option>
+                      <option value="Granary">Granary</option>
+                      <option value="RallyPoint">Rally Point</option>
+                      <option value="Barracks">Barracks</option>
+                      <option value="Stable">Stable</option>
+                      <option value="Workshop">Workshop</option>
+                      <option value="Academy">Academy</option>
+                      <option value="Residence">Residence</option>
+                      <option value="Palace">Palace</option>
+                      <option value="Smithy">Smithy</option>
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
+              disabled={sending}
+              onClick={async () => {
+                setError(null);
+                try {
+                  setSending(true);
+                  if (showScoutingTargetChoice && selectedScoutUnits.length === 0) {
+                    throw new Error("Scout movement requires at least one scout unit.");
+                  }
+                  await api.sendTroops({
+                    slotId: detail.slotId,
+                    targetX,
+                    targetY,
+                    movement,
+                    scoutingTarget: showScoutingTargetChoice ? scoutingTarget : undefined,
+                    catapultTargets: showCatapultTargets
+                      ? (catapultTargetSelectionCount === 1
+                        ? [catapultTarget1]
+                        : [catapultTarget1, catapultTarget2])
+                      : undefined,
+                    units: toUnitsArray(),
+                  });
+                  await onMutate();
+                  window.location.assign(`/app/build/39?target_x=${targetX}&target_y=${targetY}`);
+                } catch (err) {
+                  setError((err as Error).message);
+                } finally {
+                  setSending(false);
+                }
+              }}
+            >
+              {sending ? "Sending..." : "Confirm and send"}
+            </button>
+          </div>
+        ) : null}
         {error ? <div class="text-sm text-red-600">{error}</div> : null}
       </div>
     </>
@@ -1338,7 +1466,7 @@ export function BuildingPage({
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Remaining</span>
                       <LiveCountdown
-                        seconds={job.timeRemainingSecs}
+                        seconds={secondsUntil(job.finishesAt)}
                         onElapsed={() => {
                           void onMutate();
                         }}
@@ -1367,7 +1495,7 @@ export function BuildingPage({
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Time remaining</span>
                       <LiveCountdown
-                        seconds={job.timeRemainingSecs}
+                        seconds={secondsUntil(job.finishesAt)}
                         onElapsed={() => {
                           void onMutate();
                         }}
@@ -1380,7 +1508,7 @@ export function BuildingPage({
 
             <div>
               <div class="text-sm text-gray-500 uppercase">Research available</div>
-              {detail.academy.readyUnits.length === 0 ? (
+              {detail.academy.readyUnits.length === 0 && detail.academy.lockedUnits.length === 0 ? (
                 <p class="text-sm text-gray-500 mt-2">No research available.</p>
               ) : (
                 <div class="space-y-4 mt-3">
@@ -1395,6 +1523,21 @@ export function BuildingPage({
                 </div>
               )}
             </div>
+            {detail.academy.lockedUnits.length > 0 ? (
+              <div>
+                <div class="text-sm text-gray-500 uppercase">Locked research</div>
+                <div class="space-y-4 mt-3">
+                  {detail.academy.lockedUnits.map((option) => (
+                    <AcademyOptionCard
+                      key={option.unitName}
+                      option={option}
+                      detail={detail}
+                      onMutate={onMutate}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
 

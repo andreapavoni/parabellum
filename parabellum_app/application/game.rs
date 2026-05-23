@@ -74,11 +74,11 @@ impl GameApplication {
 
     pub async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError> {
         self.identity_port()
-            .authenticate_user(email, password)
+            .authenticate_user(username, password)
             .await
     }
 

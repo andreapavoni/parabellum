@@ -229,7 +229,11 @@ impl ReportProjector {
                     } else {
                         vec![]
                     },
-                    scouting: report.scouting.clone(),
+                    scouting: if scouting_success {
+                        report.scouting.clone()
+                    } else {
+                        None
+                    },
                     wall_damage: None,
                     catapult_damage: vec![],
                 });
@@ -276,11 +280,19 @@ impl ReportProjector {
                     .bounty
                     .clone()
                     .unwrap_or_else(|| ResourceGroup::new(0, 0, 0, 0));
-                let success = report
+                let attacker_survivors = report.attacker.survivors.immensity();
+                let defender_survivors = report
                     .defender
                     .as_ref()
-                    .map(|def| def.survivors.immensity() == 0)
-                    .unwrap_or(true);
+                    .map(|def| def.survivors.immensity())
+                    .unwrap_or(0);
+                let reinforcements_survivors: u32 = report
+                    .reinforcements
+                    .iter()
+                    .map(|reinf| reinf.survivors.immensity())
+                    .sum();
+                let defending_side_survivors = defender_survivors + reinforcements_survivors;
+                let success = attacker_survivors > 0 && defending_side_survivors == 0;
                 let attacker_payload = BattlePartyPayload {
                     tribe: report.attacker.army_before.tribe.clone(),
                     army_before: report.attacker.army_before.units().clone(),

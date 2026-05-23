@@ -217,6 +217,13 @@ export type MapFieldDetailResponse = {
   oasis?: string;
 };
 
+export type MovementPreviewResponse = {
+  arrivesAt: string;
+  detectedKind: "attack_or_raid" | "scout_only" | "reinforcement" | "found_village";
+  supportsScoutingTargetChoice: boolean;
+  hasCatapultUnits: boolean;
+};
+
 export type Requirement = {
   buildingName: string;
   requiredLevel: number;
@@ -241,7 +248,7 @@ export type TrainingQueueItem = {
   quantity: number;
   unitName: string;
   timePerUnit: number;
-  timeRemainingSecs: number;
+  finishesAt: string;
 };
 
 export type AcademyResearchOption = {
@@ -253,7 +260,7 @@ export type AcademyResearchOption = {
 
 export type AcademyQueueItem = {
   unitName: string;
-  timeRemainingSecs: number;
+  finishesAt: string;
   isProcessing: boolean;
 };
 
@@ -269,7 +276,7 @@ export type SmithyUpgradeOption = {
 export type SmithyQueueItem = {
   unitName: string;
   targetLevel: number;
-  timeRemainingSecs: number;
+  finishesAt: string;
   isProcessing: boolean;
 };
 
@@ -387,21 +394,22 @@ export type MerchantMovement = {
   destinationPosition?: Position;
   resources: ResourceAmounts;
   merchantsUsed: number;
-  timeRemainingSecs: number;
+  arrivesAt: string;
 };
 
 export type RallyCardCategory = "stationed" | "reinforcement" | "deployed" | "incoming" | "outgoing";
-export type RallyMovementKind = "attack" | "raid" | "reinforcement" | "return" | "found_village";
+export type RallyMovementKind = "attack" | "raid" | "scout" | "reinforcement" | "return" | "found_village";
 export type RallyAction = "recall" | "release";
 
 export type RallyCard = {
   villageId: number;
   villageName?: string;
   position?: Position;
+  tribe: string;
   units: number[];
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
-  arrivalTime?: number;
+  arrivesAt?: string;
   action?: RallyAction;
   actionId?: string;
 };

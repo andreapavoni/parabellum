@@ -18,9 +18,12 @@ use parabellum_app::villages::VillageEvent;
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
+use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::smithy::SmithyUpgrades;
-use parabellum_game::models::village::Village;
+use parabellum_game::models::village::{Village, VillageBuilding};
 use parabellum_types::army::UnitRole;
+use parabellum_types::buildings::BuildingName;
+use parabellum_types::map::ValleyTopology;
 
 struct ComputedAttackOutcome {
     source: ResolveAttackBattle,
@@ -29,6 +32,42 @@ struct ComputedAttackOutcome {
 
 struct ComputedScoutOutcome {
     fact: VillageEvent,
+}
+
+const DEFAULT_FOUNDATION_SPEED: i8 = 1;
+
+fn default_founded_village_buildings(
+    topology: &ValleyTopology,
+    speed: i8,
+) -> Result<Vec<VillageBuilding>, CqrsError> {
+    let mut slot_id: u8 = 1;
+    let mut buildings = Vec::with_capacity(19);
+
+    let mut push_n = |name: BuildingName, count: u8| -> Result<(), CqrsError> {
+        for _ in 0..count {
+            let building = Building::new(name.clone(), speed)
+                .at_level(0, speed)
+                .map_err(CqrsError::domain_source)?;
+            buildings.push(VillageBuilding { slot_id, building });
+            slot_id += 1;
+        }
+        Ok(())
+    };
+
+    push_n(BuildingName::Woodcutter, topology.lumber())?;
+    push_n(BuildingName::ClayPit, topology.clay())?;
+    push_n(BuildingName::IronMine, topology.iron())?;
+    push_n(BuildingName::Cropland, topology.crop())?;
+
+    let main_building = Building::new(BuildingName::MainBuilding, speed)
+        .at_level(1, speed)
+        .map_err(CqrsError::domain_source)?;
+    buildings.push(VillageBuilding {
+        slot_id: 19,
+        building: main_building,
+    });
+
+    Ok(buildings)
 }
 
 fn build_army_return_fact(
@@ -309,6 +348,21 @@ pub(super) async fn execute_action(
             };
 
             if can_found {
+                let target_topology_json: Option<serde_json::Value> =
+                    sqlx::query_scalar("SELECT topology FROM rm_map_fields WHERE id = $1")
+                        .bind(target_village_id as i32)
+                        .fetch_optional(&svc.pool)
+                        .await
+                        .map_err(CqrsError::domain_source)?;
+                let target_topology = target_topology_json
+                    .and_then(|value| serde_json::from_value::<MapFieldTopology>(value).ok());
+                let topology = match target_topology {
+                    Some(MapFieldTopology::Valley(valley)) => valley,
+                    _ => ValleyTopology(4, 4, 4, 6),
+                };
+                let default_buildings =
+                    default_founded_village_buildings(&topology, DEFAULT_FOUNDATION_SPEED)?;
+
                 svc.append_village_workflow_events(vec![
                     (
                         source_village_id,
@@ -334,7 +388,7 @@ pub(super) async fn execute_action(
                             tribe,
                             player_id,
                             parent_village_id: Some(source_village_id),
-                            buildings: vec![],
+                            buildings: default_buildings,
                         },
                     ),
                 ])

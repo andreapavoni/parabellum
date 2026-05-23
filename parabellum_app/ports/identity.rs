@@ -32,7 +32,7 @@ pub trait IdentityPort: Send + Sync {
     -> Result<(), ApplicationError>;
     async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError>;
     async fn get_user_by_email(&self, email: &str) -> Result<User, ApplicationError>;
@@ -48,6 +48,9 @@ pub trait UserRepository: Send + Sync {
 
     /// Find user by email.
     async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError>;
+
+    /// Find user by username.
+    async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError>;
 
     /// Find user by id.
     async fn get_by_id(&self, user_id: Uuid) -> Result<User, ApplicationError>;

@@ -184,7 +184,7 @@ impl MapRepository for PostgresMapRepository {
                 WHERE id = $1
                   AND village_id IS NULL
                   AND player_id IS NULL
-                  AND topology @> '{"Valley":[4,4,4,6]}'
+                  AND topology ? 'Valley'
             )
             "#,
         )
@@ -200,21 +200,40 @@ impl MapRepository for PostgresMapRepository {
 pub(crate) fn random_unoccupied_valley_query(quadrant: &MapQuadrant) -> &'static str {
     match quadrant {
         MapQuadrant::NorthEast => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
         }
         MapQuadrant::SouthEast => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
         }
         MapQuadrant::SouthWest => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
         }
         MapQuadrant::NorthWest => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1"
         }
     }
 }
 
 pub(crate) fn random_unoccupied_valley_for_update_query(quadrant: &MapQuadrant) -> &'static str {
+    match quadrant {
+        MapQuadrant::NorthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::SouthEast => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::SouthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+        MapQuadrant::NorthWest => {
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology ? 'Valley' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+        }
+    }
+}
+
+pub(crate) fn random_unoccupied_4446_valley_for_update_query(
+    quadrant: &MapQuadrant,
+) -> &'static str {
     match quadrant {
         MapQuadrant::NorthEast => {
             "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"

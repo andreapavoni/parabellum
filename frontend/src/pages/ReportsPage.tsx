@@ -1,5 +1,6 @@
 import type { ReportDetailResponse, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
+import { UnitSprite } from "@/components/UnitSprite";
 
 function formatTimestamp(timestamp: number) {
   return new Date(timestamp * 1000).toLocaleString();
@@ -182,14 +183,14 @@ function ArmyTable({
   title,
   before,
   losses,
+  tribe,
 }: {
   title: string;
   before: number[];
   losses?: number[];
+  tribe?: string;
 }) {
   const length = Math.max(before.length, losses?.length ?? 0);
-  const labels = Array.from({ length }, (_, idx) => `U${idx + 1}`);
-
   if (length === 0) {
     return null;
   }
@@ -201,16 +202,16 @@ function ArmyTable({
         <table class="w-full border-collapse">
           <thead>
             <tr>
-              {labels.map((label) => (
-                <th key={label} class="text-center p-1 text-xs text-gray-500 border-b">
-                  {label}
+              {Array.from({ length }, (_, idx) => (
+                <th key={`u-${idx}`} class="text-center p-1 text-xs text-gray-500 border-b">
+                  <UnitSprite tribe={tribe} unitIndex={idx} label={`U${idx + 1}`} />
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              {labels.map((_, idx) => {
+              {Array.from({ length }, (_, idx) => {
                 const value = before[idx] ?? 0;
                 return (
                   <td
@@ -226,7 +227,7 @@ function ArmyTable({
             </tr>
             {losses ? (
               <tr>
-                {labels.map((_, idx) => {
+                {Array.from({ length }, (_, idx) => {
                   const loss = losses[idx] ?? 0;
                   return (
                     <td key={`loss-${idx}`} class="text-center p-2 border-r last:border-r-0 bg-red-50">
@@ -261,6 +262,8 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
   const attackerLosses = troopArray(attacker?.losses);
   const defenderBefore = troopArray(defender?.army_before);
   const defenderLosses = troopArray(defender?.losses);
+  const attackerTribe = readString(attacker ?? {}, "tribe");
+  const defenderTribe = readString(defender ?? {}, "tribe");
   const scoutingTargetReport = scouting?.target_report;
   const scoutingTarget = normalizeScoutingTarget(scouting?.target);
 
@@ -293,8 +296,8 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
         </div>
       </div>
 
-      <ArmyTable title="Attacker Army" before={attackerBefore} losses={attackerLosses} />
-      {defender ? <ArmyTable title="Defender Army" before={defenderBefore} losses={defenderLosses} /> : null}
+      <ArmyTable title="Attacker Army" before={attackerBefore} losses={attackerLosses} tribe={attackerTribe} />
+      {defender ? <ArmyTable title="Defender Army" before={defenderBefore} losses={defenderLosses} tribe={defenderTribe} /> : null}
 
       {reinforcements.length > 0 ? (
         <div class="border rounded-md p-4">
@@ -308,6 +311,7 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
                   title={`Reinforcement #${idx + 1}`}
                   before={troopArray(reinf.army_before)}
                   losses={troopArray(reinf.losses)}
+                  tribe={readString(reinf, "tribe")}
                 />
               );
             })}
@@ -399,7 +403,7 @@ function ReinforcementReportDetail({ data, payload }: { data: ReportDetailRespon
           </p>
         </div>
       </div>
-      <ArmyTable title="Troops Sent" before={troopArray(payload.units)} />
+      <ArmyTable title="Troops Sent" before={troopArray(payload.units)} tribe={readString(payload, "tribe")} />
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );

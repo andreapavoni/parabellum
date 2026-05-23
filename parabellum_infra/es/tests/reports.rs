@@ -377,6 +377,20 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
             .expect("reinforcement owner must receive battle report");
         assert_eq!(attacker_battle.id, defender_battle.id);
         assert_eq!(attacker_battle.id, reinforcer_battle.id);
+        let ReportPayload::Battle(payload) = &attacker_battle.payload else {
+            panic!("expected battle report payload");
+        };
+        let attacker_survivors = payload
+            .attacker
+            .as_ref()
+            .map(|party| party.survivors.immensity())
+            .unwrap_or(0);
+        if attacker_survivors == 0 {
+            assert!(
+                !payload.success,
+                "battle cannot be marked as attacker victory when attacker has no survivors"
+            );
+        }
     })
     .await;
 }
@@ -901,6 +915,139 @@ async fn village_es_service_detected_scout_reports_to_defender_player() {
             .unwrap();
         assert_eq!(defender_reports.len(), 1);
         assert_eq!(defender_reports[0].id, attacker_reports[0].id);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_scout_with_all_attackers_dead_hides_scouting_details() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+
+        let (_attacker_user_id, attacker_player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(20),
+                rally_point(1),
+                barracks(1),
+                academy(20),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_defender_user_id, defender_player_id, target_village_id) = setup_village(
+            &pool,
+            &service,
+            "Target",
+            Position { x: 2, y: 2 },
+            parabellum_types::tribe::Tribe::Teuton,
+            vec![
+                main_building(20),
+                rally_point(1),
+                barracks(1),
+                academy(20),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let research_due_by = chrono::Utc::now() + chrono::Duration::hours(2);
+        research_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            UnitName::Scout,
+            1,
+            research_due_by,
+            200,
+        )
+        .await;
+        research_and_complete(
+            &service,
+            target_village_id,
+            defender_player_id,
+            UnitName::Scout,
+            1,
+            research_due_by,
+            200,
+        )
+        .await;
+
+        let train_due_by = chrono::Utc::now() + chrono::Duration::hours(3);
+        train_and_complete(
+            &service,
+            source_village_id,
+            attacker_player_id,
+            3,
+            BuildingName::Barracks,
+            1,
+            1,
+            train_due_by,
+            200,
+        )
+        .await;
+        train_and_complete(
+            &service,
+            target_village_id,
+            defender_player_id,
+            3,
+            BuildingName::Barracks,
+            200,
+            1,
+            train_due_by,
+            200,
+        )
+        .await;
+
+        let arrives_at = chrono::Utc::now() + chrono::Duration::seconds(2);
+        let returns_at = chrono::Utc::now() + chrono::Duration::seconds(4);
+        service
+            .send_scout(
+                source_village_id,
+                &ScoutVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id: attacker_player_id,
+                    target_village_id,
+                    units: TroopSet::new([0, 0, 0, 1, 0, 0, 0, 0, 0, 0]),
+                    target: ScoutingTarget::Resources,
+                    attack_type: AttackType::Raid,
+                    arrives_at,
+                    returns_at,
+                },
+            )
+            .await
+            .unwrap();
+        process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 20).await;
+
+        let attacker_reports = service
+            .list_reports_for_player(attacker_player_id, 10)
+            .await
+            .unwrap();
+        assert_eq!(attacker_reports.len(), 1);
+        let ReportPayload::Battle(payload) = &attacker_reports[0].payload else {
+            panic!("expected scouting battle report");
+        };
+        let attacker_survivors = payload
+            .attacker
+            .as_ref()
+            .map(|p| p.survivors.immensity())
+            .unwrap_or(0);
+        if attacker_survivors == 0 {
+            assert!(!payload.success);
+            assert!(payload.scouting.is_none());
+            assert!(payload.defender.is_none());
+            assert!(payload.reinforcements.is_empty());
+        }
     })
     .await;
 }

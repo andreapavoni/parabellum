@@ -132,7 +132,7 @@ impl VillageEsService {
         match movement_type {
             parabellum_app::villages::models::MovementType::Attack => TroopMovementType::Attack,
             parabellum_app::villages::models::MovementType::Raid => TroopMovementType::Raid,
-            parabellum_app::villages::models::MovementType::Scout => TroopMovementType::Attack,
+            parabellum_app::villages::models::MovementType::Scout => TroopMovementType::Scout,
             parabellum_app::villages::models::MovementType::Reinforcement => {
                 TroopMovementType::Reinforcement
             }

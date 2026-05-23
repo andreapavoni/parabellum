@@ -599,7 +599,7 @@ impl VillageProjector {
                     arrives_at: returns_at,
                     time_seconds: None,
                     units: army.units().clone(),
-                    tribe: None,
+                    tribe: Some(army.tribe.clone()),
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -673,7 +673,7 @@ impl VillageProjector {
                 army,
                 arrives_at,
                 ..
-            } => {
+                } => {
                 self.armies
                     .upsert_moving_in_tx(tx, &army, source_village_id, player_id)
                     .await
@@ -684,6 +684,30 @@ impl VillageProjector {
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
+                let outgoing = VillageMovement {
+                    movement_id,
+                    movement_type: MovementType::FoundVillage,
+                    direction: MovementDirection::Outgoing,
+                    origin_village_id: source_village_id,
+                    origin_village_name: None,
+                    origin_player_id: player_id,
+                    origin_position: None,
+                    // `rm_village_movements.target_village_id` is FK-backed and an
+                    // unoccupied valley has no rm_village row yet. Keep FK valid
+                    // and carry real destination in `target_position`.
+                    target_village_id: source_village_id,
+                    target_village_name: Some(village_name.clone()),
+                    target_player_id: Some(player_id),
+                    target_position: Some(target_position.clone()),
+                    arrives_at,
+                    time_seconds: None,
+                    units: army.units().clone(),
+                    tribe: Some(tribe.clone()),
+                };
+                self.movements
+                    .upsert_in_tx(tx, &outgoing)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 let source = self
                     .village
                     .get_by_village_id_in_tx(tx, source_village_id)
@@ -739,11 +763,18 @@ impl VillageProjector {
                 )
                 .await
             }
-            VillageEvent::SettlersArrived { army_id, .. } => self
-                .armies
-                .delete_in_tx(tx, army_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string())),
+            VillageEvent::SettlersArrived {
+                movement_id, army_id, ..
+            } => {
+                self.movements
+                    .delete_by_movement_id_in_tx(tx, movement_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.armies
+                    .delete_in_tx(tx, army_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))
+            }
             VillageEvent::AttackSent {
                 movement_id,
                 player_id,
@@ -1017,7 +1048,7 @@ impl VillageProjector {
                     arrives_at: returns_at,
                     time_seconds: None,
                     units: return_army.units().clone(),
-                    tribe: None,
+                    tribe: Some(return_army.tribe.clone()),
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -1270,7 +1301,7 @@ impl VillageProjector {
                     arrives_at: returns_at,
                     time_seconds: None,
                     units: return_army.units().clone(),
-                    tribe: None,
+                    tribe: Some(return_army.tribe.clone()),
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,

@@ -182,7 +182,40 @@ pub struct ReleaseReinforcementsRequest {
 pub struct FoundVillageRequest {
     pub target_x: i32,
     pub target_y: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewTroopsRequest {
+    pub target_x: i32,
+    pub target_y: i32,
+    pub movement: MovementKind,
     pub units: Vec<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewFoundVillageRequest {
+    pub target_x: i32,
+    pub target_y: i32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MovementPreviewResponse {
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
+    pub detected_kind: PreviewDetectedKind,
+    pub supports_scouting_target_choice: bool,
+    pub has_catapult_units: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewDetectedKind {
+    AttackOrRaid,
+    ScoutOnly,
+    Reinforcement,
+    FoundVillage,
 }
 
 /// Starts a building construction job on an empty slot.
@@ -522,6 +555,77 @@ pub async fn send_troops(
     Ok(Json(ActionResponse { success: true }))
 }
 
+pub async fn preview_troops(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewTroopsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    let units = parse_troop_set(&payload.units)?;
+    if units.units().iter().all(|value| *value == 0) {
+        return Err(ApiError::unprocessable("At least one unit is required"));
+    }
+
+    let selected_units = user
+        .village
+        .tribe
+        .units()
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, unit)| {
+            if units.get(idx) > 0 {
+                Some(unit)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    let min_speed = selected_units.iter().map(|unit| unit.speed).min().unwrap_or(1);
+    let scout_only = !selected_units.is_empty()
+        && selected_units
+            .iter()
+            .all(|unit| matches!(unit.role, parabellum_types::army::UnitRole::Scout));
+    let has_catapult_units = selected_units
+        .iter()
+        .any(|unit| matches!(unit.role, parabellum_types::army::UnitRole::Cata));
+
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position.clone(),
+        min_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    // keep preview semantics aligned with send endpoint contract
+    if matches!(payload.movement, MovementKind::Attack | MovementKind::Raid) {
+        let _target_village_id = target_position.to_id(state.world_size);
+    }
+
+    let detected_kind = match payload.movement {
+        MovementKind::Reinforcement => PreviewDetectedKind::Reinforcement,
+        MovementKind::Attack | MovementKind::Raid => {
+            if scout_only {
+                PreviewDetectedKind::ScoutOnly
+            } else {
+                PreviewDetectedKind::AttackOrRaid
+            }
+        }
+    };
+
+    Ok(Json(MovementPreviewResponse {
+        arrives_at,
+        detected_kind,
+        supports_scouting_target_choice: scout_only,
+        has_catapult_units,
+    }))
+}
+
 /// Recalls units from a deployed army.
 pub async fn recall_troops(
     State(state): State<AppState>,
@@ -595,6 +699,50 @@ pub async fn found_village(
     Ok(Json(ActionResponse { success: true }))
 }
 
+pub async fn preview_found_village(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewFoundVillageRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let target_field_id = target_position.to_id(state.world_size);
+    let target_field = state
+        .game_app
+        .get_map_field(target_field_id)
+        .await
+        .map_err(|err| map_application_error("preview_failed", err))?;
+    let target_is_empty_valley = target_field.village_id.is_none()
+        && target_field.player_id.is_none()
+        && matches!(
+            target_field.topology,
+            parabellum_game::models::map::MapFieldTopology::Valley(_)
+        );
+    if !target_is_empty_valley {
+        return Err(ApiError::unprocessable("Target field is not available"));
+    }
+
+    let settlers_speed = user.village.tribe.units().get(9).map(|u| u.speed).unwrap_or(1);
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position,
+        settlers_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    Ok(Json(MovementPreviewResponse {
+        arrives_at,
+        detected_kind: PreviewDetectedKind::FoundVillage,
+        supports_scouting_target_choice: false,
+        has_catapult_units: false,
+    }))
+}
+
 fn ensure_slot(slot_id: u8) -> Result<(), ApiError> {
     if !(1..=MAX_SLOT_ID).contains(&slot_id) {
         Err(ApiError::bad_request("Invalid building slot"))
@@ -648,9 +796,10 @@ fn parse_catapult_targets(
 ) -> Result<[BuildingName; 2], ApiError> {
     match targets {
         None => Ok([BuildingName::MainBuilding, BuildingName::Warehouse]),
+        Some(values) if values.len() == 1 => Ok([values[0].clone(), values[0].clone()]),
         Some(values) if values.len() == 2 => Ok([values[0].clone(), values[1].clone()]),
         Some(_) => Err(ApiError::unprocessable(
-            "catapultTargets must contain exactly 2 building names",
+            "catapultTargets must contain 1 or 2 building names",
         )),
     }
 }

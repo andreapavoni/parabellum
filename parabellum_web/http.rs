@@ -23,9 +23,9 @@ use crate::{
     api::{
         actions::{
             accept_marketplace_offer, add_building, cancel_marketplace_offer,
-            create_marketplace_offer, found_village, recall_troops, release_reinforcements,
-            research_academy, research_smithy, send_resources, send_troops, train_units,
-            upgrade_building,
+            create_marketplace_offer, found_village, preview_found_village, preview_troops,
+            recall_troops, release_reinforcements, research_academy, research_smithy,
+            send_resources, send_troops, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
@@ -95,6 +95,7 @@ impl WebRouter {
             .route("/buildings/upgrade", post(upgrade_building))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
+            .route("/army/preview", post(preview_troops))
             .route("/army/recall", post(recall_troops))
             .route("/army/release", post(release_reinforcements))
             .route("/marketplace/send", post(send_resources))
@@ -110,6 +111,7 @@ impl WebRouter {
             .route("/academy/research", post(research_academy))
             .route("/smithy/research", post(research_smithy))
             .route("/map/found-village", post(found_village))
+            .route("/map/found-village/preview", post(preview_found_village))
             .route("/map/region", get(map_region))
             .route("/map/fields/{id}", get(map_field))
             .route("/reports", get(reports))

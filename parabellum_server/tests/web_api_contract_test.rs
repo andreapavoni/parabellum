@@ -20,11 +20,11 @@ fn unique_identity() -> (String, String, String) {
 async fn login(
     client: &reqwest::Client,
     base_url: &str,
-    email: &str,
+    username: &str,
     password: &str,
 ) -> reqwest::Response {
     let payload = json!({
-        "email": email,
+        "username": username,
         "password": password
     })
     .to_string();
@@ -40,10 +40,10 @@ async fn login(
 async fn login_access_token(
     client: &reqwest::Client,
     base_url: &str,
-    email: &str,
+    username: &str,
     password: &str,
 ) -> String {
-    let resp = login(client, base_url, email, password).await;
+    let resp = login(client, base_url, username, password).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let body: Value = serde_json::from_str(&resp.text().await.unwrap()).unwrap();
     str_field(&body, &["access_token", "accessToken"])
@@ -90,7 +90,7 @@ async fn auth_login_happy_path_returns_tokens_and_me_context() -> Result<(), App
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
 
-    let login_response = login(&client, &base_url, &seeded.email, "Password123!").await;
+    let login_response = login(&client, &base_url, &seeded.username, "Password123!").await;
     let login_status = login_response.status();
     let login_text = login_response.text().await.unwrap();
     assert_eq!(login_status, StatusCode::OK, "login failed: {login_text}");
@@ -127,7 +127,7 @@ async fn auth_refresh_happy_path_rotates_refresh_token() -> Result<(), Applicati
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
 
-    let login_response = login(&client, &base_url, &seeded.email, "Password123!").await;
+    let login_response = login(&client, &base_url, &seeded.username, "Password123!").await;
     let login_status = login_response.status();
     let login_text = login_response.text().await.unwrap();
     assert_eq!(login_status, StatusCode::OK, "login failed: {login_text}");
@@ -157,7 +157,7 @@ async fn auth_refresh_happy_path_rotates_refresh_token() -> Result<(), Applicati
 }
 
 #[tokio::test]
-async fn auth_login_validation_error_for_missing_email() -> Result<(), ApplicationError> {
+async fn auth_login_validation_error_for_missing_username() -> Result<(), ApplicationError> {
     let (_schema, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
 
@@ -166,7 +166,7 @@ async fn auth_login_validation_error_for_missing_email() -> Result<(), Applicati
         .header("content-type", "application/json")
         .body(
             json!({
-                "email": "",
+                "username": "",
                 "password": "x"
             })
             .to_string(),
@@ -183,7 +183,7 @@ async fn auth_login_validation_error_for_missing_email() -> Result<(), Applicati
     );
     let body: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(body["code"], "validation_error");
-    assert_eq!(body["field_errors"]["email"], "Email is required");
+    assert_eq!(body["field_errors"]["username"], "Username is required");
 
     Ok(())
 }
@@ -319,8 +319,8 @@ async fn auth_login_invalid_credentials_is_unauthorized() -> Result<(), Applicat
     let (_schema, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
 
-    let (_, email, _) = unique_identity();
-    let login_response = login(&client, &base_url, &email, "wrong-password").await;
+    let (username, _, _) = unique_identity();
+    let login_response = login(&client, &base_url, &username, "wrong-password").await;
     let login_status = login_response.status();
     let login_text = login_response.text().await.unwrap();
     assert_eq!(
@@ -403,7 +403,7 @@ async fn contract_gap_register_invalid_password_should_be_422() -> Result<(), Ap
             json!({
                 "username": username,
                 "email": email,
-                "password": "short",
+                "password": "abc",
                 "tribe": "Teuton",
                 "quadrant": "NorthEast"
             })
@@ -508,6 +508,37 @@ async fn map_region_partial_coordinates_returns_bad_request() -> Result<(), Appl
         .await
         .unwrap();
     assert_error_code(response, StatusCode::BAD_REQUEST, "bad_request").await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn army_preview_returns_canonical_arrives_at_timestamp() -> Result<(), ApplicationError> {
+    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
+    let client = reqwest::Client::new();
+    let access_token = login_access_token(&client, &base_url, &seeded.username, "Password123!").await;
+
+    let response = client
+        .post(format!("{base_url}/api/v1/army/preview"))
+        .bearer_auth(access_token)
+        .header("content-type", "application/json")
+        .body(
+            json!({
+                "targetX": 1,
+                "targetY": 1,
+                "movement": "attack",
+                "units": [1,0,0,0,0,0,0,0,0,0]
+            })
+            .to_string(),
+        )
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    assert!(body["arrivesAt"].as_str().is_some());
+    assert!(body.get("travelTimeSecs").is_none());
+    assert!(body.get("arrivesAtUnix").is_none());
     Ok(())
 }
 

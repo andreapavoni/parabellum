@@ -271,7 +271,7 @@ pub mod tests {
             .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
 
         let auth_user = game_app
-            .authenticate_user(&seeded.email, &seeded.password)
+            .authenticate_user(&seeded.username, &seeded.password)
             .await?;
         let player = game_app.get_player_by_user_id(auth_user.id).await?;
         let _ = game_app.list_villages_by_player_id(player.id).await?;
@@ -303,7 +303,7 @@ pub mod tests {
             .header("content-type", "application/json")
             .body(
                 serde_json::json!({
-                    "email": seeded.email,
+                    "username": seeded.username,
                     "password": seeded.password,
                 })
                 .to_string(),

@@ -1,6 +1,7 @@
 use parabellum_app::villages::models::{
     self, ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
+use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_app::villages::{
     AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
@@ -1559,6 +1560,13 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             )
             .await
             .unwrap();
+
+        let movements_after_scout_send = service.get_village_troop_movements(village_id).await.unwrap();
+        assert_eq!(movements_after_scout_send.outgoing.len(), 1);
+        assert_eq!(
+            movements_after_scout_send.outgoing[0].movement_type,
+            TroopMovementType::Scout
+        );
 
         let first_processed = scenario
             .process_until(arrives_at + chrono::Duration::seconds(1), 10)

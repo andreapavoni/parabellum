@@ -16,6 +16,7 @@ use uuid::Uuid;
 pub enum MovementKind {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -45,7 +46,7 @@ pub struct ArmyCardData {
     pub tribe: Tribe,
     pub category: ArmyCategory,
     pub movement_kind: Option<MovementKind>,
-    pub arrival_time: Option<u32>,
+    pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
     pub action_button: Option<ArmyAction>,
 }
 
@@ -121,7 +122,7 @@ pub fn prepare_rally_point_cards(
             tribe: village_tribe.clone(),
             category: ArmyCategory::Stationed,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
             action_button: None,
         });
     }
@@ -142,7 +143,7 @@ pub fn prepare_rally_point_cards(
             tribe: army.tribe.clone(),
             category: ArmyCategory::Deployed,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
             action_button: Some(ArmyAction::Recall {
                 army_id: army.id.to_string(),
             }),
@@ -165,7 +166,7 @@ pub fn prepare_rally_point_cards(
             tribe: reinforcement.tribe.clone(),
             category: ArmyCategory::Reinforcement,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
             action_button: Some(ArmyAction::Release {
                 army_id: reinforcement.id.to_string(),
             }),
@@ -174,12 +175,10 @@ pub fn prepare_rally_point_cards(
 
     // 4. Outgoing movements
     for movement in &movements.outgoing {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
         let movement_kind = match movement.movement_type {
             TroopMovementType::Attack => MovementKind::Attack,
             TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Scout => MovementKind::Scout,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
             TroopMovementType::FoundVillage => MovementKind::FoundVillage,
@@ -196,19 +195,17 @@ pub fn prepare_rally_point_cards(
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Outgoing,
             movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
+            arrives_at: Some(movement.arrives_at),
             action_button,
         });
     }
 
     // 5. Incoming movements
     for movement in &movements.incoming {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
         let movement_kind = match movement.movement_type {
             TroopMovementType::Attack => MovementKind::Attack,
             TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Scout => MovementKind::Scout,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
             TroopMovementType::FoundVillage => MovementKind::FoundVillage,
@@ -222,7 +219,7 @@ pub fn prepare_rally_point_cards(
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Incoming,
             movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
+            arrives_at: Some(movement.arrives_at),
             action_button: None,
         });
     }
@@ -327,7 +324,7 @@ pub struct MerchantMovementView {
     pub destination_position: Option<Position>,
     pub resources: ResourceGroup,
     pub merchants_used: u8,
-    pub time_remaining_secs: u32,
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Converts MarketplaceData into view models for own offers
@@ -386,14 +383,11 @@ pub fn prepare_merchant_movements(
     village_info: &HashMap<u32, VillageInfo>,
     direction: MerchantMovementDirection,
 ) -> Vec<MerchantMovementView> {
-    let now = Utc::now();
     movements
         .iter()
         .map(|movement| {
             let origin_info = village_info.get(&movement.origin_village_id);
             let destination_info = village_info.get(&movement.destination_village_id);
-            let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
             MerchantMovementView {
                 job_id: movement.job_id.to_string(),
                 direction: direction.clone(),
@@ -408,7 +402,7 @@ pub fn prepare_merchant_movements(
                 destination_position: destination_info.map(|info| info.position.clone()),
                 resources: movement.resources.clone(),
                 merchants_used: movement.merchants_used,
-                time_remaining_secs,
+                arrives_at: movement.arrives_at,
             }
         })
         .collect()

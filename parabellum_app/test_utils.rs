@@ -236,6 +236,18 @@ pub mod tests {
                 })
         }
 
+        async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError> {
+            self.users
+                .lock()
+                .unwrap()
+                .values()
+                .find(|u| u.email == username)
+                .cloned()
+                .ok_or_else(|| {
+                    ApplicationError::Db(DbError::UserByUsernameNotFound(username.to_string()))
+                })
+        }
+
         async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
             self.users
                 .lock()

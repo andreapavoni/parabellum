@@ -196,7 +196,13 @@ export function App() {
           />
         );
       case "mapField":
-        return <ProtectedMapField fieldId={route.fieldId} reloadKey={reloadKey} />;
+        return (
+          <ProtectedMapField
+            fieldId={route.fieldId}
+            reloadKey={reloadKey}
+            onMutate={runMutation}
+          />
+        );
       case "login":
         return (
           <LoginPage
@@ -385,11 +391,19 @@ function ProtectedMap({
   );
 }
 
-function ProtectedMapField({ fieldId, reloadKey }: { fieldId: number; reloadKey: number }) {
+function ProtectedMapField({
+  fieldId,
+  reloadKey,
+  onMutate,
+}: {
+  fieldId: number;
+  reloadKey: number;
+  onMutate: () => Promise<void>;
+}) {
   const { data, error, loading } = usePageData(() => api.mapField(fieldId), [fieldId, reloadKey]);
   if (loading) return <Loading label="Loading field..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load field."} />;
-  return <MapFieldPage data={data} />;
+  return <MapFieldPage data={data} onMutate={onMutate} />;
 }
 
 function ProtectedBuilding({

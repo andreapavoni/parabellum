@@ -10,6 +10,9 @@ pub enum DbError {
     #[error("User with with email '{0}' not found")]
     UserByEmailNotFound(String),
 
+    #[error("User with username '{0}' not found")]
+    UserByUsernameNotFound(String),
+
     #[error("World Map hasn't been initialized")]
     WorldMapNotInitialized,
 

@@ -231,6 +231,7 @@ pub async fn run_seed(
                 .filter(|b| b.slot_id >= 19)
                 .collect::<Vec<_>>();
             resource_buildings.append(&mut extra_buildings);
+            normalize_buildings_by_slot(&mut resource_buildings);
 
             let village_name = village.name.clone().unwrap_or_else(|| {
                 if village_idx == 0 {
@@ -362,6 +363,21 @@ fn upsert_building(buildings: &mut Vec<SeedBuilding>, building: SeedBuilding) {
         return;
     }
     buildings.push(building);
+}
+
+fn normalize_buildings_by_slot(buildings: &mut Vec<VillageBuilding>) {
+    let mut normalized = Vec::with_capacity(buildings.len());
+    for building in buildings.drain(..) {
+        if let Some(existing) = normalized
+            .iter_mut()
+            .find(|b: &&mut VillageBuilding| b.slot_id == building.slot_id)
+        {
+            *existing = building;
+        } else {
+            normalized.push(building);
+        }
+    }
+    *buildings = normalized;
 }
 
 fn topology_resource_buildings(

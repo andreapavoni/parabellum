@@ -39,7 +39,7 @@ use super::bearer_token;
 #[serde(rename_all = "camelCase")]
 /// Login payload for token-based authentication.
 pub struct TokenLoginRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
 }
 
@@ -94,9 +94,9 @@ pub async fn token_login(
     headers: HeaderMap,
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if payload.email.trim().is_empty() {
+    if payload.username.trim().is_empty() {
         return Err(ApiError::unprocessable("Missing required login fields.")
-            .with_field_error("email", "Email is required"));
+            .with_field_error("username", "Username is required"));
     }
     if payload.password.trim().is_empty() {
         return Err(ApiError::unprocessable("Missing required login fields.")
@@ -105,11 +105,11 @@ pub async fn token_login(
 
     let account = state
         .game_app
-        .authenticate_user(&payload.email, &payload.password)
+        .authenticate_user(&payload.username, &payload.password)
         .await
         .map_err(|err| {
             inc_auth_failure();
-            warn!(email = %payload.email, error = %err, "token login failed");
+            warn!(username = %payload.username, error = %err, "token login failed");
             map_auth_error(err)
         })?;
 
@@ -295,8 +295,9 @@ pub async fn token_logout(
 fn map_auth_error(error: ApplicationError) -> ApiError {
     match error {
         ApplicationError::App(AppError::WrongAuthCredentials)
+        | ApplicationError::Db(DbError::UserByUsernameNotFound(_))
         | ApplicationError::Db(DbError::UserByEmailNotFound(_)) => {
-            ApiError::unauthorized("Invalid email or password.")
+            ApiError::unauthorized("Invalid username or password.")
         }
         _ => internal_error("auth_login_failed", error),
     }
@@ -391,10 +392,8 @@ fn client_ip(headers: &HeaderMap) -> Option<std::net::IpAddr> {
 }
 
 fn is_valid_registration_password(password: &str) -> bool {
-    if password.len() < 8 {
+    if password.len() < 4 {
         return false;
     }
-    let has_alpha = password.chars().any(|c| c.is_ascii_alphabetic());
-    let has_digit = password.chars().any(|c| c.is_ascii_digit());
-    has_alpha && has_digit
+    true
 }

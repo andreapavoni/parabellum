@@ -189,7 +189,7 @@ pub struct TrainingQueueItemDto {
     pub quantity: u32,
     pub unit_name: String,
     pub time_per_unit: u32,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,7 +215,7 @@ pub struct AcademyResearchOptionDto {
 #[serde(rename_all = "camelCase")]
 pub struct AcademyQueueItemDto {
     pub unit_name: String,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub is_processing: bool,
 }
 
@@ -243,7 +243,7 @@ pub struct SmithyUpgradeOptionDto {
 pub struct SmithyQueueItemDto {
     pub unit_name: String,
     pub target_level: u8,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub is_processing: bool,
 }
 
@@ -306,7 +306,7 @@ pub struct MerchantMovementDto {
     pub destination_position: Option<PositionDto>,
     pub resources: ResourceAmountsDto,
     pub merchants_used: u8,
-    pub time_remaining_secs: u32,
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -332,6 +332,7 @@ pub enum RallyCardCategoryDto {
 pub enum RallyMovementKindDto {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -352,12 +353,13 @@ pub struct RallyCardDto {
     pub village_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<PositionDto>,
+    pub tribe: String,
     pub units: Vec<u32>,
     pub category: RallyCardCategoryDto,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub movement_kind: Option<RallyMovementKindDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrival_time: Option<u32>,
+    pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<RallyActionDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -809,10 +811,10 @@ pub async fn building_detail(
                             .map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         resources: resource_group_to_dto(&movement.resources),
                         merchants_used: movement.merchants_used,
-                        time_remaining_secs: movement.time_remaining_secs,
+                        arrives_at: movement.arrives_at,
                     })
                     .collect();
-                merchant_movements.sort_by_key(|movement| movement.time_remaining_secs);
+                merchant_movements.sort_by_key(|movement| movement.arrives_at);
 
                 BuildingDetailDto {
                     slot_id,
@@ -891,6 +893,7 @@ pub async fn building_detail(
                         village_id: card.village_id,
                         village_name: card.village_name,
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
+                        tribe: format!("{:?}", card.tribe),
                         units: card.units.units().to_vec(),
                         category: match card.category {
                             crate::view_helpers::ArmyCategory::Stationed => {
@@ -914,6 +917,9 @@ pub async fn building_detail(
                                 RallyMovementKindDto::Attack
                             }
                             crate::view_helpers::MovementKind::Raid => RallyMovementKindDto::Raid,
+                            crate::view_helpers::MovementKind::Scout => {
+                                RallyMovementKindDto::Scout
+                            }
                             crate::view_helpers::MovementKind::Reinforcement => {
                                 RallyMovementKindDto::Reinforcement
                             }
@@ -924,7 +930,7 @@ pub async fn building_detail(
                                 RallyMovementKindDto::FoundVillage
                             }
                         }),
-                        arrival_time: card.arrival_time,
+                        arrives_at: card.arrives_at,
                         action,
                         action_id,
                     }
@@ -1289,7 +1295,6 @@ fn training_options_for_group(
 }
 
 fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<TrainingQueueItemDto> {
-    let now = Utc::now();
     queue
         .iter()
         .filter(|item| item.slot_id == slot_id)
@@ -1297,7 +1302,7 @@ fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<Trai
             quantity: item.quantity.max(0) as u32,
             unit_name: unit_key(&item.unit),
             time_per_unit: item.time_per_unit.max(0) as u32,
-            time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+            finishes_at: item.finishes_at,
         })
         .collect()
 }
@@ -1353,12 +1358,11 @@ fn academy_options_for_village(
 }
 
 fn academy_queue_for_slot(queue: &[AcademyQueueItem]) -> Vec<AcademyQueueItemDto> {
-    let now = Utc::now();
     queue
         .iter()
         .map(|item| AcademyQueueItemDto {
             unit_name: unit_key(&item.unit),
-            time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+            finishes_at: item.finishes_at,
             is_processing: item.status == ScheduledActionStatus::Processing,
         })
         .collect()
@@ -1466,7 +1470,6 @@ fn smithy_queue_counts(queue: &[SmithyQueueItem]) -> HashMap<UnitName, u8> {
 
 fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
     let mut unit_counts: HashMap<UnitName, u8> = HashMap::new();
-    let now = Utc::now();
 
     queue
         .iter()
@@ -1477,7 +1480,7 @@ fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
             SmithyQueueItemDto {
                 unit_name: unit_key(&item.unit),
                 target_level: *count,
-                time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+                finishes_at: item.finishes_at,
                 is_processing: item.status == ScheduledActionStatus::Processing,
             }
         })

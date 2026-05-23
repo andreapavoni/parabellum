@@ -68,6 +68,7 @@ pub struct VillageQueues {
 pub enum TroopMovementType {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,

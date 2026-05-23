@@ -1,6 +1,7 @@
 import type {
   BuildingPageResponse,
   MapFieldDetailResponse,
+  MovementPreviewResponse,
   MapRegionResponse,
   MeContextResponse,
   PlayerProfileResponse,
@@ -161,7 +162,7 @@ export const api = {
   hasAccessToken: () => Boolean(accessToken),
   hasRefreshToken: () => Boolean(refreshToken),
   tokenSession: () => request<SessionResponse>("/me/session", {}, false),
-  tokenLogin: (payload: { email: string; password: string }) =>
+  tokenLogin: (payload: { username: string; password: string }) =>
     request<TokenAuthResponse>("/auth/token/login", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -340,7 +341,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  recallTroops: (payload: { armyId: string; units: number[] }) =>
+  previewTroops: (payload: {
+    targetX: number;
+    targetY: number;
+    movement: "attack" | "raid" | "reinforcement";
+    units: number[];
+  }) =>
+    request<MovementPreviewResponse>("/army/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  recallTroops: (payload: { villageId: number; armyId: string; units: number[] }) =>
     request<{ success: boolean }>("/army/recall", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -356,9 +367,16 @@ export const api = {
   foundVillage: (payload: {
     targetX: number;
     targetY: number;
-    units: number[];
   }) =>
     request<{ success: boolean }>("/map/found-village", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  previewFoundVillage: (payload: {
+    targetX: number;
+    targetY: number;
+  }) =>
+    request<MovementPreviewResponse>("/map/found-village/preview", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
