@@ -1,16 +1,13 @@
-use chrono::Utc;
 use parabellum_app::ports::queries::{
-    BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
+    MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
     VillageArmyStateView, VillageTroopMovements,
 };
 use parabellum_app::read_models::VillageInfo;
-use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_types::{
     army::TroopSet, buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
 };
 use rust_i18n::t;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MovementKind {
@@ -48,48 +45,6 @@ pub struct ArmyCardData {
     pub movement_kind: Option<MovementKind>,
     pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
     pub action_button: Option<ArmyAction>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BuildingQueueItemView {
-    pub job_id: Uuid,
-    pub slot_id: u8,
-    pub building_name: BuildingName,
-    pub target_level: u8,
-    pub is_processing: bool,
-    pub time_remaining: String,
-    pub time_seconds: u32,
-    pub queue_class: Option<String>,
-}
-
-/// Formats a duration in seconds to HH:MM:SS.
-pub fn format_duration(total_seconds: u32) -> String {
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-}
-
-/// Converts queue items into view representations with formatted timers.
-pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueueItemView> {
-    let now = Utc::now();
-    items
-        .iter()
-        .map(|item| {
-            let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
-            BuildingQueueItemView {
-                job_id: item.job_id,
-                slot_id: item.slot_id,
-                building_name: item.building_name.clone(),
-                target_level: item.target_level,
-                is_processing: matches!(item.status, ScheduledActionStatus::Processing),
-                time_remaining: format_duration(remaining),
-                time_seconds: remaining,
-                queue_class: None,
-            }
-        })
-        .collect()
 }
 
 /// Prepares all army cards for the Rally Point page from domain data.

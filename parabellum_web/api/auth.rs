@@ -27,7 +27,6 @@ use crate::{
         error_mapping::internal_error,
         errors::ApiError,
     },
-    auth_metrics::{inc_auth_failure, inc_auth_success, inc_refresh_failure, inc_refresh_success},
     auth_tokens::{AuthTokenError, IssuedTokenPair},
     http::AppState,
     session::current_user_by_ids,
@@ -108,7 +107,6 @@ pub async fn token_login(
         .authenticate_user(&payload.username, &payload.password)
         .await
         .map_err(|err| {
-            inc_auth_failure();
             warn!(username = %payload.username, error = %err, "token login failed");
             map_auth_error(err)
         })?;
@@ -130,7 +128,6 @@ pub async fn token_login(
         .token_service
         .issue_token_pair(&current, refresh_session.id, refresh_token)
         .map_err(map_token_error)?;
-    inc_auth_success();
     info!(user_id = %current.account.id, player_id = %current.player.id, "token login succeeded");
     Ok(Json(token_response(pair, &current)))
 }
@@ -242,7 +239,6 @@ pub async fn token_refresh(
         )
         .await
         .map_err(|err| {
-            inc_refresh_failure();
             warn!(error = %err, "token refresh failed");
             map_token_error(err)
         })?;
@@ -253,7 +249,6 @@ pub async fn token_refresh(
         .token_service
         .issue_token_pair(&current, session.id, rotated_refresh_token)
         .map_err(map_token_error)?;
-    inc_refresh_success();
     info!(user_id = %current.account.id, player_id = %current.player.id, "token refresh succeeded");
     Ok(Json(token_response(pair, &current)))
 }
