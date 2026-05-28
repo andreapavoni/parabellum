@@ -13,6 +13,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use parabellum_app::read_models::MapRegionTile;
@@ -24,9 +25,11 @@ use crate::{
     api::{
         dto::{
             LeaderboardEntryDto, MeContextResponse, PaginationDto, PlayerProfileResponse,
-            PlayerVillageDto, ReportDetailResponse, ReportListItemDto, ReportsResponse,
-            StatsResponse, player_summary, session_user, village_list, village_overview_response,
-            village_resources_response, village_summary,
+            PlayerVillageDto, ReportDetailPayloadResponse, ReportDetailResponse, ReportListItemDto,
+            ReportsResponse,
+            StatsResponse, VillageOverviewResponse, VillageResourcesResponse, player_summary,
+            session_user, village_list, village_overview_response, village_resources_response,
+            village_summary,
         },
         errors::ApiError,
     },
@@ -41,20 +44,20 @@ use super::{authenticated_user, bearer_token};
 const LEADERBOARD_PAGE_SIZE: i64 = 20;
 const MAP_REGION_RADIUS: i32 = 7;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// Pagination query for leaderboard endpoint.
 pub struct StatsQuery {
     pub page: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Request payload to switch current village.
 pub struct SwitchVillageRequest {
     pub village_id: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Response for village switch operation.
 pub struct SwitchVillageResponse {
@@ -65,7 +68,7 @@ pub struct SwitchVillageResponse {
     pub expires_in: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Session endpoint response for authenticated clients.
 pub struct MeSessionResponse {
@@ -74,7 +77,7 @@ pub struct MeSessionResponse {
     pub current_village_id: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// Query params for map region retrieval.
 pub struct MapRegionQuery {
     pub x: Option<i32>,
@@ -82,7 +85,7 @@ pub struct MapRegionQuery {
     pub village_id: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Response for map region endpoint.
 pub struct MapRegionResponse {
     pub center: MapPoint,
@@ -90,14 +93,14 @@ pub struct MapRegionResponse {
     pub tiles: Vec<MapTileResponse>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 2D point on world map.
 pub struct MapPoint {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Tile data returned by map region endpoint.
 pub struct MapTileResponse {
     pub x: i32,
@@ -112,6 +115,8 @@ pub struct MapTileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub village_population: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_capital: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub player_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tribe: Option<String>,
@@ -122,7 +127,7 @@ pub struct MapTileResponse {
     pub oasis: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 /// Runtime tile category.
 pub enum TileType {
@@ -131,7 +136,7 @@ pub enum TileType {
     Oasis,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Detailed payload for a specific map field.
 pub struct MapFieldDetailResponse {
@@ -150,12 +155,14 @@ pub struct MapFieldDetailResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub village_population: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_capital: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub valley: Option<ValleyDistribution>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oasis: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Valley resource distribution for valley/oasis map payloads.
 pub struct ValleyDistribution {
     pub lumber: u8,
@@ -199,6 +206,7 @@ impl From<MapRegionTile> for MapTileResponse {
             player_id: field.player_id,
             village_name: tile.village_name,
             village_population: tile.village_population,
+            is_capital: tile.is_capital,
             player_name: tile.player_name,
             tribe: tile.tribe.map(|t| format!("{t:?}")),
             tile_type,
@@ -209,6 +217,11 @@ impl From<MapRegionTile> for MapTileResponse {
 }
 
 /// Returns current authenticated session user and active village id.
+#[utoipa::path(
+    get,
+    path = "/me/session",
+    responses((status = 200, body = MeSessionResponse))
+)]
 pub async fn me_session(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -222,6 +235,11 @@ pub async fn me_session(
 }
 
 /// Returns authenticated user context for SPA shell state.
+#[utoipa::path(
+    get,
+    path = "/me/context",
+    responses((status = 200, body = MeContextResponse))
+)]
 pub async fn me_context(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -238,6 +256,14 @@ pub async fn me_context(
 }
 
 /// Returns village overview (building slots + queue) for owned village.
+#[utoipa::path(
+    get,
+    path = "/villages/{id}/overview",
+    params(
+        ("id" = u32, Path, description = "Village id")
+    ),
+    responses((status = 200, body = VillageOverviewResponse))
+)]
 pub async fn village_overview(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -254,6 +280,14 @@ pub async fn village_overview(
 }
 
 /// Returns village resource fields and queue for owned village.
+#[utoipa::path(
+    get,
+    path = "/villages/{id}/resources",
+    params(
+        ("id" = u32, Path, description = "Village id")
+    ),
+    responses((status = 200, body = VillageResourcesResponse))
+)]
 pub async fn village_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -279,6 +313,12 @@ pub async fn village_resources(
 }
 
 /// Switches current village and rotates access token context when bearer is present.
+#[utoipa::path(
+    post,
+    path = "/me/village/current",
+    request_body = SwitchVillageRequest,
+    responses((status = 200, body = SwitchVillageResponse))
+)]
 pub async fn switch_village(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -333,6 +373,14 @@ pub async fn switch_village(
 }
 
 /// Returns paginated leaderboard data.
+#[utoipa::path(
+    get,
+    path = "/stats",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (1-based)")
+    ),
+    responses((status = 200, body = StatsResponse))
+)]
 pub async fn stats(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -388,6 +436,14 @@ pub async fn stats(
 }
 
 /// Returns profile summary for a specific player.
+#[utoipa::path(
+    get,
+    path = "/players/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Player id")
+    ),
+    responses((status = 200, body = PlayerProfileResponse))
+)]
 pub async fn player_profile(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -419,12 +475,18 @@ pub async fn player_profile(
                 x: village.position.x,
                 y: village.position.y,
                 population: village.population as i32,
+                is_capital: village.is_capital,
             })
             .collect(),
     }))
 }
 
 /// Returns recent reports for current player.
+#[utoipa::path(
+    get,
+    path = "/reports",
+    responses((status = 200, body = ReportsResponse))
+)]
 pub async fn reports(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -443,6 +505,14 @@ pub async fn reports(
 }
 
 /// Returns full report payload and marks report as read.
+#[utoipa::path(
+    get,
+    path = "/reports/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Report id")
+    ),
+    responses((status = 200, body = ReportDetailPayloadResponse))
+)]
 pub async fn report_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -471,6 +541,16 @@ pub async fn report_detail(
 }
 
 /// Returns wrapped map region around requested/default center.
+#[utoipa::path(
+    get,
+    path = "/map/region",
+    params(
+        ("x" = Option<i32>, Query, description = "Center x coordinate"),
+        ("y" = Option<i32>, Query, description = "Center y coordinate"),
+        ("village_id" = Option<u32>, Query, description = "Use owned village as center")
+    ),
+    responses((status = 200, body = MapRegionResponse))
+)]
 pub async fn map_region(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -494,6 +574,14 @@ pub async fn map_region(
 }
 
 /// Returns details for one map field.
+#[utoipa::path(
+    get,
+    path = "/map/fields/{id}",
+    params(
+        ("id" = u32, Path, description = "Map field id")
+    ),
+    responses((status = 200, body = MapFieldDetailResponse))
+)]
 pub async fn map_field(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -532,7 +620,8 @@ pub async fn map_field(
         player_id: field.player_id,
         village_name: region_tile.as_ref().and_then(|t| t.village_name.clone()),
         player_name: region_tile.as_ref().and_then(|t| t.player_name.clone()),
-        village_population: region_tile.and_then(|t| t.village_population),
+        village_population: region_tile.as_ref().and_then(|t| t.village_population),
+        is_capital: region_tile.as_ref().and_then(|t| t.is_capital),
         valley,
         oasis,
     }))

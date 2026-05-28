@@ -41,6 +41,7 @@ export type VillageSummary = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
   population: number;
   warehouseCapacity: number;
   granaryCapacity: number;
@@ -53,6 +54,7 @@ export type VillageListItem = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
   isCurrent: boolean;
 };
 
@@ -136,6 +138,7 @@ export type PlayerVillage = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
   population: number;
 };
 
@@ -180,6 +183,7 @@ export type MapTile = {
   playerId?: string;
   villageName?: string;
   villagePopulation?: number;
+  isCapital?: boolean;
   playerName?: string;
   tribe?: string;
   tileType: "village" | "valley" | "oasis";
@@ -208,6 +212,7 @@ export type MapFieldDetailResponse = {
   villageName?: string;
   playerName?: string;
   villagePopulation?: number;
+  isCapital?: boolean;
   valley?: {
     lumber: number;
     clay: number;
@@ -241,6 +246,9 @@ export type TrainingUnitOption = {
   name: string;
   cost: ResourceAmounts;
   upkeep: number;
+  attack: number;
+  defenseInfantry: number;
+  defenseCavalry: number;
   timeSecs: number;
 };
 
@@ -407,6 +415,7 @@ export type RallyCard = {
   position?: Position;
   tribe: string;
   units: number[];
+  upkeep: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
   arrivesAt?: string;

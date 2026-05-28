@@ -1,4 +1,5 @@
 import type { PlayerProfileResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "@/components/Link";
 
 export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
@@ -21,6 +22,7 @@ export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
                   <Link to={`/map/field/${village.villageId}`} class="text-green-700 hover:underline">
                     {village.name}
                   </Link>
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </td>
                 <td class="px-4 py-3 text-gray-600">
                   ({village.x}|{village.y})

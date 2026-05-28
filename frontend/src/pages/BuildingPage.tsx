@@ -409,6 +409,25 @@ function TrainingUnitCard({
         <div class="text-xs text-gray-500">Upkeep {option.upkeep}</div>
       </div>
 
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Attack</div>
+          <div class="font-semibold text-gray-900">{option.attack}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Def. Infantry</div>
+          <div class="font-semibold text-gray-900">{option.defenseInfantry}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Def. Cavalry</div>
+          <div class="font-semibold text-gray-900">{option.defenseCavalry}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Upkeep</div>
+          <div class="font-semibold text-gray-900">{option.upkeep}</div>
+        </div>
+      </div>
+
       <div>
         <div class="text-xs uppercase text-gray-500">Training cost</div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
@@ -1010,6 +1029,7 @@ function RallyPointSection({
                           ) : null}
                         </div>
                         {card.position ? <p class="text-sm text-gray-600 mt-1">({card.position.x}, {card.position.y})</p> : null}
+                        <p class="text-xs text-gray-500 mt-1">Upkeep: {card.upkeep}</p>
                         {card.arrivesAt ? (
                           <div class="mt-1 space-y-1 text-sm text-gray-500">
                             <p class="font-mono">

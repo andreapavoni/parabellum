@@ -90,7 +90,7 @@ async fn auth_login_happy_path_returns_tokens_and_me_context() -> Result<(), App
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
 
-    let login_response = login(&client, &base_url, &seeded.username, "Password123!").await;
+    let login_response = login(&client, &base_url, &seeded.username, &seeded.password).await;
     let login_status = login_response.status();
     let login_text = login_response.text().await.unwrap();
     assert_eq!(login_status, StatusCode::OK, "login failed: {login_text}");
@@ -127,7 +127,7 @@ async fn auth_refresh_happy_path_rotates_refresh_token() -> Result<(), Applicati
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
 
-    let login_response = login(&client, &base_url, &seeded.username, "Password123!").await;
+    let login_response = login(&client, &base_url, &seeded.username, &seeded.password).await;
     let login_status = login_response.status();
     let login_text = login_response.text().await.unwrap();
     assert_eq!(login_status, StatusCode::OK, "login failed: {login_text}");
@@ -452,7 +452,7 @@ async fn reports_detail_unknown_id_returns_not_found_with_valid_auth()
 -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .get(format!("{base_url}/api/v1/reports/{}", Uuid::new_v4()))
@@ -483,7 +483,7 @@ async fn reports_detail_malformed_id_returns_bad_request_before_auth()
 async fn map_field_unknown_id_returns_not_found_with_valid_auth() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .get(format!("{base_url}/api/v1/map/fields/999999999"))
@@ -499,7 +499,7 @@ async fn map_field_unknown_id_returns_not_found_with_valid_auth() -> Result<(), 
 async fn map_region_partial_coordinates_returns_bad_request() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .get(format!("{base_url}/api/v1/map/region?x=10"))
@@ -515,7 +515,8 @@ async fn map_region_partial_coordinates_returns_bad_request() -> Result<(), Appl
 async fn army_preview_returns_canonical_arrives_at_timestamp() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let access_token = login_access_token(&client, &base_url, &seeded.username, "Password123!").await;
+    let access_token =
+        login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .post(format!("{base_url}/api/v1/army/preview"))
@@ -547,7 +548,7 @@ async fn village_overview_unknown_id_returns_not_found_with_valid_auth()
 -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .get(format!("{base_url}/api/v1/villages/999999999/overview"))
@@ -564,7 +565,7 @@ async fn village_resources_unknown_id_returns_not_found_with_valid_auth()
 -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .get(format!("{base_url}/api/v1/villages/999999999/resources"))
@@ -581,7 +582,7 @@ async fn marketplace_accept_unknown_offer_returns_not_found_with_valid_auth()
 -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .post(format!(
@@ -603,7 +604,7 @@ async fn marketplace_cancel_unknown_offer_returns_not_found_with_valid_auth()
 -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .post(format!(
@@ -624,7 +625,7 @@ async fn marketplace_cancel_unknown_offer_returns_not_found_with_valid_auth()
 async fn train_units_zero_quantity_returns_validation_error() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
 
     let response = client
         .post(format!("{base_url}/api/v1/army/train"))
@@ -655,7 +656,8 @@ async fn train_units_zero_quantity_returns_validation_error() -> Result<(), Appl
 async fn marketplace_offer_owner_accept_returns_conflict() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
-    let owner_token = login_access_token(&client, &base_url, &seeded.email, &seeded.password).await;
+    let owner_token =
+        login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
     let owner_market_slot = 28;
 
     let create_offer = client

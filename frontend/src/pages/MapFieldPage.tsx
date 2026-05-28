@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import type { MapFieldDetailResponse, MovementPreviewResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "@/components/Link";
 
 function secondsUntil(timestamp: string) {
@@ -38,6 +39,7 @@ export function MapFieldPage({
           </div>
           <div>Type: {data.tileType}</div>
           {data.villageName ? <div>Village: {data.villageName}</div> : null}
+          {data.isCapital ? <div>Village status: <CapitalBadge /></div> : null}
           {data.playerName ? <div>Player: {data.playerName}</div> : null}
           {data.villagePopulation ? <div>Population: {data.villagePopulation}</div> : null}
           {data.valley ? (

@@ -15,7 +15,6 @@ use axum::{
 use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
-
 use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
@@ -87,6 +86,7 @@ impl WebRouter {
             .route("/auth/token/logout", post(token_logout))
             .route("/me/session", get(me_session))
             .route("/me/context", get(me_context))
+            .route("/stats", get(stats))
             .route("/villages/{id}/overview", get(village_overview))
             .route("/villages/{id}/resources", get(village_resources))
             .route("/buildings/{slot_id}", get(building_detail))
@@ -117,7 +117,6 @@ impl WebRouter {
             .route("/reports", get(reports))
             .route("/reports/{id}", get(report_detail))
             .route("/players/{id}", get(player_profile))
-            .route("/stats", get(stats))
             .route("/openapi.json", get(openapi_spec))
             .fallback(api_not_found);
 

@@ -12,6 +12,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
@@ -45,55 +46,59 @@ use super::error_mapping::map_application_error;
 const MAX_SLOT_ID: u8 = 40;
 const RALLY_POINT_SLOT: u8 = 39;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Generic success response for command endpoints.
 pub struct ActionResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for building creation on an empty slot.
 pub struct AddBuildingRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub building_name: BuildingName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for upgrading a building by slot.
 pub struct UpgradeBuildingRequest {
     pub slot_id: u8,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for unit training command.
 pub struct TrainUnitsRequest {
     pub slot_id: u8,
     pub unit_idx: u8,
     pub quantity: i32,
+    #[schema(value_type = String)]
     pub building_name: BuildingName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for academy research.
 pub struct ResearchAcademyRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub unit_name: UnitName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for smithy upgrade research.
 pub struct ResearchSmithyRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub unit_name: UnitName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for direct resource transfer via marketplace.
 pub struct SendResourcesRequest {
@@ -106,7 +111,7 @@ pub struct SendResourcesRequest {
     pub crop: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for marketplace offer creation.
 pub struct CreateOfferRequest {
@@ -121,14 +126,14 @@ pub struct CreateOfferRequest {
     pub seek_crop: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Common payload for marketplace offer accept/cancel actions.
 pub struct OfferActionRequest {
     pub slot_id: u8,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MovementKind {
     Attack,
@@ -136,14 +141,14 @@ pub enum MovementKind {
     Reinforcement,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ScoutingTargetKind {
     Resources,
     Defenses,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for troop movement commands.
 pub struct SendTroopsRequest {
@@ -153,10 +158,11 @@ pub struct SendTroopsRequest {
     pub movement: MovementKind,
     pub units: Vec<i32>,
     pub scouting_target: Option<ScoutingTargetKind>,
+    #[schema(value_type = Option<Vec<String>>)]
     pub catapult_targets: Option<Vec<BuildingName>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for recalling deployed units.
 pub struct RecallTroopsRequest {
@@ -166,7 +172,7 @@ pub struct RecallTroopsRequest {
     pub hero_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for releasing reinforcements from a source village.
 pub struct ReleaseReinforcementsRequest {
@@ -176,7 +182,7 @@ pub struct ReleaseReinforcementsRequest {
     pub hero_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for settler village founding movement.
 pub struct FoundVillageRequest {
@@ -184,7 +190,7 @@ pub struct FoundVillageRequest {
     pub target_y: i32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewTroopsRequest {
     pub target_x: i32,
@@ -193,23 +199,24 @@ pub struct PreviewTroopsRequest {
     pub units: Vec<i32>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewFoundVillageRequest {
     pub target_x: i32,
     pub target_y: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MovementPreviewResponse {
+    #[schema(value_type = String)]
     pub arrives_at: chrono::DateTime<chrono::Utc>,
     pub detected_kind: PreviewDetectedKind,
     pub supports_scouting_target_choice: bool,
     pub has_catapult_units: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PreviewDetectedKind {
     AttackOrRaid,
@@ -219,6 +226,12 @@ pub enum PreviewDetectedKind {
 }
 
 /// Starts a building construction job on an empty slot.
+#[utoipa::path(
+    post,
+    path = "/buildings/add",
+    request_body = AddBuildingRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn add_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -242,6 +255,12 @@ pub async fn add_building(
 }
 
 /// Queues a building upgrade for the target slot.
+#[utoipa::path(
+    post,
+    path = "/buildings/upgrade",
+    request_body = UpgradeBuildingRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn upgrade_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -264,6 +283,12 @@ pub async fn upgrade_building(
 }
 
 /// Queues unit training in a valid training/expansion building slot.
+#[utoipa::path(
+    post,
+    path = "/army/train",
+    request_body = TrainUnitsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn train_units(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -300,6 +325,12 @@ pub async fn train_units(
 }
 
 /// Queues academy research for a unit.
+#[utoipa::path(
+    post,
+    path = "/academy/research",
+    request_body = ResearchAcademyRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn research_academy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -323,6 +354,12 @@ pub async fn research_academy(
 }
 
 /// Queues smithy research for a unit.
+#[utoipa::path(
+    post,
+    path = "/smithy/research",
+    request_body = ResearchSmithyRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn research_smithy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -346,6 +383,12 @@ pub async fn research_smithy(
 }
 
 /// Sends resources from current village to coordinates-derived target village.
+#[utoipa::path(
+    post,
+    path = "/marketplace/send",
+    request_body = SendResourcesRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn send_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -376,6 +419,12 @@ pub async fn send_resources(
 }
 
 /// Creates a marketplace offer from current village.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers",
+    request_body = CreateOfferRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn create_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -413,6 +462,15 @@ pub async fn create_marketplace_offer(
 }
 
 /// Accepts an existing marketplace offer.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers/{offer_id}/accept",
+    params(
+        ("offer_id" = Uuid, Path, description = "Marketplace offer id")
+    ),
+    request_body = OfferActionRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn accept_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -437,6 +495,15 @@ pub async fn accept_marketplace_offer(
 }
 
 /// Cancels one of current village marketplace offers.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers/{offer_id}/cancel",
+    params(
+        ("offer_id" = Uuid, Path, description = "Marketplace offer id")
+    ),
+    request_body = OfferActionRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn cancel_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -461,6 +528,12 @@ pub async fn cancel_marketplace_offer(
 }
 
 /// Sends troops as attack/raid/reinforcement or scouting movement.
+#[utoipa::path(
+    post,
+    path = "/army/send",
+    request_body = SendTroopsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn send_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -555,6 +628,12 @@ pub async fn send_troops(
     Ok(Json(ActionResponse { success: true }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/army/preview",
+    request_body = PreviewTroopsRequest,
+    responses((status = 200, body = MovementPreviewResponse))
+)]
 pub async fn preview_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -627,6 +706,12 @@ pub async fn preview_troops(
 }
 
 /// Recalls units from a deployed army.
+#[utoipa::path(
+    post,
+    path = "/army/recall",
+    request_body = RecallTroopsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn recall_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -651,6 +736,12 @@ pub async fn recall_troops(
 }
 
 /// Releases reinforcements back to their origin village.
+#[utoipa::path(
+    post,
+    path = "/army/release",
+    request_body = ReleaseReinforcementsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn release_reinforcements(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -675,6 +766,12 @@ pub async fn release_reinforcements(
 }
 
 /// Sends settlers to found a new village.
+#[utoipa::path(
+    post,
+    path = "/map/found-village",
+    request_body = FoundVillageRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn found_village(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -699,6 +796,12 @@ pub async fn found_village(
     Ok(Json(ActionResponse { success: true }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/map/found-village/preview",
+    request_body = PreviewFoundVillageRequest,
+    responses((status = 200, body = MovementPreviewResponse))
+)]
 pub async fn preview_found_village(
     State(state): State<AppState>,
     headers: HeaderMap,

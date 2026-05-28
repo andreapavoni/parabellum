@@ -22,6 +22,7 @@ type RawMapTile = {
   player_id?: string;
   village_name?: string;
   village_population?: number;
+  is_capital?: boolean;
   player_name?: string;
   tribe?: string;
   tile_type: "village" | "valley" | "oasis";
@@ -251,6 +252,7 @@ export const api = {
         playerId: tile.player_id,
         villageName: tile.village_name,
         villagePopulation: tile.village_population,
+        isCapital: tile.is_capital,
         playerName: tile.player_name,
         tribe: tile.tribe,
         tileType: tile.tile_type,

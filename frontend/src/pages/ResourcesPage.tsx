@@ -1,4 +1,5 @@
 import type { VillageResourcesResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
 import { UnitSpriteByName } from "@/components/UnitSprite";
@@ -18,6 +19,7 @@ export function ResourcesPage({
       <div class="flex flex-col items-center w-full md:w-auto">
         <h1 class="text-xl font-bold mb-4 w-full text-left">
           {data.village.name} ({data.village.x}|{data.village.y})
+          {data.village.isCapital ? <CapitalBadge /> : null}
         </h1>
         <ResourceFieldsMap slots={data.resourceSlots} />
         <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />

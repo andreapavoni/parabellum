@@ -1,4 +1,5 @@
 import type { VillageOverviewResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { QueueList } from "@/components/QueueList";
 import { VillageMap } from "@/components/VillageMap";
 
@@ -14,6 +15,7 @@ export function VillagePage({
       <div class="flex flex-col items-center w-full md:w-auto">
         <h1 class="text-xl font-bold mb-4 w-full text-left">
           {data.village.name} ({data.village.x}|{data.village.y})
+          {data.village.isCapital ? <CapitalBadge /> : null}
         </h1>
         <VillageMap slots={data.buildingSlots} />
         <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />

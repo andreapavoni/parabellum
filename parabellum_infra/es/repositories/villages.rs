@@ -611,14 +611,14 @@ impl VillageRepository for PostgresVillageRepository {
             vec![],
             100,
             VillageProduction::default(),
-            false,
+            parent_village_id.is_none(),
             [0_u8; 8],
             stocks.clone(),
             parabellum_game::models::village::AcademyResearch::default(),
             0,
             0,
             chrono::Utc::now(),
-            None,
+            parent_village_id,
         );
 
         sqlx::query(
@@ -667,7 +667,7 @@ impl VillageRepository for PostgresVillageRepository {
         .bind(Json(stocks))
         .bind(projected.population as i32)
         .bind(100_i16)
-        .bind(false)
+        .bind(parent_village_id.is_none())
         .bind(projected.culture_points_production as i32)
         .bind(Json([0_u8; 8]))
         .bind(Json(parabellum_game::models::village::AcademyResearch::default()))

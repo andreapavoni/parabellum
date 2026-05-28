@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { MeContextResponse, SessionResponse, VillageListItem } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "./Link";
 
 type LayoutProps = {
@@ -117,6 +118,7 @@ export function Layout(props: LayoutProps) {
                 <div class="res-item">{resourceLabel(Math.floor(liveResources?.iron ?? village.resources.iron), village.warehouseCapacity, "⛏️")}</div>
                 <div class="res-item">{resourceLabel(Math.floor(liveResources?.crop ?? village.resources.crop), village.granaryCapacity, "🌾")}</div>
                 <div class="res-item">👤 {village.population}</div>
+                {village.isCapital ? <div class="res-item">🏛️ Capital</div> : null}
               </div>
             ) : null}
           </>
@@ -202,6 +204,7 @@ function VillagesList({
                 <span class="flex items-center">
                   <span class="w-2 h-2 rounded-full mr-2 bg-orange-500" />
                   {village.name}
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </span>
                 <span class="text-gray-600">
                   ({village.x}|{village.y})
@@ -215,6 +218,7 @@ function VillagesList({
                 <span class="flex items-center">
                   <span class="w-2 h-2 rounded-full mr-2 bg-green-500" />
                   {village.name}
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </span>
                 <span class="text-gray-500">
                   ({village.x}|{village.y})

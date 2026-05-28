@@ -851,7 +851,7 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
                 player_id,
                 "Target",
                 Position { x: 3, y: 3 },
-                parabellum_types::tribe::Tribe::Teuton,
+                parabellum_types::tribe::Tribe::Roman,
                 vec![main_building(1), warehouse(20), granary(20)],
                 resources(80_000, 80_000, 80_000, 80_000),
             )
@@ -916,6 +916,11 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             .await
             .unwrap();
         assert_eq!(movements_after_arrival.incoming.len(), 1);
+        assert_eq!(
+            movements_after_arrival.incoming[0].tribe,
+            parabellum_types::tribe::Tribe::Teuton,
+            "returning attack army must keep the attacker's tribe, not the target village tribe"
+        );
         assert!(movements_after_arrival.outgoing.is_empty());
 
         let second_processed = scenario

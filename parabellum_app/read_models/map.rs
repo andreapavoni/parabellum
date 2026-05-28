@@ -8,4 +8,5 @@ pub struct MapRegionTile {
     pub village_population: Option<i32>,
     pub player_name: Option<String>,
     pub tribe: Option<Tribe>,
+    pub is_capital: Option<bool>,
 }

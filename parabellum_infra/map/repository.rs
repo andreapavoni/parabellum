@@ -89,6 +89,7 @@ impl MapRepository for PostgresMapRepository {
                 mf.topology,
                 rv.village_name AS village_name,
                 rv.population AS village_population,
+                rv.is_capital AS is_capital,
                 p.username AS player_name,
                 p.tribe as tribe
             FROM rm_map_fields AS mf
@@ -119,6 +120,7 @@ impl MapRepository for PostgresMapRepository {
                     field: MapField::from(db_field),
                     village_name: record.village_name,
                     village_population: record.village_population,
+                    is_capital: record.is_capital,
                     player_name: record.player_name,
                     tribe: record.tribe.map(|t| t.into()),
                 }
@@ -142,6 +144,7 @@ impl MapRepository for PostgresMapRepository {
                 mf.topology,
                 rv.village_name AS village_name,
                 rv.population AS village_population,
+                rv.is_capital AS is_capital,
                 p.username AS player_name,
                 p.tribe as tribe
             FROM rm_map_fields AS mf
@@ -169,6 +172,7 @@ impl MapRepository for PostgresMapRepository {
                 field: MapField::from(db_field),
                 village_name: record.village_name,
                 village_population: record.village_population,
+                is_capital: record.is_capital,
                 player_name: record.player_name,
                 tribe: record.tribe.map(|t| t.into()),
             }
@@ -265,6 +269,7 @@ struct DbMapFieldWithOwner {
     topology: Value,
     village_name: Option<String>,
     village_population: Option<i32>,
+    is_capital: Option<bool>,
     player_name: Option<String>,
     tribe: Option<db_models::Tribe>,
 }

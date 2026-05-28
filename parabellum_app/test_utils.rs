@@ -164,6 +164,7 @@ pub mod tests {
                             village_population: None,
                             player_name: None,
                             tribe: None,
+                            is_capital: None,
                         });
                     }
                 }
@@ -183,6 +184,7 @@ pub mod tests {
                 village_population: None,
                 player_name: None,
                 tribe: None,
+                is_capital: None,
             }))
         }
 

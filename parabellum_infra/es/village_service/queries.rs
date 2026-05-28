@@ -59,7 +59,16 @@ impl VillageEsService {
                 units: movement.units,
                 tribe: movement
                     .tribe
-                    .or_else(|| origin_model.as_ref().map(|v| v.tribe.clone()))
+                    .or_else(|| {
+                        if matches!(
+                            movement.movement_type,
+                            parabellum_app::villages::models::MovementType::Return
+                        ) {
+                            target_model.as_ref().map(|v| v.tribe.clone())
+                        } else {
+                            origin_model.as_ref().map(|v| v.tribe.clone())
+                        }
+                    })
                     .unwrap_or(parabellum_types::tribe::Tribe::Nature),
             };
             match mapped.direction {

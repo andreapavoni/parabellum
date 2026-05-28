@@ -13,6 +13,7 @@
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+use utoipa::ToSchema;
 
 use parabellum_app::ports::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
@@ -34,7 +35,7 @@ use crate::{
 
 use super::bearer_token;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Login payload for token-based authentication.
 pub struct TokenLoginRequest {
@@ -42,7 +43,7 @@ pub struct TokenLoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Registration payload.
 pub struct TokenRegisterRequest {
@@ -53,14 +54,14 @@ pub struct TokenRegisterRequest {
     pub quadrant: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Refresh request with current refresh token.
 pub struct TokenRefreshRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Logout request. Optionally revokes all sessions for the user.
 pub struct TokenLogoutRequest {
@@ -69,14 +70,14 @@ pub struct TokenLogoutRequest {
     pub all_sessions: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Logout response payload.
 pub struct LogoutResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Token response returned by login/register/refresh.
 pub struct TokenAuthResponse {
@@ -88,6 +89,16 @@ pub struct TokenAuthResponse {
 }
 
 /// Authenticates user credentials and returns access+refresh token pair.
+#[utoipa::path(
+    post,
+    path = "/auth/token/login",
+    request_body = TokenLoginRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Access/refresh token pair"),
+        (status = 401, description = "Invalid credentials"),
+        (status = 422, description = "Validation error")
+    )
+)]
 pub async fn token_login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -133,6 +144,16 @@ pub async fn token_login(
 }
 
 /// Registers a new user/player and immediately returns tokens.
+#[utoipa::path(
+    post,
+    path = "/auth/token/register",
+    request_body = TokenRegisterRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Registered and authenticated"),
+        (status = 409, description = "Username or email already exists"),
+        (status = 422, description = "Validation error")
+    )
+)]
 pub async fn token_register(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -219,6 +240,15 @@ pub async fn token_register(
 }
 
 /// Rotates refresh token and returns a fresh token pair.
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = TokenRefreshRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Rotated token pair"),
+        (status = 401, description = "Refresh token invalid/expired")
+    )
+)]
 pub async fn token_refresh(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -254,6 +284,14 @@ pub async fn token_refresh(
 }
 
 /// Revokes the provided refresh token (and optionally all user sessions).
+#[utoipa::path(
+    post,
+    path = "/auth/token/logout",
+    request_body = TokenLogoutRequest,
+    responses(
+        (status = 200, body = LogoutResponse, description = "Refresh session revoked")
+    )
+)]
 pub async fn token_logout(
     State(state): State<AppState>,
     headers: HeaderMap,

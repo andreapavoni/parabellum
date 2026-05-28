@@ -210,6 +210,7 @@ pub async fn run_seed(
             village_position: first.position.clone(),
         });
 
+        let mut previous_village_id = Some(first.village_id);
         for (village_idx, village) in player.villages.iter().enumerate().skip(1) {
             let village = resolve_village_from_template(village, seed_file_path)?;
             let (village_id, village_position, soft_reserved) = if let Some(pos) = village.position.clone() {
@@ -249,7 +250,7 @@ pub async fn run_seed(
                         position: village_position.clone(),
                         tribe: player.tribe.clone(),
                         player_id,
-                        parent_village_id: None,
+                        parent_village_id: previous_village_id,
                         buildings: resource_buildings,
                     },
                 )
@@ -284,6 +285,7 @@ pub async fn run_seed(
                 village_id,
                 village_position,
             });
+            previous_village_id = Some(village_id);
         }
     }
 

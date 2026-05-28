@@ -33,6 +33,7 @@ use parabellum_types::{
     buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::ApplicationError,
+    tribe::Tribe,
 };
 
 use crate::{
@@ -180,6 +181,9 @@ pub struct TrainingUnitOptionDto {
     pub name: String,
     pub cost: ResourceAmountsDto,
     pub upkeep: u32,
+    pub attack: u32,
+    pub defense_infantry: u32,
+    pub defense_cavalry: u32,
     pub time_secs: u32,
 }
 
@@ -355,6 +359,7 @@ pub struct RallyCardDto {
     pub position: Option<PositionDto>,
     pub tribe: String,
     pub units: Vec<u32>,
+    pub upkeep: u32,
     pub category: RallyCardCategoryDto,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub movement_kind: Option<RallyMovementKindDto>,
@@ -383,6 +388,16 @@ pub struct PositionDto {
 }
 
 /// Returns building detail payload for one slot in current authenticated village.
+#[utoipa::path(
+    get,
+    path = "/buildings/{slot_id}",
+    params(
+        ("slot_id" = u8, Path, description = "Building slot id (1..=40)")
+    ),
+    responses(
+        (status = 200, body = serde_json::Value, description = "Building page response")
+    )
+)]
 pub async fn building_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -895,6 +910,7 @@ pub async fn building_detail(
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         tribe: format!("{:?}", card.tribe),
                         units: card.units.units().to_vec(),
+                        upkeep: troop_upkeep_for_tribe(&card.tribe, card.units.units()),
                         category: match card.category {
                             crate::view_helpers::ArmyCategory::Stationed => {
                                 RallyCardCategoryDto::Stationed
@@ -1288,10 +1304,22 @@ fn training_options_for_group(
                 name: unit_key(&unit.name),
                 cost: resource_group_to_dto(&unit.cost.resources),
                 upkeep: unit.cost.upkeep,
+                attack: unit.attack,
+                defense_infantry: unit.defense_infantry,
+                defense_cavalry: unit.defense_cavalry,
                 time_secs: time_per_unit,
             })
         })
         .collect()
+}
+
+fn troop_upkeep_for_tribe(tribe: &Tribe, units: &[u32; 10]) -> u32 {
+    tribe
+        .units()
+        .iter()
+        .enumerate()
+        .map(|(idx, unit)| unit.cost.upkeep.saturating_mul(*units.get(idx).unwrap_or(&0)))
+        .sum()
 }
 
 fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<TrainingQueueItemDto> {

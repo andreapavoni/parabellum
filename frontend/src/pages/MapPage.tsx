@@ -42,7 +42,7 @@ function tileVisual(tile: MapTile | null, isHome: boolean) {
     return {
       icon: "🏠",
       typeClass: isHome ? "is-own-village" : "is-village",
-      title: tile.villageName ?? "Village",
+      title: `${tile.villageName ?? "Village"}${tile.isCapital ? " (Capital)" : ""}`,
       oasisBg: "",
     };
   }
@@ -318,6 +318,18 @@ export function MapPage({
                           {visual.icon}
                         </text>
                       ) : null}
+                      {tile?.villageId && tile.isCapital ? (
+                        <text
+                          x={cellSize * 0.82}
+                          y={cellSize * 0.22}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={cellSize * 0.24}
+                          pointerEvents="none"
+                        >
+                          👑
+                        </text>
+                      ) : null}
                     </g>
                   );
                 }),
@@ -388,6 +400,10 @@ export function MapPage({
                 <tr class="border-b border-gray-200">
                   <td class="py-2 text-gray-600">Population</td>
                   <td class="py-2 text-right font-bold text-black">{hovered.tile?.villagePopulation ?? "-"}</td>
+                </tr>
+                <tr class="border-b border-gray-200">
+                  <td class="py-2 text-gray-600">Capital</td>
+                  <td class="py-2 text-right font-bold text-black">{hovered.tile?.isCapital ? "Yes" : "-"}</td>
                 </tr>
                 <tr>
                   <td class="py-2 text-gray-600">Tribe</td>
