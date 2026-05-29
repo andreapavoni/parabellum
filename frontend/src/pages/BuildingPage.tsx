@@ -1472,6 +1472,18 @@ export function BuildingPage({
                   Culture Points
                 </div>
               </div>
+              <div class="mt-3">
+                <span class="text-sm text-gray-600">Loyalty: </span>
+                <span
+                  class={
+                    expansion.loyalty < 100
+                      ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
+                      : "text-sm font-semibold text-gray-800"
+                  }
+                >
+                  {expansion.loyalty}%
+                </span>
+              </div>
             </div>
 
             <div class="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">

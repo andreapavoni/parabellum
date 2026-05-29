@@ -70,6 +70,15 @@ pub enum VillageEvent {
         reset: bool,
         revived_at: DateTime<Utc>,
     },
+    LoyaltyRegenerated {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        loyalty_before: u8,
+        loyalty_after: u8,
+        building_level: u8,
+        regenerated_at: DateTime<Utc>,
+    },
     ReinforcementSent {
         movement_id: Uuid,
         army_id: Uuid,
@@ -500,6 +509,7 @@ impl fmt::Display for VillageEvent {
             VillageEvent::HeroCreated { .. } => "HeroCreated",
             VillageEvent::HeroRevivalScheduled { .. } => "HeroRevivalScheduled",
             VillageEvent::HeroRevived { .. } => "HeroRevived",
+            VillageEvent::LoyaltyRegenerated { .. } => "LoyaltyRegenerated",
             VillageEvent::ReinforcementSent { .. } => "ReinforcementSent",
             VillageEvent::ReinforcementArrived { .. } => "ReinforcementArrived",
             VillageEvent::ReinforcementAppliedToVillage { .. } => "ReinforcementAppliedToVillage",

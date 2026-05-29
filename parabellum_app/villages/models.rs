@@ -184,6 +184,7 @@ pub enum ScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
+    LoyaltyRegen,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -334,6 +335,12 @@ pub enum ScheduledActionPayload {
         reset: bool,
         revive_at: DateTime<Utc>,
     },
+    LoyaltyRegen {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        execute_at: DateTime<Utc>,
+    },
 }
 
 impl ScheduledActionPayload {
@@ -359,6 +366,7 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
             ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
             ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
+            ScheduledActionPayload::LoyaltyRegen { .. } => ScheduledActionType::LoyaltyRegen,
         }
     }
 }

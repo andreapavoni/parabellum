@@ -1807,6 +1807,11 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
             .await;
 
         let second_now = chrono::Utc::now();
+        sqlx::query("UPDATE rm_village SET loyalty = 30 WHERE village_id = $1")
+            .bind(target_village_id as i32)
+            .execute(&pool)
+            .await
+            .unwrap();
         service
             .send_attack(
                 source_village_id,
@@ -1836,6 +1841,88 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
             1,
             "exactly one surviving chief unit must be consumed on successful conquer"
         );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_loyalty_regenerates_with_residence_over_time() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let action_repo = PostgresScheduledActionRepository::new(pool.clone());
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Loyalty Regen",
+            Position { x: 1, y: 1 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(10),
+                VillageBuilding {
+                    slot_id: 22,
+                    building: Building::new(BuildingName::Residence, 1)
+                        .at_level(1, 1)
+                        .unwrap(),
+                },
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        sqlx::query("UPDATE rm_village SET loyalty = 80 WHERE village_id = $1")
+            .bind(village_id as i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let action_id = Uuid::new_v4();
+        let execute_at = chrono::Utc::now();
+        let payload = ScheduledActionPayload::LoyaltyRegen {
+            action_id,
+            village_id,
+            player_id,
+            execute_at,
+        };
+        action_repo
+            .add(&ScheduledAction {
+                id: action_id,
+                action_type: payload.action_type(),
+                execute_at,
+                payload: serde_json::to_value(payload).unwrap(),
+                status: ScheduledActionStatus::Pending,
+            })
+            .await
+            .unwrap();
+
+        let pending_regen = service
+            .get_village_scheduled_action_status_count(
+                village_id,
+                models::ScheduledActionType::LoyaltyRegen,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_regen, 1);
+
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(24), 50)
+            .await
+            .unwrap();
+
+        let after_tick = service.get_village(village_id).await.unwrap();
+        assert_eq!(after_tick.loyalty, 82);
+
+        let pending_next = service
+            .get_village_scheduled_action_status_count(
+                village_id,
+                models::ScheduledActionType::LoyaltyRegen,
+                ScheduledActionStatus::Pending,
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_next, 1);
     })
     .await;
 }

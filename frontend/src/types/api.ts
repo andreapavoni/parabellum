@@ -42,6 +42,7 @@ export type VillageSummary = {
   x: number;
   y: number;
   isCapital: boolean;
+  loyalty: number;
   population: number;
   warehouseCapacity: number;
   granaryCapacity: number;
@@ -344,6 +345,7 @@ export type BuildingDetail = {
     queue: TrainingQueueItem[];
   };
   expansion?: {
+    loyalty: number;
     villageCulturePointsProduction: number;
     accountCulturePointsProduction: number;
     accountCulturePoints: number;

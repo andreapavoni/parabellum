@@ -35,6 +35,12 @@ struct ComputedScoutOutcome {
 }
 
 const DEFAULT_FOUNDATION_SPEED: i8 = 1;
+fn loyalty_regen_building_level(village: &Village) -> u8 {
+    village
+        .get_palace_or_residence()
+        .map(|(building, _)| building.level)
+        .unwrap_or(0)
+}
 
 fn default_founded_village_buildings(
     topology: &ValleyTopology,
@@ -808,6 +814,41 @@ pub(super) async fn execute_action(
                     hero: revived_hero,
                     reset,
                     revived_at: revive_at,
+                },
+            )])
+            .await?;
+        }
+        ScheduledActionPayload::LoyaltyRegen {
+            action_id,
+            village_id,
+            player_id,
+            execute_at,
+        } => {
+            let model = svc.get_village(village_id).await?;
+            if model.player_id != player_id {
+                return Ok(());
+            }
+            let village = Village::try_from(model).map_err(CqrsError::domain_source)?;
+            let current_loyalty = village.loyalty();
+            if current_loyalty >= 100 {
+                return Ok(());
+            }
+            let building_level = loyalty_regen_building_level(&village);
+            if building_level == 0 {
+                return Ok(());
+            }
+            let regen_points = building_level.saturating_mul(2);
+            let loyalty_after = current_loyalty.saturating_add(regen_points).min(100);
+            svc.append_village_workflow_events(vec![(
+                village_id,
+                VillageEvent::LoyaltyRegenerated {
+                    action_id,
+                    village_id,
+                    player_id,
+                    loyalty_before: current_loyalty,
+                    loyalty_after,
+                    building_level,
+                    regenerated_at: execute_at,
                 },
             )])
             .await?;

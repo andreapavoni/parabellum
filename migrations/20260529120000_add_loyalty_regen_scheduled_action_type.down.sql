@@ -1,0 +1,2 @@
+-- Postgres enums do not support removing values safely in-place.
+-- No-op down migration for development environments.

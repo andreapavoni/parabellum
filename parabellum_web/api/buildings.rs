@@ -114,6 +114,7 @@ pub enum BuildingTypeDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpansionDetailDto {
+    pub loyalty: u8,
     pub village_culture_points_production: u32,
     pub account_culture_points_production: u32,
     pub account_culture_points: u32,
@@ -671,6 +672,7 @@ pub async fn building_detail(
                         queue: training_queue,
                     }),
                     expansion: Some(ExpansionDetailDto {
+                        loyalty: user.village.loyalty(),
                         village_culture_points_production,
                         account_culture_points_production,
                         account_culture_points,

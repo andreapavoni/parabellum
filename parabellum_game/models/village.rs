@@ -718,6 +718,10 @@ impl Village {
         self.loyalty
     }
 
+    pub fn regenerate_loyalty_to(&mut self, loyalty_after: u8) {
+        self.loyalty = loyalty_after.min(100);
+    }
+
     /// Calculates the total culture points production per day from all buildings.
     pub fn calculate_culture_points_production(&self) -> u32 {
         self.buildings

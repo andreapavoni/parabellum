@@ -17,6 +17,18 @@ export function VillagePage({
           {data.village.name} ({data.village.x}|{data.village.y})
           {data.village.isCapital ? <CapitalBadge /> : null}
         </h1>
+        <div class="w-full mb-3">
+          <span class="text-xs text-gray-600">Loyalty: </span>
+          <span
+            class={
+              data.village.loyalty < 100
+                ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
+                : "text-xs font-semibold text-gray-800"
+            }
+          >
+            {data.village.loyalty}%
+          </span>
+        </div>
         <VillageMap slots={data.buildingSlots} />
         <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
       </div>
