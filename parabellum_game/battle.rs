@@ -1,4 +1,5 @@
 /// Battle
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f64;
 
@@ -48,6 +49,34 @@ pub struct Battle {
     defender_village: Village,
     catapult_targets: Option<[Building; 2]>,
     conquer_permitted: bool,
+}
+
+fn loyalty_reduction_range_for_tribe(tribe: &Tribe) -> (u8, u8) {
+    match tribe {
+        Tribe::Roman => (20, 30),
+        Tribe::Teuton => (20, 25),
+        Tribe::Gaul => (20, 25),
+        _ => (20, 25),
+    }
+}
+
+fn loyalty_reduction_per_chief(
+    tribe: &Tribe,
+    roll: f64,
+    attacker_great_celebration_active: bool,
+    defender_great_celebration_active: bool,
+) -> u8 {
+    let (min, max) = loyalty_reduction_range_for_tribe(tribe);
+    let span = (max - min + 1) as f64;
+    let clamped_roll = roll.clamp(0.0, 0.999_999_999);
+    let rolled = min as i16 + (clamped_roll * span).floor() as i16;
+    let celebration_modifier = (if attacker_great_celebration_active {
+        5
+    } else {
+        0
+    }) - (if defender_great_celebration_active { 5 } else { 0 });
+
+    (rolled + celebration_modifier).clamp(0, 100) as u8
 }
 
 impl Battle {
@@ -320,12 +349,24 @@ impl Battle {
         surviving_attacker.update_units(&attacker_survivors);
         let surviving_chiefs =
             surviving_attacker.get_troop_count_by_role(parabellum_types::army::UnitRole::Chief);
+        // TownHall celebrations are not implemented yet; keep neutral defaults for now.
+        let attacker_great_celebration_active = false;
+        let defender_great_celebration_active = false;
+        let loyalty_roll = rand::thread_rng().gen_range(0.0..1.0);
+        let loyalty_reduction_per_chief = loyalty_reduction_per_chief(
+            &self.attacker.tribe,
+            loyalty_roll,
+            attacker_great_celebration_active,
+            defender_great_celebration_active,
+        );
         let loyalty_reduction = if self.attack_type == AttackType::Normal
             && self.conquer_permitted
             && surviving_chiefs > 0
             && !has_residence_or_palace_after
         {
-            (surviving_chiefs as u8).saturating_mul(25)
+            (loyalty_reduction_per_chief as u32)
+                .saturating_mul(surviving_chiefs)
+                .min(u8::MAX as u32) as u8
         } else {
             0
         };
@@ -877,5 +918,41 @@ mod tests {
         });
 
         (player, village, army)
+    }
+
+    #[test]
+    fn loyalty_reduction_per_chief_uses_tribe_ranges() {
+        assert_eq!(
+            super::loyalty_reduction_per_chief(&Tribe::Roman, 0.0, false, false),
+            20
+        );
+        assert_eq!(
+            super::loyalty_reduction_per_chief(&Tribe::Roman, 0.999_9, false, false),
+            30
+        );
+        assert_eq!(
+            super::loyalty_reduction_per_chief(&Tribe::Teuton, 0.0, false, false),
+            20
+        );
+        assert_eq!(
+            super::loyalty_reduction_per_chief(&Tribe::Teuton, 0.999_9, false, false),
+            25
+        );
+        assert_eq!(
+            super::loyalty_reduction_per_chief(&Tribe::Gaul, 0.999_9, false, false),
+            25
+        );
+    }
+
+    #[test]
+    fn loyalty_reduction_per_chief_applies_celebration_modifiers() {
+        let base = super::loyalty_reduction_per_chief(&Tribe::Roman, 0.5, false, false);
+        let attacker_buff = super::loyalty_reduction_per_chief(&Tribe::Roman, 0.5, true, false);
+        let defender_debuff = super::loyalty_reduction_per_chief(&Tribe::Roman, 0.5, false, true);
+        let canceled = super::loyalty_reduction_per_chief(&Tribe::Roman, 0.5, true, true);
+
+        assert_eq!(attacker_buff, base + 5);
+        assert_eq!(defender_debuff + 5, base);
+        assert_eq!(canceled, base);
     }
 }
