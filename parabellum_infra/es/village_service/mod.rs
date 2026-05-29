@@ -639,6 +639,25 @@ impl VillageEsService {
                 "requeued stale processing scheduled actions to pending"
             );
         }
+        let requeued_failed_smithy = sqlx::query(
+            r#"
+            UPDATE rm_scheduled_actions
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'failed'
+              AND action_type = 'ResearchSmithy'
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(CqrsError::domain_source)?
+        .rows_affected();
+        if requeued_failed_smithy > 0 {
+            warn!(
+                action = "scheduler_requeue_failed_smithy",
+                requeued = requeued_failed_smithy,
+                "requeued failed smithy actions to pending"
+            );
+        }
 
         let actions = repo
             .take_due_pending(before_or_equal, limit)
@@ -677,6 +696,8 @@ impl VillageEsService {
             let result = scheduler::execute_action(self, &service, action).await;
             let next_status = if result.is_ok() {
                 ScheduledActionStatus::Completed
+            } else if matches!(result, Err(CqrsError::Conflict { .. })) {
+                ScheduledActionStatus::Pending
             } else {
                 ScheduledActionStatus::Failed
             };

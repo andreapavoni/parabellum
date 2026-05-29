@@ -44,6 +44,11 @@
    border-color: #80ba34;
  }
 
+ .nav-unread {
+   border-color: #d97706;
+   box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.18);
+ }
+
  .res-item {
    display: flex;
    align-items: center;

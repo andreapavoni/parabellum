@@ -169,6 +169,7 @@ pub trait MarketplaceRepository: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct ProjectedReport {
+    pub id: Uuid,
     pub report_type: String,
     pub payload: serde_json::Value,
     pub actor_player_id: Uuid,
@@ -187,6 +188,7 @@ pub trait ReportRepository: Send + Sync {
     async fn list_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError>;
 

@@ -10,6 +10,7 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::VillageRepository;
 use parabellum_game::models::army::Army;
+use parabellum_game::models::buildings::get_building_data;
 use parabellum_game::models::village::Village;
 use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
@@ -81,6 +82,25 @@ impl VillageProjector {
                 remaining.set_hero(None);
             }
             (Some(remaining), returning)
+        }
+    }
+
+    fn remove_tribe_incompatible_buildings(village: &mut Village) {
+        let tribe = village.tribe.clone();
+        let incompatible_slots: Vec<u8> = village
+            .buildings()
+            .iter()
+            .filter_map(|vb| {
+                let data = get_building_data(&vb.building.name).ok()?;
+                if data.rules.tribes.is_empty() || data.rules.tribes.contains(&tribe) {
+                    None
+                } else {
+                    Some(vb.slot_id)
+                }
+            })
+            .collect();
+        for slot_id in incompatible_slots {
+            let _ = village.remove_building_at_slot(slot_id, 1);
         }
     }
 
@@ -361,6 +381,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: army.units().clone(),
                     tribe: None,
+                    bounty: None,
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -511,8 +532,152 @@ impl VillageProjector {
                 stationed_village_id,
                 army,
                 returns_at,
+            } => {
+                let source = self
+                    .village
+                    .get_by_village_id_in_tx(tx, home_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut next_deployed = source.deployed_armies;
+                if let Some(idx) = next_deployed.iter().position(|a| a.id == army_id) {
+                    let existing = next_deployed[idx].clone();
+                    let (remaining, _) =
+                        Self::split_army(&existing, army.units(), army.hero().is_some());
+                    if let Some(remaining) = remaining {
+                        next_deployed[idx] = remaining;
+                    } else {
+                        next_deployed.remove(idx);
+                    }
+                    self.village
+                        .update_deployed_armies_in_tx(tx, home_village_id, &next_deployed)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+
+                let stationed = self
+                    .village
+                    .get_by_village_id_in_tx(tx, stationed_village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                let mut next_reinforcements = stationed.reinforcements;
+                if let Some(idx) = next_reinforcements.iter().position(|a| a.id == army_id) {
+                    let existing = next_reinforcements[idx].clone();
+                    let (remaining, _) =
+                        Self::split_army(&existing, army.units(), army.hero().is_some());
+                    if let Some(remaining) = remaining {
+                        next_reinforcements[idx] = remaining.clone();
+                        self.armies
+                            .upsert_stationed_in_tx(
+                                tx,
+                                &remaining,
+                                stationed_village_id,
+                                remaining.player_id,
+                            )
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                        if let Some(hero) = remaining.hero() {
+                            self.heroes
+                                .upsert_in_tx(
+                                    tx,
+                                    &hero,
+                                    hero.village_id,
+                                    stationed_village_id,
+                                    "stationed",
+                                )
+                                .await
+                                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                        }
+                    } else {
+                        next_reinforcements.remove(idx);
+                        self.armies
+                            .delete_in_tx(tx, army_id)
+                            .await
+                            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    }
+                    self.village
+                        .update_reinforcements_in_tx(tx, stationed_village_id, &next_reinforcements)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+
+                let outgoing = VillageMovement {
+                    movement_id,
+                    movement_type: MovementType::Return,
+                    direction: MovementDirection::Outgoing,
+                    origin_village_id: stationed_village_id,
+                    origin_village_name: None,
+                    origin_player_id: army.player_id,
+                    origin_position: None,
+                    target_village_id: home_village_id,
+                    target_village_name: None,
+                    target_player_id: None,
+                    target_position: None,
+                    arrives_at: returns_at,
+                    time_seconds: None,
+                    units: army.units().clone(),
+                    tribe: Some(army.tribe.clone()),
+                    bounty: None,
+                };
+                let incoming = VillageMovement {
+                    direction: MovementDirection::Incoming,
+                    ..outgoing.clone()
+                };
+                self.movements
+                    .upsert_in_tx(tx, &outgoing)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.movements
+                    .upsert_in_tx(tx, &incoming)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.armies
+                    .upsert_moving_in_tx(tx, &army, stationed_village_id, army.player_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if let Some(hero) = army.hero() {
+                    self.heroes
+                        .upsert_in_tx(tx, &hero, hero.village_id, stationed_village_id, "moving")
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                }
+
+                self.add_scheduled_action_in_tx(
+                    tx,
+                    &ScheduledAction {
+                        id: action_id,
+                        action_type: ScheduledActionPayload::ArmyReturn {
+                            action_id,
+                            movement_id,
+                            army_id,
+                            village_id: home_village_id,
+                            source_village_id: home_village_id,
+                            target_village_id: stationed_village_id,
+                            player_id,
+                            army: army.clone(),
+                            bounty: None,
+                            returns_at,
+                        }
+                        .action_type(),
+                        execute_at: returns_at,
+                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
+                            action_id,
+                            movement_id,
+                            army_id,
+                            village_id: home_village_id,
+                            source_village_id: home_village_id,
+                            target_village_id: stationed_village_id,
+                            player_id,
+                            army,
+                            bounty: None,
+                            returns_at,
+                        })
+                        .map_err(CqrsError::Serialization)?,
+                        status: ScheduledActionStatus::Pending,
+                    },
+                )
+                .await
             }
-            | VillageEvent::ReinforcementsReleased {
+            VillageEvent::ReinforcementsReleased {
                 action_id,
                 movement_id,
                 army_id,
@@ -556,7 +721,12 @@ impl VillageProjector {
                     if let Some(remaining) = remaining {
                         next_reinforcements[idx] = remaining.clone();
                         self.armies
-                            .upsert_stationed_in_tx(tx, &remaining, stationed_village_id, player_id)
+                            .upsert_stationed_in_tx(
+                                tx,
+                                &remaining,
+                                stationed_village_id,
+                                remaining.player_id,
+                            )
                             .await
                             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                         if let Some(hero) = remaining.hero() {
@@ -584,13 +754,14 @@ impl VillageProjector {
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
 
-                let outgoing = VillageMovement {
+                // Released reinforcements are only visible to the reinforcement owner (home side).
+                let incoming = VillageMovement {
                     movement_id,
                     movement_type: MovementType::Return,
-                    direction: MovementDirection::Outgoing,
+                    direction: MovementDirection::Incoming,
                     origin_village_id: stationed_village_id,
                     origin_village_name: None,
-                    origin_player_id: player_id,
+                    origin_player_id: army.player_id,
                     origin_position: None,
                     target_village_id: home_village_id,
                     target_village_name: None,
@@ -600,21 +771,14 @@ impl VillageProjector {
                     time_seconds: None,
                     units: army.units().clone(),
                     tribe: Some(army.tribe.clone()),
+                    bounty: None,
                 };
-                let incoming = VillageMovement {
-                    direction: MovementDirection::Incoming,
-                    ..outgoing.clone()
-                };
-                self.movements
-                    .upsert_in_tx(tx, &outgoing)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 self.movements
                     .upsert_in_tx(tx, &incoming)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 self.armies
-                    .upsert_moving_in_tx(tx, &army, stationed_village_id, player_id)
+                    .upsert_moving_in_tx(tx, &army, stationed_village_id, army.player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 if let Some(hero) = army.hero() {
@@ -703,6 +867,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: army.units().clone(),
                     tribe: Some(tribe.clone()),
+                    bounty: None,
                 };
                 self.movements
                     .upsert_in_tx(tx, &outgoing)
@@ -815,6 +980,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: army.units().clone(),
                     tribe: None,
+                    bounty: None,
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -919,6 +1085,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: army.units().clone(),
                     tribe: None,
+                    bounty: None,
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -1049,6 +1216,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: return_army.units().clone(),
                     tribe: Some(return_army.tribe.clone()),
+                    bounty: report.bounty.clone(),
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -1109,6 +1277,7 @@ impl VillageProjector {
                 .await
             }
             VillageEvent::BattleOutcomeAppliedToVillage {
+                source_village_id,
                 target_village_id,
                 target_player_id,
                 target_parent_village_id,
@@ -1196,6 +1365,19 @@ impl VillageProjector {
                 }
 
                 if target_player_id != target_before.player_id {
+                    let source = self
+                        .village
+                        .get_by_village_id_in_tx(tx, source_village_id)
+                        .await
+                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    target_next.tribe = source.tribe.clone();
+                    let mut conquered_village = Self::village_from_model(&target_next);
+                    conquered_village.tribe = source.tribe;
+                    Self::remove_tribe_incompatible_buildings(&mut conquered_village);
+                    target_next.buildings = conquered_village.buildings().to_vec();
+                    target_next.production = conquered_village.production.clone();
+                    target_next.population = conquered_village.population;
+                    target_next.stocks = conquered_village.stocks().clone();
                     self.armies
                         .delete_by_home_village_in_tx(tx, target_village_id)
                         .await
@@ -1302,6 +1484,7 @@ impl VillageProjector {
                     time_seconds: None,
                     units: return_army.units().clone(),
                     tribe: Some(return_army.tribe.clone()),
+                    bounty: None,
                 };
                 let incoming = VillageMovement {
                     direction: MovementDirection::Incoming,
@@ -1985,6 +2168,7 @@ impl VillageProjector {
                 .update_building_in_tx(tx, village_id, slot_id, building_name, level, speed)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string())),
+            VillageEvent::ReportMarkedAsRead { .. } => Ok(()),
         }
     }
 }

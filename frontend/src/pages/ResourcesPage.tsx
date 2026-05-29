@@ -3,6 +3,7 @@ import { CapitalBadge } from "@/components/CapitalBadge";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
 import { UnitSpriteByName } from "@/components/UnitSprite";
+import { Link } from "@/components/Link";
 import { unitLabel } from "@/lib/labels";
 
 export function ResourcesPage({
@@ -48,6 +49,29 @@ export function ResourcesPage({
             ))}
           </div>
         )}
+        <h3 class="font-bold mt-6 mb-3 text-sm">Troop Movements</h3>
+        <div class="text-xs space-y-2">
+          <MovementRow
+            label="Incoming attacks/raids"
+            count={data.troopMovementSummary.incomingAttacksRaids}
+            href="/app/build/39#incoming"
+          />
+          <MovementRow
+            label="Incoming returns/reinforcements"
+            count={data.troopMovementSummary.incomingReturnsReinforcements}
+            href="/app/build/39#incoming"
+          />
+          <MovementRow
+            label="Outgoing attacks/raids"
+            count={data.troopMovementSummary.outgoingAttacksRaids}
+            href="/app/build/39#outgoing"
+          />
+          <MovementRow
+            label="Outgoing reinforcements"
+            count={data.troopMovementSummary.outgoingReinforcements}
+            href="/app/build/39#outgoing"
+          />
+        </div>
       </div>
     </div>
   );
@@ -58,6 +82,17 @@ function ProductionRow({ label, value }: { label: string; value: number }) {
     <div class="flex justify-between border-b border-gray-100 pb-2">
       <span>{label}</span>
       <span class="font-bold text-gray-900">{value}/hour</span>
+    </div>
+  );
+}
+
+function MovementRow({ label, count, href }: { label: string; count: number; href: string }) {
+  return (
+    <div class="flex justify-between border-b border-gray-100 pb-2">
+      <span>{label}</span>
+      <Link to={href} class="font-bold text-green-700 hover:underline">
+        {count}
+      </Link>
     </div>
   );
 }

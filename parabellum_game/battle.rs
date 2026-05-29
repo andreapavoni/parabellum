@@ -316,10 +316,10 @@ impl Battle {
             &self.defender_village,
             &catapult_reports,
         );
-        let surviving_chiefs = self
-            .attacker
-            .get_troop_count_by_role(parabellum_types::army::UnitRole::Chief)
-            .min(attacker_survivors.get(8));
+        let mut surviving_attacker = self.attacker.clone();
+        surviving_attacker.update_units(&attacker_survivors);
+        let surviving_chiefs =
+            surviving_attacker.get_troop_count_by_role(parabellum_types::army::UnitRole::Chief);
         let loyalty_reduction = if self.attack_type == AttackType::Normal
             && self.conquer_permitted
             && surviving_chiefs > 0

@@ -344,7 +344,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
                     warehouse(20),
                     granary(20),
                 ],
-                resources(80_000, 80_000, 80_000, 80_000),
+                resources(800_000, 800_000, 800_000, 800_000),
             )
             .await;
 
@@ -427,7 +427,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
                     warehouse(20),
                     granary(20),
                 ],
-                resources(80_000, 80_000, 80_000, 80_000),
+                resources(800_000, 800_000, 800_000, 800_000),
             )
             .await;
 
@@ -1676,6 +1676,166 @@ async fn village_es_service_conquer_is_blocked_without_expansion_prerequisites()
             target_player_id
         );
         assert_ne!(village_owner(&service, target_village_id).await, player_id);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let scenario = EsScenario::new(&pool, &service);
+
+        let (_user_id, player_id, source_village_id) = scenario
+            .village(
+                "Conquer Source",
+                Position { x: 10, y: 10 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![
+                    main_building(1),
+                    rally_point(10),
+                    academy(20),
+                    VillageBuilding {
+                        slot_id: 26,
+                        building: Building::new(BuildingName::Palace, 1)
+                            .at_level(20, 1)
+                            .unwrap(),
+                    },
+                    warehouse(20),
+                    granary(20),
+                ],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
+
+        let (_target_user_id, _target_player_id, target_village_id) = scenario
+            .village(
+                "Conquer Target",
+                Position { x: 12, y: 10 },
+                parabellum_types::tribe::Tribe::Teuton,
+                vec![main_building(1), warehouse(20), granary(20)],
+                resources(80_000, 80_000, 80_000, 80_000),
+            )
+            .await;
+
+        sqlx::query("UPDATE rm_village SET is_capital = FALSE WHERE village_id = $1")
+            .bind(target_village_id as i32)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE players SET culture_points = 5000 WHERE id = $1")
+            .bind(player_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        research_and_complete(
+            &service,
+            source_village_id,
+            player_id,
+            UnitName::Chief,
+            1,
+            chrono::Utc::now() + chrono::Duration::days(7),
+            400,
+        )
+        .await;
+        refill_resources(
+            &service,
+            source_village_id,
+            player_id,
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        train_and_complete(
+            &service,
+            source_village_id,
+            player_id,
+            8,
+            BuildingName::Palace,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::days(7),
+            400,
+        )
+        .await;
+        refill_resources(
+            &service,
+            source_village_id,
+            player_id,
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        train_and_complete(
+            &service,
+            source_village_id,
+            player_id,
+            8,
+            BuildingName::Palace,
+            1,
+            1,
+            chrono::Utc::now() + chrono::Duration::days(7),
+            400,
+        )
+        .await;
+        assert_eq!(home_units(&pool, source_village_id, 8).await, 2);
+
+        let first_now = chrono::Utc::now();
+        service
+            .send_attack(
+                source_village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at: first_now + chrono::Duration::seconds(2),
+                    returns_at: first_now + chrono::Duration::seconds(4),
+                },
+            )
+            .await
+            .unwrap();
+        scenario
+            .process_until(first_now + chrono::Duration::seconds(3), 20)
+            .await;
+        scenario
+            .process_until(first_now + chrono::Duration::seconds(5), 20)
+            .await;
+
+        let second_now = chrono::Utc::now();
+        service
+            .send_attack(
+                source_village_id,
+                &AttackVillage {
+                    movement_id: Uuid::new_v4(),
+                    arrival_action_id: Uuid::new_v4(),
+                    return_action_id: Uuid::new_v4(),
+                    player_id,
+                    target_village_id,
+                    units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
+                    hero_id: None,
+                    attack_type: AttackType::Normal,
+                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    arrives_at: second_now + chrono::Duration::seconds(2),
+                    returns_at: second_now + chrono::Duration::seconds(4),
+                },
+            )
+            .await
+            .unwrap();
+        scenario
+            .process_until(second_now + chrono::Duration::seconds(3), 20)
+            .await;
+
+        assert_eq!(village_owner(&service, target_village_id).await, player_id);
+        assert_eq!(
+            stationed_units(&pool, target_village_id, 8).await,
+            1,
+            "exactly one surviving chief unit must be consumed on successful conquer"
+        );
     })
     .await;
 }

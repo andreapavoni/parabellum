@@ -176,6 +176,7 @@ pub struct VillageResourcesResponse {
     pub resource_slots: Vec<ResourceSlotDto>,
     pub building_queue: Vec<BuildingQueueItemDto>,
     pub current_troops: Vec<CurrentTroopDto>,
+    pub troop_movement_summary: TroopMovementSummaryDto,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -184,6 +185,15 @@ pub struct VillageResourcesResponse {
 pub struct CurrentTroopDto {
     pub unit_name: String,
     pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TroopMovementSummaryDto {
+    pub incoming_attacks_raids: usize,
+    pub incoming_returns_reinforcements: usize,
+    pub outgoing_attacks_raids: usize,
+    pub outgoing_reinforcements: usize,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -227,6 +237,7 @@ pub struct PlayerVillageDto {
     pub y: i32,
     pub is_capital: bool,
     pub population: i32,
+    pub distance_from_current: u32,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -257,6 +268,15 @@ pub struct ReportListItemDto {
 pub struct ReportsResponse {
     pub server_time: i64,
     pub reports: Vec<ReportListItemDto>,
+    pub pagination: ReportsPaginationDto,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportsPaginationDto {
+    pub page: i64,
+    pub per_page: i64,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -362,6 +382,9 @@ pub struct BattleReportPayloadDoc {
     pub scouting: Option<ScoutingBattleReportDoc>,
     pub wall_damage: Option<BuildingDamageReportDoc>,
     pub catapult_damage: Vec<BuildingDamageReportDoc>,
+    pub loyalty_before: Option<u8>,
+    pub loyalty_after: Option<u8>,
+    pub conquered: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -572,13 +595,56 @@ pub fn village_resources_response(
     village: &Village,
     queues: &parabellum_app::ports::queries::VillageQueues,
     army_state: &parabellum_app::ports::queries::VillageArmyStateView,
+    movements: &parabellum_app::ports::queries::VillageTroopMovements,
 ) -> VillageResourcesResponse {
+    use parabellum_app::ports::queries::TroopMovementType;
     let queue_views = building_queue_to_views(&queues.building);
+    let incoming_attacks_raids = movements
+        .incoming
+        .iter()
+        .filter(|movement| {
+            matches!(
+                movement.movement_type,
+                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
+            )
+        })
+        .count();
+    let incoming_returns_reinforcements = movements
+        .incoming
+        .iter()
+        .filter(|movement| {
+            matches!(
+                movement.movement_type,
+                TroopMovementType::Return | TroopMovementType::Reinforcement
+            )
+        })
+        .count();
+    let outgoing_attacks_raids = movements
+        .outgoing
+        .iter()
+        .filter(|movement| {
+            matches!(
+                movement.movement_type,
+                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
+            )
+        })
+        .count();
+    let outgoing_reinforcements = movements
+        .outgoing
+        .iter()
+        .filter(|movement| movement.movement_type == TroopMovementType::Reinforcement)
+        .count();
     VillageResourcesResponse {
         server_time: Utc::now().timestamp(),
         village: village_summary(village),
         resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
         current_troops: current_troops(army_state),
+        troop_movement_summary: TroopMovementSummaryDto {
+            incoming_attacks_raids,
+            incoming_returns_reinforcements,
+            outgoing_attacks_raids,
+            outgoing_reinforcements,
+        },
     }
 }

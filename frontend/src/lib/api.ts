@@ -230,7 +230,8 @@ export const api = {
     request<VillageResourcesResponse>(`/villages/${villageId}/resources`),
   stats: (page = 1) => request<StatsResponse>(`/stats?page=${page}`),
   player: (playerId: string) => request<PlayerProfileResponse>(`/players/${playerId}`),
-  reports: () => request<ReportsResponse>("/reports"),
+  reports: (page = 1, perPage = 25) =>
+    request<ReportsResponse>(`/reports?page=${page}&per_page=${perPage}`),
   report: (reportId: string) => request<ReportDetailResponse>(`/reports/${reportId}`),
   mapRegion: async (params?: { x?: number; y?: number; villageId?: number }) => {
     const search = new URLSearchParams();
@@ -359,7 +360,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   releaseReinforcements: (payload: {
-    sourceVillageId: number;
+    villageId: number;
+    armyId: string;
     units: number[];
   }) =>
     request<{ success: boolean }>("/army/release", {

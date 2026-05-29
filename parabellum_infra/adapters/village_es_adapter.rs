@@ -27,6 +27,7 @@ use parabellum_app::{
     },
 };
 use parabellum_types::{
+    army::{UnitName, UnitRole},
     errors::{AppError, ApplicationError, DbError, GameError},
     map::Position,
 };
@@ -244,6 +245,111 @@ impl VillageCommandsPort for VillageEsAdapter {
     }
 
     async fn train_units(&self, request: TrainUnitsRequest) -> Result<(), ApplicationError> {
+        let source = self
+            .service
+            .get_village(request.village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let unit = source
+            .tribe
+            .units()
+            .get(request.unit_idx as usize)
+            .ok_or(GameError::InvalidUnitIndex(request.unit_idx))
+            .map_err(ApplicationError::from)?;
+        if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
+            let source_village: parabellum_game::models::village::Village = source.clone().into();
+            let max_slots = source_village.max_foundation_slots();
+            let owned_villages = self
+                .service
+                .list_villages_by_player_id(request.player_id)
+                .await
+                .map_err(Self::map_query_cqrs_error)?;
+            let child_villages_count = owned_villages
+                .iter()
+                .filter(|v| v.parent_village_id == Some(request.village_id))
+                .count() as u8;
+            let free_slots = max_slots.saturating_sub(child_villages_count);
+            if free_slots == 0 {
+                return Err(ApplicationError::Game(GameError::NoFoundationSlotsAvailable));
+            }
+
+            let chiefs_at_home = source_village.count_chiefs_at_home();
+            let settlers_at_home = source_village.count_settlers_at_home();
+            let chiefs_deployed: u32 = source_village
+                .deployed_armies()
+                .iter()
+                .map(|army| army.units().get(8))
+                .sum();
+            let settlers_deployed: u32 = source_village
+                .deployed_armies()
+                .iter()
+                .map(|army| army.units().get(9))
+                .sum();
+            let training_queue = self
+                .service
+                .get_village_training_queue(request.village_id)
+                .await
+                .map_err(Self::map_query_cqrs_error)?;
+            let mut chiefs_queued = 0u32;
+            let mut settlers_queued = 0u32;
+            for action in training_queue {
+                let Ok(payload) = serde_json::from_value::<
+                    parabellum_app::villages::models::ScheduledActionPayload,
+                >(action.payload) else {
+                    continue;
+                };
+                if let parabellum_app::villages::models::ScheduledActionPayload::TrainUnit {
+                    unit,
+                    quantity_remaining,
+                    ..
+                } = payload
+                {
+                    let qty = quantity_remaining.max(0) as u32;
+                    if matches!(unit, UnitName::Chief | UnitName::Senator | UnitName::Chieftain) {
+                        chiefs_queued = chiefs_queued.saturating_add(qty);
+                    } else if matches!(unit, UnitName::Settler) {
+                        settlers_queued = settlers_queued.saturating_add(qty);
+                    }
+                }
+            }
+
+            let movements = self
+                .service
+                .get_village_troop_movements(request.village_id)
+                .await
+                .map_err(Self::map_query_cqrs_error)?;
+            let (chiefs_moving, settlers_moving) = movements
+                .outgoing
+                .iter()
+                .chain(movements.incoming.iter())
+                .filter(|m| m.origin_player_id == request.player_id)
+                .fold((0u32, 0u32), |(chiefs, settlers), m| {
+                    (
+                        chiefs.saturating_add(m.units.get(8)),
+                        settlers.saturating_add(m.units.get(9)),
+                    )
+                });
+
+            let chiefs_total = chiefs_at_home + chiefs_deployed + chiefs_queued + chiefs_moving;
+            let settlers_total =
+                settlers_at_home + settlers_deployed + settlers_queued + settlers_moving;
+            let committed_this_unit = if matches!(unit.role, UnitRole::Chief) {
+                chiefs_total
+            } else {
+                settlers_total
+            };
+            let max_trainable = parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                unit.role.clone(),
+                free_slots,
+                chiefs_total,
+                settlers_total,
+                committed_this_unit,
+            );
+            if request.quantity as u32 > max_trainable {
+                return Err(ApplicationError::Game(GameError::NoFoundationSlotsAvailable));
+            }
+        }
+
         self.service
             .train_units(
                 request.village_id,
@@ -742,10 +848,11 @@ impl VillageQueryPort for VillageEsAdapter {
     async fn list_reports_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<parabellum_app::villages::models::ReportModel>, ApplicationError> {
         self.service
-            .list_reports_for_player(player_id, limit)
+            .list_reports_for_player(player_id, offset, limit)
             .await
             .map_err(Self::map_query_cqrs_error)
     }

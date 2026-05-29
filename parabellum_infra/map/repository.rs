@@ -240,16 +240,16 @@ pub(crate) fn random_unoccupied_4446_valley_for_update_query(
 ) -> &'static str {
     match quadrant {
         MapQuadrant::NorthEast => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int > 0 AND topology = '{\"Valley\":[4,4,4,6]}'::jsonb ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
         }
         MapQuadrant::SouthEast => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int > 0 AND (position->>'y')::int < 0 AND topology = '{\"Valley\":[4,4,4,6]}'::jsonb ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
         }
         MapQuadrant::SouthWest => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int < 0 AND topology = '{\"Valley\":[4,4,4,6]}'::jsonb ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
         }
         MapQuadrant::NorthWest => {
-            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology @> '{\"Valley\":[4,4,4,6]}' ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
+            "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology = '{\"Valley\":[4,4,4,6]}'::jsonb ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
         }
     }
 }

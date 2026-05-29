@@ -528,6 +528,7 @@ pub(super) async fn execute_action(
                         source_village_id: outcome.target.source_village_id,
                         target_village_id: outcome.target.target_village_id,
                         target_player_id: outcome.target.target_player_id,
+                        target_tribe: outcome.target.target_tribe.clone(),
                         target_parent_village_id: outcome.target.target_parent_village_id,
                         target_loyalty: outcome.target.target_loyalty,
                         target_buildings: outcome.target.target_buildings.clone(),
@@ -887,12 +888,14 @@ async fn build_attack_outcome_command(
 
     let conquered = can_attempt_conquer && report.loyalty_after == 0;
     let mut target_player_id = target.player_id;
+    let mut target_tribe = target.tribe.clone();
     let mut target_parent_village_id = target.parent_village_id;
     let mut target_loyalty = defender_village.loyalty();
     let mut target_army = defender_village.army().cloned();
     let mut target_reinforcements = defender_village.reinforcements().clone();
     if conquered {
         target_player_id = player_id;
+        target_tribe = source.tribe.clone();
         target_parent_village_id = Some(source_village_id);
         target_loyalty = 100;
         target_army = None;
@@ -902,7 +905,10 @@ async fn build_attack_outcome_command(
     let stationed_attacker_army = if conquered {
         let mut stationed = attacker_army.clone();
         let mut units = stationed.units().clone();
-        units.set(8, 0);
+        let chiefs = units.get(8);
+        if chiefs > 0 {
+            units.set(8, chiefs - 1);
+        }
         stationed.update_units(&units);
         if stationed.immensity() > 0 {
             Some(stationed)
@@ -950,6 +956,7 @@ async fn build_attack_outcome_command(
             source_village_id,
             target_village_id,
             target_player_id,
+            target_tribe,
             target_parent_village_id,
             target_loyalty,
             target_buildings: defender_village.buildings().to_vec(),
@@ -1124,8 +1131,9 @@ async fn can_attempt_conquer(
         .await
         .map_err(CqrsError::domain_source)?
         .culture_points;
+    let cfg = parabellum_app::config::Config::from_env();
     let needed_cp = required_cp(
-        parabellum_types::common::Speed::X1,
+        parabellum_types::common::Speed::from(cfg.speed),
         player_villages.len() + 1,
     );
     Ok(total_cp >= needed_cp)

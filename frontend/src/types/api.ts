@@ -109,6 +109,12 @@ export type VillageResourcesResponse = {
     unitName: string;
     count: number;
   }[];
+  troopMovementSummary: {
+    incomingAttacksRaids: number;
+    incomingReturnsReinforcements: number;
+    outgoingAttacksRaids: number;
+    outgoingReinforcements: number;
+  };
 };
 
 export type LeaderboardEntry = {
@@ -140,6 +146,7 @@ export type PlayerVillage = {
   y: number;
   isCapital: boolean;
   population: number;
+  distanceFromCurrent: number;
 };
 
 export type PlayerProfileResponse = {
@@ -160,6 +167,11 @@ export type ReportListItem = {
 export type ReportsResponse = {
   serverTime: number;
   reports: ReportListItem[];
+  pagination: {
+    page: number;
+    perPage: number;
+    hasMore: boolean;
+  };
 };
 
 export type ReportDetailResponse = {
@@ -249,6 +261,8 @@ export type TrainingUnitOption = {
   attack: number;
   defenseInfantry: number;
   defenseCavalry: number;
+  speed: number;
+  capacity: number;
   timeSecs: number;
 };
 
@@ -419,6 +433,7 @@ export type RallyCard = {
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
   arrivesAt?: string;
+  bounty?: ResourceAmounts;
   action?: RallyAction;
   actionId?: string;
 };

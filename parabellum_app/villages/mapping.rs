@@ -2,7 +2,8 @@ use super::models::VillageModel;
 
 impl From<VillageModel> for parabellum_game::models::village::Village {
     fn from(model: VillageModel) -> Self {
-        parabellum_game::models::village::Village::from_persistence(
+        let busy_merchants = model.busy_merchants;
+        let mut village = parabellum_game::models::village::Village::from_persistence(
             model.village_id,
             model.village_name,
             model.player_id,
@@ -24,7 +25,9 @@ impl From<VillageModel> for parabellum_game::models::village::Village {
             model.culture_points_production,
             model.updated_at,
             model.parent_village_id,
-        )
+        );
+        village.busy_merchants = busy_merchants.min(village.total_merchants);
+        village
     }
 }
 

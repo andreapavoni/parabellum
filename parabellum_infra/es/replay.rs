@@ -288,5 +288,6 @@ fn is_report_event(event: &VillageEvent) -> bool {
             | VillageEvent::MerchantsArrived { .. }
             | VillageEvent::ScoutBattleResolved { .. }
             | VillageEvent::AttackBattleResolved { .. }
+            | VillageEvent::ReportMarkedAsRead { .. }
     )
 }

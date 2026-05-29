@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { MeContextResponse, SessionResponse, VillageListItem } from "@/types/api";
 import { CapitalBadge } from "@/components/CapitalBadge";
+import { api } from "@/lib/api";
 import { Link } from "./Link";
 
 type LayoutProps = {
@@ -27,6 +28,7 @@ type LiveResources = {
 export function Layout(props: LayoutProps) {
   const [serverTime, setServerTime] = useState(props.meContext?.serverTime ?? Date.now() / 1000);
   const [liveResources, setLiveResources] = useState<LiveResources | null>(null);
+  const [hasUnreadReports, setHasUnreadReports] = useState(false);
 
   useEffect(() => {
     setServerTime(props.meContext?.serverTime ?? Date.now() / 1000);
@@ -69,6 +71,34 @@ export function Layout(props: LayoutProps) {
     return () => window.clearInterval(timer);
   }, [props.meContext?.currentVillage]);
 
+  useEffect(() => {
+    if (!props.session.authenticated) {
+      setHasUnreadReports(false);
+      return;
+    }
+    let cancelled = false;
+    const refreshUnread = async () => {
+      try {
+        const page = await api.reports(1, 25);
+        if (!cancelled) {
+          setHasUnreadReports(page.reports.some((report) => !report.isRead));
+        }
+      } catch {
+        if (!cancelled) {
+          setHasUnreadReports(false);
+        }
+      }
+    };
+    void refreshUnread();
+    const timer = window.setInterval(() => {
+      void refreshUnread();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [props.session.authenticated]);
+
   const serverClock = useMemo(() => {
     const date = new Date(serverTime * 1000);
     return [date.getHours(), date.getMinutes(), date.getSeconds()]
@@ -105,7 +135,12 @@ export function Layout(props: LayoutProps) {
               <NavIcon active={props.active === "village"} to="/village" label="🏠" />
               <NavIcon active={props.active === "map"} to="/map" label="🗺️" />
               <NavIcon active={props.active === "stats"} to="/stats" label="📊" />
-              <NavIcon active={props.active === "reports"} to="/reports" label="📜" />
+              <NavIcon
+                active={props.active === "reports"}
+                alert={hasUnreadReports}
+                to="/reports"
+                label="📜"
+              />
               <div class="nav-icon" title="Messages">
                 ✉️
               </div>
@@ -171,9 +206,26 @@ export function Layout(props: LayoutProps) {
   );
 }
 
-function NavIcon({ active, to, label }: { active: boolean; to: string; label: string }) {
+function NavIcon({
+  active,
+  alert,
+  to,
+  label,
+}: {
+  active: boolean;
+  alert?: boolean;
+  to: string;
+  label: string;
+}) {
+  const className = [
+    "nav-icon",
+    active ? "nav-active" : "",
+    alert && !active ? "nav-unread" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div class={active ? "nav-icon nav-active" : "nav-icon"}>
+    <div class={className}>
       <Link to={to}>{label}</Link>
     </div>
   );

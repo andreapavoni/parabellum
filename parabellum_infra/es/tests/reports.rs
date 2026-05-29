@@ -91,7 +91,7 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
             .await;
 
         let reports = service
-            .list_reports_for_player(player_id, 10)
+            .list_reports_for_player(player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(reports.len(), 1);
@@ -104,7 +104,7 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
             .await;
 
         let reports_after_return = service
-            .list_reports_for_player(player_id, 10)
+            .list_reports_for_player(player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(reports_after_return.len(), 1);
@@ -184,7 +184,7 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
             .await;
 
         let attacker_reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);
@@ -199,7 +199,7 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
         );
 
         let defender_reports = service
-            .list_reports_for_player(defender_player_id, 10)
+            .list_reports_for_player(defender_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(defender_reports.len(), 1);
@@ -210,11 +210,11 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
             .await;
 
         let attacker_reports_after_return = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         let defender_reports_after_return = service
-            .list_reports_for_player(defender_player_id, 10)
+            .list_reports_for_player(defender_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports_after_return.len(), 1);
@@ -351,15 +351,15 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 50).await;
 
         let attacker_reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         let defender_reports = service
-            .list_reports_for_player(defender_player_id, 10)
+            .list_reports_for_player(defender_player_id, 0, 10)
             .await
             .unwrap();
         let reinforcer_reports = service
-            .list_reports_for_player(reinforcer_player_id, 10)
+            .list_reports_for_player(reinforcer_player_id, 0, 10)
             .await
             .unwrap();
 
@@ -465,7 +465,7 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(reports.len(), 1);
@@ -586,7 +586,7 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
         .await;
 
         let player_reports = service
-            .list_reports_for_player(attacker_player_id, 20)
+            .list_reports_for_player(attacker_player_id, 0, 20)
             .await
             .unwrap();
         let reinforcement_reports = player_reports
@@ -667,7 +667,7 @@ async fn village_es_service_reinforcement_reports_one_audience_for_same_player()
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let reports = service
-            .list_reports_for_player(player_id, 10)
+            .list_reports_for_player(player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(reports.len(), 1);
@@ -758,7 +758,7 @@ async fn village_es_service_scout_projects_battle_report() {
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);
@@ -772,7 +772,7 @@ async fn village_es_service_scout_projects_battle_report() {
             ScoutingTarget::Resources
         );
         let defender_reports = service
-            .list_reports_for_player(defender_player_id, 10)
+            .list_reports_for_player(defender_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(defender_reports.len(), 0);
@@ -780,7 +780,7 @@ async fn village_es_service_scout_projects_battle_report() {
         process_due_until(&service, returns_at + chrono::Duration::seconds(1), 10).await;
 
         let attacker_reports_after_return = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports_after_return.len(), 1);
@@ -898,7 +898,7 @@ async fn village_es_service_detected_scout_reports_to_defender_player() {
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 20).await;
 
         let attacker_reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);
@@ -910,7 +910,7 @@ async fn village_es_service_detected_scout_reports_to_defender_player() {
         assert!(payload.defender.is_some());
 
         let defender_reports = service
-            .list_reports_for_player(defender_player_id, 10)
+            .list_reports_for_player(defender_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(defender_reports.len(), 1);
@@ -1030,7 +1030,7 @@ async fn village_es_service_scout_with_all_attackers_dead_hides_scouting_details
         process_due_until(&service, arrives_at + chrono::Duration::seconds(1), 20).await;
 
         let attacker_reports = service
-            .list_reports_for_player(attacker_player_id, 10)
+            .list_reports_for_player(attacker_player_id, 0, 10)
             .await
             .unwrap();
         assert_eq!(attacker_reports.len(), 1);

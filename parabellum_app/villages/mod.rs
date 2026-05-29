@@ -12,7 +12,7 @@ pub use aggregate::VillageAggregate;
 pub use commands::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
     CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
-    RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
     ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
     SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };

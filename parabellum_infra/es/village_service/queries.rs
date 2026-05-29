@@ -70,6 +70,7 @@ impl VillageEsService {
                         }
                     })
                     .unwrap_or(parabellum_types::tribe::Tribe::Nature),
+                bounty: movement.bounty,
             };
             match mapped.direction {
                 TroopMovementDirection::Outgoing => outgoing.push(mapped),
@@ -563,6 +564,7 @@ impl VillageEsService {
     pub async fn list_reports_for_player(
         &self,
         player_id: uuid::Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
@@ -571,6 +573,7 @@ impl VillageEsService {
                 repository: Arc::new(PostgresReportRepository::new(self.pool.clone()))
                     as Arc<dyn ReportRepository>,
                 player_id,
+                offset,
                 limit,
             })
             .await
@@ -597,10 +600,27 @@ impl VillageEsService {
         report_id: uuid::Uuid,
         player_id: uuid::Uuid,
     ) -> Result<(), CqrsError> {
-        let repo = PostgresReportRepository::new(self.pool.clone());
-        repo.mark_as_read(report_id, player_id)
-            .await
-            .map_err(CqrsError::domain_source)
+        let report = self
+            .get_report_for_player(report_id, player_id)
+            .await?
+            .ok_or_else(|| CqrsError::EventStore("report not found for player".to_string()))?;
+        let village_id = report
+            .actor_village_id
+            .or(report.target_village_id)
+            .ok_or_else(|| CqrsError::EventStore("report has no village stream anchor".to_string()))?;
+
+        let cqrs = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&cqrs);
+        service
+            .mark_report_read(
+                village_id,
+                &parabellum_app::villages::MarkReportRead {
+                    report_id,
+                    player_id,
+                },
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn get_village_scheduled_action_status_count(

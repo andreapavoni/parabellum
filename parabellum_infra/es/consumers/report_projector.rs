@@ -24,6 +24,13 @@ pub struct ReportProjector {
 }
 
 impl ReportProjector {
+    fn projected_report_id(event: &StoredEvent) -> Uuid {
+        match event.global_sequence {
+            Some(seq) => Uuid::from_u128(0xa11ce000000000000000000000000000u128 | seq as u128),
+            None => Uuid::new_v4(),
+        }
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool: pool.clone(),
@@ -67,6 +74,7 @@ impl ReportProjector {
         if !event.aggregate_type.contains("VillageAggregate") {
             return Ok(());
         }
+        let projected_report_id = Self::projected_report_id(event);
 
         let domain_event = event.get_payload::<VillageEvent>()?;
         match domain_event {
@@ -101,6 +109,7 @@ impl ReportProjector {
                     .add_projected_in_tx(
                         tx,
                         &ProjectedReport {
+                            id: projected_report_id,
                             report_type: "reinforcement".to_string(),
                             payload: serde_json::to_value(payload)
                                 .map_err(CqrsError::Serialization)?,
@@ -148,6 +157,7 @@ impl ReportProjector {
                     .add_projected_in_tx(
                         tx,
                         &ProjectedReport {
+                            id: projected_report_id,
                             report_type: "marketplace_delivery".to_string(),
                             payload: serde_json::to_value(payload)
                                 .map_err(CqrsError::Serialization)?,
@@ -236,6 +246,9 @@ impl ReportProjector {
                     },
                     wall_damage: None,
                     catapult_damage: vec![],
+                    loyalty_before: None,
+                    loyalty_after: None,
+                    conquered: None,
                 });
                 let mut audiences = vec![player_id];
                 if let Some(scouting) = &report.scouting
@@ -248,6 +261,7 @@ impl ReportProjector {
                     .add_projected_in_tx(
                         tx,
                         &ProjectedReport {
+                            id: projected_report_id,
                             report_type: "battle".to_string(),
                             payload: serde_json::to_value(payload)
                                 .map_err(CqrsError::Serialization)?,
@@ -331,6 +345,9 @@ impl ReportProjector {
                     scouting: report.scouting,
                     wall_damage: report.wall_damage,
                     catapult_damage: report.catapult_damage,
+                    loyalty_before: Some(report.loyalty_before),
+                    loyalty_after: Some(report.loyalty_after),
+                    conquered: Some(success && report.loyalty_after == 0),
                 });
                 let mut audiences = vec![player_id];
                 if target.player_id != player_id {
@@ -346,6 +363,7 @@ impl ReportProjector {
                     .add_projected_in_tx(
                         tx,
                         &ProjectedReport {
+                            id: projected_report_id,
                             report_type: "battle".to_string(),
                             payload: serde_json::to_value(payload)
                                 .map_err(CqrsError::Serialization)?,
@@ -356,6 +374,25 @@ impl ReportProjector {
                         },
                         &audiences,
                     )
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                Ok(())
+            }
+            VillageEvent::ReportMarkedAsRead {
+                report_id,
+                player_id,
+                read_at,
+            } => {
+                let updated = self
+                    .reports
+                    .mark_as_read_in_tx(tx, report_id, player_id, read_at)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                if updated {
+                    return Ok(());
+                }
+                self.reports
+                    .mark_latest_unread_as_read_before_in_tx(tx, player_id, read_at)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 Ok(())

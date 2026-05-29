@@ -210,6 +210,7 @@ pub enum VillageEvent {
         source_village_id: u32,
         target_village_id: u32,
         target_player_id: Uuid,
+        target_tribe: parabellum_types::tribe::Tribe,
         target_parent_village_id: Option<u32>,
         target_loyalty: u8,
         target_buildings: Vec<VillageBuilding>,
@@ -482,6 +483,11 @@ pub enum VillageEvent {
         village_id: u32,
         unit: UnitName,
     },
+    ReportMarkedAsRead {
+        report_id: Uuid,
+        player_id: Uuid,
+        read_at: DateTime<Utc>,
+    },
 }
 
 impl fmt::Display for VillageEvent {
@@ -540,6 +546,7 @@ impl fmt::Display for VillageEvent {
             VillageEvent::AcademyResearchCompleted { .. } => "AcademyResearchCompleted",
             VillageEvent::SmithyResearchScheduled { .. } => "SmithyResearchScheduled",
             VillageEvent::SmithyResearchCompleted { .. } => "SmithyResearchCompleted",
+            VillageEvent::ReportMarkedAsRead { .. } => "ReportMarkedAsRead",
         };
         f.write_str(name)
     }

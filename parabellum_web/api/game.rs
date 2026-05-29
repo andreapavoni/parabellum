@@ -26,10 +26,9 @@ use crate::{
         dto::{
             LeaderboardEntryDto, MeContextResponse, PaginationDto, PlayerProfileResponse,
             PlayerVillageDto, ReportDetailPayloadResponse, ReportDetailResponse, ReportListItemDto,
-            ReportsResponse,
-            StatsResponse, VillageOverviewResponse, VillageResourcesResponse, player_summary,
-            session_user, village_list, village_overview_response, village_resources_response,
-            village_summary,
+            ReportsResponse, StatsResponse, VillageOverviewResponse, VillageResourcesResponse,
+            player_summary, session_user, village_list, village_overview_response,
+            village_resources_response, village_summary,
         },
         errors::ApiError,
     },
@@ -48,6 +47,12 @@ const MAP_REGION_RADIUS: i32 = 7;
 /// Pagination query for leaderboard endpoint.
 pub struct StatsQuery {
     pub page: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ReportsQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -305,10 +310,16 @@ pub async fn village_resources(
         .get_village_queues(village.id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
+    let movements = state
+        .game_app
+        .get_village_troop_movements(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_troop_movements", e))?;
     Ok(Json(village_resources_response(
         &village,
         &queues,
         &army_state,
+        &movements,
     )))
 }
 
@@ -325,11 +336,10 @@ pub async fn switch_village(
     Json(payload): Json<SwitchVillageRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-
     if !user
         .villages
         .iter()
-        .any(|village| village.id == payload.village_id)
+        .any(|v| v.id == payload.village_id && v.player_id == user.player.id)
     {
         return Err(ApiError::not_found(
             "Village not available for the current player",
@@ -449,7 +459,7 @@ pub async fn player_profile(
     headers: HeaderMap,
     Path(player_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let _user = authenticated_user(&state, &headers).await?;
+    let user = authenticated_user(&state, &headers).await?;
 
     let player = state
         .game_app
@@ -476,6 +486,10 @@ pub async fn player_profile(
                 y: village.position.y,
                 population: village.population as i32,
                 is_capital: village.is_capital,
+                distance_from_current: user
+                    .village
+                    .position
+                    .distance(&village.position, state.world_size as i32),
             })
             .collect(),
     }))
@@ -485,22 +499,37 @@ pub async fn player_profile(
 #[utoipa::path(
     get,
     path = "/reports",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (1-based)"),
+        ("per_page" = Option<i64>, Query, description = "Items per page (max 100)")
+    ),
     responses((status = 200, body = ReportsResponse))
 )]
 pub async fn reports(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Query(params): Query<ReportsQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(50).clamp(1, 100);
+    let offset = (page - 1) * per_page;
     let reports = state
         .game_app
-        .list_reports_for_player(user.player.id, 50)
+        .list_reports_for_player(user.player.id, offset, per_page + 1)
         .await
         .map_err(|err| map_application_error("unable_to_list_reports", err))?;
+    let has_more = reports.len() as i64 > per_page;
+    let reports: Vec<_> = reports.into_iter().take(per_page as usize).collect();
 
     Ok(Json(ReportsResponse {
         server_time: Utc::now().timestamp(),
         reports: reports.into_iter().map(map_report_summary).collect(),
+        pagination: crate::api::dto::ReportsPaginationDto {
+            page,
+            per_page,
+            has_more,
+        },
     }))
 }
 
@@ -688,15 +717,25 @@ async fn owned_village_by_id(
     user: &CurrentUser,
     village_id: u32,
 ) -> Result<Village, ApiError> {
+    if !user
+        .villages
+        .iter()
+        .any(|v| v.id == village_id && v.player_id == user.player.id)
+    {
+        return Err(ApiError::not_found(
+            "Village not available for the current player",
+        ));
+    }
+
     let village = state
         .game_app
         .get_village_model(village_id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village", e))?;
-    if village.player_id != user.player.id {
-        return Err(ApiError::not_found(
-            "Village not available for the current player",
-        ));
+    if village.player_id != user.player.id
+        && let Some(cached) = user.villages.iter().find(|v| v.id == village_id)
+    {
+        return Ok(cached.clone());
     }
     Ok(village.into())
 }

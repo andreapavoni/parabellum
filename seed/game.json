@@ -1,7 +1,7 @@
 {
   "players": [
     {
-      "username": "titus",
+      "username": "erina",
       "tribe": "Teuton",
       "villages": [
         {
@@ -13,6 +13,42 @@
           "template": "developed",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
           "buildings": [
             {
               "slotId": 31,

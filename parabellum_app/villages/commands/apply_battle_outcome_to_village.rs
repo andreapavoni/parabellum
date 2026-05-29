@@ -1,6 +1,7 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
+use parabellum_types::tribe::Tribe;
 use parabellum_types::errors::AppError;
 use uuid::Uuid;
 
@@ -13,6 +14,7 @@ pub struct ApplyBattleOutcomeToVillage {
     pub source_village_id: u32,
     pub target_village_id: u32,
     pub target_player_id: Uuid,
+    pub target_tribe: Tribe,
     pub target_parent_village_id: Option<u32>,
     pub target_loyalty: u8,
     pub target_buildings: Vec<VillageBuilding>,
@@ -41,6 +43,7 @@ impl Command for ApplyBattleOutcomeToVillage {
             source_village_id: self.source_village_id,
             target_village_id: self.target_village_id,
             target_player_id: self.target_player_id,
+            target_tribe: self.target_tribe.clone(),
             target_parent_village_id: self.target_parent_village_id,
             target_loyalty: self.target_loyalty,
             target_buildings: self.target_buildings.clone(),

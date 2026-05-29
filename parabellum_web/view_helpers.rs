@@ -44,6 +44,7 @@ pub struct ArmyCardData {
     pub category: ArmyCategory,
     pub movement_kind: Option<MovementKind>,
     pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub bounty: Option<ResourceGroup>,
     pub action_button: Option<ArmyAction>,
 }
 
@@ -78,6 +79,7 @@ pub fn prepare_rally_point_cards(
             category: ArmyCategory::Stationed,
             movement_kind: None,
             arrives_at: None,
+            bounty: None,
             action_button: None,
         });
     }
@@ -99,6 +101,7 @@ pub fn prepare_rally_point_cards(
             category: ArmyCategory::Deployed,
             movement_kind: None,
             arrives_at: None,
+            bounty: None,
             action_button: Some(ArmyAction::Recall {
                 army_id: army.id.to_string(),
             }),
@@ -122,6 +125,7 @@ pub fn prepare_rally_point_cards(
             category: ArmyCategory::Reinforcement,
             movement_kind: None,
             arrives_at: None,
+            bounty: None,
             action_button: Some(ArmyAction::Release {
                 army_id: reinforcement.id.to_string(),
             }),
@@ -151,6 +155,7 @@ pub fn prepare_rally_point_cards(
             category: ArmyCategory::Outgoing,
             movement_kind: Some(movement_kind),
             arrives_at: Some(movement.arrives_at),
+            bounty: movement.bounty.clone(),
             action_button,
         });
     }
@@ -175,6 +180,7 @@ pub fn prepare_rally_point_cards(
             category: ArmyCategory::Incoming,
             movement_kind: Some(movement_kind),
             arrives_at: Some(movement.arrives_at),
+            bounty: movement.bounty.clone(),
             action_button: None,
         });
     }

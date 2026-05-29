@@ -97,6 +97,7 @@ pub struct TroopMovement {
     pub time_seconds: u32,
     pub units: TroopSet,
     pub tribe: parabellum_types::tribe::Tribe,
+    pub bounty: Option<ResourceGroup>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -161,6 +162,7 @@ pub trait VillageQueryPort: Send + Sync {
     async fn list_reports_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError>;
     async fn get_report_for_player(

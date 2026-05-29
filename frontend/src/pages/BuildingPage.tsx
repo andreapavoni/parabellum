@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { buildingLabel, unitLabel } from "@/lib/labels";
+import { Link } from "@/components/Link";
 import { UnitSprite } from "@/components/UnitSprite";
 import type {
   AcademyResearchOption,
@@ -141,7 +142,7 @@ function formatSingleResourceSummary(resources: ResourceAmounts) {
     return formatResourceSummary(resources);
   }
 
-  const key = keys[0];
+  const key = keys[0] as ResourceKey;
   const value = resources[key];
   const icon = key === "lumber" ? "🌲" : key === "clay" ? "🧱" : key === "iron" ? "⛏️" : "🌾";
   return `${icon} ${value}`;
@@ -409,7 +410,7 @@ function TrainingUnitCard({
         <div class="text-xs text-gray-500">Upkeep {option.upkeep}</div>
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-sm">
         <div class="rounded border bg-gray-50 px-2 py-1">
           <div class="text-[11px] uppercase text-gray-500">Attack</div>
           <div class="font-semibold text-gray-900">{option.attack}</div>
@@ -425,6 +426,14 @@ function TrainingUnitCard({
         <div class="rounded border bg-gray-50 px-2 py-1">
           <div class="text-[11px] uppercase text-gray-500">Upkeep</div>
           <div class="font-semibold text-gray-900">{option.upkeep}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Speed</div>
+          <div class="font-semibold text-gray-900">{option.speed}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Capacity</div>
+          <div class="font-semibold text-gray-900">{option.capacity}</div>
         </div>
       </div>
 
@@ -571,6 +580,9 @@ function SmithyOptionCard({
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.smithy?.queueFull ?? false;
   const canUpgrade = option.canUpgrade && affordable && !queueFull && !submitting;
+  const nextLevel = Math.min(option.currentLevel + 1, option.maxLevel);
+  const reachedMaxLevel = option.currentLevel >= option.maxLevel;
+  const alreadyQueued = detail.smithy?.queue.some((job) => job.unitName === option.unitName) ?? false;
 
   return (
     <div class="border rounded-md p-4 bg-white space-y-3">
@@ -578,7 +590,7 @@ function SmithyOptionCard({
         <div>
           <div class="text-lg font-semibold text-gray-900">{unitLabel(option.unitName)}</div>
           <div class="text-xs text-gray-500">
-            Level {option.currentLevel} → {option.currentLevel + 1} (Max: {option.maxLevel})
+            Level {option.currentLevel} → {nextLevel} (Max: {option.maxLevel})
           </div>
           <div class="text-xs text-gray-500">Upgrade time: {formatDuration(option.timeSecs)}</div>
         </div>
@@ -612,7 +624,8 @@ function SmithyOptionCard({
       </button>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Upgrade queue is full</div> : null}
-      {!option.canUpgrade ? <div class="text-xs text-gray-500">Max level reached</div> : null}
+      {!queueFull && alreadyQueued ? <div class="text-xs text-amber-700">Already in upgrade queue</div> : null}
+      {reachedMaxLevel ? <div class="text-xs text-gray-500">Max level reached</div> : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
     </div>
   );
@@ -675,7 +688,7 @@ function MarketplaceSection({
         <div class="grid gap-3 sm:grid-cols-4">
           {(["lumber", "clay", "iron", "crop"] as const).map((key) => (
             <label key={key} class="text-sm text-gray-600">
-              {key[0].toUpperCase() + key.slice(1)}
+              {key.charAt(0).toUpperCase() + key.slice(1)}
               <input
                 type="number"
                 min="0"
@@ -919,7 +932,11 @@ function OffersTable({
             <tbody>
               {offers.map((offer) => (
                 <tr key={offer.offerId} class="border-b last:border-b-0">
-                  <td class="py-2 pr-4">{offer.villageName} ({offer.position.x}|{offer.position.y})</td>
+                  <td class="py-2 pr-4">
+                    <Link to={`/map/field/${offer.villageId}`} class="text-green-700 hover:underline">
+                      {offer.villageName} ({offer.position.x}|{offer.position.y})
+                    </Link>
+                  </td>
                   <td class="py-2 pr-4">{formatSingleResourceSummary(offer.offerResources)}</td>
                   <td class="py-2 pr-4">{formatSingleResourceSummary(offer.seekResources)}</td>
                   <td class="py-2 pr-4">{offer.merchantsRequired}</td>
@@ -976,9 +993,17 @@ function RallyPointSection({
   const [catapultTarget2, setCatapultTarget2] = useState("Warehouse");
   const [units, setUnits] = useState<Record<number, number>>({});
   const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
+  const [previewStartedAtMs, setPreviewStartedAtMs] = useState<number | null>(null);
+  const [previewTravelSeconds, setPreviewTravelSeconds] = useState(0);
+  const [previewTick, setPreviewTick] = useState(0);
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!preview) return;
+    const timer = window.setInterval(() => setPreviewTick((v) => v + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [preview]);
 
   if (!detail.rallyPoint) return null;
 
@@ -1016,19 +1041,38 @@ function RallyPointSection({
           if (cards.length === 0) return null;
           return (
             <div class="space-y-2" key={category}>
-              <h3 class="text-sm font-semibold text-gray-700">{category}</h3>
+              <h3
+                id={category === "incoming" ? "incoming" : category === "outgoing" ? "outgoing" : undefined}
+                class="text-sm font-semibold text-gray-700"
+              >
+                {category}
+              </h3>
               <div class="space-y-2">
                 {cards.map((card) => (
                   <div key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="border rounded-lg p-4 bg-white shadow-sm space-y-3">
                     <div class="flex justify-between items-start">
                       <div class="flex-1">
                         <div class="flex items-center gap-2">
-                          <h3 class="font-semibold text-gray-900">{card.villageName ?? "Unknown Village"}</h3>
+                          {card.villageName ? (
+                            <h3 class="font-semibold text-gray-900">
+                              <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                                {card.villageName}
+                              </Link>
+                            </h3>
+                          ) : (
+                            <h3 class="font-semibold text-gray-900">Unknown Village</h3>
+                          )}
                           {card.movementKind ? (
                             <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{card.movementKind}</span>
                           ) : null}
                         </div>
-                        {card.position ? <p class="text-sm text-gray-600 mt-1">({card.position.x}, {card.position.y})</p> : null}
+                        {card.position ? (
+                          <p class="text-sm text-gray-600 mt-1">
+                            <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                              ({card.position.x}, {card.position.y})
+                            </Link>
+                          </p>
+                        ) : null}
                         <p class="text-xs text-gray-500 mt-1">Upkeep: {card.upkeep}</p>
                         {card.arrivesAt ? (
                           <div class="mt-1 space-y-1 text-sm text-gray-500">
@@ -1043,6 +1087,11 @@ function RallyPointSection({
                             </p>
                             <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
                           </div>
+                        ) : null}
+                        {card.bounty ? (
+                          <p class="text-xs text-amber-700 mt-1">
+                            Loot: {card.bounty.lumber}/{card.bounty.clay}/{card.bounty.iron}/{card.bounty.crop}
+                          </p>
                         ) : null}
                       </div>
                       <span class="text-xs px-2 py-1 rounded font-medium whitespace-nowrap bg-gray-100 text-gray-800">{card.category}</span>
@@ -1076,12 +1125,18 @@ function RallyPointSection({
                         type="button"
                         class="inline-block px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded"
                         onClick={async () => {
-                          await api.recallTroops({
-                            villageId: detail.villageId,
-                            armyId: card.actionId!,
-                            units: fullUnitsFromCard(card),
-                          });
-                          await onMutate();
+                          setError(null);
+                          try {
+                            await api.recallTroops({
+                              villageId: detail.villageId,
+                              armyId: card.actionId!,
+                              units: fullUnitsFromCard(card),
+                            });
+                            await onMutate();
+                          } catch (err) {
+                            const message = err instanceof Error ? err.message : "Unable to recall troops";
+                            setError(message);
+                          }
                         }}
                       >
                         ↩️ Recall Troops
@@ -1092,11 +1147,18 @@ function RallyPointSection({
                         type="button"
                         class="inline-block px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
                         onClick={async () => {
-                          await api.releaseReinforcements({
-                            sourceVillageId: card.villageId,
-                            units: fullUnitsFromCard(card),
-                          });
-                          await onMutate();
+                          setError(null);
+                          try {
+                            await api.releaseReinforcements({
+                              villageId: card.villageId,
+                              armyId: card.actionId!,
+                              units: fullUnitsFromCard(card),
+                            });
+                            await onMutate();
+                          } catch (err) {
+                            const message = err instanceof Error ? err.message : "Unable to release reinforcements";
+                            setError(message);
+                          }
                         }}
                       >
                         🏠 Release Reinforcements
@@ -1178,6 +1240,8 @@ function RallyPointSection({
                 units: toUnitsArray(),
               });
               setPreview(result);
+              setPreviewStartedAtMs(Date.now());
+              setPreviewTravelSeconds(secondsUntil(result.arrivesAt));
             } catch (err) {
               setError((err as Error).message);
             } finally {
@@ -1189,12 +1253,21 @@ function RallyPointSection({
         </button>
         {preview ? (
           <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+            {(() => {
+              void previewTick;
+              void previewStartedAtMs;
+              const dynamicArrivesAt = new Date(Date.now() + previewTravelSeconds * 1000);
+              return (
+                <>
             <div>
-              Arrives at: <span class="font-semibold">{new Date(preview.arrivesAt).toLocaleString()}</span>
+                    Travel time: <span class="font-semibold">{formatDuration(previewTravelSeconds)}</span>
             </div>
             <div>
-              Time remaining: <span class="font-semibold">{formatDuration(secondsUntil(preview.arrivesAt))}</span>
+                    Arrives at: <span class="font-semibold">{dynamicArrivesAt.toLocaleString()}</span>
             </div>
+                </>
+              );
+            })()}
             <div>
               Detected movement:{" "}
               <span class="font-semibold">
@@ -1322,6 +1395,7 @@ export function BuildingPage({
   onMutate: () => Promise<void>;
 }) {
   const detail = data.detail;
+  const expansion = detail.expansion;
 
   return (
     <div class="container mx-auto p-4 max-w-6xl">
@@ -1367,7 +1441,7 @@ export function BuildingPage({
           <UpgradeBlock data={detail} onMutate={onMutate} />
         )}
 
-        {detail.buildingType === "expansion" && detail.expansion ? (
+        {detail.buildingType === "expansion" && expansion ? (
           <div class="space-y-4">
             <div class="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-800">Culture Points</h2>
@@ -1375,26 +1449,26 @@ export function BuildingPage({
                 <div class="bg-blue-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Village Production</div>
                   <div class="text-2xl font-bold text-blue-700">
-                    {detail.expansion.villageCulturePointsProduction}
+                    {expansion.villageCulturePointsProduction}
                     <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
                   </div>
                 </div>
                 <div class="bg-green-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Total Production</div>
                   <div class="text-2xl font-bold text-green-700">
-                    {detail.expansion.accountCulturePointsProduction}
+                    {expansion.accountCulturePointsProduction}
                     <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
                   </div>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Total Culture Points</div>
-                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.accountCulturePoints}</div>
+                  <div class="text-2xl font-bold text-purple-700">{expansion.accountCulturePoints}</div>
                 </div>
               </div>
               <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
                 <div class="text-sm font-medium text-gray-700">
                   Next village requires:{" "}
-                  <span class="font-bold text-yellow-700">{detail.expansion.nextCpRequired}</span>{" "}
+                  <span class="font-bold text-yellow-700">{expansion.nextCpRequired}</span>{" "}
                   Culture Points
                 </div>
               </div>
@@ -1404,8 +1478,8 @@ export function BuildingPage({
               <h2 class="text-xl font-semibold mb-4 text-gray-800">Expansion</h2>
               <h3 class="text-lg font-medium mb-2 text-gray-700">Foundation Slots</h3>
               <div class="flex items-center gap-2 flex-wrap">
-                {Array.from({ length: detail.expansion.maxFoundationSlots }).map((_, i) =>
-                  i < detail.expansion.childVillagesCount ? (
+                {Array.from({ length: expansion.maxFoundationSlots }).map((_, i) =>
+                  i < expansion.childVillagesCount ? (
                     <div
                       key={i}
                       class="w-14 h-14 bg-red-500 border-2 border-red-700 rounded flex items-center justify-center"
@@ -1423,22 +1497,22 @@ export function BuildingPage({
                 )}
               </div>
               <div class="text-sm text-gray-600 mt-2">
-                {detail.expansion.childVillagesCount} / {detail.expansion.maxFoundationSlots} slots
+                {expansion.childVillagesCount} / {expansion.maxFoundationSlots} slots
                 used
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div class="bg-blue-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Settlers at Home</div>
-                  <div class="text-2xl font-bold text-blue-700">{detail.expansion.settlersAtHome}</div>
+                  <div class="text-2xl font-bold text-blue-700">{expansion.settlersAtHome}</div>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Settlers Deployed</div>
-                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.settlersDeployed}</div>
+                  <div class="text-2xl font-bold text-purple-700">{expansion.settlersDeployed}</div>
                 </div>
                 <div class="bg-amber-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Trainable Settlers</div>
-                  <div class="text-2xl font-bold text-amber-700">{detail.expansion.maxSettlersTrainable}</div>
+                  <div class="text-2xl font-bold text-amber-700">{expansion.maxSettlersTrainable}</div>
                 </div>
               </div>
             </div>
@@ -1562,23 +1636,51 @@ export function BuildingPage({
         ) : null}
 
         {detail.buildingType === "smithy" && detail.smithy ? (
-          <div>
-            <div class="text-sm text-gray-500 uppercase">Smithy upgrades</div>
-            {detail.smithy.units.length === 0 ? (
-              <p class="text-sm text-gray-500 mt-2">No units to upgrade.</p>
-            ) : (
-              <div class="space-y-4 mt-3">
-                {detail.smithy.units.map((option) => (
-                  <SmithyOptionCard
-                    key={option.unitName}
-                    option={option}
-                    detail={detail}
-                    onMutate={onMutate}
-                  />
+          <>
+            {detail.smithy.queue.length > 0 ? (
+              <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+                <div class="text-sm text-gray-500 uppercase">Upgrade queue</div>
+                {detail.smithy.queue.map((job, index) => (
+                  <div key={`${job.unitName}-${job.targetLevel}-${index}`} class="bg-white border rounded-md p-3 text-sm space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="font-semibold text-gray-900">
+                        {unitLabel(job.unitName)} to level {job.targetLevel}
+                      </span>
+                      <span class={job.isProcessing ? "text-xs font-semibold text-emerald-600" : "text-xs font-semibold text-gray-500"}>
+                        {job.isProcessing ? "In progress" : "Pending"}
+                      </span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-600">
+                      <span>Time remaining</span>
+                      <LiveCountdown
+                        seconds={secondsUntil(job.finishesAt)}
+                        onElapsed={() => {
+                          void onMutate();
+                        }}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
+            ) : null}
+            <div>
+              <div class="text-sm text-gray-500 uppercase">Smithy upgrades</div>
+              {detail.smithy.units.length === 0 ? (
+                <p class="text-sm text-gray-500 mt-2">No units to upgrade.</p>
+              ) : (
+                <div class="space-y-4 mt-3">
+                  {detail.smithy.units.map((option) => (
+                    <SmithyOptionCard
+                      key={option.unitName}
+                      option={option}
+                      detail={detail}
+                      onMutate={onMutate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         ) : null}
 
         {detail.buildingType === "marketplace" ? (

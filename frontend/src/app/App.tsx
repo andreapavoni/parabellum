@@ -181,7 +181,7 @@ export function App() {
       case "player":
         return <ProtectedPlayer playerId={route.playerId} reloadKey={reloadKey} />;
       case "reports":
-        return <ProtectedReports reloadKey={reloadKey} />;
+        return <ProtectedReports page={route.page} perPage={route.perPage} reloadKey={reloadKey} />;
       case "report":
         return <ProtectedReport reportId={route.reportId} reloadKey={reloadKey} />;
       case "map":
@@ -350,8 +350,8 @@ function ProtectedPlayer({ playerId, reloadKey }: { playerId: string; reloadKey:
   return <PlayerPage data={data} />;
 }
 
-function ProtectedReports({ reloadKey }: { reloadKey: number }) {
-  const { data, error, loading } = usePageData(() => api.reports(), [reloadKey]);
+function ProtectedReports({ page, perPage, reloadKey }: { page: number; perPage: number; reloadKey: number }) {
+  const { data, error, loading } = usePageData(() => api.reports(page, perPage), [page, perPage, reloadKey]);
   if (loading) return <Loading label="Loading reports..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load reports."} />;
   return <ReportsPage data={data} />;

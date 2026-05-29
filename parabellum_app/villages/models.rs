@@ -7,7 +7,7 @@ use parabellum_game::models::{
 use parabellum_types::battle::AttackType;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::buildings::BuildingName;
-use parabellum_types::common::ResourceQuantity;
+use parabellum_types::common::{ResourceGroup, ResourceQuantity};
 use parabellum_types::reports::ReportPayload;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -76,6 +76,7 @@ pub struct VillageMovement {
     pub time_seconds: Option<u32>,
     pub units: parabellum_types::army::TroopSet,
     pub tribe: Option<Tribe>,
+    pub bounty: Option<ResourceGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

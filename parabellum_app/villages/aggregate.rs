@@ -155,7 +155,49 @@ impl Aggregate for VillageAggregate {
             VillageEvent::AttackArrivalScheduled { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
             VillageEvent::AttackBattleResolved { .. } => {}
-            VillageEvent::BattleOutcomeAppliedToVillage { .. } => {}
+            VillageEvent::BattleOutcomeAppliedToVillage {
+                target_player_id,
+                target_tribe,
+                target_parent_village_id,
+                target_loyalty,
+                target_buildings,
+                target_production,
+                target_population,
+                target_stocks,
+                target_army,
+                target_reinforcements,
+                stationed_attacker_army,
+                ..
+            } => {
+                let current = &self.village.village;
+                let mut reinforcements = target_reinforcements.clone();
+                if let Some(stationed_attacker) = stationed_attacker_army.clone() {
+                    reinforcements.push(stationed_attacker);
+                }
+                self.village.village = parabellum_game::models::village::Village::from_persistence(
+                    current.id,
+                    current.name.clone(),
+                    *target_player_id,
+                    current.position.clone(),
+                    target_tribe.clone(),
+                    target_buildings.clone(),
+                    current.oases.clone(),
+                    *target_population,
+                    target_army.clone(),
+                    reinforcements,
+                    current.deployed_armies().clone(),
+                    *target_loyalty,
+                    target_production.clone(),
+                    current.is_capital,
+                    current.smithy().clone(),
+                    target_stocks.clone(),
+                    current.academy_research().clone(),
+                    current.culture_points,
+                    current.culture_points_production,
+                    chrono::Utc::now(),
+                    *target_parent_village_id,
+                );
+            }
             VillageEvent::ArmyReturned { army, bounty, .. } => {
                 let _ = self.village.merge_units_home(army.units());
                 if let Some(bounty) = bounty {
@@ -327,6 +369,7 @@ impl Aggregate for VillageAggregate {
                 action_id,
                 slot_id,
                 unit,
+                time_per_unit,
                 quantity_remaining,
                 cost,
                 execute_at,
@@ -337,6 +380,7 @@ impl Aggregate for VillageAggregate {
                     *action_id,
                     *slot_id,
                     unit.clone(),
+                    *time_per_unit,
                     *quantity_remaining,
                     *execute_at,
                 );
@@ -384,6 +428,7 @@ impl Aggregate for VillageAggregate {
                 self.village.mark_smithy_action_consumed(*action_id);
                 let _ = self.village.apply_smithy_research_completed(unit.clone());
             }
+            VillageEvent::ReportMarkedAsRead { .. } => {}
         }
     }
 

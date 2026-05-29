@@ -2,7 +2,7 @@ use parabellum_app::villages::models::ReportModel;
 use parabellum_app::villages::repositories::{ProjectedReport, ReportRepository};
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::postgres::PgQueryResult;
-use sqlx::{PgPool, types::Json};
+use sqlx::{PgPool, Row, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -21,7 +21,7 @@ impl PostgresReportRepository {
         report: &ProjectedReport,
         audience_player_ids: &[Uuid],
     ) -> Result<Uuid, ApplicationError> {
-        let report_id = Uuid::new_v4();
+        let report_id = report.id;
 
         sqlx::query(
             r#"
@@ -53,6 +53,64 @@ impl PostgresReportRepository {
 
         Ok(report_id)
     }
+
+    pub async fn mark_as_read_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        report_id: Uuid,
+        player_id: Uuid,
+        read_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, ApplicationError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE rm_report_reads
+            SET read_at = $3
+            WHERE report_id = $1 AND player_id = $2
+            "#,
+        )
+        .bind(report_id)
+        .bind(player_id)
+        .bind(read_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn mark_latest_unread_as_read_before_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        player_id: Uuid,
+        read_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, ApplicationError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE rm_report_reads rr
+            SET read_at = $2
+            FROM rm_reports r
+            WHERE rr.player_id = $1
+              AND rr.read_at IS NULL
+              AND rr.report_id = r.id
+              AND r.created_at <= $2
+              AND rr.report_id = (
+                SELECT rr2.report_id
+                FROM rm_report_reads rr2
+                JOIN rm_reports r2 ON r2.id = rr2.report_id
+                WHERE rr2.player_id = $1
+                  AND rr2.read_at IS NULL
+                  AND r2.created_at <= $2
+                ORDER BY r2.created_at DESC, rr2.report_id DESC
+                LIMIT 1
+              )
+            "#,
+        )
+        .bind(player_id)
+        .bind(read_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(result.rows_affected() > 0)
+    }
 }
 
 #[async_trait::async_trait]
@@ -79,14 +137,15 @@ impl ReportRepository for PostgresReportRepository {
     async fn list_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query(
             r#"
             SELECT
               r.id,
               r.report_type,
-              r.payload as "payload!: Json<serde_json::Value>",
+              r.payload,
               r.actor_player_id,
               r.actor_village_id,
               r.target_player_id,
@@ -97,27 +156,50 @@ impl ReportRepository for PostgresReportRepository {
             JOIN rm_report_reads rr ON rr.report_id = r.id
             WHERE rr.player_id = $1
             ORDER BY r.created_at DESC
-            LIMIT $2
+            OFFSET $2
+            LIMIT $3
             "#,
-            player_id,
-            limit
         )
+        .bind(player_id)
+        .bind(offset)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
+            let payload: serde_json::Value = row
+                .try_get("payload")
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
             records.push(ReportModel {
-                id: row.id,
-                report_type: row.report_type,
-                payload: serde_json::from_value(row.payload.0)?,
-                actor_player_id: row.actor_player_id,
-                actor_village_id: row.actor_village_id.map(|v| v as u32),
-                target_player_id: row.target_player_id,
-                target_village_id: row.target_village_id.map(|v| v as u32),
-                created_at: row.created_at,
-                read_at: row.read_at,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
+                report_type: row
+                    .try_get("report_type")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
+                payload: serde_json::from_value(payload)?,
+                actor_player_id: row
+                    .try_get("actor_player_id")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
+                actor_village_id: row
+                    .try_get::<Option<i32>, _>("actor_village_id")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+                    .map(|v| v as u32),
+                target_player_id: row
+                    .try_get("target_player_id")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
+                target_village_id: row
+                    .try_get::<Option<i32>, _>("target_village_id")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+                    .map(|v| v as u32),
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
+                read_at: row
+                    .try_get("read_at")
+                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
             });
         }
         Ok(records)

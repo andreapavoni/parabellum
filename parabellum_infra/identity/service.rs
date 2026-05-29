@@ -19,6 +19,7 @@ use parabellum_types::{
     buildings::BuildingName,
     common::{Player, User},
     errors::{AppError, ApplicationError, DbError},
+    map::ValleyTopology,
 };
 use sqlx::PgPool;
 
@@ -85,6 +86,11 @@ impl IdentityService {
         let valley = self
             .select_unoccupied_valley(&mut tx, &req.quadrant)
             .await?;
+        if valley.topology != ValleyTopology(4, 4, 4, 6) {
+            return Err(ApplicationError::Db(DbError::Transaction(
+                "initial village must be founded on a 4-4-4-6 valley".to_string(),
+            )));
+        }
         debug!(
             player_id = %req.player_id,
             village_id = valley.id,

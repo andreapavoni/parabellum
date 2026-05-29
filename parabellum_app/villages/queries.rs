@@ -95,6 +95,7 @@ impl Query for GetMarketplaceOfferById {
 pub struct ListReportsForPlayer {
     pub repository: Arc<dyn ReportRepository>,
     pub player_id: uuid::Uuid,
+    pub offset: i64,
     pub limit: i64,
 }
 
@@ -103,7 +104,7 @@ impl Query for ListReportsForPlayer {
 
     async fn apply(&self) -> Self::Output {
         self.repository
-            .list_for_player(self.player_id, self.limit)
+            .list_for_player(self.player_id, self.offset, self.limit)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -160,6 +161,7 @@ mod tests {
         async fn list_for_player(
             &self,
             player_id: Uuid,
+            offset: i64,
             limit: i64,
         ) -> Result<Vec<ReportModel>, parabellum_types::errors::ApplicationError> {
             let reads = self.reads.lock().await;
@@ -177,6 +179,9 @@ mod tests {
             }
             out.sort_by_key(|r| r.created_at);
             out.reverse();
+            if offset > 0 {
+                out = out.into_iter().skip(offset as usize).collect();
+            }
             out.truncate(limit as usize);
             Ok(out)
         }
@@ -242,6 +247,7 @@ mod tests {
         let query = ListReportsForPlayer {
             repository: repo,
             player_id,
+            offset: 0,
             limit: 10,
         };
         let out = query.apply().await.unwrap();

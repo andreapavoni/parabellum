@@ -29,7 +29,7 @@ use parabellum_game::models::{
     village::VillageBuilding,
 };
 use parabellum_types::{
-    army::{UnitGroup, UnitName},
+    army::{UnitGroup, UnitName, UnitRole},
     buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::ApplicationError,
@@ -184,6 +184,8 @@ pub struct TrainingUnitOptionDto {
     pub attack: u32,
     pub defense_infantry: u32,
     pub defense_cavalry: u32,
+    pub speed: u8,
+    pub capacity: u32,
     pub time_secs: u32,
 }
 
@@ -366,6 +368,8 @@ pub struct RallyCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub bounty: Option<ResourceAmountsDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<RallyActionDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action_id: Option<String>,
@@ -476,6 +480,24 @@ pub async fn building_detail(
         let next_value = upgrade_info
             .as_ref()
             .map(|upgraded| format_next_value(slot.building.name.clone(), upgraded.value));
+        let (chiefs_moving, settlers_moving) = state
+            .game_app
+            .get_village_troop_movements(user.village.id)
+            .await
+            .map(|movements| {
+                movements
+                    .outgoing
+                    .iter()
+                    .chain(movements.incoming.iter())
+                    .filter(|m| m.origin_player_id == user.player.id)
+                    .fold((0u32, 0u32), |(chiefs, settlers), m| {
+                        (
+                            chiefs.saturating_add(m.units.get(8)),
+                            settlers.saturating_add(m.units.get(9)),
+                        )
+                    })
+            })
+            .unwrap_or((0, 0));
 
         match building_type {
             BuildingTypeDto::Empty => unreachable!(),
@@ -528,6 +550,8 @@ pub async fn building_detail(
                     &expected_buildings,
                     group,
                     &queues.training,
+                    None,
+                    (chiefs_moving, settlers_moving),
                 );
                 let queue = training_queue_for_slot(slot_id, &queues.training);
 
@@ -574,16 +598,6 @@ pub async fn building_detail(
                     culture_points_info.village_culture_points_production;
                 let next_cp_required = culture_points_info.next_cp_required;
 
-                let training_units = training_options_for_group(
-                    &user.village,
-                    state.server_speed,
-                    &slot,
-                    &[BuildingName::Residence, BuildingName::Palace],
-                    UnitGroup::Expansion,
-                    &queues.training,
-                );
-                let training_queue = training_queue_for_slot(slot_id, &queues.training);
-
                 let max_slots = user.village.max_foundation_slots();
                 let child_villages_count = if max_slots > 0 {
                     user.villages
@@ -594,6 +608,17 @@ pub async fn building_detail(
                     0
                 };
                 let available_slots = max_slots.saturating_sub(child_villages_count as u8);
+                let training_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    &slot,
+                    &[BuildingName::Residence, BuildingName::Palace],
+                    UnitGroup::Expansion,
+                    &queues.training,
+                    Some(available_slots),
+                    (chiefs_moving, settlers_moving),
+                );
+                let training_queue = training_queue_for_slot(slot_id, &queues.training);
                 let settler_idx = user
                     .village
                     .tribe
@@ -947,6 +972,7 @@ pub async fn building_detail(
                             }
                         }),
                         arrives_at: card.arrives_at,
+                        bounty: card.bounty.as_ref().map(resource_group_to_dto),
                         action,
                         action_id,
                     }
@@ -1282,7 +1308,9 @@ fn training_options_for_group(
     building: &VillageBuilding,
     expected_buildings: &[BuildingName],
     group: UnitGroup,
-    _training_queue: &[TrainingQueueItem],
+    training_queue: &[TrainingQueueItem],
+    foundation_free_slots: Option<u8>,
+    moving_expansion_units: (u32, u32),
 ) -> Vec<TrainingUnitOptionDto> {
     if !expected_buildings.contains(&building.building.name) {
         return vec![];
@@ -1292,9 +1320,53 @@ fn training_options_for_group(
     let available_units = village.available_units_for_training(group);
     let tribe = village.tribe.clone();
 
+    let chiefs_at_home = village.count_chiefs_at_home();
+    let settlers_at_home = village.count_settlers_at_home();
+    let chiefs_deployed: u32 = village
+        .deployed_armies()
+        .iter()
+        .map(|army| army.units().get(8))
+        .sum();
+    let settlers_deployed: u32 = village
+        .deployed_armies()
+        .iter()
+        .map(|army| army.units().get(9))
+        .sum();
+    let mut chiefs_queued = 0u32;
+    let mut settlers_queued = 0u32;
+    for item in training_queue {
+        let qty = item.quantity.max(0) as u32;
+        if matches!(item.unit, UnitName::Chief | UnitName::Senator | UnitName::Chieftain) {
+            chiefs_queued = chiefs_queued.saturating_add(qty);
+        } else if matches!(item.unit, UnitName::Settler) {
+            settlers_queued = settlers_queued.saturating_add(qty);
+        }
+    }
+    let chiefs_total = chiefs_at_home + chiefs_deployed + chiefs_queued + moving_expansion_units.0;
+    let settlers_total =
+        settlers_at_home + settlers_deployed + settlers_queued + moving_expansion_units.1;
+    let available_slots = foundation_free_slots.unwrap_or_else(|| village.max_foundation_slots());
+
     available_units
         .into_iter()
         .filter_map(|unit| {
+            if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
+                let committed_this_unit = if matches!(unit.role, UnitRole::Chief) {
+                    chiefs_total
+                } else {
+                    settlers_total
+                };
+                let max_trainable = parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                    unit.role.clone(),
+                    available_slots,
+                    chiefs_total,
+                    settlers_total,
+                    committed_this_unit,
+                );
+                if max_trainable == 0 {
+                    return None;
+                }
+            }
             let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
             let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
             let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
@@ -1307,6 +1379,8 @@ fn training_options_for_group(
                 attack: unit.attack,
                 defense_infantry: unit.defense_infantry,
                 defense_cavalry: unit.defense_cavalry,
+                speed: unit.speed,
+                capacity: unit.capacity,
                 time_secs: time_per_unit,
             })
         })

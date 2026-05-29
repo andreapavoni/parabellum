@@ -17,15 +17,16 @@ use crate::api::{
     dto::{
         BattlePartyPayloadDoc, BattleReportPayloadDoc, BuildingDamageReportDoc, LeaderboardEntryDto,
         MarketplaceDeliveryReportPayloadDoc, MeContextResponse, PaginationDto, PlayerProfileResponse,
-        PlayerSummaryDto, PlayerVillageDto, PositionDoc, ProductionAmountsDto, ReportDetailPayloadResponse,
-        ReportListItemDto, ReportPayloadDoc, ReportsResponse, ReinforcementReportPayloadDoc,
-        ResourceAmountsDto, ResourceGroupDoc, ScoutingBattleReportDoc, ScoutingTargetDefensesDoc,
-        ScoutingTargetReportDoc, SessionUserDto, StatsResponse, VillageListItemDto, VillageSummaryDto,
+        PlayerSummaryDto, PlayerVillageDto, PositionDoc, ProductionAmountsDto,
+        ReportDetailPayloadResponse, ReportListItemDto, ReportPayloadDoc, ReportsPaginationDto,
+        ReportsResponse, ReinforcementReportPayloadDoc, ResourceAmountsDto, ResourceGroupDoc,
+        ScoutingBattleReportDoc, ScoutingTargetDefensesDoc, ScoutingTargetReportDoc,
+        SessionUserDto, StatsResponse, VillageListItemDto, VillageSummaryDto,
     },
     game::{
         MapFieldDetailResponse, MapPoint, MapRegionQuery, MapRegionResponse, MapTileResponse,
-        MeSessionResponse, StatsQuery, SwitchVillageRequest, SwitchVillageResponse, TileType,
-        ValleyDistribution,
+        MeSessionResponse, ReportsQuery, StatsQuery, SwitchVillageRequest, SwitchVillageResponse,
+        TileType, ValleyDistribution,
     },
 };
 
@@ -76,6 +77,7 @@ use crate::api::{
             MeSessionResponse,
             MeContextResponse,
             StatsQuery,
+            ReportsQuery,
             StatsResponse,
             SessionUserDto,
             ResourceAmountsDto,
@@ -89,6 +91,7 @@ use crate::api::{
             PaginationDto,
             ReportListItemDto,
             ReportsResponse,
+            ReportsPaginationDto,
             ReportDetailPayloadResponse,
             ReportPayloadDoc,
             BattleReportPayloadDoc,

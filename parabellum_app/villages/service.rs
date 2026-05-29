@@ -3,7 +3,7 @@ use mini_cqrs_es::{Cqrs, CqrsError};
 use crate::villages::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
     CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
-    RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
     ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
     SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
@@ -228,5 +228,13 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         self.cqrs
             .execute::<SetVillageResources>(&village_id, command)
             .await
+    }
+
+    pub async fn mark_report_read(
+        &self,
+        village_id: u32,
+        command: &MarkReportRead,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute::<MarkReportRead>(&village_id, command).await
     }
 }
