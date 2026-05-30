@@ -574,6 +574,7 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
                     target_village_id,
                     resources: ResourceGroup::new(200, 50, 25, 10),
                     arrives_at: merchants_arrive_at,
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await

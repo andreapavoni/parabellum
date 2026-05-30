@@ -664,6 +664,12 @@ function MarketplaceSection({
           <p class="text-sm text-gray-500">
             Available merchants: {detail.marketplace.availableMerchants}/{detail.marketplace.totalMerchants}
           </p>
+          <p class="text-sm text-gray-500">
+            Capacity per merchant: {detail.marketplace.merchantCapacity}
+          </p>
+          <p class="text-sm text-gray-500">
+            Merchant speed: {detail.marketplace.merchantSpeed} fields/hour
+          </p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="text-sm text-gray-600">

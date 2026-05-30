@@ -237,6 +237,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                     target_village_id: request.target_village_id,
                     resources: request.resources,
                     arrives_at,
+                    speed: self.config.speed,
                 },
             )
             .await
@@ -676,6 +677,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                     player_id: request.player_id,
                     offer_resources: request.offer_resources,
                     seek_resources: request.seek_resources,
+                    speed: self.config.speed,
                 },
             )
             .await

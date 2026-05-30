@@ -282,6 +282,7 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await

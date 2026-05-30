@@ -110,7 +110,10 @@ export function Layout(props: LayoutProps) {
   const villages = props.meContext?.villages ?? [];
   const player = props.meContext?.player;
   const isGuestHome = !player && props.active === "home";
-  const showVillageSwitcher = Boolean(player) && props.active === "village" && villages.length > 0;
+  const showVillageSwitcher =
+    Boolean(player) &&
+    (props.active === "village" || props.active === "building") &&
+    villages.length > 0;
 
   return (
     <>

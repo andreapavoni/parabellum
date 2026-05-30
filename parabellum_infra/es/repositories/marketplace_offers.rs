@@ -308,8 +308,8 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
         #[derive(Debug, FromRow)]
         struct DbMerchantReturnRow {
             id: Uuid,
-            source_village_id: i32,
-            target_village_id: i32,
+            origin_village_id: i32,
+            destination_village_id: i32,
             merchants_used: i16,
             arrives_at: DateTime<Utc>,
         }
@@ -339,8 +339,11 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'village_id')::int AS target_village_id,
+                COALESCE(
+                    (payload->>'target_village_id')::int,
+                    (payload->>'village_id')::int
+                ) AS origin_village_id,
+                (payload->>'source_village_id')::int AS destination_village_id,
                 (payload->>'merchants_used')::smallint AS merchants_used,
                 (payload->>'returns_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
@@ -373,8 +376,8 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             out.push(MerchantMovement {
                 job_id: row.id,
                 kind: MerchantMovementKind::Return,
-                origin_village_id: row.source_village_id as u32,
-                destination_village_id: row.target_village_id as u32,
+                origin_village_id: row.origin_village_id as u32,
+                destination_village_id: row.destination_village_id as u32,
                 resources: ResourceGroup::new(0, 0, 0, 0),
                 merchants_used: row.merchants_used as u8,
                 arrives_at: row.arrives_at,

@@ -499,7 +499,12 @@ impl VillageEsService {
         if !accepting_village.has_enough_resources(&seek_group) {
             return Err(CqrsError::domain_source(GameError::NotEnoughResources));
         }
-        let capacity = accepting_village.tribe.merchant_stats().capacity;
+        let speed = parabellum_app::config::Config::from_env().speed.max(1) as u32;
+        let capacity = accepting_village
+            .tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed);
         if capacity == 0 {
             return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
         }

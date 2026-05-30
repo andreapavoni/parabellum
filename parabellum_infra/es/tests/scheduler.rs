@@ -536,6 +536,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
                     target_village_id,
                     resources: send,
                     arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await
@@ -1923,6 +1924,117 @@ async fn village_es_service_loyalty_regenerates_with_residence_over_time() {
             .await
             .unwrap();
         assert_eq!(pending_next, 1);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn village_es_service_horse_drinking_trough_thresholds_reduce_cavalry_upkeep() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        async fn run_threshold_case(
+            pool: &sqlx::PgPool,
+            service: &VillageEsService,
+            unit: UnitName,
+            trough_before: u8,
+            x: i32,
+        ) -> (u32, u32) {
+            let (_user_id, player_id, village_id) = setup_village(
+                pool,
+                service,
+                "Roman Cavalry",
+                Position { x, y: 30 },
+                parabellum_types::tribe::Tribe::Roman,
+                vec![
+                    main_building(10),
+                    rally_point(10),
+                    academy(20),
+                    VillageBuilding {
+                        slot_id: 21,
+                        building: Building::new(BuildingName::Stable, 1)
+                            .at_level(20, 1)
+                            .unwrap(),
+                    },
+                    VillageBuilding {
+                        slot_id: 20,
+                        building: Building::new(BuildingName::HorseDrinkingTrough, 1)
+                            .at_level(trough_before, 1)
+                            .unwrap(),
+                    },
+                    warehouse(20),
+                    granary(20),
+                ],
+                resources(800_000, 800_000, 800_000, 800_000),
+            )
+            .await;
+
+            research_and_complete(
+                service,
+                village_id,
+                player_id,
+                unit.clone(),
+                1,
+                chrono::Utc::now() + chrono::Duration::days(3),
+                200,
+            )
+            .await;
+            refill_resources(
+                service,
+                village_id,
+                player_id,
+                resources(800_000, 800_000, 800_000, 800_000),
+            )
+            .await;
+
+            let tribe = service.get_village(village_id).await.unwrap().tribe;
+            let unit_idx = tribe.get_unit_idx_by_name(&unit).unwrap() as u8;
+            train_and_complete(
+                service,
+                village_id,
+                player_id,
+                unit_idx,
+                BuildingName::Stable,
+                1,
+                1,
+                chrono::Utc::now() + chrono::Duration::days(3),
+                200,
+            )
+            .await;
+
+            let before = service.get_village(village_id).await.unwrap();
+            let upkeep_before = before.production.upkeep.saturating_sub(before.population);
+
+            refill_resources(
+                service,
+                village_id,
+                player_id,
+                resources(800_000, 800_000, 800_000, 800_000),
+            )
+            .await;
+            service
+                .upgrade_building(
+                    village_id,
+                    &UpgradeBuilding {
+                        player_id,
+                        slot_id: 20,
+                        speed: 1,
+                    },
+                )
+                .await
+                .unwrap();
+            service
+                .process_due_actions(chrono::Utc::now() + chrono::Duration::days(5), 200)
+                .await
+                .unwrap();
+
+            let after = service.get_village(village_id).await.unwrap();
+            let upkeep_after = after.production.upkeep.saturating_sub(after.population);
+            (upkeep_before, upkeep_after)
+        }
+
+        let (legati_before, legati_after) =
+            run_threshold_case(&pool, &service, UnitName::EquitesLegati, 9, 30).await;
+        assert_eq!(legati_before, legati_after + 1);
     })
     .await;
 }

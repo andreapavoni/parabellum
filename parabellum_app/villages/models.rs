@@ -277,6 +277,7 @@ pub enum ScheduledActionPayload {
         action_id: Uuid,
         village_id: u32,
         source_village_id: u32,
+        target_village_id: Option<u32>,
         player_id: Uuid,
         merchants_used: u8,
         returns_at: DateTime<Utc>,

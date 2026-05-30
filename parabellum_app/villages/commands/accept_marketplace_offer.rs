@@ -19,6 +19,7 @@ pub struct AcceptMarketplaceOffer {
     pub offer: MarketplaceOfferSnapshot,
     pub owner_arrives_at: chrono::DateTime<chrono::Utc>,
     pub accepting_arrives_at: chrono::DateTime<chrono::Utc>,
+    pub speed: i8,
 }
 
 impl Command for AcceptMarketplaceOffer {
@@ -47,7 +48,7 @@ impl Command for AcceptMarketplaceOffer {
         let seek_group: parabellum_types::common::ResourceGroup = self.offer.seek_resources.into();
         let accepting_merchants_used = aggregate
             .village()
-            .schedule_send_resources(seek_group)
+            .schedule_send_resources(seek_group, self.speed)
             .map_err(as_domain_error)?;
 
         let accepted_at = Utc::now();

@@ -371,6 +371,8 @@ export type BuildingDetail = {
   marketplace?: {
     availableMerchants: number;
     totalMerchants: number;
+    merchantCapacity: number;
+    merchantSpeed: number;
     ownOffers: MarketplaceOffer[];
     globalOffers: MarketplaceOffer[];
     merchantMovements: MerchantMovement[];

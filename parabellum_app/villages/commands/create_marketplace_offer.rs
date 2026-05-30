@@ -12,6 +12,7 @@ pub struct CreateMarketplaceOffer {
     pub player_id: Uuid,
     pub offer_resources: ResourceQuantity,
     pub seek_resources: ResourceQuantity,
+    pub speed: i8,
 }
 
 impl Command for CreateMarketplaceOffer {
@@ -44,7 +45,7 @@ impl Command for CreateMarketplaceOffer {
         let offer_group: parabellum_types::common::ResourceGroup = self.offer_resources.into();
         let merchants_reserved = aggregate
             .village()
-            .schedule_send_resources(offer_group.clone())
+            .schedule_send_resources(offer_group.clone(), self.speed)
             .map_err(as_domain_error)?;
 
         let now = Utc::now();

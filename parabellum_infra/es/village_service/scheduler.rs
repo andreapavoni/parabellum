@@ -658,6 +658,7 @@ pub(super) async fn execute_action(
             action_id,
             village_id: _,
             source_village_id,
+            target_village_id: _,
             player_id,
             merchants_used,
             returns_at,
@@ -938,7 +939,7 @@ async fn build_attack_outcome_command(
         target_player_id = player_id;
         target_tribe = source.tribe.clone();
         target_parent_village_id = Some(source_village_id);
-        target_loyalty = 100;
+        target_loyalty = 0;
         target_army = None;
         target_reinforcements = vec![];
     }

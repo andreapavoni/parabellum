@@ -267,6 +267,8 @@ pub struct RequirementDto {
 pub struct MarketplaceDetailDto {
     pub available_merchants: u8,
     pub total_merchants: u8,
+    pub merchant_capacity: u32,
+    pub merchant_speed: u32,
     pub own_offers: Vec<MarketplaceOfferDto>,
     pub global_offers: Vec<MarketplaceOfferDto>,
     pub merchant_movements: Vec<MerchantMovementDto>,
@@ -822,9 +824,44 @@ pub async fn building_detail(
                     &marketplace_data.village_info,
                     MerchantMovementDirection::Incoming,
                 );
+                let pending_outgoing_goings: Vec<_> = outgoing_movements
+                    .iter()
+                    .filter(|movement| {
+                        matches!(
+                            movement.kind,
+                            parabellum_app::ports::queries::MerchantMovementKind::Going
+                        )
+                    })
+                    .cloned()
+                    .collect();
+
                 let mut merchant_movements: Vec<_> = outgoing_movements
                     .into_iter()
                     .chain(incoming_movements.into_iter())
+                    .filter(|movement| {
+                        if !matches!(movement.direction, MerchantMovementDirection::Outgoing)
+                            || !matches!(
+                                movement.kind,
+                                parabellum_app::ports::queries::MerchantMovementKind::Return
+                            )
+                        {
+                            return true;
+                        }
+
+                        // Hide pre-scheduled return legs while the paired outgoing "going" leg
+                        // is still pending. Once delivery happens, the going leg disappears and
+                        // return becomes visible.
+                        !pending_outgoing_goings.iter().any(|going| {
+                            let reverse_route_match = going.origin_position
+                                == movement.destination_position
+                                && going.destination_position == movement.origin_position;
+                            let legacy_loopback_return =
+                                movement.origin_position == movement.destination_position;
+                            (reverse_route_match || legacy_loopback_return)
+                                && going.merchants_used == movement.merchants_used
+                                && going.arrives_at <= movement.arrives_at
+                        })
+                    })
                     .map(|movement| MerchantMovementDto {
                         job_id: movement.job_id,
                         direction: match movement.direction {
@@ -880,6 +917,16 @@ pub async fn building_detail(
                     academy: None,
                     smithy: None,
                     marketplace: Some(MarketplaceDetailDto {
+                        // Marketplace stats are displayed as effective values for current server speed.
+                        // Tribe base values are 1x; gameplay speed multiplies both capacity and speed.
+                        merchant_capacity: user
+                            .village
+                            .tribe
+                            .merchant_stats()
+                            .capacity
+                            .saturating_mul(state.server_speed.max(1) as u32),
+                        merchant_speed: (user.village.tribe.merchant_stats().speed as u32)
+                            .saturating_mul(state.server_speed.max(1) as u32),
                         available_merchants: user.village.available_merchants(),
                         total_merchants: user.village.total_merchants,
                         own_offers,
@@ -921,6 +968,7 @@ pub async fn building_detail(
                 )
                 .into_iter()
                 .map(|card| {
+                    let upkeep = troop_upkeep_for_rally_card(&user.village, &card);
                     let (action, action_id) = match card.action_button {
                         Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
                             (Some(RallyActionDto::Recall), Some(army_id))
@@ -937,7 +985,7 @@ pub async fn building_detail(
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         tribe: format!("{:?}", card.tribe),
                         units: card.units.units().to_vec(),
-                        upkeep: troop_upkeep_for_tribe(&card.tribe, card.units.units()),
+                        upkeep,
                         category: match card.category {
                             crate::view_helpers::ArmyCategory::Stationed => {
                                 RallyCardCategoryDto::Stationed
@@ -1371,13 +1419,16 @@ fn training_options_for_group(
             }
             let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
             let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
-            let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
+            let trough_multiplier = village.cavalry_training_time_multiplier(unit);
+            let time_per_unit = (base_time_per_unit * training_multiplier * trough_multiplier)
+                .floor()
+                .max(1.0) as u32;
 
             Some(TrainingUnitOptionDto {
                 unit_idx,
                 name: unit_key(&unit.name),
                 cost: resource_group_to_dto(&unit.cost.resources),
-                upkeep: unit.cost.upkeep,
+                upkeep: village.effective_unit_upkeep(unit),
                 attack: unit.attack,
                 defense_infantry: unit.defense_infantry,
                 defense_cavalry: unit.defense_cavalry,
@@ -1396,6 +1447,39 @@ fn troop_upkeep_for_tribe(tribe: &Tribe, units: &[u32; 10]) -> u32 {
         .enumerate()
         .map(|(idx, unit)| unit.cost.upkeep.saturating_mul(*units.get(idx).unwrap_or(&0)))
         .sum()
+}
+
+fn troop_upkeep_for_rally_card(
+    village: &parabellum_game::models::village::Village,
+    card: &crate::view_helpers::ArmyCardData,
+) -> u32 {
+    let is_returning_own_movement = matches!(
+        (card.category, card.movement_kind),
+        (
+            crate::view_helpers::ArmyCategory::Incoming,
+            Some(crate::view_helpers::MovementKind::Return)
+        )
+    );
+    let is_own_context = matches!(
+        card.category,
+        crate::view_helpers::ArmyCategory::Stationed
+            | crate::view_helpers::ArmyCategory::Deployed
+            | crate::view_helpers::ArmyCategory::Outgoing
+    ) || is_returning_own_movement;
+    if is_own_context && card.tribe == village.tribe {
+        card.tribe
+            .units()
+            .iter()
+            .enumerate()
+            .map(|(idx, unit)| {
+                village
+                    .effective_unit_upkeep(unit)
+                    .saturating_mul(*card.units.units().get(idx).unwrap_or(&0))
+            })
+            .sum()
+    } else {
+        troop_upkeep_for_tribe(&card.tribe, card.units.units())
+    }
 }
 
 fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<TrainingQueueItemDto> {

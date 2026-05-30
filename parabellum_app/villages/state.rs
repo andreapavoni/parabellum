@@ -553,6 +553,7 @@ impl VillageState {
     pub fn schedule_send_resources(
         &self,
         resources: ResourceGroup,
+        server_speed: i8,
     ) -> Result<u8, ApplicationError> {
         if self.building_level(BuildingName::Marketplace) == 0 {
             return Err(GameError::BuildingRequirementsNotMet {
@@ -565,7 +566,13 @@ impl VillageState {
             return Err(GameError::NotEnoughResources.into());
         }
 
-        let capacity = self.village.tribe.merchant_stats().capacity;
+        let speed_multiplier = server_speed.max(1) as u32;
+        let capacity = self
+            .village
+            .tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed_multiplier);
         if capacity == 0 {
             return Err(GameError::NotEnoughMerchants.into());
         }
