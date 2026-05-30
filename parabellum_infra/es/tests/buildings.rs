@@ -1,12 +1,11 @@
-use parabellum_app::villages::{
-    CompleteAddBuilding, CompleteDowngradeBuilding, CompleteUpgradeBuilding,
-};
+use parabellum_app::villages::{AddBuilding, DowngradeBuilding, UpgradeBuilding};
 use parabellum_types::{buildings::BuildingName, map::Position};
-use uuid::Uuid;
 
 use crate::es::VillageEsService;
 
-use super::fixtures::{found_village_cmd, seed_user_and_player, with_test_pool};
+use super::fixtures::{
+    granary, main_building, resources, setup_village, warehouse, with_test_pool,
+};
 
 fn building_level(
     village: &parabellum_app::villages::models::VillageModel,
@@ -23,32 +22,32 @@ fn building_level(
 #[tokio::test]
 async fn village_es_service_projects_building_lifecycle_on_rm_village() {
     with_test_pool(|pool| async move {
-        let (_user_id, player_id) = seed_user_and_player(&pool).await;
-        let position = Position { x: 0, y: 0 };
-        let village_id = position.to_id(100);
-
         let service = VillageEsService::new(pool.clone());
-        service
-            .found_village(
-                village_id,
-                &found_village_cmd(player_id, "Village A", Position { x: 0, y: 0 }),
-            )
-            .await
-            .unwrap();
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Village A",
+            Position { x: 0, y: 0 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(10), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
 
         service
-            .complete_add_building(
+            .add_building(
                 village_id,
-                &CompleteAddBuilding {
-                    action_id: Uuid::new_v4(),
+                &AddBuilding {
                     player_id,
-                    village_id,
                     slot_id: 22,
                     building_name: BuildingName::Cranny,
-                    level: 1,
                     speed: 1,
                 },
             )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
             .await
             .unwrap();
 
@@ -59,18 +58,18 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
         );
 
         service
-            .complete_upgrade_building(
+            .upgrade_building(
                 village_id,
-                &CompleteUpgradeBuilding {
-                    action_id: Uuid::new_v4(),
+                &UpgradeBuilding {
                     player_id,
-                    village_id,
                     slot_id: 22,
-                    building_name: BuildingName::Cranny,
-                    level: 2,
                     speed: 1,
                 },
             )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
             .await
             .unwrap();
 
@@ -81,18 +80,18 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
         );
 
         service
-            .complete_downgrade_building(
+            .downgrade_building(
                 village_id,
-                &CompleteDowngradeBuilding {
-                    action_id: Uuid::new_v4(),
+                &DowngradeBuilding {
                     player_id,
-                    village_id,
                     slot_id: 22,
-                    building_name: BuildingName::Cranny,
-                    level: 1,
                     speed: 1,
                 },
             )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
             .await
             .unwrap();
 
@@ -108,32 +107,47 @@ async fn village_es_service_projects_building_lifecycle_on_rm_village() {
 #[tokio::test]
 async fn village_es_service_recomputes_culture_points_production_after_building_changes() {
     with_test_pool(|pool| async move {
-        let (_user_id, player_id) = seed_user_and_player(&pool).await;
-        let position = Position { x: 1, y: 1 };
-        let village_id = position.to_id(100);
-
         let service = VillageEsService::new(pool.clone());
-        service
-            .found_village(
-                village_id,
-                &found_village_cmd(player_id, "Village B", position),
-            )
-            .await
-            .unwrap();
+        let (_user_id, player_id, village_id) = setup_village(
+            &pool,
+            &service,
+            "Village B",
+            Position { x: 1, y: 1 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![main_building(10), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
 
         service
-            .complete_upgrade_building(
+            .add_building(
                 village_id,
-                &CompleteUpgradeBuilding {
-                    action_id: Uuid::new_v4(),
+                &AddBuilding {
                     player_id,
-                    village_id,
-                    slot_id: 19,
-                    building_name: BuildingName::MainBuilding,
-                    level: 2,
+                    slot_id: 22,
+                    building_name: BuildingName::Cranny,
                     speed: 1,
                 },
             )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+            .await
+            .unwrap();
+        service
+            .upgrade_building(
+                village_id,
+                &UpgradeBuilding {
+                    player_id,
+                    slot_id: 22,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
             .await
             .unwrap();
 
@@ -146,18 +160,18 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
         );
 
         service
-            .complete_downgrade_building(
+            .downgrade_building(
                 village_id,
-                &CompleteDowngradeBuilding {
-                    action_id: Uuid::new_v4(),
+                &DowngradeBuilding {
                     player_id,
-                    village_id,
-                    slot_id: 19,
-                    building_name: BuildingName::MainBuilding,
-                    level: 1,
+                    slot_id: 22,
                     speed: 1,
                 },
             )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
             .await
             .unwrap();
 

@@ -74,11 +74,11 @@ impl GameApplication {
 
     pub async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError> {
         self.identity_port()
-            .authenticate_user(email, password)
+            .authenticate_user(username, password)
             .await
     }
 
@@ -209,10 +209,11 @@ impl GameApplication {
     pub async fn list_reports_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<crate::villages::models::ReportModel>, ApplicationError> {
         self.queries_port()
-            .list_reports_for_player(player_id, limit)
+            .list_reports_for_player(player_id, offset, limit)
             .await
     }
 

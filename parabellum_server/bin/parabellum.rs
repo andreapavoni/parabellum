@@ -10,15 +10,18 @@ use parabellum_infra::{
 use parabellum_server::logs::setup_logging;
 use parabellum_types::{Result, errors::ApplicationError};
 use parabellum_web::{AppState, WebRouter};
+use tracing::{error, info};
 
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
     setup_logging();
+    info!("starting parabellum runtime");
     let (config, game_app, es_worker, db_pool) = setup_app().await?;
     let state = AppState::new(game_app, db_pool, &config);
 
     es_worker.run();
+    info!(port = 8080, "runtime initialized; launching web server");
     WebRouter::serve(state, 8080).await
 }
 
@@ -31,14 +34,17 @@ async fn setup_app() -> Result<
     ),
     ApplicationError,
 > {
+    info!("loading runtime configuration and database connection");
     let config = Arc::new(Config::from_env());
     let db_pool = establish_connection_pool().await?;
 
+    info!("running database migrations");
     sqlx::migrate!("../migrations")
         .run(&db_pool)
         .await
         .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
 
+    info!("ensuring world map state");
     setup_world_map(&db_pool, &config).await?;
 
     let village_service = VillageEsService::new(db_pool.clone());
@@ -68,8 +74,8 @@ async fn setup_world_map(pool: &PgPool, config: &Config) -> Result<(), Applicati
         Ok(true) => tracing::info!("World Map successfully bootstrapped."),
         Ok(false) => tracing::info!("World Map already set. Skipping bootstrap."),
         Err(e) => {
-            tracing::error!("Error during World Map initialization: {e}");
-            std::process::exit(1);
+            error!(error = %e, "world map initialization failed");
+            return Err(e);
         }
     }
 

@@ -41,8 +41,14 @@ struct PendingTrainingAction {
     action_id: Uuid,
     slot_id: u8,
     unit: UnitName,
+    #[serde(default = "default_pending_training_time_per_unit")]
+    time_per_unit: i32,
     quantity_remaining: i32,
     execute_at: chrono::DateTime<Utc>,
+}
+
+fn default_pending_training_time_per_unit() -> i32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -287,14 +293,37 @@ impl VillageState {
         speed: i8,
     ) -> Result<(BuildingName, u8, i64, ResourceGroup), ApplicationError> {
         self.enforce_building_queue_capacity()?;
-        let current = self
-            .find_building_by_slot(slot_id)
-            .ok_or(GameError::EmptySlot { slot_id })?;
-        let queued_upgrades_for_slot = self
+        let queued_for_slot: Vec<&PendingBuildingAction> = self
             .pending_building_actions
             .iter()
             .filter(|action| action.slot_id == slot_id)
-            .count() as u8;
+            .collect();
+        let mut current = self.find_building_by_slot(slot_id);
+        if current.is_none() {
+            let Some(first_queued) = queued_for_slot.iter().min_by_key(|action| action.execute_at) else {
+                return Err(GameError::EmptySlot { slot_id }.into());
+            };
+            let queued_level = queued_for_slot
+                .iter()
+                .filter(|action| action.building_name == first_queued.building_name)
+                .count() as u8;
+            if queued_level == 0 {
+                return Err(GameError::EmptySlot { slot_id }.into());
+            }
+            current = Some(VillageBuilding {
+                slot_id,
+                building: Building::new(first_queued.building_name.clone(), speed)
+                    .at_level(queued_level, speed)
+                    .map_err(ApplicationError::from)?,
+            });
+        }
+        let current = current.expect("checked above");
+        let queued_upgrades_for_slot = (self
+            .pending_building_actions
+            .iter()
+            .filter(|action| action.slot_id == slot_id)
+            .count() as u8)
+            .saturating_sub(if self.find_building_by_slot(slot_id).is_some() { 0 } else { current.building.level });
         let max = get_building_data(&current.building.name)
             .map_err(ApplicationError::from)?
             .rules
@@ -311,6 +340,9 @@ impl VillageState {
             .at_level(next_level, speed)
             .map_err(ApplicationError::from)?;
         let mut village = self.village.clone();
+        if village.get_building_by_slot_id(slot_id).is_none() {
+            let _ = village.add_building_at_slot(current.building.clone(), slot_id);
+        }
         let before = village.stored_resources();
         let data = get_building_data(&current.building.name).map_err(ApplicationError::from)?;
         village
@@ -360,7 +392,7 @@ impl VillageState {
         ))
     }
 
-    pub fn register_building_action(
+    pub fn record_building_action_scheduled(
         &mut self,
         action_id: Uuid,
         slot_id: u8,
@@ -375,7 +407,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_building_action(&mut self, action_id: Uuid) {
+    pub fn mark_building_action_consumed(&mut self, action_id: Uuid) {
         self.pending_building_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -521,6 +553,7 @@ impl VillageState {
     pub fn schedule_send_resources(
         &self,
         resources: ResourceGroup,
+        server_speed: i8,
     ) -> Result<u8, ApplicationError> {
         if self.building_level(BuildingName::Marketplace) == 0 {
             return Err(GameError::BuildingRequirementsNotMet {
@@ -533,7 +566,13 @@ impl VillageState {
             return Err(GameError::NotEnoughResources.into());
         }
 
-        let capacity = self.village.tribe.merchant_stats().capacity;
+        let speed_multiplier = server_speed.max(1) as u32;
+        let capacity = self
+            .village
+            .tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed_multiplier);
         if capacity == 0 {
             return Err(GameError::NotEnoughMerchants.into());
         }
@@ -562,11 +601,12 @@ impl VillageState {
         self.village.busy_merchants = self.village.busy_merchants.saturating_sub(merchants_used);
     }
 
-    pub fn register_training_action(
+    pub fn record_training_action_scheduled(
         &mut self,
         action_id: Uuid,
         slot_id: u8,
         unit: UnitName,
+        time_per_unit: i32,
         quantity_remaining: i32,
         execute_at: chrono::DateTime<Utc>,
     ) {
@@ -574,12 +614,13 @@ impl VillageState {
             action_id,
             slot_id,
             unit,
+            time_per_unit: time_per_unit.max(1),
             quantity_remaining,
             execute_at,
         });
     }
 
-    pub fn complete_training_action(&mut self, action_id: Uuid) {
+    pub fn mark_training_action_consumed(&mut self, action_id: Uuid) {
         self.pending_training_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -594,7 +635,13 @@ impl VillageState {
             .pending_training_actions
             .iter()
             .filter(|action| action.slot_id == slot_id)
-            .map(|action| action.execute_at)
+            .map(|action| {
+                let remaining_after_next = action.quantity_remaining.saturating_sub(1) as i64;
+                action.execute_at
+                    + chrono::Duration::seconds(
+                        remaining_after_next * i64::from(action.time_per_unit.max(1)),
+                    )
+            })
             .max()
             .filter(|time| *time > now)
             .unwrap_or(now);
@@ -660,7 +707,7 @@ impl VillageState {
             .map_err(Into::into)
     }
 
-    pub fn register_academy_action(
+    pub fn record_academy_action_scheduled(
         &mut self,
         action_id: Uuid,
         unit: UnitName,
@@ -673,7 +720,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_academy_action(&mut self, action_id: Uuid) {
+    pub fn mark_academy_action_consumed(&mut self, action_id: Uuid) {
         self.pending_academy_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -690,7 +737,10 @@ impl VillageState {
         ready_at + chrono::Duration::seconds(duration_secs.max(1))
     }
 
-    pub fn complete_academy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+    pub fn apply_academy_research_completed(
+        &mut self,
+        unit: UnitName,
+    ) -> Result<(), ApplicationError> {
         self.village.research_academy(unit).map_err(Into::into)
     }
 
@@ -725,7 +775,7 @@ impl VillageState {
             .map_err(Into::into)
     }
 
-    pub fn register_smithy_action(
+    pub fn record_smithy_action_scheduled(
         &mut self,
         action_id: Uuid,
         unit: UnitName,
@@ -738,7 +788,7 @@ impl VillageState {
         });
     }
 
-    pub fn complete_smithy_action(&mut self, action_id: Uuid) {
+    pub fn mark_smithy_action_consumed(&mut self, action_id: Uuid) {
         self.pending_smithy_actions
             .retain(|action| action.action_id != action_id);
     }
@@ -755,7 +805,10 @@ impl VillageState {
         ready_at + chrono::Duration::seconds(duration_secs.max(1))
     }
 
-    pub fn complete_smithy_research(&mut self, unit: UnitName) -> Result<(), ApplicationError> {
+    pub fn apply_smithy_research_completed(
+        &mut self,
+        unit: UnitName,
+    ) -> Result<(), ApplicationError> {
         self.village.upgrade_smithy(unit).map_err(Into::into)
     }
 

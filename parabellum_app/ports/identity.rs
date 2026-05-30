@@ -1,9 +1,19 @@
 use async_trait::async_trait;
+use parabellum_game::models::village::VillageBuilding;
 use parabellum_game::models::map::MapQuadrant;
-use parabellum_types::common::{Player, User};
+use parabellum_types::common::{Player, ResourceGroup, User};
 use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+pub struct InitialVillageSetup {
+    pub village_name: Option<String>,
+    pub resource_fields_target_level: u8,
+    pub buildings: Vec<VillageBuilding>,
+    pub resources: Option<ResourceGroup>,
+    pub speed: Option<i8>,
+}
 
 #[derive(Debug, Clone)]
 pub struct RegisterPlayerRequest {
@@ -13,6 +23,7 @@ pub struct RegisterPlayerRequest {
     pub password: String,
     pub tribe: Tribe,
     pub quadrant: MapQuadrant,
+    pub initial_village: Option<InitialVillageSetup>,
 }
 
 #[async_trait]
@@ -21,7 +32,7 @@ pub trait IdentityPort: Send + Sync {
     -> Result<(), ApplicationError>;
     async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError>;
     async fn get_user_by_email(&self, email: &str) -> Result<User, ApplicationError>;
@@ -37,6 +48,9 @@ pub trait UserRepository: Send + Sync {
 
     /// Find user by email.
     async fn get_by_email(&self, email: &str) -> Result<User, ApplicationError>;
+
+    /// Find user by username.
+    async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError>;
 
     /// Find user by id.
     async fn get_by_id(&self, user_id: Uuid) -> Result<User, ApplicationError>;

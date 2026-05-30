@@ -1,5 +1,8 @@
-use parabellum_app::villages::{CompleteTrainUnit, SendSettlers};
-use parabellum_types::{army::UnitName, map::Position, tribe::Tribe};
+use parabellum_app::villages::{SendSettlers, TrainUnits};
+use parabellum_app::ports::queries::TroopMovementType;
+use parabellum_game::models::{buildings::Building, village::VillageBuilding};
+use parabellum_types::buildings::BuildingName;
+use parabellum_types::{map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
@@ -7,6 +10,42 @@ use crate::es::VillageEsService;
 use super::fixtures::{
     granary, main_building, rally_point, resources, setup_village, warehouse, with_test_pool,
 };
+
+fn residence(level: u8) -> VillageBuilding {
+    VillageBuilding {
+        slot_id: 25,
+        building: Building::new(BuildingName::Residence, 1)
+            .at_level(level, 1)
+            .expect("residence should be buildable in tests"),
+    }
+}
+
+async fn train_settlers(
+    service: &VillageEsService,
+    village_id: u32,
+    player_id: Uuid,
+    quantity: u8,
+) {
+    for _ in 0..quantity {
+        service
+            .train_units(
+                village_id,
+                &TrainUnits {
+                    player_id,
+                    unit_idx: 9,
+                    building_name: parabellum_types::buildings::BuildingName::Residence,
+                    quantity: 1,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(12), 20)
+            .await
+            .unwrap();
+    }
+}
 
 #[tokio::test]
 async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resources() {
@@ -18,29 +57,18 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
             "Source Village",
             Position { x: 0, y: 0 },
             Tribe::Roman,
-            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            vec![
+                main_building(1),
+                rally_point(1),
+                residence(10),
+                warehouse(20),
+                granary(20),
+            ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
 
-        for _ in 0..3 {
-            service
-                .complete_train_unit(
-                    source_village_id,
-                    &CompleteTrainUnit {
-                        action_id: Uuid::new_v4(),
-                        player_id,
-                        village_id: source_village_id,
-                        slot_id: 19,
-                        unit: UnitName::Settler,
-                        time_per_unit: 1,
-                        quantity_remaining: 1,
-                        execute_at: chrono::Utc::now(),
-                    },
-                )
-                .await
-                .unwrap();
-        }
+        train_settlers(&service, source_village_id, player_id, 3).await;
 
         let source_before = service.get_village(source_village_id).await.unwrap();
         assert_eq!(
@@ -68,6 +96,16 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
             )
             .await
             .unwrap();
+
+        let source_movements = service
+            .get_village_troop_movements(source_village_id)
+            .await
+            .unwrap();
+        assert_eq!(source_movements.outgoing.len(), 1);
+        assert_eq!(
+            source_movements.outgoing[0].movement_type,
+            TroopMovementType::FoundVillage
+        );
 
         let source_after = service.get_village(source_village_id).await.unwrap();
         let after = source_after.stocks.clone();
@@ -97,28 +135,17 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
             "Source Village",
             Position { x: 0, y: 0 },
             Tribe::Roman,
-            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            vec![
+                main_building(1),
+                rally_point(1),
+                residence(10),
+                warehouse(20),
+                granary(20),
+            ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
-        for _ in 0..3 {
-            service
-                .complete_train_unit(
-                    source_village_id,
-                    &CompleteTrainUnit {
-                        action_id: Uuid::new_v4(),
-                        player_id,
-                        village_id: source_village_id,
-                        slot_id: 19,
-                        unit: UnitName::Settler,
-                        time_per_unit: 1,
-                        quantity_remaining: 1,
-                        execute_at: chrono::Utc::now(),
-                    },
-                )
-                .await
-                .unwrap();
-        }
+        train_settlers(&service, source_village_id, player_id, 3).await;
 
         let target_position = Position { x: 30, y: 30 };
         let target_field_id = target_position.to_id(100);
@@ -149,11 +176,34 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
         assert_eq!(founded.player_id, player_id);
         assert_eq!(founded.village_name, "Colony");
         assert_eq!(founded.position, target_position);
-        assert_eq!(founded.buildings.len(), 0);
+        assert_eq!(founded.buildings.len(), 19);
+        assert_eq!(
+            founded
+                .buildings
+                .iter()
+                .filter(|b| b.slot_id <= 18 && b.building.level == 0)
+                .count(),
+            18
+        );
+        assert!(
+            founded
+                .buildings
+                .iter()
+                .any(|b| b.slot_id == 19
+                    && b.building.name == BuildingName::MainBuilding
+                    && b.building.level == 1)
+        );
         assert_eq!(founded.stocks.lumber, 800);
         assert_eq!(founded.stocks.clay, 800);
         assert_eq!(founded.stocks.iron, 800);
         assert_eq!(founded.stocks.crop, 800);
+
+        let source_movements = service
+            .get_village_troop_movements(source_village_id)
+            .await
+            .unwrap();
+        assert_eq!(source_movements.outgoing.len(), 0);
+
     })
     .await;
 }
@@ -168,28 +218,17 @@ async fn village_es_service_settlers_arrival_on_occupied_target_is_cancelled() {
             "Source Village",
             Position { x: 0, y: 0 },
             Tribe::Roman,
-            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            vec![
+                main_building(1),
+                rally_point(1),
+                residence(10),
+                warehouse(20),
+                granary(20),
+            ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
-        for _ in 0..3 {
-            service
-                .complete_train_unit(
-                    source_village_id,
-                    &CompleteTrainUnit {
-                        action_id: Uuid::new_v4(),
-                        player_id,
-                        village_id: source_village_id,
-                        slot_id: 19,
-                        unit: UnitName::Settler,
-                        time_per_unit: 1,
-                        quantity_remaining: 1,
-                        execute_at: chrono::Utc::now(),
-                    },
-                )
-                .await
-                .unwrap();
-        }
+        train_settlers(&service, source_village_id, player_id, 3).await;
 
         let occupied_position = Position { x: 40, y: 40 };
         let occupied_village_id = setup_village(
@@ -247,7 +286,13 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             "Source A",
             Position { x: 0, y: 0 },
             Tribe::Roman,
-            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            vec![
+                main_building(1),
+                rally_point(1),
+                residence(10),
+                warehouse(20),
+                granary(20),
+            ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
@@ -257,30 +302,19 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             "Source B",
             Position { x: 10, y: 10 },
             Tribe::Gaul,
-            vec![main_building(1), rally_point(1), warehouse(20), granary(20)],
+            vec![
+                main_building(1),
+                rally_point(1),
+                residence(10),
+                warehouse(20),
+                granary(20),
+            ],
             resources(80_000, 80_000, 80_000, 80_000),
         )
         .await;
 
         for (player_id, source_village_id) in [(player_a, source_a), (player_b, source_b)] {
-            for _ in 0..3 {
-                service
-                    .complete_train_unit(
-                        source_village_id,
-                        &CompleteTrainUnit {
-                            action_id: Uuid::new_v4(),
-                            player_id,
-                            village_id: source_village_id,
-                            slot_id: 19,
-                            unit: UnitName::Settler,
-                            time_per_unit: 1,
-                            quantity_remaining: 1,
-                            execute_at: chrono::Utc::now(),
-                        },
-                    )
-                    .await
-                    .unwrap();
-            }
+            train_settlers(&service, source_village_id, player_id, 3).await;
         }
 
         let target_position = Position { x: 45, y: -45 };

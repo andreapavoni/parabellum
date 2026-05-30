@@ -73,6 +73,7 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await
@@ -166,6 +167,7 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Clay, 1_200),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await
@@ -262,6 +264,7 @@ async fn village_es_service_marketplace_offer_accept_closes_offer_and_rejects_ca
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Iron, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Crop, 900),
+                    speed: parabellum_app::config::Config::from_env().speed,
                 },
             )
             .await
@@ -293,7 +296,11 @@ async fn village_es_service_marketplace_offer_accept_closes_offer_and_rejects_ca
             parabellum_app::villages::models::MarketplaceOfferStatus::Accepted
         );
         assert!(
-            service.get_open_marketplace_offers().await.unwrap().is_empty(),
+            service
+                .get_open_marketplace_offers()
+                .await
+                .unwrap()
+                .is_empty(),
             "accepted offer must not remain in open marketplace list"
         );
 

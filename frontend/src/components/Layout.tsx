@@ -1,6 +1,8 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { MeContextResponse, SessionResponse, VillageListItem } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
+import { api } from "@/lib/api";
 import { Link } from "./Link";
 
 type LayoutProps = {
@@ -26,6 +28,7 @@ type LiveResources = {
 export function Layout(props: LayoutProps) {
   const [serverTime, setServerTime] = useState(props.meContext?.serverTime ?? Date.now() / 1000);
   const [liveResources, setLiveResources] = useState<LiveResources | null>(null);
+  const [hasUnreadReports, setHasUnreadReports] = useState(false);
 
   useEffect(() => {
     setServerTime(props.meContext?.serverTime ?? Date.now() / 1000);
@@ -68,6 +71,34 @@ export function Layout(props: LayoutProps) {
     return () => window.clearInterval(timer);
   }, [props.meContext?.currentVillage]);
 
+  useEffect(() => {
+    if (!props.session.authenticated) {
+      setHasUnreadReports(false);
+      return;
+    }
+    let cancelled = false;
+    const refreshUnread = async () => {
+      try {
+        const page = await api.reports(1, 25);
+        if (!cancelled) {
+          setHasUnreadReports(page.reports.some((report) => !report.isRead));
+        }
+      } catch {
+        if (!cancelled) {
+          setHasUnreadReports(false);
+        }
+      }
+    };
+    void refreshUnread();
+    const timer = window.setInterval(() => {
+      void refreshUnread();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [props.session.authenticated]);
+
   const serverClock = useMemo(() => {
     const date = new Date(serverTime * 1000);
     return [date.getHours(), date.getMinutes(), date.getSeconds()]
@@ -79,7 +110,10 @@ export function Layout(props: LayoutProps) {
   const villages = props.meContext?.villages ?? [];
   const player = props.meContext?.player;
   const isGuestHome = !player && props.active === "home";
-  const showVillageSwitcher = Boolean(player) && props.active === "village" && villages.length > 0;
+  const showVillageSwitcher =
+    Boolean(player) &&
+    (props.active === "village" || props.active === "building") &&
+    villages.length > 0;
 
   return (
     <>
@@ -104,7 +138,12 @@ export function Layout(props: LayoutProps) {
               <NavIcon active={props.active === "village"} to="/village" label="🏠" />
               <NavIcon active={props.active === "map"} to="/map" label="🗺️" />
               <NavIcon active={props.active === "stats"} to="/stats" label="📊" />
-              <NavIcon active={props.active === "reports"} to="/reports" label="📜" />
+              <NavIcon
+                active={props.active === "reports"}
+                alert={hasUnreadReports}
+                to="/reports"
+                label="📜"
+              />
               <div class="nav-icon" title="Messages">
                 ✉️
               </div>
@@ -117,6 +156,7 @@ export function Layout(props: LayoutProps) {
                 <div class="res-item">{resourceLabel(Math.floor(liveResources?.iron ?? village.resources.iron), village.warehouseCapacity, "⛏️")}</div>
                 <div class="res-item">{resourceLabel(Math.floor(liveResources?.crop ?? village.resources.crop), village.granaryCapacity, "🌾")}</div>
                 <div class="res-item">👤 {village.population}</div>
+                {village.isCapital ? <div class="res-item">🏛️ Capital</div> : null}
               </div>
             ) : null}
           </>
@@ -169,9 +209,26 @@ export function Layout(props: LayoutProps) {
   );
 }
 
-function NavIcon({ active, to, label }: { active: boolean; to: string; label: string }) {
+function NavIcon({
+  active,
+  alert,
+  to,
+  label,
+}: {
+  active: boolean;
+  alert?: boolean;
+  to: string;
+  label: string;
+}) {
+  const className = [
+    "nav-icon",
+    active ? "nav-active" : "",
+    alert && !active ? "nav-unread" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div class={active ? "nav-icon nav-active" : "nav-icon"}>
+    <div class={className}>
       <Link to={to}>{label}</Link>
     </div>
   );
@@ -202,6 +259,7 @@ function VillagesList({
                 <span class="flex items-center">
                   <span class="w-2 h-2 rounded-full mr-2 bg-orange-500" />
                   {village.name}
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </span>
                 <span class="text-gray-600">
                   ({village.x}|{village.y})
@@ -215,6 +273,7 @@ function VillagesList({
                 <span class="flex items-center">
                   <span class="w-2 h-2 rounded-full mr-2 bg-green-500" />
                   {village.name}
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </span>
                 <span class="text-gray-500">
                   ({village.x}|{village.y})

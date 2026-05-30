@@ -47,10 +47,68 @@ Parabellum is a multiplayer strategy game backend organized as a layered CQRS/ES
 - Aggregate granularity: one village aggregate per village id (`u32`).
 - Scheduling:
   - validations at scheduling time
-  - completion commands deterministic
+  - deterministic canonical fact production
   - scheduler reads due actions from `rm_scheduled_actions`
-  - scheduler does not mutate state directly; it issues completion commands.
+  - scheduler does not mutate state directly; it appends canonical workflow facts only.
 - Read models are query sources (`rm_village`, `rm_armies`, `rm_village_movements`, `rm_reports`, `rm_map_fields`, etc.).
+
+## Scheduler Operational Contract
+
+`rm_scheduled_actions` is an operational queue (not canonical domain history).
+
+Execution model:
+1. scheduler claims due `pending` actions into `processing`,
+2. executes deterministic workflow fact production,
+3. terminally marks each action as `completed` or `failed`.
+
+Recovery model:
+1. at tick start, stale `processing` rows (older than recovery threshold) are requeued to `pending`,
+2. batch failures do not leave actions indefinitely in `processing`.
+
+Replay model:
+1. replay rebuilds read models from event facts only,
+2. replay does not recreate or mutate operational queue rows (`rm_scheduled_actions`).
+
+## Workflow Transaction Boundary
+
+For cross-village facts (multi-stream workflows), infrastructure uses a dedicated
+transactional append boundary:
+
+1. collect workflow domain events grouped by target aggregate stream,
+2. load each stream expected version,
+3. append all grouped streams in one DB transaction (`es_events`),
+4. project resulting stored events in `global_seq` order.
+
+Current usage:
+- attack battle resolution appends:
+  - `AttackBattleResolved` on source village stream
+  - `BattleOutcomeAppliedToVillage` on target village stream
+- merchants arrival appends:
+  - `MerchantsArrived` on source village stream
+  - `MerchantTransferAppliedToVillage` on target village stream
+- marketplace offer acceptance appends:
+  - `MarketplaceOfferAcceptanceAppliedToVillage` on accepting village stream
+  - `MarketplaceOfferAccepted` on accepting village stream
+  - owner `MerchantsTripScheduled` on owner village stream
+  - accepting `MerchantsTripScheduled` on accepting village stream
+- marketplace create/cancel reservation effects:
+  - `MarketplaceOfferReservationAppliedToVillage` carries owner stocks/merchant reservation state
+  - `MarketplaceOfferReservationReleasedFromVillage` carries owner refund/merchant release state
+
+Failure semantics:
+- fail fast on any stream conflict (`CqrsError::Conflict`)
+- no partial append across streams
+- projector processing runs only after successful append
+- live command runtime executes projector updates in the same SQL transaction boundary (`*_in_tx` path only)
+
+## Projector Runtime Mode
+
+`VillageProjector` and `ReportProjector` run through tx wrappers in live command handling:
+1. begin SQL transaction
+2. call `process_in_tx`
+3. commit transaction
+
+Legacy non-transactional projector execution path has been removed from the live runtime.
 
 ## Read-Model Ownership Contract
 
@@ -86,10 +144,12 @@ Command-side rule:
 - `parabellum_app` and domain crates do not depend on SQLx.
 - Infrastructure-specific mapping stays in `parabellum_infra`.
 - Domain/game rules live in `parabellum_game` whenever possible.
-- No legacy UnitOfWork/job-handler path in the new ES flow.
+- ES runtime path is the only command execution path.
 
 ## API Surface
 
 - HTTP API is served under `/api/v1`.
 - Contracts and error envelopes are documented in [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md).
+- Workflow fact contracts are documented in [`docs/EVENT_CONTRACTS.md`](docs/EVENT_CONTRACTS.md).
+- Current migration snapshot is tracked in [`docs/ARCHITECTURE_STATUS.md`](docs/ARCHITECTURE_STATUS.md).
 - Machine-readable contract entrypoint: `GET /api/v1/openapi.json`.

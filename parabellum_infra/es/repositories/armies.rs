@@ -1,7 +1,7 @@
 use parabellum_app::villages::repositories::ArmyRepository;
 use parabellum_game::models::army::Army;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{PgPool, types::Json};
+use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -21,7 +21,19 @@ impl PostgresArmyRepository {
         player_id: Uuid,
         state: &str,
     ) -> Result<(), ApplicationError> {
-        sqlx::query(
+        self.upsert_in_tx_inner(None, army, current_village_id, player_id, state)
+            .await
+    }
+
+    async fn upsert_in_tx_inner(
+        &self,
+        tx: Option<&mut Transaction<'_, Postgres>>,
+        army: &Army,
+        current_village_id: u32,
+        player_id: Uuid,
+        state: &str,
+    ) -> Result<(), ApplicationError> {
+        let q = sqlx::query(
             r#"
             INSERT INTO rm_armies (
                 army_id, village_id, current_village_id, player_id, state, payload, updated_at
@@ -41,17 +53,102 @@ impl PostgresArmyRepository {
         .bind(current_village_id as i32)
         .bind(player_id)
         .bind(state)
-        .bind(Json(army))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .bind(Json(army));
+        if let Some(tx) = tx {
+            q.execute(&mut **tx)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        } else {
+            q.execute(&self.pool)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        }
         Ok(())
     }
 
     async fn delete_row(&self, army_id: Uuid) -> Result<(), ApplicationError> {
-        sqlx::query("DELETE FROM rm_armies WHERE army_id = $1")
-            .bind(army_id)
-            .execute(&self.pool)
+        self.delete_row_in_tx_inner(None, army_id).await
+    }
+
+    async fn delete_row_in_tx_inner(
+        &self,
+        tx: Option<&mut Transaction<'_, Postgres>>,
+        army_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        let q = sqlx::query("DELETE FROM rm_armies WHERE army_id = $1").bind(army_id);
+        if let Some(tx) = tx {
+            q.execute(&mut **tx)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        } else {
+            q.execute(&self.pool)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        }
+        Ok(())
+    }
+
+    pub async fn upsert_home_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        army: &Army,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            DELETE FROM rm_armies
+            WHERE village_id = $1
+              AND state = 'home'
+              AND army_id <> $2
+            "#,
+        )
+        .bind(army.village_id as i32)
+        .bind(army.id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.upsert_in_tx_inner(Some(tx), army, army.village_id, player_id, "home")
+            .await
+    }
+
+    pub async fn upsert_moving_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        army: &Army,
+        current_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.upsert_in_tx_inner(Some(tx), army, current_village_id, player_id, "moving")
+            .await
+    }
+
+    pub async fn upsert_stationed_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        army: &Army,
+        stationed_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.upsert_in_tx_inner(Some(tx), army, stationed_village_id, player_id, "stationed")
+            .await
+    }
+
+    pub async fn delete_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        army_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.delete_row_in_tx_inner(Some(tx), army_id).await
+    }
+
+    pub async fn delete_by_home_village_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query("DELETE FROM rm_armies WHERE village_id = $1")
+            .bind(village_id as i32)
+            .execute(&mut **tx)
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())

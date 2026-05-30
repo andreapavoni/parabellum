@@ -1,4 +1,5 @@
 import type { PlayerProfileResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "@/components/Link";
 
 export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
@@ -11,6 +12,7 @@ export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
             <tr>
               <th class="px-4 py-3">Village</th>
               <th class="px-4 py-3">Coordinates</th>
+              <th class="px-4 py-3 text-right">Distance</th>
               <th class="px-4 py-3 text-right">Population</th>
             </tr>
           </thead>
@@ -21,10 +23,14 @@ export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
                   <Link to={`/map/field/${village.villageId}`} class="text-green-700 hover:underline">
                     {village.name}
                   </Link>
+                  {village.isCapital ? <CapitalBadge compact /> : null}
                 </td>
                 <td class="px-4 py-3 text-gray-600">
-                  ({village.x}|{village.y})
+                  <Link to={`/map/field/${village.villageId}`} class="text-green-700 hover:underline">
+                    ({village.x}|{village.y})
+                  </Link>
                 </td>
+                <td class="px-4 py-3 text-right text-gray-700">{village.distanceFromCurrent}</td>
                 <td class="px-4 py-3 text-right text-gray-800">{village.population}</td>
               </tr>
             ))}

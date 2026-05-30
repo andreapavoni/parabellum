@@ -46,8 +46,9 @@ impl VillageAggregate {
     pub fn schedule_send_resources(
         &self,
         resources: parabellum_types::common::ResourceGroup,
+        server_speed: i8,
     ) -> Result<u8, parabellum_types::errors::ApplicationError> {
-        self.village.schedule_send_resources(resources)
+        self.village.schedule_send_resources(resources, server_speed)
     }
 
     pub fn village(&self) -> &VillageState {
@@ -141,8 +142,12 @@ impl Aggregate for VillageAggregate {
                 home_army.set_hero(Some(hero.clone()));
                 let _ = self.village.village.set_army(Some(&home_army));
             }
+            VillageEvent::LoyaltyRegenerated { loyalty_after, .. } => {
+                self.village.village.regenerate_loyalty_to(*loyalty_after);
+            }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}
+            VillageEvent::ReinforcementAppliedToVillage { .. } => {}
             VillageEvent::ReinforcementsRecalled { .. } => {}
             VillageEvent::ReinforcementsReleased { .. } => {}
             VillageEvent::SettlersSent { .. } => {
@@ -151,7 +156,52 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
+            VillageEvent::AttackArrivalScheduled { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
+            VillageEvent::AttackBattleResolved { .. } => {}
+            VillageEvent::BattleOutcomeAppliedToVillage {
+                target_player_id,
+                target_tribe,
+                target_parent_village_id,
+                target_loyalty,
+                target_buildings,
+                target_production,
+                target_population,
+                target_stocks,
+                target_army,
+                target_reinforcements,
+                stationed_attacker_army,
+                ..
+            } => {
+                let current = &self.village.village;
+                let mut reinforcements = target_reinforcements.clone();
+                if let Some(stationed_attacker) = stationed_attacker_army.clone() {
+                    reinforcements.push(stationed_attacker);
+                }
+                self.village.village = parabellum_game::models::village::Village::from_persistence(
+                    current.id,
+                    current.name.clone(),
+                    *target_player_id,
+                    current.position.clone(),
+                    target_tribe.clone(),
+                    target_buildings.clone(),
+                    current.oases.clone(),
+                    *target_population,
+                    target_army.clone(),
+                    reinforcements,
+                    current.deployed_armies().clone(),
+                    *target_loyalty,
+                    target_production.clone(),
+                    current.is_capital,
+                    current.smithy().clone(),
+                    target_stocks.clone(),
+                    current.academy_research().clone(),
+                    current.culture_points,
+                    current.culture_points_production,
+                    chrono::Utc::now(),
+                    *target_parent_village_id,
+                );
+            }
             VillageEvent::ArmyReturned { army, bounty, .. } => {
                 let _ = self.village.merge_units_home(army.units());
                 if let Some(bounty) = bounty {
@@ -160,6 +210,7 @@ impl Aggregate for VillageAggregate {
             }
             VillageEvent::ScoutSent { .. } => {}
             VillageEvent::ScoutArrived { .. } => {}
+            VillageEvent::ScoutBattleResolved { .. } => {}
             VillageEvent::MerchantsTripScheduled {
                 resources,
                 merchants_used,
@@ -173,6 +224,7 @@ impl Aggregate for VillageAggregate {
                 }
             }
             VillageEvent::MerchantsArrived { .. } => {}
+            VillageEvent::MerchantTransferAppliedToVillage { .. } => {}
             VillageEvent::MerchantsReturned { merchants_used, .. } => {
                 self.village.apply_merchant_return(*merchants_used);
             }
@@ -186,6 +238,7 @@ impl Aggregate for VillageAggregate {
                     .village
                     .apply_merchant_departure(&resources, *merchants_reserved);
             }
+            VillageEvent::MarketplaceOfferReservationAppliedToVillage { .. } => {}
             VillageEvent::MarketplaceOfferCanceled {
                 owner_village_id,
                 offer_resources,
@@ -199,18 +252,41 @@ impl Aggregate for VillageAggregate {
                     self.village.apply_merchant_return(*merchants_reserved);
                 }
             }
-            VillageEvent::MarketplaceOfferAccepted {
-                accepting_village_id,
-                seek_resources,
-                accepting_merchants_used,
+            VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {}
+            VillageEvent::MarketplaceOfferAccepted { .. } => {}
+            VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
+                village_id,
+                stocks,
+                busy_merchants,
                 ..
             } => {
-                if *accepting_village_id == self.id {
-                    let resources: parabellum_types::common::ResourceGroup =
-                        (*seek_resources).into();
-                    let _ = self
-                        .village
-                        .apply_merchant_departure(&resources, *accepting_merchants_used);
+                if *village_id == self.id {
+                    let current = self.village.village.stored_resources();
+                    let desired = parabellum_types::common::ResourceGroup::new(
+                        stocks.lumber,
+                        stocks.clay,
+                        stocks.iron,
+                        stocks.crop.max(0) as u32,
+                    );
+                    let delta_add = parabellum_types::common::ResourceGroup::new(
+                        desired.lumber().saturating_sub(current.lumber()),
+                        desired.clay().saturating_sub(current.clay()),
+                        desired.iron().saturating_sub(current.iron()),
+                        desired.crop().saturating_sub(current.crop()),
+                    );
+                    let delta_sub = parabellum_types::common::ResourceGroup::new(
+                        current.lumber().saturating_sub(desired.lumber()),
+                        current.clay().saturating_sub(desired.clay()),
+                        current.iron().saturating_sub(desired.iron()),
+                        current.crop().saturating_sub(desired.crop()),
+                    );
+                    if delta_add.total() > 0 {
+                        self.village.village.store_resources(&delta_add);
+                    }
+                    if delta_sub.total() > 0 {
+                        let _ = self.village.village.deduct_resources(&delta_sub);
+                    }
+                    self.village.village.busy_merchants = *busy_merchants;
                 }
             }
             VillageEvent::BuildingConstructionScheduled {
@@ -222,7 +298,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_building_action(
+                self.village.record_building_action_scheduled(
                     *action_id,
                     *slot_id,
                     building_name.clone(),
@@ -238,7 +314,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_building_action(
+                self.village.record_building_action_scheduled(
                     *action_id,
                     *slot_id,
                     building_name.clone(),
@@ -251,7 +327,7 @@ impl Aggregate for VillageAggregate {
                 building_name,
                 execute_at,
                 ..
-            } => self.village.register_building_action(
+            } => self.village.record_building_action_scheduled(
                 *action_id,
                 *slot_id,
                 building_name.clone(),
@@ -265,7 +341,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -277,7 +353,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -289,7 +365,7 @@ impl Aggregate for VillageAggregate {
                 speed,
                 ..
             } => {
-                self.village.complete_building_action(*action_id);
+                self.village.mark_building_action_consumed(*action_id);
                 self.village
                     .set_building_level(*slot_id, building_name.clone(), *level, *speed);
             }
@@ -297,16 +373,18 @@ impl Aggregate for VillageAggregate {
                 action_id,
                 slot_id,
                 unit,
+                time_per_unit,
                 quantity_remaining,
                 cost,
                 execute_at,
                 ..
             } => {
                 let _ = self.village.village.deduct_resources(cost);
-                self.village.register_training_action(
+                self.village.record_training_action_scheduled(
                     *action_id,
                     *slot_id,
                     unit.clone(),
+                    *time_per_unit,
                     *quantity_remaining,
                     *execute_at,
                 );
@@ -317,7 +395,7 @@ impl Aggregate for VillageAggregate {
                 quantity_trained,
                 ..
             } => {
-                self.village.complete_training_action(*action_id);
+                self.village.mark_training_action_consumed(*action_id);
                 let _ = self.village.train_units(unit.clone(), *quantity_trained);
             }
             VillageEvent::AcademyResearchScheduled {
@@ -329,13 +407,13 @@ impl Aggregate for VillageAggregate {
             } => {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village
-                    .register_academy_action(*action_id, unit.clone(), *execute_at);
+                    .record_academy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
             VillageEvent::AcademyResearchCompleted {
                 action_id, unit, ..
             } => {
-                self.village.complete_academy_action(*action_id);
-                let _ = self.village.complete_academy_research(unit.clone());
+                self.village.mark_academy_action_consumed(*action_id);
+                let _ = self.village.apply_academy_research_completed(unit.clone());
             }
             VillageEvent::SmithyResearchScheduled {
                 action_id,
@@ -346,14 +424,15 @@ impl Aggregate for VillageAggregate {
             } => {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village
-                    .register_smithy_action(*action_id, unit.clone(), *execute_at);
+                    .record_smithy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
             VillageEvent::SmithyResearchCompleted {
                 action_id, unit, ..
             } => {
-                self.village.complete_smithy_action(*action_id);
-                let _ = self.village.complete_smithy_research(unit.clone());
+                self.village.mark_smithy_action_consumed(*action_id);
+                let _ = self.village.apply_smithy_research_completed(unit.clone());
             }
+            VillageEvent::ReportMarkedAsRead { .. } => {}
         }
     }
 

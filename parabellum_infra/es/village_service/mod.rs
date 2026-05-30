@@ -3,7 +3,7 @@
 //! This module is intentionally split by concern:
 //! - `mod.rs`: command dispatch + scheduler tick orchestration
 //! - `queries.rs`: read/query helpers consumed by adapters/web layer
-//! - `scheduler.rs`: deterministic completion-command execution from scheduled payloads
+//! - `scheduler.rs`: deterministic fact-driven scheduled workflow progression
 //!
 //! Public API remains centered on `VillageEsService`.
 
@@ -11,9 +11,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use mini_cqrs_es::anyhow::Result;
-use mini_cqrs_es::{CqrsError, QueryRunner};
+use mini_cqrs_es::{CqrsError, EventMetadata, EventPayload, EventStore, NewEvent, QueryRunner};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::culture_points::required_cp;
+use parabellum_game::models::village::Village;
+use parabellum_types::buildings::BuildingName;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
@@ -37,15 +39,11 @@ use parabellum_app::villages::repositories::{
     ScheduledActionRepository, VillageMovementRepository, VillageRepository,
 };
 use parabellum_app::villages::{
-    AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
-    CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteHeroRevival, CompleteMerchantsArrival,
-    CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
-    CompleteTrainUnit, CompleteUpgradeBuilding, ConquerVillage, CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ReinforcementArrived,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
-    UpgradeBuilding, VillageService,
+    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer, CreateHero,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
+    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero,
+    ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
+    TrainUnits, UpgradeBuilding, VillageService,
 };
 use parabellum_game::models::map::MapField;
 use parabellum_game::models::marketplace::MarketplaceOffer;
@@ -53,15 +51,18 @@ use parabellum_types::errors::{DbError, GameError};
 
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{
-    PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
-    PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
-    PostgresVillageRepository, village_cqrs_runtime,
+    PostgresArmyRepository, PostgresEventStore, PostgresHeroRepository,
+    PostgresMarketplaceRepository, PostgresReportRepository, PostgresScheduledActionRepository,
+    PostgresVillageMovementRepository, PostgresVillageRepository, ReportProjector,
+    VillageProjector, WorkflowStreamAppend, village_cqrs_runtime,
 };
 use crate::identity::repositories::PostgresPlayerRepository;
 use crate::map::PostgresMapRepository;
 
 mod queries;
 mod scheduler;
+
+const SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS: i64 = 120;
 
 #[derive(Debug, Clone)]
 /// ES orchestration facade for village command, scheduler, and read helper flows.
@@ -80,13 +81,58 @@ pub struct ReinforcementContext {
 }
 
 impl VillageEsService {
+    /// Converts unordered `(village_id, event)` facts into stream-grouped append
+    /// units with expected versions.
+    ///
+    /// Contract:
+    /// - grouping is by aggregate stream id (`village_id`)
+    /// - event order is preserved inside each stream group
+    /// - expected versions are loaded immediately before append preparation
+    ///
+    /// This is a local extraction seam for a future generic workflow builder in
+    /// `mini_cqrs_es`.
+    async fn build_village_workflow_appends(
+        &self,
+        workflow_events: Vec<(u32, parabellum_app::villages::VillageEvent)>,
+    ) -> Result<Vec<WorkflowStreamAppend>, CqrsError> {
+        let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+        let store = PostgresEventStore::new(self.pool.clone());
+        let mut grouped: Vec<(u32, Vec<NewEvent>)> = Vec::new();
+        for (aggregate_id, payload) in workflow_events {
+            let event = NewEvent {
+                event_type: payload.name(),
+                payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
+                metadata: EventMetadata::default(),
+                timestamp: chrono::Utc::now(),
+            };
+            if let Some((_, events)) = grouped.iter_mut().find(|(id, _)| *id == aggregate_id) {
+                events.push(event);
+            } else {
+                grouped.push((aggregate_id, vec![event]));
+            }
+        }
+
+        let mut streams = Vec::with_capacity(grouped.len());
+        for (aggregate_id, events) in grouped {
+            let (_, expected_version) = store
+                .load_events(aggregate_type, &aggregate_id.to_string())
+                .await?;
+            streams.push(WorkflowStreamAppend {
+                aggregate_id: aggregate_id.to_string(),
+                expected_version,
+                events,
+            });
+        }
+        Ok(streams)
+    }
+
     fn map_troop_movement_type(
         movement_type: parabellum_app::villages::models::MovementType,
     ) -> TroopMovementType {
         match movement_type {
             parabellum_app::villages::models::MovementType::Attack => TroopMovementType::Attack,
             parabellum_app::villages::models::MovementType::Raid => TroopMovementType::Raid,
-            parabellum_app::villages::models::MovementType::Scout => TroopMovementType::Attack,
+            parabellum_app::villages::models::MovementType::Scout => TroopMovementType::Scout,
             parabellum_app::villages::models::MovementType::Reinforcement => {
                 TroopMovementType::Reinforcement
             }
@@ -112,6 +158,35 @@ impl VillageEsService {
 
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    async fn materialize_current_resources_for_command(
+        &self,
+        village_id: u32,
+        player_id: uuid::Uuid,
+    ) -> Result<(), CqrsError> {
+        let current = self.get_village(village_id).await?;
+        if current.player_id != player_id {
+            return Err(CqrsError::domain_source(GameError::VillageNotOwned {
+                village_id,
+                player_id,
+            }));
+        }
+        let resources = parabellum_types::common::ResourceGroup::new(
+            current.stocks.lumber,
+            current.stocks.clay,
+            current.stocks.iron,
+            current.stocks.crop.max(0) as u32,
+        );
+        self.set_village_resources(
+            village_id,
+            &SetVillageResources {
+                player_id,
+                resources,
+            },
+        )
+        .await?;
+        Ok(())
     }
 
     pub async fn found_village(
@@ -179,6 +254,8 @@ impl VillageEsService {
         village_id: u32,
         command: &SendSettlers,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.send_settlers(village_id, command).await
@@ -190,9 +267,7 @@ impl VillageEsService {
         command: &CreateHero,
     ) -> Result<u32, CqrsError> {
         if self.player_has_alive_hero(command.player_id).await? {
-            return Err(CqrsError::Domain(
-                "player already has an alive hero".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroAlreadyExists));
         }
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
@@ -208,14 +283,10 @@ impl VillageEsService {
             .player_has_pending_hero_revival(command.player_id)
             .await?
         {
-            return Err(CqrsError::Domain(
-                "hero revival already pending".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroRevivalAlreadyPending));
         }
         if self.player_has_alive_hero(command.player_id).await? {
-            return Err(CqrsError::Domain(
-                "cannot revive while an alive hero exists".to_string(),
-            ));
+            return Err(CqrsError::domain_source(GameError::HeroAlreadyExists));
         }
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
@@ -228,7 +299,7 @@ impl VillageEsService {
         map_repo
             .is_unoccupied_valley(field_id as i32)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn add_building(
@@ -236,6 +307,8 @@ impl VillageEsService {
         village_id: u32,
         command: &AddBuilding,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.add_building(village_id, command).await
@@ -246,6 +319,8 @@ impl VillageEsService {
         village_id: u32,
         command: &UpgradeBuilding,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.upgrade_building(village_id, command).await
@@ -266,19 +341,11 @@ impl VillageEsService {
         village_id: u32,
         command: &TrainUnits,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.train_units(village_id, command).await
-    }
-
-    pub async fn complete_train_unit(
-        &self,
-        village_id: u32,
-        command: &CompleteTrainUnit,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service.complete_train_unit(village_id, command).await
     }
 
     pub async fn research_academy(
@@ -286,6 +353,8 @@ impl VillageEsService {
         village_id: u32,
         command: &ResearchAcademy,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.research_academy(village_id, command).await
@@ -296,40 +365,32 @@ impl VillageEsService {
         village_id: u32,
         command: &ResearchSmithy,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.research_smithy(village_id, command).await
     }
 
-    pub async fn complete_add_building(
+    pub async fn resolve_attack_battle(
         &self,
         village_id: u32,
-        command: &CompleteAddBuilding,
+        command: &ResolveAttackBattle,
     ) -> Result<u32, CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
-        service.complete_add_building(village_id, command).await
+        service.resolve_attack_battle(village_id, command).await
     }
 
-    pub async fn complete_upgrade_building(
+    pub async fn apply_battle_outcome_to_village(
         &self,
         village_id: u32,
-        command: &CompleteUpgradeBuilding,
-    ) -> Result<u32, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service.complete_upgrade_building(village_id, command).await
-    }
-
-    pub async fn complete_downgrade_building(
-        &self,
-        village_id: u32,
-        command: &CompleteDowngradeBuilding,
+        command: &ApplyBattleOutcomeToVillage,
     ) -> Result<u32, CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service
-            .complete_downgrade_building(village_id, command)
+            .apply_battle_outcome_to_village(village_id, command)
             .await
     }
 
@@ -338,6 +399,8 @@ impl VillageEsService {
         village_id: u32,
         command: &SendMerchantsTransfer,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.send_resources(village_id, command).await
@@ -348,6 +411,8 @@ impl VillageEsService {
         village_id: u32,
         command: &CreateMarketplaceOffer,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.create_marketplace_offer(village_id, command).await
@@ -364,7 +429,7 @@ impl VillageEsService {
             || offer.owner_village_id != village_id
             || offer.owner_player_id != player_id
         {
-            return Err(CqrsError::domain("invalid marketplace offer cancellation"));
+            return Err(CqrsError::domain_source(GameError::InvalidMarketplaceOffer));
         }
 
         let runtime = village_cqrs_runtime(self.pool.clone());
@@ -388,6 +453,8 @@ impl VillageEsService {
         owner_arrives_at: chrono::DateTime<chrono::Utc>,
         accepting_arrives_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(accepting_village_id, accepting_player_id)
+            .await?;
         let offers = PostgresMarketplaceRepository::new(self.pool.clone());
         let Some(offer) = offers
             .claim_open_for_accept(
@@ -397,24 +464,132 @@ impl VillageEsService {
                 chrono::Utc::now(),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+            .map_err(CqrsError::domain_source)?
         else {
-            return Err(CqrsError::domain(GameError::MarketplaceOfferNoLongerValid));
+            return Err(CqrsError::domain_source(GameError::MarketplaceOfferNoLongerValid));
         };
+        if accepting_village_id == offer.owner_village_id
+            || accepting_player_id == offer.owner_player_id
+            || offer.offer_resources.quantity == 0
+            || offer.seek_resources.quantity == 0
+            || offer.offer_resources.resource == offer.seek_resources.resource
+        {
+            return Err(CqrsError::domain_source(GameError::InvalidMarketplaceOffer));
+        }
 
-        let runtime = village_cqrs_runtime(self.pool.clone());
-        let service = VillageService::new(&runtime);
-        service
-            .accept_marketplace_offer(
+        let accepting_model = self.get_village(accepting_village_id).await?;
+        if accepting_model.player_id != accepting_player_id {
+            return Err(CqrsError::domain_source(GameError::VillageNotOwned {
+                village_id: accepting_village_id,
+                player_id: accepting_player_id,
+            }));
+        }
+        let accepting_village =
+            Village::try_from(accepting_model).map_err(CqrsError::domain_source)?;
+        let seek_group: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
+        if accepting_village
+            .get_building_by_name(&BuildingName::Marketplace)
+            .is_none_or(|slot| slot.building.level == 0)
+        {
+            return Err(CqrsError::domain_source(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Marketplace,
+                level: 1,
+            }));
+        }
+        if !accepting_village.has_enough_resources(&seek_group) {
+            return Err(CqrsError::domain_source(GameError::NotEnoughResources));
+        }
+        let speed = parabellum_app::config::Config::from_env().speed.max(1) as u32;
+        let capacity = accepting_village
+            .tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed);
+        if capacity == 0 {
+            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
+        }
+        let total = seek_group.total();
+        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
+        let accepting_merchants_used = if total > 0 { needed.max(1) } else { 0 };
+        if accepting_merchants_used == 0
+            || accepting_merchants_used > accepting_village.available_merchants()
+        {
+            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
+        }
+        let mut accepting_after = accepting_village.clone();
+        accepting_after
+            .deduct_resources(&seek_group)
+            .map_err(CqrsError::domain_source)?;
+        accepting_after.busy_merchants = accepting_after
+            .busy_merchants
+            .saturating_add(accepting_merchants_used);
+
+        let accepted_at = chrono::Utc::now();
+        let owner_trip_duration =
+            (owner_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
+        let accepting_trip_duration =
+            (accepting_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
+
+        self.append_village_workflow_events(vec![
+            (
                 accepting_village_id,
-                &AcceptMarketplaceOffer {
+                parabellum_app::villages::VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
+                    offer_id: offer.offer_id,
                     player_id: accepting_player_id,
-                    offer: Self::as_offer_snapshot(offer),
-                    owner_arrives_at,
-                    accepting_arrives_at,
+                    village_id: accepting_village_id,
+                    stocks: accepting_after.stocks().clone(),
+                    busy_merchants: accepting_after.busy_merchants,
+                    applied_at: accepted_at,
                 },
-            )
-            .await
+            ),
+            (
+                accepting_village_id,
+                parabellum_app::villages::VillageEvent::MarketplaceOfferAccepted {
+                    offer_id: offer.offer_id,
+                    owner_player_id: offer.owner_player_id,
+                    owner_village_id: offer.owner_village_id,
+                    accepting_player_id,
+                    accepting_village_id,
+                    offer_resources: offer.offer_resources,
+                    seek_resources: offer.seek_resources,
+                    owner_merchants_reserved: offer.merchants_reserved,
+                    accepting_merchants_used,
+                    accepted_at,
+                },
+            ),
+            (
+                offer.owner_village_id,
+                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
+                    arrival_action_id: uuid::Uuid::new_v4(),
+                    return_action_id: uuid::Uuid::new_v4(),
+                    player_id: offer.owner_player_id,
+                    source_village_id: offer.owner_village_id,
+                    target_village_id: accepting_village_id,
+                    resources: offer.offer_resources.into(),
+                    merchants_used: offer.merchants_reserved,
+                    resources_already_reserved: true,
+                    arrives_at: owner_arrives_at,
+                    returns_at: owner_arrives_at + owner_trip_duration,
+                },
+            ),
+            (
+                accepting_village_id,
+                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
+                    arrival_action_id: uuid::Uuid::new_v4(),
+                    return_action_id: uuid::Uuid::new_v4(),
+                    player_id: accepting_player_id,
+                    source_village_id: accepting_village_id,
+                    target_village_id: offer.owner_village_id,
+                    resources: offer.seek_resources.into(),
+                    merchants_used: accepting_merchants_used,
+                    resources_already_reserved: true,
+                    arrives_at: accepting_arrives_at,
+                    returns_at: accepting_arrives_at + accepting_trip_duration,
+                },
+            ),
+        ])
+        .await?;
+        Ok(accepting_village_id)
     }
 
     /// Executes the village resource utility command through the ES runtime.
@@ -428,7 +603,7 @@ impl VillageEsService {
         service.set_village_resources(village_id, command).await
     }
 
-    /// Executes due scheduled actions by dispatching completion commands.
+    /// Executes due scheduled actions by appending canonical workflow facts.
     ///
     /// Status transitions are persisted for each action (`completed` or `failed`).
     pub async fn process_due_actions(
@@ -440,12 +615,12 @@ impl VillageEsService {
             .pool
             .acquire()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let acquired = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .fetch_one(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if !acquired {
             info!(
                 action = "scheduler_skip_locked",
@@ -454,10 +629,45 @@ impl VillageEsService {
             return Ok(0);
         }
 
-        let actions = PostgresScheduledActionRepository::new(self.pool.clone())
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        let stale_before = before_or_equal
+            - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
+        let requeued = repo
+            .requeue_stale_processing(stale_before)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        if requeued > 0 {
+            warn!(
+                action = "scheduler_requeue_stale_processing",
+                requeued,
+                stale_before = %stale_before,
+                "requeued stale processing scheduled actions to pending"
+            );
+        }
+        let requeued_failed_smithy = sqlx::query(
+            r#"
+            UPDATE rm_scheduled_actions
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'failed'
+              AND action_type = 'ResearchSmithy'
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(CqrsError::domain_source)?
+        .rows_affected();
+        if requeued_failed_smithy > 0 {
+            warn!(
+                action = "scheduler_requeue_failed_smithy",
+                requeued = requeued_failed_smithy,
+                "requeued failed smithy actions to pending"
+            );
+        }
+
+        let actions = repo
             .take_due_pending(before_or_equal, limit)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let claimed = actions.len();
         if claimed > 0 {
             info!(
@@ -474,7 +684,7 @@ impl VillageEsService {
             .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
             .execute(&mut *conn)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         result
     }
 
@@ -491,12 +701,14 @@ impl VillageEsService {
             let result = scheduler::execute_action(self, &service, action).await;
             let next_status = if result.is_ok() {
                 ScheduledActionStatus::Completed
+            } else if matches!(result, Err(CqrsError::Conflict { .. })) {
+                ScheduledActionStatus::Pending
             } else {
                 ScheduledActionStatus::Failed
             };
             repo.update_status(action.id, next_status)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             if let Err(err) = &result {
                 warn!(
                     action = "scheduler_action_failed",
@@ -513,10 +725,58 @@ impl VillageEsService {
                     "scheduled action completed"
                 );
             }
-            result?;
             processed += 1;
         }
         Ok(processed)
     }
 
+    /// Appends a cross-village workflow as one transactional event-store write.
+    ///
+    /// This is the strict-consistency primitive for multi-stream facts in the
+    /// village bounded context:
+    /// 1. group events by aggregate stream,
+    /// 2. load expected versions,
+    /// 3. append all grouped streams in one transaction,
+    /// 4. project resulting stored events in global-sequence order.
+    ///
+    /// If any stream version check conflicts, nothing is appended.
+    /// Appends multi-stream village workflow facts atomically, then projects them.
+    ///
+    /// Contract:
+    /// - all stream writes succeed or none are committed
+    /// - stream conflicts fail fast with `CqrsError::Conflict`
+    /// - projector dispatch runs only after a successful append
+    async fn append_village_workflow_events(
+        &self,
+        workflow_events: Vec<(u32, parabellum_app::villages::VillageEvent)>,
+    ) -> Result<(), CqrsError> {
+        if workflow_events.is_empty() {
+            return Ok(());
+        }
+
+        let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+        let store = PostgresEventStore::new(self.pool.clone());
+        let streams = self.build_village_workflow_appends(workflow_events).await?;
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(CqrsError::domain_source)?;
+        let mut stored = store
+            .append_workflow_events_in_tx(&mut tx, aggregate_type, &streams)
+            .await?;
+        stored.sort_by_key(|event| event.global_sequence.unwrap_or(i64::MAX));
+
+        let village_projector = VillageProjector::new(self.pool.clone());
+        let report_projector = ReportProjector::new(self.pool.clone());
+        for event in &stored {
+            village_projector.process_in_tx(&mut tx, event).await?;
+            report_projector.process_in_tx(&mut tx, event).await?;
+        }
+        tx.commit()
+            .await
+            .map_err(CqrsError::domain_source)?;
+        Ok(())
+    }
 }

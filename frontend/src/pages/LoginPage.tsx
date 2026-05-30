@@ -5,9 +5,9 @@ export function LoginPage({
   onSubmit,
 }: {
   error: string | null;
-  onSubmit: (payload: { email: string; password: string }) => Promise<void>;
+  onSubmit: (payload: { username: string; password: string }) => Promise<void>;
 }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -21,7 +21,7 @@ export function LoginPage({
             event.preventDefault();
             setPending(true);
             try {
-              await onSubmit({ email, password });
+              await onSubmit({ username, password });
             } catch {
               // Error state is rendered by the parent.
             } finally {
@@ -30,11 +30,11 @@ export function LoginPage({
           }}
         >
           <label class="block text-sm text-gray-700">
-            Email
+            Username
             <input
               class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={email}
-              onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+              value={username}
+              onInput={(event) => setUsername((event.target as HTMLInputElement).value)}
             />
           </label>
           <label class="block text-sm text-gray-700">

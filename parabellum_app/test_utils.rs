@@ -164,6 +164,7 @@ pub mod tests {
                             village_population: None,
                             player_name: None,
                             tribe: None,
+                            is_capital: None,
                         });
                     }
                 }
@@ -183,6 +184,7 @@ pub mod tests {
                 village_population: None,
                 player_name: None,
                 tribe: None,
+                is_capital: None,
             }))
         }
 
@@ -233,6 +235,18 @@ pub mod tests {
                 .cloned()
                 .ok_or_else(|| {
                     ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string()))
+                })
+        }
+
+        async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError> {
+            self.users
+                .lock()
+                .unwrap()
+                .values()
+                .find(|u| u.email == username)
+                .cloned()
+                .ok_or_else(|| {
+                    ApplicationError::Db(DbError::UserByUsernameNotFound(username.to_string()))
                 })
         }
 

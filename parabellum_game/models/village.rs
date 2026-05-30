@@ -129,6 +129,48 @@ pub struct Village {
 }
 
 impl Village {
+    fn horse_drinking_trough_level(&self) -> u8 {
+        self.get_building_by_name(&BuildingName::HorseDrinkingTrough)
+            .map(|b| b.building.level)
+            .unwrap_or(0)
+    }
+
+    pub fn cavalry_training_time_multiplier(&self, unit: &Unit) -> f64 {
+        if self.tribe != Tribe::Roman || unit.group != UnitGroup::Cavalry {
+            return 1.0;
+        }
+        let trough_level = self.horse_drinking_trough_level() as f64;
+        (100.0 - trough_level).max(1.0) / 100.0
+    }
+
+    fn unit_upkeep_with_trough(unit: &Unit, trough_level: u8) -> u32 {
+        let discount = match unit.name {
+            UnitName::EquitesLegati if trough_level >= 10 => 1,
+            UnitName::EquitesImperatoris if trough_level >= 15 => 1,
+            UnitName::EquitesCaesaris if trough_level >= 20 => 1,
+            _ => 0,
+        };
+        unit.cost.upkeep.saturating_sub(discount)
+    }
+
+    pub fn effective_unit_upkeep(&self, unit: &Unit) -> u32 {
+        let trough_level = self.horse_drinking_trough_level();
+        Self::unit_upkeep_with_trough(unit, trough_level)
+    }
+
+    fn army_upkeep_with_trough(&self, army: &Army) -> u32 {
+        let trough_level = self.horse_drinking_trough_level();
+        let units_data = army.tribe.units();
+        let mut total = 0u32;
+        for (idx, qty) in army.units().units().iter().enumerate() {
+            let Some(unit) = units_data.get(idx) else {
+                continue;
+            };
+            total = total.saturating_add(Self::unit_upkeep_with_trough(unit, trough_level) * qty);
+        }
+        total
+    }
+
     /// Returns a new village instance.
     pub fn new(
         name: String,
@@ -273,8 +315,9 @@ impl Village {
 
         let training_time_bonus_perc = building.building.value as f64 / 1000.0; // Es: 100 -> 1.0, 90 -> 0.9
         let base_time_per_unit = cost_per_unit.time as f64 / server_speed as f64;
+        let trough_multiplier = self.cavalry_training_time_multiplier(&unit);
 
-        let time_per_unit = (base_time_per_unit * training_time_bonus_perc)
+        let time_per_unit = (base_time_per_unit * training_time_bonus_perc * trough_multiplier)
             .floor()
             .max(1.0) as u32;
 
@@ -718,6 +761,10 @@ impl Village {
         self.loyalty
     }
 
+    pub fn regenerate_loyalty_to(&mut self, loyalty_after: u8) {
+        self.loyalty = loyalty_after.min(100);
+    }
+
     /// Calculates the total culture points production per day from all buildings.
     pub fn calculate_culture_points_production(&self) -> u32 {
         self.buildings
@@ -1046,9 +1093,12 @@ impl Village {
         }
 
         // armies upkeep
-        self.production.upkeep += self.army.clone().map_or(0, |a| a.upkeep());
+        self.production.upkeep += self
+            .army
+            .clone()
+            .map_or(0, |a| self.army_upkeep_with_trough(&a));
         for a in self.reinforcements.iter() {
-            self.production.upkeep += a.upkeep();
+            self.production.upkeep += self.army_upkeep_with_trough(a);
         }
 
         // update internal data
@@ -1297,7 +1347,7 @@ impl Default for VillageStocks {
 #[allow(clippy::unnecessary_cast)]
 mod tests {
     use crate::{
-        models::{buildings::Building, village::VillageStocks},
+        models::{army::Army, buildings::Building, village::VillageStocks},
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
@@ -1305,6 +1355,7 @@ mod tests {
     };
     use chrono::{Duration, Utc};
     use parabellum_types::{
+        army::{TroopSet, UnitName},
         buildings::BuildingName, common::ResourceGroup, errors::GameError, map::ValleyTopology,
         tribe::Tribe,
     };
@@ -1601,5 +1652,75 @@ mod tests {
         // Should pass because elapsed production is applied before availability check.
         let cost = ResourceGroup::new(1, 1, 1, 1);
         assert!(v.deduct_resources(&cost).is_ok());
+    }
+
+    #[test]
+    fn test_horse_drinking_trough_reduces_cavalry_training_time() {
+        let mut baseline = village_factory(Default::default());
+        let stable = Building::new(BuildingName::Stable, 1).at_level(1, 1).unwrap();
+        baseline.add_building_at_slot(stable.clone(), 21).unwrap();
+        baseline.set_academy_research_for_test(&UnitName::EquitesLegati, true);
+        let unit_idx = baseline
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesLegati)
+            .unwrap() as u8;
+        let (_, _, base_time_per_unit) = baseline
+            .init_unit_training(unit_idx, &BuildingName::Stable, 1, 1)
+            .unwrap();
+
+        let mut v = village_factory(Default::default());
+        let stable = Building::new(BuildingName::Stable, 1).at_level(1, 1).unwrap();
+        v.add_building_at_slot(stable, 21).unwrap();
+        let trough = Building::new(BuildingName::HorseDrinkingTrough, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(trough, 20).unwrap();
+        v.set_academy_research_for_test(&UnitName::EquitesLegati, true);
+
+        let (_, _, time_per_unit) = v
+            .init_unit_training(unit_idx, &BuildingName::Stable, 1, 1)
+            .unwrap();
+
+        assert_eq!(time_per_unit, (base_time_per_unit as f64 * 0.8).floor() as u32);
+    }
+
+    #[test]
+    fn test_horse_drinking_trough_reduces_roman_cavalry_upkeep_at_thresholds() {
+        let mut v = village_factory(Default::default());
+        let trough = Building::new(BuildingName::HorseDrinkingTrough, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(trough, 20).unwrap();
+
+        let mut units = TroopSet::default();
+        let legati_idx = v.tribe.get_unit_idx_by_name(&UnitName::EquitesLegati).unwrap();
+        let imperatoris_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesImperatoris)
+            .unwrap();
+        let caesaris_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesCaesaris)
+            .unwrap();
+        units.set(legati_idx, 1);
+        units.set(imperatoris_idx, 1);
+        units.set(caesaris_idx, 1);
+
+        let army = Army::new(
+            None,
+            v.id,
+            Some(v.id),
+            v.player_id,
+            v.tribe.clone(),
+            &units,
+            &[0; 8],
+            None,
+        );
+        v.set_army(Some(&army)).unwrap();
+        v.update_state();
+
+        // Base upkeep for Roman cavalry trio: 2 + 3 + 4 = 9.
+        // At trough level 20 each gets -1 => 6 total.
+        assert_eq!(v.production.upkeep, v.population + 6);
     }
 }

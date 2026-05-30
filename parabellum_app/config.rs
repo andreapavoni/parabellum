@@ -1,6 +1,7 @@
 use dotenvy::dotenv;
 use std::env;
 
+#[derive(Clone)]
 pub struct Config {
     pub world_size: i16,
     pub speed: i8,

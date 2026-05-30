@@ -15,7 +15,6 @@ use axum::{
 use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
-
 use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 
@@ -23,9 +22,9 @@ use crate::{
     api::{
         actions::{
             accept_marketplace_offer, add_building, cancel_marketplace_offer,
-            create_marketplace_offer, found_village, recall_troops, release_reinforcements,
-            research_academy, research_smithy, send_resources, send_troops, train_units,
-            upgrade_building,
+            create_marketplace_offer, found_village, preview_found_village, preview_troops,
+            recall_troops, release_reinforcements, research_academy, research_smithy,
+            send_resources, send_troops, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
@@ -73,6 +72,7 @@ impl WebRouter {
         rust_i18n::set_locale("en-EN");
         // rust_i18n::set_locale("it-IT");
 
+        tracing::info!("ensuring auth refresh schema");
         state
             .token_service
             .ensure_refresh_schema(&state.db_pool)
@@ -86,6 +86,7 @@ impl WebRouter {
             .route("/auth/token/logout", post(token_logout))
             .route("/me/session", get(me_session))
             .route("/me/context", get(me_context))
+            .route("/stats", get(stats))
             .route("/villages/{id}/overview", get(village_overview))
             .route("/villages/{id}/resources", get(village_resources))
             .route("/buildings/{slot_id}", get(building_detail))
@@ -94,6 +95,7 @@ impl WebRouter {
             .route("/buildings/upgrade", post(upgrade_building))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
+            .route("/army/preview", post(preview_troops))
             .route("/army/recall", post(recall_troops))
             .route("/army/release", post(release_reinforcements))
             .route("/marketplace/send", post(send_resources))
@@ -109,12 +111,12 @@ impl WebRouter {
             .route("/academy/research", post(research_academy))
             .route("/smithy/research", post(research_smithy))
             .route("/map/found-village", post(found_village))
+            .route("/map/found-village/preview", post(preview_found_village))
             .route("/map/region", get(map_region))
             .route("/map/fields/{id}", get(map_field))
             .route("/reports", get(reports))
             .route("/reports/{id}", get(report_detail))
             .route("/players/{id}", get(player_profile))
-            .route("/stats", get(stats))
             .route("/openapi.json", get(openapi_spec))
             .fallback(api_not_found);
 
@@ -134,10 +136,7 @@ impl WebRouter {
             ApplicationError::Infrastructure(err)
         })?;
 
-        tracing::info!(
-            "HTTP Server started, listening on http://{}",
-            addr.to_string()
-        );
+        tracing::info!(address = %addr, "http server started");
         axum::serve(listener, router).await.map_err(infra_error)?;
 
         Ok(())
@@ -145,6 +144,7 @@ impl WebRouter {
 }
 
 fn infra_error(e: Error) -> ApplicationError {
+    tracing::error!(error = %e, "http server terminated with error");
     let err = format!("{:#?}", e);
     ApplicationError::Infrastructure(err)
 }

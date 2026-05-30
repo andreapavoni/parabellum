@@ -2,6 +2,7 @@ pub mod adapters;
 pub mod es;
 pub mod identity;
 pub mod map;
+pub mod seed;
 mod persistence;
 
 mod connection;

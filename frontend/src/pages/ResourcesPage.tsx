@@ -1,6 +1,9 @@
 import type { VillageResourcesResponse } from "@/types/api";
+import { CapitalBadge } from "@/components/CapitalBadge";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
+import { UnitSpriteByName } from "@/components/UnitSprite";
+import { Link } from "@/components/Link";
 import { unitLabel } from "@/lib/labels";
 
 export function ResourcesPage({
@@ -17,7 +20,20 @@ export function ResourcesPage({
       <div class="flex flex-col items-center w-full md:w-auto">
         <h1 class="text-xl font-bold mb-4 w-full text-left">
           {data.village.name} ({data.village.x}|{data.village.y})
+          {data.village.isCapital ? <CapitalBadge /> : null}
         </h1>
+        <div class="w-full mb-3">
+          <span class="text-xs text-gray-600">Loyalty: </span>
+          <span
+            class={
+              data.village.loyalty < 100
+                ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
+                : "text-xs font-semibold text-gray-800"
+            }
+          >
+            {data.village.loyalty}%
+          </span>
+        </div>
         <ResourceFieldsMap slots={data.resourceSlots} />
         <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
       </div>
@@ -36,12 +52,38 @@ export function ResourcesPage({
           <div class="text-xs space-y-2">
             {data.currentTroops.map((troop) => (
               <div class="flex justify-between border-b border-gray-100 pb-2" key={troop.unitName}>
-                <span>{unitLabel(troop.unitName)}</span>
+                <span class="inline-flex items-center gap-2">
+                  <UnitSpriteByName unitName={troop.unitName} label={unitLabel(troop.unitName)} />
+                  <span>{unitLabel(troop.unitName)}</span>
+                </span>
                 <span class="font-bold text-gray-900">{troop.count}</span>
               </div>
             ))}
           </div>
         )}
+        <h3 class="font-bold mt-6 mb-3 text-sm">Troop Movements</h3>
+        <div class="text-xs space-y-2">
+          <MovementRow
+            label="Incoming attacks/raids"
+            count={data.troopMovementSummary.incomingAttacksRaids}
+            href="/app/build/39#incoming"
+          />
+          <MovementRow
+            label="Incoming returns/reinforcements"
+            count={data.troopMovementSummary.incomingReturnsReinforcements}
+            href="/app/build/39#incoming"
+          />
+          <MovementRow
+            label="Outgoing attacks/raids"
+            count={data.troopMovementSummary.outgoingAttacksRaids}
+            href="/app/build/39#outgoing"
+          />
+          <MovementRow
+            label="Outgoing reinforcements"
+            count={data.troopMovementSummary.outgoingReinforcements}
+            href="/app/build/39#outgoing"
+          />
+        </div>
       </div>
     </div>
   );
@@ -52,6 +94,17 @@ function ProductionRow({ label, value }: { label: string; value: number }) {
     <div class="flex justify-between border-b border-gray-100 pb-2">
       <span>{label}</span>
       <span class="font-bold text-gray-900">{value}/hour</span>
+    </div>
+  );
+}
+
+function MovementRow({ label, count, href }: { label: string; count: number; href: string }) {
+  return (
+    <div class="flex justify-between border-b border-gray-100 pb-2">
+      <span>{label}</span>
+      <Link to={href} class="font-bold text-green-700 hover:underline">
+        {count}
+      </Link>
     </div>
   );
 }

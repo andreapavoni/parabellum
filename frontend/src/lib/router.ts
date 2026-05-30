@@ -9,7 +9,7 @@ export type Route =
   | { name: "mapField"; fieldId: number }
   | { name: "stats"; page: number }
   | { name: "player"; playerId: string }
-  | { name: "reports" }
+  | { name: "reports"; page: number; perPage: number }
   | { name: "report"; reportId: string }
   | { name: "notFound" };
 
@@ -41,11 +41,17 @@ function parseRouteParts(path: string, search: URLSearchParams): Route {
     return { name: "stats", page: Number(search.get("page") ?? "1") || 1 };
   }
   if (/^\/players\/[^/]+$/.test(path)) {
-    return { name: "player", playerId: path.split("/")[2] };
+    const playerId = path.split("/")[2];
+    return playerId ? { name: "player", playerId } : { name: "notFound" };
   }
-  if (path === "/reports") return { name: "reports" };
+  if (path === "/reports") {
+    const page = Number(search.get("page") ?? "1") || 1;
+    const perPage = Number(search.get("per_page") ?? "25") || 25;
+    return { name: "reports", page: Math.max(1, page), perPage: Math.max(1, perPage) };
+  }
   if (/^\/reports\/[^/]+$/.test(path)) {
-    return { name: "report", reportId: path.split("/")[2] };
+    const reportId = path.split("/")[2];
+    return reportId ? { name: "report", reportId } : { name: "notFound" };
   }
 
   return { name: "notFound" };

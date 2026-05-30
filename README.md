@@ -65,15 +65,44 @@ Want to get the server running locally? Here’s how.
 
 5.  **(optional) Seed game data:**
     ```sh
-    # Uses seed/game.json by default
+    # Uses seed/default.json by default
     cargo run -p parabellum_server --bin parabellum-seed
     ```
-    You can also pass a custom data file and a username override:
+    You can also pass a custom data file:
     ```sh
-    cargo run -p parabellum_server --bin parabellum-seed -- --file seed/dev.json --username andrea
+    cargo run -p parabellum_server --bin parabellum-seed -- seed/game.json
     ```
-    The seeder creates (or reuses) a user/player and prepares one developed village according to the JSON file.
-    Login defaults are deterministic: email is `<username>@example.com`, password is `<username>`.
+    The seeder supports multiple players and multiple villages per player. Root JSON shape:
+    ```json
+    {
+      "players": [
+        {
+          "username": "andrea",
+          "email": "andrea@example.com",
+          "password": "andrea",
+          "tribe": "Roman",
+          "villages": [
+            {
+              "template": "developed",
+              "quadrant": "NorthEast",
+              "buildings": [
+                { "slotId": 39, "name": "RallyPoint", "level": 2 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    ```
+    Use separate template files to keep village setups reusable, for example:
+    - `seed/default.json` (players + village references)
+    - `seed/templates/developed.json` (village defaults)
+    - `seed/templates/rusher.json` (another village profile)
+
+    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`).
+    First village follows signup rules: it is always founded on a random unoccupied valley in the selected `quadrant` (explicit `position` is not allowed for the first village).
+    Additional villages can either set an explicit `position` (must be free) or use random unoccupied valley selection with `quadrant`.
+    If omitted, login defaults remain deterministic: email is `<username>@example.com`, password is `<username>`.
 
 6.  **Install frontend dependencies:**
     ```sh
@@ -244,7 +273,7 @@ These packages define the whole game engine. There aren't infrastructure details
 
 - Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - API contract matrix: [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md)
-- API test roadmap: [`parabellum_server/tests/API_TESTING_PLAN.md`](parabellum_server/tests/API_TESTING_PLAN.md)
+- Testing and error conventions: [`docs/TESTING_AND_ERROR_CONVENTIONS.md`](docs/TESTING_AND_ERROR_CONVENTIONS.md)
 
 ---
 

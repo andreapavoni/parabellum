@@ -25,6 +25,23 @@ impl PostgresVillageRepository {
         &self,
         model: &VillageModel,
     ) -> Result<(), ApplicationError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.replace_village_state_in_tx(&mut tx, model).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn replace_village_state_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        model: &VillageModel,
+    ) -> Result<(), ApplicationError> {
         sqlx::query(
             r#"
             UPDATE rm_village
@@ -71,7 +88,150 @@ impl PostgresVillageRepository {
         .bind(Json(&model.deployed_armies))
         .bind(model.total_merchants as i16)
         .bind(model.busy_merchants as i16)
-        .execute(&self.pool)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn set_stored_resources_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        resources: ResourceGroup,
+    ) -> Result<(), ApplicationError> {
+        let stocks: Json<VillageStocks> =
+            sqlx::query_scalar("SELECT stocks FROM rm_village WHERE village_id = $1")
+                .bind(village_id as i32)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let mut next = stocks.0;
+        next.lumber = resources.lumber().min(next.warehouse_capacity);
+        next.clay = resources.clay().min(next.warehouse_capacity);
+        next.iron = resources.iron().min(next.warehouse_capacity);
+        next.crop = (resources.crop() as i64).min(next.granary_capacity as i64);
+
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET stocks = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(next))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn set_busy_merchants_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        busy_merchants: u8,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET busy_merchants = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(busy_merchants as i16)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn update_army_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        army: &Option<Army>,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET army = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(army))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn update_reinforcements_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        reinforcements: &[Army],
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET reinforcements = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(reinforcements))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn update_deployed_armies_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        deployed_armies: &[Army],
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET deployed_armies = $2, updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(deployed_armies))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn set_map_occupancy_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        field_id: u32,
+        village_id: Option<u32>,
+        player_id: Option<Uuid>,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_map_fields
+            SET village_id = $2,
+                player_id = $3,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(field_id as i32)
+        .bind(village_id.map(|id| id as i32))
+        .bind(player_id)
+        .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
@@ -96,16 +256,157 @@ impl PostgresVillageRepository {
         &self,
         model: VillageModel,
     ) -> Result<VillageModel, ApplicationError> {
-        let refreshed = Self::refresh_materialized_village_state(model.clone());
-        if refreshed.stocks != model.stocks
-            || refreshed.population != model.population
-            || refreshed.production != model.production
-            || refreshed.total_merchants != model.total_merchants
-            || refreshed.culture_points_production != model.culture_points_production
-        {
-            self.replace_village_state(&refreshed).await?;
+        Ok(Self::refresh_materialized_village_state(model))
+    }
+
+    pub async fn update_building_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        slot_id: u8,
+        building_name: BuildingName,
+        level: u8,
+        speed: i8,
+    ) -> Result<(), ApplicationError> {
+        let row: DbVillageModelRow = sqlx::query_as(
+            r#"
+            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+            FROM rm_village
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let model: VillageModel = row.try_into()?;
+
+        let mut next_buildings = model.buildings.clone();
+        if let Some(entry) = next_buildings.iter_mut().find(|b| b.slot_id == slot_id) {
+            let next_building = Building::new(building_name.clone(), speed)
+                .at_level(level, speed)
+                .map_err(ApplicationError::Game)?;
+            entry.building = next_building;
+        } else {
+            let next_building = Building::new(building_name.clone(), speed)
+                .at_level(level, speed)
+                .map_err(ApplicationError::Game)?;
+            next_buildings.push(VillageBuilding {
+                slot_id,
+                building: next_building,
+            });
         }
-        Ok(refreshed)
+
+        let warehouse_capacity = next_buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Warehouse)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let granary_capacity = next_buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Granary)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let total_merchants = next_buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Marketplace)
+            .map(|b| b.building.level)
+            .max()
+            .unwrap_or(0);
+
+        let mut next_stocks = model.stocks.clone();
+        next_stocks.warehouse_capacity = warehouse_capacity;
+        next_stocks.granary_capacity = granary_capacity;
+        next_stocks.lumber = next_stocks.lumber.min(warehouse_capacity);
+        next_stocks.clay = next_stocks.clay.min(warehouse_capacity);
+        next_stocks.iron = next_stocks.iron.min(warehouse_capacity);
+        next_stocks.crop = next_stocks.crop.min(granary_capacity as i64);
+
+        let hydrated = parabellum_game::models::village::Village::from_persistence(
+            model.village_id,
+            model.village_name.clone(),
+            model.player_id,
+            model.position,
+            model.tribe,
+            next_buildings.clone(),
+            vec![],
+            model.population,
+            model.army.clone(),
+            model.reinforcements.clone(),
+            model.deployed_armies.clone(),
+            model.loyalty,
+            model.production.clone(),
+            model.is_capital,
+            model.smithy_upgrades,
+            next_stocks.clone(),
+            model.academy_research.clone(),
+            0,
+            model.culture_points_production,
+            chrono::Utc::now(),
+            model.parent_village_id,
+        );
+
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET buildings = $2,
+                stocks = $3,
+                total_merchants = $4,
+                production = $5,
+                population = $6,
+                culture_points_production = $7,
+                updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(next_buildings))
+        .bind(Json(next_stocks))
+        .bind(total_merchants as i16)
+        .bind(Json(hydrated.production.clone()))
+        .bind(hydrated.population as i32)
+        .bind(hydrated.culture_points_production as i32)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    async fn refresh_for_read_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        model: VillageModel,
+    ) -> Result<VillageModel, ApplicationError> {
+        let _ = tx;
+        Ok(Self::refresh_materialized_village_state(model))
+    }
+
+    pub async fn get_by_village_id_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+    ) -> Result<VillageModel, ApplicationError> {
+        let row: DbVillageModelRow = sqlx::query_as(
+            r#"
+            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+            FROM rm_village
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let model: VillageModel = row.try_into()?;
+        self.refresh_for_read_in_tx(tx, model).await
     }
 }
 
@@ -310,14 +611,14 @@ impl VillageRepository for PostgresVillageRepository {
             vec![],
             100,
             VillageProduction::default(),
-            false,
+            parent_village_id.is_none(),
             [0_u8; 8],
             stocks.clone(),
             parabellum_game::models::village::AcademyResearch::default(),
             0,
             0,
             chrono::Utc::now(),
-            None,
+            parent_village_id,
         );
 
         sqlx::query(
@@ -366,7 +667,7 @@ impl VillageRepository for PostgresVillageRepository {
         .bind(Json(stocks))
         .bind(projected.population as i32)
         .bind(100_i16)
-        .bind(false)
+        .bind(parent_village_id.is_none())
         .bind(projected.culture_points_production as i32)
         .bind(Json([0_u8; 8]))
         .bind(Json(parabellum_game::models::village::AcademyResearch::default()))
@@ -633,7 +934,7 @@ impl VillageRepository for PostgresVillageRepository {
     }
 
     async fn get_by_village_id(&self, village_id: u32) -> Result<VillageModel, ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
+        let row: Option<DbVillageModelRow> = sqlx::query_as(
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
@@ -643,9 +944,10 @@ impl VillageRepository for PostgresVillageRepository {
             "#,
         )
         .bind(village_id as i32)
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row = row.ok_or(DbError::VillageNotFound(village_id))?;
 
         let model: VillageModel = row.try_into()?;
         self.refresh_for_read(model).await

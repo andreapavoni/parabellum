@@ -1,27 +1,30 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
+use parabellum_game::battle::BattleReport;
+use parabellum_game::models::army::Army;
+use parabellum_types::battle::AttackType;
 use parabellum_types::errors::AppError;
-use parabellum_types::map::Position;
-use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
 
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
-pub struct CompleteSettlersArrival {
+pub struct ResolveAttackBattle {
     pub action_id: Uuid,
     pub movement_id: Uuid,
+    pub return_action_id: Uuid,
     pub army_id: Uuid,
     pub player_id: Uuid,
     pub source_village_id: u32,
     pub target_village_id: u32,
-    pub target_position: Position,
-    pub village_name: String,
-    pub tribe: Tribe,
-    pub arrives_at: DateTime<Utc>,
+    pub attack_type: AttackType,
+    pub report: BattleReport,
+    pub returning_army: Option<Army>,
+    pub stationed_attacker_army: Option<Army>,
+    pub returns_at: DateTime<Utc>,
 }
 
-impl Command for CompleteSettlersArrival {
+impl Command for ResolveAttackBattle {
     type Aggregate = VillageAggregate;
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
@@ -32,17 +35,19 @@ impl Command for CompleteSettlersArrival {
             }));
         }
 
-        Ok(vec![VillageEvent::SettlersArrived {
+        Ok(vec![VillageEvent::AttackBattleResolved {
             action_id: self.action_id,
             movement_id: self.movement_id,
+            return_action_id: self.return_action_id,
             army_id: self.army_id,
             player_id: self.player_id,
             source_village_id: self.source_village_id,
             target_village_id: self.target_village_id,
-            target_position: self.target_position.clone(),
-            village_name: self.village_name.clone(),
-            tribe: self.tribe.clone(),
-            arrives_at: self.arrives_at,
+            attack_type: self.attack_type.clone(),
+            report: self.report.clone(),
+            returning_army: self.returning_army.clone(),
+            stationed_attacker_army: self.stationed_attacker_army.clone(),
+            returns_at: self.returns_at,
         }])
     }
 }

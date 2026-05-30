@@ -29,10 +29,11 @@ use parabellum_game::models::{
     village::VillageBuilding,
 };
 use parabellum_types::{
-    army::{UnitGroup, UnitName},
+    army::{UnitGroup, UnitName, UnitRole},
     buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::ApplicationError,
+    tribe::Tribe,
 };
 
 use crate::{
@@ -113,6 +114,7 @@ pub enum BuildingTypeDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpansionDetailDto {
+    pub loyalty: u8,
     pub village_culture_points_production: u32,
     pub account_culture_points_production: u32,
     pub account_culture_points: u32,
@@ -180,6 +182,11 @@ pub struct TrainingUnitOptionDto {
     pub name: String,
     pub cost: ResourceAmountsDto,
     pub upkeep: u32,
+    pub attack: u32,
+    pub defense_infantry: u32,
+    pub defense_cavalry: u32,
+    pub speed: u8,
+    pub capacity: u32,
     pub time_secs: u32,
 }
 
@@ -189,7 +196,7 @@ pub struct TrainingQueueItemDto {
     pub quantity: u32,
     pub unit_name: String,
     pub time_per_unit: u32,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,7 +222,7 @@ pub struct AcademyResearchOptionDto {
 #[serde(rename_all = "camelCase")]
 pub struct AcademyQueueItemDto {
     pub unit_name: String,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub is_processing: bool,
 }
 
@@ -243,7 +250,7 @@ pub struct SmithyUpgradeOptionDto {
 pub struct SmithyQueueItemDto {
     pub unit_name: String,
     pub target_level: u8,
-    pub time_remaining_secs: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub is_processing: bool,
 }
 
@@ -260,6 +267,8 @@ pub struct RequirementDto {
 pub struct MarketplaceDetailDto {
     pub available_merchants: u8,
     pub total_merchants: u8,
+    pub merchant_capacity: u32,
+    pub merchant_speed: u32,
     pub own_offers: Vec<MarketplaceOfferDto>,
     pub global_offers: Vec<MarketplaceOfferDto>,
     pub merchant_movements: Vec<MerchantMovementDto>,
@@ -306,7 +315,7 @@ pub struct MerchantMovementDto {
     pub destination_position: Option<PositionDto>,
     pub resources: ResourceAmountsDto,
     pub merchants_used: u8,
-    pub time_remaining_secs: u32,
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Serialize)]
@@ -332,6 +341,7 @@ pub enum RallyCardCategoryDto {
 pub enum RallyMovementKindDto {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -352,12 +362,16 @@ pub struct RallyCardDto {
     pub village_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<PositionDto>,
+    pub tribe: String,
     pub units: Vec<u32>,
+    pub upkeep: u32,
     pub category: RallyCardCategoryDto,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub movement_kind: Option<RallyMovementKindDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrival_time: Option<u32>,
+    pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bounty: Option<ResourceAmountsDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<RallyActionDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -381,6 +395,16 @@ pub struct PositionDto {
 }
 
 /// Returns building detail payload for one slot in current authenticated village.
+#[utoipa::path(
+    get,
+    path = "/buildings/{slot_id}",
+    params(
+        ("slot_id" = u8, Path, description = "Building slot id (1..=40)")
+    ),
+    responses(
+        (status = 200, body = serde_json::Value, description = "Building page response")
+    )
+)]
 pub async fn building_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -459,6 +483,24 @@ pub async fn building_detail(
         let next_value = upgrade_info
             .as_ref()
             .map(|upgraded| format_next_value(slot.building.name.clone(), upgraded.value));
+        let (chiefs_moving, settlers_moving) = state
+            .game_app
+            .get_village_troop_movements(user.village.id)
+            .await
+            .map(|movements| {
+                movements
+                    .outgoing
+                    .iter()
+                    .chain(movements.incoming.iter())
+                    .filter(|m| m.origin_player_id == user.player.id)
+                    .fold((0u32, 0u32), |(chiefs, settlers), m| {
+                        (
+                            chiefs.saturating_add(m.units.get(8)),
+                            settlers.saturating_add(m.units.get(9)),
+                        )
+                    })
+            })
+            .unwrap_or((0, 0));
 
         match building_type {
             BuildingTypeDto::Empty => unreachable!(),
@@ -511,6 +553,8 @@ pub async fn building_detail(
                     &expected_buildings,
                     group,
                     &queues.training,
+                    None,
+                    (chiefs_moving, settlers_moving),
                 );
                 let queue = training_queue_for_slot(slot_id, &queues.training);
 
@@ -557,16 +601,6 @@ pub async fn building_detail(
                     culture_points_info.village_culture_points_production;
                 let next_cp_required = culture_points_info.next_cp_required;
 
-                let training_units = training_options_for_group(
-                    &user.village,
-                    state.server_speed,
-                    &slot,
-                    &[BuildingName::Residence, BuildingName::Palace],
-                    UnitGroup::Expansion,
-                    &queues.training,
-                );
-                let training_queue = training_queue_for_slot(slot_id, &queues.training);
-
                 let max_slots = user.village.max_foundation_slots();
                 let child_villages_count = if max_slots > 0 {
                     user.villages
@@ -577,6 +611,17 @@ pub async fn building_detail(
                     0
                 };
                 let available_slots = max_slots.saturating_sub(child_villages_count as u8);
+                let training_units = training_options_for_group(
+                    &user.village,
+                    state.server_speed,
+                    &slot,
+                    &[BuildingName::Residence, BuildingName::Palace],
+                    UnitGroup::Expansion,
+                    &queues.training,
+                    Some(available_slots),
+                    (chiefs_moving, settlers_moving),
+                );
+                let training_queue = training_queue_for_slot(slot_id, &queues.training);
                 let settler_idx = user
                     .village
                     .tribe
@@ -629,6 +674,7 @@ pub async fn building_detail(
                         queue: training_queue,
                     }),
                     expansion: Some(ExpansionDetailDto {
+                        loyalty: user.village.loyalty(),
                         village_culture_points_production,
                         account_culture_points_production,
                         account_culture_points,
@@ -778,9 +824,44 @@ pub async fn building_detail(
                     &marketplace_data.village_info,
                     MerchantMovementDirection::Incoming,
                 );
+                let pending_outgoing_goings: Vec<_> = outgoing_movements
+                    .iter()
+                    .filter(|movement| {
+                        matches!(
+                            movement.kind,
+                            parabellum_app::ports::queries::MerchantMovementKind::Going
+                        )
+                    })
+                    .cloned()
+                    .collect();
+
                 let mut merchant_movements: Vec<_> = outgoing_movements
                     .into_iter()
                     .chain(incoming_movements.into_iter())
+                    .filter(|movement| {
+                        if !matches!(movement.direction, MerchantMovementDirection::Outgoing)
+                            || !matches!(
+                                movement.kind,
+                                parabellum_app::ports::queries::MerchantMovementKind::Return
+                            )
+                        {
+                            return true;
+                        }
+
+                        // Hide pre-scheduled return legs while the paired outgoing "going" leg
+                        // is still pending. Once delivery happens, the going leg disappears and
+                        // return becomes visible.
+                        !pending_outgoing_goings.iter().any(|going| {
+                            let reverse_route_match = going.origin_position
+                                == movement.destination_position
+                                && going.destination_position == movement.origin_position;
+                            let legacy_loopback_return =
+                                movement.origin_position == movement.destination_position;
+                            (reverse_route_match || legacy_loopback_return)
+                                && going.merchants_used == movement.merchants_used
+                                && going.arrives_at <= movement.arrives_at
+                        })
+                    })
                     .map(|movement| MerchantMovementDto {
                         job_id: movement.job_id,
                         direction: match movement.direction {
@@ -809,10 +890,10 @@ pub async fn building_detail(
                             .map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         resources: resource_group_to_dto(&movement.resources),
                         merchants_used: movement.merchants_used,
-                        time_remaining_secs: movement.time_remaining_secs,
+                        arrives_at: movement.arrives_at,
                     })
                     .collect();
-                merchant_movements.sort_by_key(|movement| movement.time_remaining_secs);
+                merchant_movements.sort_by_key(|movement| movement.arrives_at);
 
                 BuildingDetailDto {
                     slot_id,
@@ -836,6 +917,16 @@ pub async fn building_detail(
                     academy: None,
                     smithy: None,
                     marketplace: Some(MarketplaceDetailDto {
+                        // Marketplace stats are displayed as effective values for current server speed.
+                        // Tribe base values are 1x; gameplay speed multiplies both capacity and speed.
+                        merchant_capacity: user
+                            .village
+                            .tribe
+                            .merchant_stats()
+                            .capacity
+                            .saturating_mul(state.server_speed.max(1) as u32),
+                        merchant_speed: (user.village.tribe.merchant_stats().speed as u32)
+                            .saturating_mul(state.server_speed.max(1) as u32),
                         available_merchants: user.village.available_merchants(),
                         total_merchants: user.village.total_merchants,
                         own_offers,
@@ -877,6 +968,7 @@ pub async fn building_detail(
                 )
                 .into_iter()
                 .map(|card| {
+                    let upkeep = troop_upkeep_for_rally_card(&user.village, &card);
                     let (action, action_id) = match card.action_button {
                         Some(crate::view_helpers::ArmyAction::Recall { army_id }) => {
                             (Some(RallyActionDto::Recall), Some(army_id))
@@ -891,7 +983,9 @@ pub async fn building_detail(
                         village_id: card.village_id,
                         village_name: card.village_name,
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
+                        tribe: format!("{:?}", card.tribe),
                         units: card.units.units().to_vec(),
+                        upkeep,
                         category: match card.category {
                             crate::view_helpers::ArmyCategory::Stationed => {
                                 RallyCardCategoryDto::Stationed
@@ -914,6 +1008,9 @@ pub async fn building_detail(
                                 RallyMovementKindDto::Attack
                             }
                             crate::view_helpers::MovementKind::Raid => RallyMovementKindDto::Raid,
+                            crate::view_helpers::MovementKind::Scout => {
+                                RallyMovementKindDto::Scout
+                            }
                             crate::view_helpers::MovementKind::Reinforcement => {
                                 RallyMovementKindDto::Reinforcement
                             }
@@ -924,7 +1021,8 @@ pub async fn building_detail(
                                 RallyMovementKindDto::FoundVillage
                             }
                         }),
-                        arrival_time: card.arrival_time,
+                        arrives_at: card.arrives_at,
+                        bounty: card.bounty.as_ref().map(resource_group_to_dto),
                         action,
                         action_id,
                     }
@@ -1260,7 +1358,9 @@ fn training_options_for_group(
     building: &VillageBuilding,
     expected_buildings: &[BuildingName],
     group: UnitGroup,
-    _training_queue: &[TrainingQueueItem],
+    training_queue: &[TrainingQueueItem],
+    foundation_free_slots: Option<u8>,
+    moving_expansion_units: (u32, u32),
 ) -> Vec<TrainingUnitOptionDto> {
     if !expected_buildings.contains(&building.building.name) {
         return vec![];
@@ -1270,26 +1370,119 @@ fn training_options_for_group(
     let available_units = village.available_units_for_training(group);
     let tribe = village.tribe.clone();
 
+    let chiefs_at_home = village.count_chiefs_at_home();
+    let settlers_at_home = village.count_settlers_at_home();
+    let chiefs_deployed: u32 = village
+        .deployed_armies()
+        .iter()
+        .map(|army| army.units().get(8))
+        .sum();
+    let settlers_deployed: u32 = village
+        .deployed_armies()
+        .iter()
+        .map(|army| army.units().get(9))
+        .sum();
+    let mut chiefs_queued = 0u32;
+    let mut settlers_queued = 0u32;
+    for item in training_queue {
+        let qty = item.quantity.max(0) as u32;
+        if matches!(item.unit, UnitName::Chief | UnitName::Senator | UnitName::Chieftain) {
+            chiefs_queued = chiefs_queued.saturating_add(qty);
+        } else if matches!(item.unit, UnitName::Settler) {
+            settlers_queued = settlers_queued.saturating_add(qty);
+        }
+    }
+    let chiefs_total = chiefs_at_home + chiefs_deployed + chiefs_queued + moving_expansion_units.0;
+    let settlers_total =
+        settlers_at_home + settlers_deployed + settlers_queued + moving_expansion_units.1;
+    let available_slots = foundation_free_slots.unwrap_or_else(|| village.max_foundation_slots());
+
     available_units
         .into_iter()
         .filter_map(|unit| {
+            if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
+                let committed_this_unit = if matches!(unit.role, UnitRole::Chief) {
+                    chiefs_total
+                } else {
+                    settlers_total
+                };
+                let max_trainable = parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                    unit.role.clone(),
+                    available_slots,
+                    chiefs_total,
+                    settlers_total,
+                    committed_this_unit,
+                );
+                if max_trainable == 0 {
+                    return None;
+                }
+            }
             let unit_idx = tribe.get_unit_idx_by_name(&unit.name)? as u8;
             let base_time_per_unit = unit.cost.time as f64 / server_speed as f64;
-            let time_per_unit = (base_time_per_unit * training_multiplier).floor().max(1.0) as u32;
+            let trough_multiplier = village.cavalry_training_time_multiplier(unit);
+            let time_per_unit = (base_time_per_unit * training_multiplier * trough_multiplier)
+                .floor()
+                .max(1.0) as u32;
 
             Some(TrainingUnitOptionDto {
                 unit_idx,
                 name: unit_key(&unit.name),
                 cost: resource_group_to_dto(&unit.cost.resources),
-                upkeep: unit.cost.upkeep,
+                upkeep: village.effective_unit_upkeep(unit),
+                attack: unit.attack,
+                defense_infantry: unit.defense_infantry,
+                defense_cavalry: unit.defense_cavalry,
+                speed: unit.speed,
+                capacity: unit.capacity,
                 time_secs: time_per_unit,
             })
         })
         .collect()
 }
 
+fn troop_upkeep_for_tribe(tribe: &Tribe, units: &[u32; 10]) -> u32 {
+    tribe
+        .units()
+        .iter()
+        .enumerate()
+        .map(|(idx, unit)| unit.cost.upkeep.saturating_mul(*units.get(idx).unwrap_or(&0)))
+        .sum()
+}
+
+fn troop_upkeep_for_rally_card(
+    village: &parabellum_game::models::village::Village,
+    card: &crate::view_helpers::ArmyCardData,
+) -> u32 {
+    let is_returning_own_movement = matches!(
+        (card.category, card.movement_kind),
+        (
+            crate::view_helpers::ArmyCategory::Incoming,
+            Some(crate::view_helpers::MovementKind::Return)
+        )
+    );
+    let is_own_context = matches!(
+        card.category,
+        crate::view_helpers::ArmyCategory::Stationed
+            | crate::view_helpers::ArmyCategory::Deployed
+            | crate::view_helpers::ArmyCategory::Outgoing
+    ) || is_returning_own_movement;
+    if is_own_context && card.tribe == village.tribe {
+        card.tribe
+            .units()
+            .iter()
+            .enumerate()
+            .map(|(idx, unit)| {
+                village
+                    .effective_unit_upkeep(unit)
+                    .saturating_mul(*card.units.units().get(idx).unwrap_or(&0))
+            })
+            .sum()
+    } else {
+        troop_upkeep_for_tribe(&card.tribe, card.units.units())
+    }
+}
+
 fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<TrainingQueueItemDto> {
-    let now = Utc::now();
     queue
         .iter()
         .filter(|item| item.slot_id == slot_id)
@@ -1297,7 +1490,7 @@ fn training_queue_for_slot(slot_id: u8, queue: &[TrainingQueueItem]) -> Vec<Trai
             quantity: item.quantity.max(0) as u32,
             unit_name: unit_key(&item.unit),
             time_per_unit: item.time_per_unit.max(0) as u32,
-            time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+            finishes_at: item.finishes_at,
         })
         .collect()
 }
@@ -1353,12 +1546,11 @@ fn academy_options_for_village(
 }
 
 fn academy_queue_for_slot(queue: &[AcademyQueueItem]) -> Vec<AcademyQueueItemDto> {
-    let now = Utc::now();
     queue
         .iter()
         .map(|item| AcademyQueueItemDto {
             unit_name: unit_key(&item.unit),
-            time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+            finishes_at: item.finishes_at,
             is_processing: item.status == ScheduledActionStatus::Processing,
         })
         .collect()
@@ -1466,7 +1658,6 @@ fn smithy_queue_counts(queue: &[SmithyQueueItem]) -> HashMap<UnitName, u8> {
 
 fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
     let mut unit_counts: HashMap<UnitName, u8> = HashMap::new();
-    let now = Utc::now();
 
     queue
         .iter()
@@ -1477,7 +1668,7 @@ fn smithy_queue_for_slot(queue: &[SmithyQueueItem]) -> Vec<SmithyQueueItemDto> {
             SmithyQueueItemDto {
                 unit_name: unit_key(&item.unit),
                 target_level: *count,
-                time_remaining_secs: (item.finishes_at - now).num_seconds().max(0) as u32,
+                finishes_at: item.finishes_at,
                 is_processing: item.status == ScheduledActionStatus::Processing,
             }
         })

@@ -17,6 +17,47 @@ impl PostgresScheduledActionRepository {
         Self { pool }
     }
 
+    pub async fn requeue_stale_processing(
+        &self,
+        updated_before_or_equal: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, ApplicationError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE rm_scheduled_actions
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'processing'
+              AND updated_at <= $1
+            "#,
+        )
+        .bind(updated_before_or_equal)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(result.rows_affected())
+    }
+
+    pub async fn add_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        action: &ScheduledAction,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(action.id)
+        .bind(DbScheduledActionType::from(action.action_type))
+        .bind(action.execute_at)
+        .bind(Json(&action.payload))
+        .bind(DbScheduledActionStatus::from(action.status))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
     pub async fn has_pending_hero_revival_for_player(
         &self,
         player_id: Uuid,
@@ -65,20 +106,15 @@ impl From<DbScheduledActionRow> for ScheduledAction {
 #[async_trait::async_trait]
 impl ScheduledActionRepository for PostgresScheduledActionRepository {
     async fn add(&self, action: &ScheduledAction) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
-            VALUES ($1, $2, $3, $4, $5)
-            "#,
-        )
-        .bind(action.id)
-        .bind(DbScheduledActionType::from(action.action_type))
-        .bind(action.execute_at)
-        .bind(Json(&action.payload))
-        .bind(DbScheduledActionStatus::from(action.status))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.add_in_tx(&mut tx, action).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 
@@ -315,6 +351,7 @@ enum DbScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
+    LoyaltyRegen,
 }
 
 impl From<DbScheduledActionStatus> for ScheduledActionStatus {
@@ -356,6 +393,7 @@ impl From<DbScheduledActionType> for ScheduledActionType {
             DbScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             DbScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             DbScheduledActionType::HeroRevival => Self::HeroRevival,
+            DbScheduledActionType::LoyaltyRegen => Self::LoyaltyRegen,
         }
     }
 }
@@ -377,6 +415,7 @@ impl From<ScheduledActionType> for DbScheduledActionType {
             ScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             ScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             ScheduledActionType::HeroRevival => Self::HeroRevival,
+            ScheduledActionType::LoyaltyRegen => Self::LoyaltyRegen,
         }
     }
 }

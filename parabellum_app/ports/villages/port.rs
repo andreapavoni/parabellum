@@ -4,9 +4,9 @@ use parabellum_types::errors::ApplicationError;
 use super::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
     CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
-    ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
-    ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
-    SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
+    ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
+    SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+    SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
 };
 
 #[async_trait]

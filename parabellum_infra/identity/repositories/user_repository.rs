@@ -57,6 +57,23 @@ impl UserRepository for PostgresUserRepository {
         Ok(rec.into())
     }
 
+    async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError> {
+        let rec = sqlx::query_as::<_, db_models::User>(
+            r#"
+            SELECT u.id, u.email, u.password_hash
+            FROM users u
+            JOIN players p ON p.user_id = u.id
+            WHERE p.username = $1
+            "#,
+        )
+        .bind(username)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| ApplicationError::Db(DbError::UserByUsernameNotFound(username.to_string())))?;
+
+        Ok(rec.into())
+    }
+
     async fn get_by_id(&self, id: Uuid) -> Result<User, ApplicationError> {
         let rec = sqlx::query_as!(
             db_models::User,

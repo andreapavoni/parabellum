@@ -1,21 +1,19 @@
-use chrono::Utc;
 use parabellum_app::ports::queries::{
-    BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
+    MarketplaceData, MerchantMovement, MerchantMovementKind, TroopMovementType,
     VillageArmyStateView, VillageTroopMovements,
 };
 use parabellum_app::read_models::VillageInfo;
-use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_types::{
     army::TroopSet, buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
 };
 use rust_i18n::t;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MovementKind {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -45,50 +43,9 @@ pub struct ArmyCardData {
     pub tribe: Tribe,
     pub category: ArmyCategory,
     pub movement_kind: Option<MovementKind>,
-    pub arrival_time: Option<u32>,
+    pub arrives_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub bounty: Option<ResourceGroup>,
     pub action_button: Option<ArmyAction>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BuildingQueueItemView {
-    pub job_id: Uuid,
-    pub slot_id: u8,
-    pub building_name: BuildingName,
-    pub target_level: u8,
-    pub is_processing: bool,
-    pub time_remaining: String,
-    pub time_seconds: u32,
-    pub queue_class: Option<String>,
-}
-
-/// Formats a duration in seconds to HH:MM:SS.
-pub fn format_duration(total_seconds: u32) -> String {
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-}
-
-/// Converts queue items into view representations with formatted timers.
-pub fn building_queue_to_views(items: &[BuildingQueueItem]) -> Vec<BuildingQueueItemView> {
-    let now = Utc::now();
-    items
-        .iter()
-        .map(|item| {
-            let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
-            BuildingQueueItemView {
-                job_id: item.job_id,
-                slot_id: item.slot_id,
-                building_name: item.building_name.clone(),
-                target_level: item.target_level,
-                is_processing: matches!(item.status, ScheduledActionStatus::Processing),
-                time_remaining: format_duration(remaining),
-                time_seconds: remaining,
-                queue_class: None,
-            }
-        })
-        .collect()
 }
 
 /// Prepares all army cards for the Rally Point page from domain data.
@@ -121,7 +78,8 @@ pub fn prepare_rally_point_cards(
             tribe: village_tribe.clone(),
             category: ArmyCategory::Stationed,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
+            bounty: None,
             action_button: None,
         });
     }
@@ -142,7 +100,8 @@ pub fn prepare_rally_point_cards(
             tribe: army.tribe.clone(),
             category: ArmyCategory::Deployed,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
+            bounty: None,
             action_button: Some(ArmyAction::Recall {
                 army_id: army.id.to_string(),
             }),
@@ -165,7 +124,8 @@ pub fn prepare_rally_point_cards(
             tribe: reinforcement.tribe.clone(),
             category: ArmyCategory::Reinforcement,
             movement_kind: None,
-            arrival_time: None,
+            arrives_at: None,
+            bounty: None,
             action_button: Some(ArmyAction::Release {
                 army_id: reinforcement.id.to_string(),
             }),
@@ -174,12 +134,10 @@ pub fn prepare_rally_point_cards(
 
     // 4. Outgoing movements
     for movement in &movements.outgoing {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
         let movement_kind = match movement.movement_type {
             TroopMovementType::Attack => MovementKind::Attack,
             TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Scout => MovementKind::Scout,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
             TroopMovementType::FoundVillage => MovementKind::FoundVillage,
@@ -196,19 +154,18 @@ pub fn prepare_rally_point_cards(
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Outgoing,
             movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
+            arrives_at: Some(movement.arrives_at),
+            bounty: movement.bounty.clone(),
             action_button,
         });
     }
 
     // 5. Incoming movements
     for movement in &movements.incoming {
-        let now = chrono::Utc::now();
-        let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
         let movement_kind = match movement.movement_type {
             TroopMovementType::Attack => MovementKind::Attack,
             TroopMovementType::Raid => MovementKind::Raid,
+            TroopMovementType::Scout => MovementKind::Scout,
             TroopMovementType::Reinforcement => MovementKind::Reinforcement,
             TroopMovementType::Return => MovementKind::Return,
             TroopMovementType::FoundVillage => MovementKind::FoundVillage,
@@ -222,7 +179,8 @@ pub fn prepare_rally_point_cards(
             tribe: movement.tribe.clone(),
             category: ArmyCategory::Incoming,
             movement_kind: Some(movement_kind),
-            arrival_time: Some(time_remaining_secs),
+            arrives_at: Some(movement.arrives_at),
+            bounty: movement.bounty.clone(),
             action_button: None,
         });
     }
@@ -327,7 +285,7 @@ pub struct MerchantMovementView {
     pub destination_position: Option<Position>,
     pub resources: ResourceGroup,
     pub merchants_used: u8,
-    pub time_remaining_secs: u32,
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Converts MarketplaceData into view models for own offers
@@ -386,14 +344,11 @@ pub fn prepare_merchant_movements(
     village_info: &HashMap<u32, VillageInfo>,
     direction: MerchantMovementDirection,
 ) -> Vec<MerchantMovementView> {
-    let now = Utc::now();
     movements
         .iter()
         .map(|movement| {
             let origin_info = village_info.get(&movement.origin_village_id);
             let destination_info = village_info.get(&movement.destination_village_id);
-            let time_remaining_secs = (movement.arrives_at - now).num_seconds().max(0) as u32;
-
             MerchantMovementView {
                 job_id: movement.job_id.to_string(),
                 direction: direction.clone(),
@@ -408,7 +363,7 @@ pub fn prepare_merchant_movements(
                 destination_position: destination_info.map(|info| info.position.clone()),
                 resources: movement.resources.clone(),
                 merchants_used: movement.merchants_used,
-                time_remaining_secs,
+                arrives_at: movement.arrives_at,
             }
         })
         .collect()

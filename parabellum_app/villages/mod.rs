@@ -10,15 +10,11 @@ mod state;
 
 pub use aggregate::VillageAggregate;
 pub use commands::{
-    AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
-    CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteHeroRevival, CompleteMerchantsArrival,
-    CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
-    CompleteTrainUnit, CompleteUpgradeBuilding, ConquerVillage, CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ReinforcementArrived,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
-    UpgradeBuilding,
+    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
+    CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
+    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 pub use events::VillageEvent;
 pub use service::VillageService;

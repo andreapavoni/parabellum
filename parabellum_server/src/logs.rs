@@ -27,8 +27,11 @@ pub fn setup_logging() {
         .with_thread_ids(true)
         .with_target(true);
 
-    // Default EnvFilter: info for everything, debug for our crate
-    let default_filter = "info,parabellum=debug,tower_http=debug,sqlx=info";
+    // Default EnvFilter: keep app/runtime lifecycle visible while reducing
+    // framework and DB verbosity in normal development runs.
+    // let default_filter = "info,parabellum=debug,tower_http=debug,sqlx=info";
+    let default_filter =
+        "info,parabellum=info,parabellum_infra=info,parabellum_web=info,tower_http=warn,sqlx=warn";
 
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));

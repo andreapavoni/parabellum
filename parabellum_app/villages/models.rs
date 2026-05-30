@@ -7,9 +7,11 @@ use parabellum_game::models::{
 use parabellum_types::battle::AttackType;
 use parabellum_types::battle::ScoutingTarget;
 use parabellum_types::buildings::BuildingName;
-use parabellum_types::common::ResourceQuantity;
+use parabellum_types::common::{ResourceGroup, ResourceQuantity};
 use parabellum_types::reports::ReportPayload;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use parabellum_game::models::army::Army;
@@ -74,6 +76,7 @@ pub struct VillageMovement {
     pub time_seconds: Option<u32>,
     pub units: parabellum_types::army::TroopSet,
     pub tribe: Option<Tribe>,
+    pub bounty: Option<ResourceGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -139,6 +142,32 @@ pub enum ScheduledActionStatus {
     Failed,
 }
 
+impl fmt::Display for ScheduledActionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = match self {
+            Self::Pending => "pending",
+            Self::Processing => "processing",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        };
+        f.write_str(value)
+    }
+}
+
+impl FromStr for ScheduledActionStatus {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "processing" => Ok(Self::Processing),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            _ => Err("invalid scheduled action status"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScheduledActionType {
     ReinforcementArrival,
@@ -155,6 +184,7 @@ pub enum ScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
+    LoyaltyRegen,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -247,6 +277,7 @@ pub enum ScheduledActionPayload {
         action_id: Uuid,
         village_id: u32,
         source_village_id: u32,
+        target_village_id: Option<u32>,
         player_id: Uuid,
         merchants_used: u8,
         returns_at: DateTime<Utc>,
@@ -305,6 +336,12 @@ pub enum ScheduledActionPayload {
         reset: bool,
         revive_at: DateTime<Utc>,
     },
+    LoyaltyRegen {
+        action_id: Uuid,
+        village_id: u32,
+        player_id: Uuid,
+        execute_at: DateTime<Utc>,
+    },
 }
 
 impl ScheduledActionPayload {
@@ -330,6 +367,7 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
             ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
             ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
+            ScheduledActionPayload::LoyaltyRegen { .. } => ScheduledActionType::LoyaltyRegen,
         }
     }
 }

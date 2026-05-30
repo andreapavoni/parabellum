@@ -8,3 +8,4 @@ mod reinforcement;
 mod replay;
 mod reports;
 mod scheduler;
+mod workflow;

@@ -16,11 +16,97 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
+use crate::es::repositories::PostgresArmyRepository;
 use crate::establish_test_connection_pool;
+use parabellum_app::villages::models::ScheduledActionStatus;
+use parabellum_app::villages::repositories::ArmyRepository;
+use parabellum_app::villages::{ResearchAcademy, SetVillageResources, TrainUnits};
+use parabellum_types::army::UnitName;
 
 static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
 static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
 const TEST_DB_ADVISORY_LOCK_KEY: i64 = 9_842_771;
+
+pub struct EsScenario<'a> {
+    pub pool: &'a sqlx::PgPool,
+    pub service: &'a VillageEsService,
+}
+
+impl<'a> EsScenario<'a> {
+    pub fn new(pool: &'a sqlx::PgPool, service: &'a VillageEsService) -> Self {
+        Self { pool, service }
+    }
+
+    pub async fn village(
+        &self,
+        village_name: &str,
+        position: Position,
+        tribe: Tribe,
+        buildings: Vec<VillageBuilding>,
+        resources: ResourceGroup,
+    ) -> (Uuid, Uuid, u32) {
+        setup_village(
+            self.pool,
+            self.service,
+            village_name,
+            position,
+            tribe,
+            buildings,
+            resources,
+        )
+        .await
+    }
+
+    pub async fn village_for_player(
+        &self,
+        player_id: Uuid,
+        village_name: &str,
+        position: Position,
+        tribe: Tribe,
+        buildings: Vec<VillageBuilding>,
+        resources: ResourceGroup,
+    ) -> u32 {
+        setup_village_for_player(
+            self.service,
+            player_id,
+            village_name,
+            position,
+            tribe,
+            buildings,
+            resources,
+        )
+        .await
+    }
+
+    pub async fn train_and_complete(
+        &self,
+        village_id: u32,
+        player_id: Uuid,
+        unit_idx: u8,
+        building_name: BuildingName,
+        quantity: i32,
+        speed: i8,
+        due_by: chrono::DateTime<chrono::Utc>,
+        process_limit: i64,
+    ) {
+        train_and_complete(
+            self.service,
+            village_id,
+            player_id,
+            unit_idx,
+            building_name,
+            quantity,
+            speed,
+            due_by,
+            process_limit,
+        )
+        .await;
+    }
+
+    pub async fn process_until(&self, until: chrono::DateTime<chrono::Utc>, limit: i64) -> usize {
+        process_due_until(self.service, until, limit).await
+    }
+}
 
 pub async fn setup_pool() -> sqlx::PgPool {
     // Run embedded migrations once for the shared test database.
@@ -51,7 +137,10 @@ where
     let _guard = TEST_DB_MUTEX.lock().await;
     let pool = setup_pool().await;
     // Cross-process serialization (multiple `cargo test` processes sharing TEST_DATABASE_URL).
-    let mut lock_conn = pool.acquire().await.expect("failed to acquire test lock connection");
+    let mut lock_conn = pool
+        .acquire()
+        .await
+        .expect("failed to acquire test lock connection");
     sqlx::query("SELECT pg_advisory_lock($1)")
         .bind(TEST_DB_ADVISORY_LOCK_KEY)
         .execute(&mut *lock_conn)
@@ -70,6 +159,14 @@ where
 }
 
 pub async fn reset_tables(pool: &sqlx::PgPool) {
+    sqlx::query("DELETE FROM rm_report_reads")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM rm_reports")
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("DELETE FROM rm_marketplace_offers")
         .execute(pool)
         .await
@@ -99,6 +196,10 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .await
         .unwrap();
     sqlx::query("DELETE FROM es_snapshots")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM es_projector_offsets")
         .execute(pool)
         .await
         .unwrap();
@@ -146,6 +247,162 @@ pub async fn seed_user_and_player(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
 
 pub fn resources(lumber: u32, clay: u32, iron: u32, crop: u32) -> ResourceGroup {
     ResourceGroup::new(lumber, clay, iron, crop)
+}
+
+pub async fn process_due_until(
+    service: &VillageEsService,
+    until: chrono::DateTime<chrono::Utc>,
+    limit: i64,
+) -> usize {
+    service.process_due_actions(until, limit).await.unwrap()
+}
+
+pub async fn refill_resources(
+    service: &VillageEsService,
+    village_id: u32,
+    player_id: Uuid,
+    stocks: ResourceGroup,
+) {
+    service
+        .set_village_resources(
+            village_id,
+            &SetVillageResources {
+                player_id,
+                resources: stocks,
+            },
+        )
+        .await
+        .unwrap();
+}
+
+pub async fn research_and_complete(
+    service: &VillageEsService,
+    village_id: u32,
+    player_id: Uuid,
+    unit: UnitName,
+    speed: i8,
+    due_by: chrono::DateTime<chrono::Utc>,
+    process_limit: i64,
+) {
+    service
+        .research_academy(
+            village_id,
+            &ResearchAcademy {
+                player_id,
+                unit,
+                speed,
+            },
+        )
+        .await
+        .unwrap();
+    process_due_until(service, due_by, process_limit).await;
+}
+
+pub async fn train_and_complete(
+    service: &VillageEsService,
+    village_id: u32,
+    player_id: Uuid,
+    unit_idx: u8,
+    building_name: BuildingName,
+    quantity: i32,
+    speed: i8,
+    due_by: chrono::DateTime<chrono::Utc>,
+    process_limit: i64,
+) {
+    service
+        .train_units(
+            village_id,
+            &TrainUnits {
+                player_id,
+                unit_idx,
+                building_name,
+                quantity,
+                speed,
+            },
+        )
+        .await
+        .unwrap();
+    process_due_until(service, due_by, process_limit).await;
+}
+
+pub async fn home_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
+    PostgresArmyRepository::new(pool.clone())
+        .get_home_army(village_id)
+        .await
+        .unwrap()
+        .map(|army| army.units().get(unit_idx))
+        .unwrap_or(0)
+}
+
+pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
+    PostgresArmyRepository::new(pool.clone())
+        .list_stationed_armies(village_id)
+        .await
+        .unwrap()
+        .iter()
+        .map(|army| army.units().get(unit_idx))
+        .sum()
+}
+
+pub async fn deployed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
+    PostgresArmyRepository::new(pool.clone())
+        .list_deployed_armies(village_id)
+        .await
+        .unwrap()
+        .iter()
+        .map(|army| army.units().get(unit_idx))
+        .sum()
+}
+
+pub async fn village_owner(service: &VillageEsService, village_id: u32) -> Uuid {
+    service.get_village(village_id).await.unwrap().player_id
+}
+
+pub async fn village_stocks(
+    service: &VillageEsService,
+    village_id: u32,
+) -> parabellum_game::models::village::VillageStocks {
+    service.get_village(village_id).await.unwrap().stocks
+}
+
+pub async fn village_busy_merchants(service: &VillageEsService, village_id: u32) -> u8 {
+    service
+        .get_village(village_id)
+        .await
+        .unwrap()
+        .busy_merchants
+}
+
+pub async fn insert_corrupt_scheduled_action(
+    pool: &sqlx::PgPool,
+    status: ScheduledActionStatus,
+) -> Uuid {
+    let action_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status, updated_at)
+        VALUES ($1, 'TrainUnit', NOW() - interval '10 minutes', '{}'::jsonb, $2::scheduled_action_status, NOW() - interval '10 minutes')
+        "#,
+    )
+    .bind(action_id)
+    .bind(status.to_string())
+    .execute(pool)
+    .await
+    .unwrap();
+    action_id
+}
+
+pub async fn scheduled_action_status_count(
+    pool: &sqlx::PgPool,
+    status: ScheduledActionStatus,
+) -> i64 {
+    sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM rm_scheduled_actions WHERE status = $1::scheduled_action_status",
+    )
+        .bind(status.to_string())
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 pub fn main_building(level: u8) -> VillageBuilding {
@@ -308,20 +565,5 @@ pub fn rally_point(level: u8) -> VillageBuilding {
             culture_points: 0,
             level,
         },
-    }
-}
-
-pub fn found_village_cmd(
-    player_id: Uuid,
-    village_name: &str,
-    position: parabellum_types::map::Position,
-) -> parabellum_app::villages::FoundVillage {
-    parabellum_app::villages::FoundVillage {
-        village_name: village_name.to_string(),
-        position,
-        tribe: Tribe::Roman,
-        player_id,
-        parent_village_id: None,
-        buildings: vec![main_building(1), rally_point(1)],
     }
 }

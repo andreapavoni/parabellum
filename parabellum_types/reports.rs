@@ -69,4 +69,10 @@ pub struct BattleReportPayload {
     pub wall_damage: Option<BuildingDamageReport>,
     #[serde(default)]
     pub catapult_damage: Vec<BuildingDamageReport>,
+    #[serde(default)]
+    pub loyalty_before: Option<u8>,
+    #[serde(default)]
+    pub loyalty_after: Option<u8>,
+    #[serde(default)]
+    pub conquered: Option<bool>,
 }

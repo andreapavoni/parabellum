@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 /// Errors for app logic.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum AppError {
     #[error("Wrong authentication credentials")]
     WrongAuthCredentials,

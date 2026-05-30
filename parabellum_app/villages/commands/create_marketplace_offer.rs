@@ -1,5 +1,6 @@
 use chrono::Utc;
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
+use parabellum_game::models::village::VillageStocks;
 use parabellum_types::{common::ResourceQuantity, errors::GameError};
 use uuid::Uuid;
 
@@ -11,6 +12,7 @@ pub struct CreateMarketplaceOffer {
     pub player_id: Uuid,
     pub offer_resources: ResourceQuantity,
     pub seek_resources: ResourceQuantity,
+    pub speed: i8,
 }
 
 impl Command for CreateMarketplaceOffer {
@@ -43,17 +45,45 @@ impl Command for CreateMarketplaceOffer {
         let offer_group: parabellum_types::common::ResourceGroup = self.offer_resources.into();
         let merchants_reserved = aggregate
             .village()
-            .schedule_send_resources(offer_group)
+            .schedule_send_resources(offer_group.clone(), self.speed)
             .map_err(as_domain_error)?;
 
-        Ok(vec![VillageEvent::MarketplaceOfferCreated {
-            offer_id: Uuid::new_v4(),
-            owner_player_id: self.player_id,
-            owner_village_id: village_id,
-            offer_resources: self.offer_resources,
-            seek_resources: self.seek_resources,
-            merchants_reserved,
-            created_at: Utc::now(),
-        }])
+        let now = Utc::now();
+        let current = aggregate.village().village.stocks();
+        let owner_stocks = VillageStocks {
+            warehouse_capacity: current.warehouse_capacity,
+            granary_capacity: current.granary_capacity,
+            lumber: current.lumber.saturating_sub(offer_group.lumber()),
+            clay: current.clay.saturating_sub(offer_group.clay()),
+            iron: current.iron.saturating_sub(offer_group.iron()),
+            crop: current.crop.saturating_sub(offer_group.crop() as i64),
+        };
+        let owner_busy_merchants = aggregate
+            .village()
+            .village
+            .busy_merchants
+            .saturating_add(merchants_reserved);
+
+        let offer_id = Uuid::new_v4();
+        Ok(vec![
+            VillageEvent::MarketplaceOfferCreated {
+                offer_id,
+                owner_player_id: self.player_id,
+                owner_village_id: village_id,
+                offer_resources: self.offer_resources,
+                seek_resources: self.seek_resources,
+                merchants_reserved,
+                created_at: now,
+            },
+            VillageEvent::MarketplaceOfferReservationAppliedToVillage {
+                offer_id,
+                owner_player_id: self.player_id,
+                owner_village_id: village_id,
+                merchants_reserved,
+                owner_stocks,
+                owner_busy_merchants,
+                applied_at: now,
+            },
+        ])
     }
 }

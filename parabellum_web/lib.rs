@@ -9,7 +9,6 @@
 //! Game rules and business behavior must stay in `parabellum_game` / `parabellum_app`.
 
 pub mod api;
-pub mod auth_metrics;
 pub mod auth_tokens;
 pub mod session;
 pub mod view_helpers;

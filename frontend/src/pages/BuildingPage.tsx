@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { buildingLabel, unitLabel } from "@/lib/labels";
+import { Link } from "@/components/Link";
+import { UnitSprite } from "@/components/UnitSprite";
 import type {
   AcademyResearchOption,
   BuildingPageResponse,
   EmptySlotBuildOption,
+  MovementPreviewResponse,
   MarketplaceOffer,
   ResourceAmounts,
   RallyCard,
@@ -83,6 +86,12 @@ function LiveCountdown({
   return <span class="font-mono">{formatDuration(remaining)}</span>;
 }
 
+function secondsUntil(timestamp: string) {
+  const targetMs = new Date(timestamp).getTime();
+  if (Number.isNaN(targetMs)) return 0;
+  return Math.max(0, Math.floor((targetMs - Date.now()) / 1000));
+}
+
 function formatRelativeTime(timestamp: number) {
   const now = Date.now();
   const diffMs = now - timestamp * 1000;
@@ -133,7 +142,7 @@ function formatSingleResourceSummary(resources: ResourceAmounts) {
     return formatResourceSummary(resources);
   }
 
-  const key = keys[0];
+  const key = keys[0] as ResourceKey;
   const value = resources[key];
   const icon = key === "lumber" ? "🌲" : key === "clay" ? "🧱" : key === "iron" ? "⛏️" : "🌾";
   return `${icon} ${value}`;
@@ -401,6 +410,33 @@ function TrainingUnitCard({
         <div class="text-xs text-gray-500">Upkeep {option.upkeep}</div>
       </div>
 
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-sm">
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Attack</div>
+          <div class="font-semibold text-gray-900">{option.attack}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Def. Infantry</div>
+          <div class="font-semibold text-gray-900">{option.defenseInfantry}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Def. Cavalry</div>
+          <div class="font-semibold text-gray-900">{option.defenseCavalry}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Upkeep</div>
+          <div class="font-semibold text-gray-900">{option.upkeep}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Speed</div>
+          <div class="font-semibold text-gray-900">{option.speed}</div>
+        </div>
+        <div class="rounded border bg-gray-50 px-2 py-1">
+          <div class="text-[11px] uppercase text-gray-500">Capacity</div>
+          <div class="font-semibold text-gray-900">{option.capacity}</div>
+        </div>
+      </div>
+
       <div>
         <div class="text-xs uppercase text-gray-500">Training cost</div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm">
@@ -477,7 +513,8 @@ function AcademyOptionCard({
   const [error, setError] = useState<string | null>(null);
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.academy?.queueFull ?? false;
-  const canResearch = affordable && !queueFull && !submitting;
+  const blockedByRequirements = option.missingRequirements.length > 0;
+  const canResearch = affordable && !queueFull && !submitting && !blockedByRequirements;
 
   return (
     <div class="border rounded-md p-4 bg-white space-y-3">
@@ -516,6 +553,14 @@ function AcademyOptionCard({
       </button>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Research queue is full</div> : null}
+      {blockedByRequirements ? (
+        <div class="text-xs text-amber-700">
+          Requires:{" "}
+          {option.missingRequirements
+            .map((req) => `${buildingLabel(req.buildingName)} ${req.requiredLevel}`)
+            .join(", ")}
+        </div>
+      ) : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
     </div>
   );
@@ -535,6 +580,9 @@ function SmithyOptionCard({
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.smithy?.queueFull ?? false;
   const canUpgrade = option.canUpgrade && affordable && !queueFull && !submitting;
+  const nextLevel = Math.min(option.currentLevel + 1, option.maxLevel);
+  const reachedMaxLevel = option.currentLevel >= option.maxLevel;
+  const alreadyQueued = detail.smithy?.queue.some((job) => job.unitName === option.unitName) ?? false;
 
   return (
     <div class="border rounded-md p-4 bg-white space-y-3">
@@ -542,7 +590,7 @@ function SmithyOptionCard({
         <div>
           <div class="text-lg font-semibold text-gray-900">{unitLabel(option.unitName)}</div>
           <div class="text-xs text-gray-500">
-            Level {option.currentLevel} → {option.currentLevel + 1} (Max: {option.maxLevel})
+            Level {option.currentLevel} → {nextLevel} (Max: {option.maxLevel})
           </div>
           <div class="text-xs text-gray-500">Upgrade time: {formatDuration(option.timeSecs)}</div>
         </div>
@@ -576,7 +624,8 @@ function SmithyOptionCard({
       </button>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Upgrade queue is full</div> : null}
-      {!option.canUpgrade ? <div class="text-xs text-gray-500">Max level reached</div> : null}
+      {!queueFull && alreadyQueued ? <div class="text-xs text-amber-700">Already in upgrade queue</div> : null}
+      {reachedMaxLevel ? <div class="text-xs text-gray-500">Max level reached</div> : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
     </div>
   );
@@ -615,6 +664,12 @@ function MarketplaceSection({
           <p class="text-sm text-gray-500">
             Available merchants: {detail.marketplace.availableMerchants}/{detail.marketplace.totalMerchants}
           </p>
+          <p class="text-sm text-gray-500">
+            Capacity per merchant: {detail.marketplace.merchantCapacity}
+          </p>
+          <p class="text-sm text-gray-500">
+            Merchant speed: {detail.marketplace.merchantSpeed} fields/hour
+          </p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="text-sm text-gray-600">
@@ -639,7 +694,7 @@ function MarketplaceSection({
         <div class="grid gap-3 sm:grid-cols-4">
           {(["lumber", "clay", "iron", "crop"] as const).map((key) => (
             <label key={key} class="text-sm text-gray-600">
-              {key[0].toUpperCase() + key.slice(1)}
+              {key.charAt(0).toUpperCase() + key.slice(1)}
               <input
                 type="number"
                 min="0"
@@ -829,7 +884,7 @@ function MarketplaceSection({
                       <td class="py-2 pr-4">{movement.merchantsUsed}</td>
                       <td class="py-2 font-mono text-gray-600">
                         <LiveCountdown
-                          seconds={movement.timeRemainingSecs}
+                          seconds={secondsUntil(movement.arrivesAt)}
                           onElapsed={() => {
                             void onMutate();
                           }}
@@ -883,7 +938,11 @@ function OffersTable({
             <tbody>
               {offers.map((offer) => (
                 <tr key={offer.offerId} class="border-b last:border-b-0">
-                  <td class="py-2 pr-4">{offer.villageName} ({offer.position.x}|{offer.position.y})</td>
+                  <td class="py-2 pr-4">
+                    <Link to={`/map/field/${offer.villageId}`} class="text-green-700 hover:underline">
+                      {offer.villageName} ({offer.position.x}|{offer.position.y})
+                    </Link>
+                  </td>
                   <td class="py-2 pr-4">{formatSingleResourceSummary(offer.offerResources)}</td>
                   <td class="py-2 pr-4">{formatSingleResourceSummary(offer.seekResources)}</td>
                   <td class="py-2 pr-4">{offer.merchantsRequired}</td>
@@ -934,12 +993,23 @@ function RallyPointSection({
   const initialTargetY = Number(query.get("target_y") ?? "0") || 0;
   const [targetX, setTargetX] = useState(initialTargetX);
   const [targetY, setTargetY] = useState(initialTargetY);
-  const [movement, setMovement] = useState<"attack" | "raid" | "scout" | "reinforcement" | "found_village">(
-    "attack",
-  );
+  const [movement, setMovement] = useState<"attack" | "raid" | "reinforcement">("attack");
   const [scoutingTarget, setScoutingTarget] = useState<"resources" | "defenses">("resources");
+  const [catapultTarget1, setCatapultTarget1] = useState("MainBuilding");
+  const [catapultTarget2, setCatapultTarget2] = useState("Warehouse");
   const [units, setUnits] = useState<Record<number, number>>({});
+  const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
+  const [previewStartedAtMs, setPreviewStartedAtMs] = useState<number | null>(null);
+  const [previewTravelSeconds, setPreviewTravelSeconds] = useState(0);
+  const [previewTick, setPreviewTick] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!preview) return;
+    const timer = window.setInterval(() => setPreviewTick((v) => v + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [preview]);
 
   if (!detail.rallyPoint) return null;
 
@@ -950,11 +1020,22 @@ function RallyPointSection({
 
   const isScoutUnitName = (name: string) =>
     name === "Scout" || name === "Pathfinder" || name === "EquitesLegati";
+  const isCatapultUnitName = (name: string) =>
+    name === "Catapult" || name === "FireCatapult" || name === "Trebuchet" || name === "Ballista";
 
-  const selectedNonScoutUnits = detail.rallyPoint.sendableUnits.filter((unit) => {
+  const selectedScoutUnits = detail.rallyPoint.sendableUnits.filter((unit) => {
     const selected = units[unit.unitIdx] ?? 0;
-    return selected > 0 && !isScoutUnitName(unit.name);
+    return selected > 0 && isScoutUnitName(unit.name);
   });
+  const selectedCatapultUnits = detail.rallyPoint.sendableUnits
+    .filter((unit) => isCatapultUnitName(unit.name))
+    .reduce((sum, unit) => sum + (units[unit.unitIdx] ?? 0), 0);
+  const isScoutDetected = preview?.detectedKind === "scout_only";
+  const showScoutingTargetChoice =
+    movement !== "reinforcement" && !!preview?.supportsScoutingTargetChoice;
+  const showCatapultTargets =
+    movement === "attack" && !isScoutDetected && !!preview?.hasCatapultUnits;
+  const catapultTargetSelectionCount = selectedCatapultUnits <= 1 ? 1 : 2;
 
   const fullUnitsFromCard = (card: RallyCard) => card.units.map((value) => Number(value ?? 0));
 
@@ -966,28 +1047,56 @@ function RallyPointSection({
           if (cards.length === 0) return null;
           return (
             <div class="space-y-2" key={category}>
-              <h3 class="text-sm font-semibold text-gray-700">{category}</h3>
+              <h3
+                id={category === "incoming" ? "incoming" : category === "outgoing" ? "outgoing" : undefined}
+                class="text-sm font-semibold text-gray-700"
+              >
+                {category}
+              </h3>
               <div class="space-y-2">
                 {cards.map((card) => (
                   <div key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="border rounded-lg p-4 bg-white shadow-sm space-y-3">
                     <div class="flex justify-between items-start">
                       <div class="flex-1">
                         <div class="flex items-center gap-2">
-                          <h3 class="font-semibold text-gray-900">{card.villageName ?? "Unknown Village"}</h3>
+                          {card.villageName ? (
+                            <h3 class="font-semibold text-gray-900">
+                              <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                                {card.villageName}
+                              </Link>
+                            </h3>
+                          ) : (
+                            <h3 class="font-semibold text-gray-900">Unknown Village</h3>
+                          )}
                           {card.movementKind ? (
                             <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{card.movementKind}</span>
                           ) : null}
                         </div>
-                        {card.position ? <p class="text-sm text-gray-600 mt-1">({card.position.x}, {card.position.y})</p> : null}
-                        {card.arrivalTime ? (
-                          <p class="text-sm text-gray-500 mt-1 font-mono">
-                            ⏱️{" "}
-                            <LiveCountdown
-                              seconds={card.arrivalTime}
-                              onElapsed={() => {
-                                void onMutate();
-                              }}
-                            />
+                        {card.position ? (
+                          <p class="text-sm text-gray-600 mt-1">
+                            <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                              ({card.position.x}, {card.position.y})
+                            </Link>
+                          </p>
+                        ) : null}
+                        <p class="text-xs text-gray-500 mt-1">Upkeep: {card.upkeep}</p>
+                        {card.arrivesAt ? (
+                          <div class="mt-1 space-y-1 text-sm text-gray-500">
+                            <p class="font-mono">
+                              ⏱️{" "}
+                              <LiveCountdown
+                                seconds={secondsUntil(card.arrivesAt)}
+                                onElapsed={() => {
+                                  void onMutate();
+                                }}
+                              />
+                            </p>
+                            <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
+                          </div>
+                        ) : null}
+                        {card.bounty ? (
+                          <p class="text-xs text-amber-700 mt-1">
+                            Loot: {card.bounty.lumber}/{card.bounty.clay}/{card.bounty.iron}/{card.bounty.crop}
                           </p>
                         ) : null}
                       </div>
@@ -996,6 +1105,15 @@ function RallyPointSection({
 
                     <div class="overflow-x-auto">
                       <table class="w-full border-collapse">
+                        <thead>
+                          <tr>
+                            {card.units.map((_, idx) => (
+                              <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
+                                <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
                         <tbody>
                           <tr>
                             {card.units.map((count, idx) => (
@@ -1013,8 +1131,18 @@ function RallyPointSection({
                         type="button"
                         class="inline-block px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded"
                         onClick={async () => {
-                          await api.recallTroops({ armyId: card.actionId!, units: fullUnitsFromCard(card) });
-                          await onMutate();
+                          setError(null);
+                          try {
+                            await api.recallTroops({
+                              villageId: detail.villageId,
+                              armyId: card.actionId!,
+                              units: fullUnitsFromCard(card),
+                            });
+                            await onMutate();
+                          } catch (err) {
+                            const message = err instanceof Error ? err.message : "Unable to recall troops";
+                            setError(message);
+                          }
                         }}
                       >
                         ↩️ Recall Troops
@@ -1025,11 +1153,18 @@ function RallyPointSection({
                         type="button"
                         class="inline-block px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
                         onClick={async () => {
-                          await api.releaseReinforcements({
-                            sourceVillageId: card.villageId,
-                            units: fullUnitsFromCard(card),
-                          });
-                          await onMutate();
+                          setError(null);
+                          try {
+                            await api.releaseReinforcements({
+                              villageId: card.villageId,
+                              armyId: card.actionId!,
+                              units: fullUnitsFromCard(card),
+                            });
+                            await onMutate();
+                          } catch (err) {
+                            const message = err instanceof Error ? err.message : "Unable to release reinforcements";
+                            setError(message);
+                          }
                         }}
                       >
                         🏠 Release Reinforcements
@@ -1059,37 +1194,13 @@ function RallyPointSection({
           </label>
           <label class="text-sm text-gray-600">
             Movement type
-            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "scout" | "reinforcement" | "found_village")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
+            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "reinforcement")} class="mt-1 w-full border rounded px-3 py-2 text-gray-700">
               <option value="attack">Attack</option>
               <option value="raid">Raid</option>
-              <option value="scout">Scout</option>
               <option value="reinforcement">Reinforcement</option>
-              <option value="found_village">Found village</option>
             </select>
           </label>
         </div>
-        {movement === "found_village" ? (
-          <p class="text-xs text-gray-500">
-            Select settlers and send them to an empty valley to found a new village.
-          </p>
-        ) : null}
-        {movement === "scout" ? (
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="text-sm text-gray-600">
-              Scouting target
-              <select
-                value={scoutingTarget}
-                onChange={(e) =>
-                  setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
-                }
-                class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
-              >
-                <option value="resources">Resources + troops</option>
-                <option value="defenses">Residence/Palace + Walls + troops</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
         <div class="space-y-2">
           <div class="text-sm text-gray-500 uppercase">Select units</div>
           {detail.rallyPoint.sendableUnits.map((unit) => (
@@ -1121,45 +1232,161 @@ function RallyPointSection({
 
         <button
           type="button"
-          class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded"
+          disabled={previewing || sending}
           onClick={async () => {
             setError(null);
+            setPreview(null);
             try {
-              if (movement === "found_village") {
-                await api.foundVillage({
-                  targetX,
-                  targetY,
-                  units: toUnitsArray(),
-                });
-              } else if (movement === "scout") {
-                if (selectedNonScoutUnits.length > 0) {
-                  throw new Error("Only scout units can be sent with Scout movement.");
-                }
-                await api.sendTroops({
-                  slotId: detail.slotId,
-                  targetX,
-                  targetY,
-                  movement: "attack",
-                  scoutingTarget,
-                  units: toUnitsArray(),
-                });
-              } else {
-                await api.sendTroops({
-                  slotId: detail.slotId,
-                  targetX,
-                  targetY,
-                  movement,
-                  units: toUnitsArray(),
-                });
-              }
-              await onMutate();
+              setPreviewing(true);
+              const result = await api.previewTroops({
+                targetX,
+                targetY,
+                movement,
+                units: toUnitsArray(),
+              });
+              setPreview(result);
+              setPreviewStartedAtMs(Date.now());
+              setPreviewTravelSeconds(secondsUntil(result.arrivesAt));
             } catch (err) {
               setError((err as Error).message);
+            } finally {
+              setPreviewing(false);
             }
           }}
         >
-          {movement === "found_village" ? "Found village" : movement === "scout" ? "Send scouts" : "Send troops"}
+          {previewing ? "Calculating..." : "Preview movement"}
         </button>
+        {preview ? (
+          <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+            {(() => {
+              void previewTick;
+              void previewStartedAtMs;
+              const dynamicArrivesAt = new Date(Date.now() + previewTravelSeconds * 1000);
+              return (
+                <>
+            <div>
+                    Travel time: <span class="font-semibold">{formatDuration(previewTravelSeconds)}</span>
+            </div>
+            <div>
+                    Arrives at: <span class="font-semibold">{dynamicArrivesAt.toLocaleString()}</span>
+            </div>
+                </>
+              );
+            })()}
+            <div>
+              Detected movement:{" "}
+              <span class="font-semibold">
+                {preview.detectedKind === "scout_only"
+                  ? `Scout-only (${movement === "raid" ? "Raid" : "Attack"})`
+                  : preview.detectedKind === "reinforcement"
+                    ? "Reinforcement"
+                    : "Attack/Raid"}
+              </span>
+            </div>
+            {showScoutingTargetChoice ? (
+              <div class="grid gap-2">
+                <label class="text-sm text-gray-700">
+                  Scouting target
+                  <select
+                    value={scoutingTarget}
+                    onChange={(e) =>
+                      setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
+                    }
+                    class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                  >
+                    <option value="resources">Resources + troops</option>
+                    <option value="defenses">Residence/Palace + Walls + troops</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            {showCatapultTargets ? (
+              <div class="grid gap-2">
+                <div class="text-xs text-gray-700">
+                  Catapults detected: select {catapultTargetSelectionCount === 1 ? "one target building" : "up to two target buildings"}.
+                </div>
+                <label class="text-sm text-gray-700">
+                  Catapult target #1
+                  <select
+                    value={catapultTarget1}
+                    onChange={(e) => setCatapultTarget1((e.target as HTMLSelectElement).value)}
+                    class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                  >
+                    <option value="MainBuilding">Main Building</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Granary">Granary</option>
+                    <option value="RallyPoint">Rally Point</option>
+                    <option value="Barracks">Barracks</option>
+                    <option value="Stable">Stable</option>
+                    <option value="Workshop">Workshop</option>
+                    <option value="Academy">Academy</option>
+                    <option value="Residence">Residence</option>
+                    <option value="Palace">Palace</option>
+                    <option value="Smithy">Smithy</option>
+                  </select>
+                </label>
+                {catapultTargetSelectionCount > 1 ? (
+                  <label class="text-sm text-gray-700">
+                    Catapult target #2
+                    <select
+                      value={catapultTarget2}
+                      onChange={(e) => setCatapultTarget2((e.target as HTMLSelectElement).value)}
+                      class="mt-1 w-full border rounded px-3 py-2 text-gray-700"
+                    >
+                      <option value="MainBuilding">Main Building</option>
+                      <option value="Warehouse">Warehouse</option>
+                      <option value="Granary">Granary</option>
+                      <option value="RallyPoint">Rally Point</option>
+                      <option value="Barracks">Barracks</option>
+                      <option value="Stable">Stable</option>
+                      <option value="Workshop">Workshop</option>
+                      <option value="Academy">Academy</option>
+                      <option value="Residence">Residence</option>
+                      <option value="Palace">Palace</option>
+                      <option value="Smithy">Smithy</option>
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
+              disabled={sending}
+              onClick={async () => {
+                setError(null);
+                try {
+                  setSending(true);
+                  if (showScoutingTargetChoice && selectedScoutUnits.length === 0) {
+                    throw new Error("Scout movement requires at least one scout unit.");
+                  }
+                  await api.sendTroops({
+                    slotId: detail.slotId,
+                    targetX,
+                    targetY,
+                    movement,
+                    scoutingTarget: showScoutingTargetChoice ? scoutingTarget : undefined,
+                    catapultTargets: showCatapultTargets
+                      ? (catapultTargetSelectionCount === 1
+                        ? [catapultTarget1]
+                        : [catapultTarget1, catapultTarget2])
+                      : undefined,
+                    units: toUnitsArray(),
+                  });
+                  await onMutate();
+                  window.location.assign(`/app/build/39?target_x=${targetX}&target_y=${targetY}`);
+                } catch (err) {
+                  setError((err as Error).message);
+                } finally {
+                  setSending(false);
+                }
+              }}
+            >
+              {sending ? "Sending..." : "Confirm and send"}
+            </button>
+          </div>
+        ) : null}
         {error ? <div class="text-sm text-red-600">{error}</div> : null}
       </div>
     </>
@@ -1174,6 +1401,7 @@ export function BuildingPage({
   onMutate: () => Promise<void>;
 }) {
   const detail = data.detail;
+  const expansion = detail.expansion;
 
   return (
     <div class="container mx-auto p-4 max-w-6xl">
@@ -1219,7 +1447,7 @@ export function BuildingPage({
           <UpgradeBlock data={detail} onMutate={onMutate} />
         )}
 
-        {detail.buildingType === "expansion" && detail.expansion ? (
+        {detail.buildingType === "expansion" && expansion ? (
           <div class="space-y-4">
             <div class="bg-white border border-gray-300 rounded-lg p-6 shadow-sm">
               <h2 class="text-xl font-semibold mb-4 text-gray-800">Culture Points</h2>
@@ -1227,28 +1455,40 @@ export function BuildingPage({
                 <div class="bg-blue-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Village Production</div>
                   <div class="text-2xl font-bold text-blue-700">
-                    {detail.expansion.villageCulturePointsProduction}
+                    {expansion.villageCulturePointsProduction}
                     <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
                   </div>
                 </div>
                 <div class="bg-green-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Total Production</div>
                   <div class="text-2xl font-bold text-green-700">
-                    {detail.expansion.accountCulturePointsProduction}
+                    {expansion.accountCulturePointsProduction}
                     <span class="text-sm font-normal text-gray-600 ml-1">/ day</span>
                   </div>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Total Culture Points</div>
-                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.accountCulturePoints}</div>
+                  <div class="text-2xl font-bold text-purple-700">{expansion.accountCulturePoints}</div>
                 </div>
               </div>
               <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
                 <div class="text-sm font-medium text-gray-700">
                   Next village requires:{" "}
-                  <span class="font-bold text-yellow-700">{detail.expansion.nextCpRequired}</span>{" "}
+                  <span class="font-bold text-yellow-700">{expansion.nextCpRequired}</span>{" "}
                   Culture Points
                 </div>
+              </div>
+              <div class="mt-3">
+                <span class="text-sm text-gray-600">Loyalty: </span>
+                <span
+                  class={
+                    expansion.loyalty < 100
+                      ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
+                      : "text-sm font-semibold text-gray-800"
+                  }
+                >
+                  {expansion.loyalty}%
+                </span>
               </div>
             </div>
 
@@ -1256,8 +1496,8 @@ export function BuildingPage({
               <h2 class="text-xl font-semibold mb-4 text-gray-800">Expansion</h2>
               <h3 class="text-lg font-medium mb-2 text-gray-700">Foundation Slots</h3>
               <div class="flex items-center gap-2 flex-wrap">
-                {Array.from({ length: detail.expansion.maxFoundationSlots }).map((_, i) =>
-                  i < detail.expansion.childVillagesCount ? (
+                {Array.from({ length: expansion.maxFoundationSlots }).map((_, i) =>
+                  i < expansion.childVillagesCount ? (
                     <div
                       key={i}
                       class="w-14 h-14 bg-red-500 border-2 border-red-700 rounded flex items-center justify-center"
@@ -1275,22 +1515,22 @@ export function BuildingPage({
                 )}
               </div>
               <div class="text-sm text-gray-600 mt-2">
-                {detail.expansion.childVillagesCount} / {detail.expansion.maxFoundationSlots} slots
+                {expansion.childVillagesCount} / {expansion.maxFoundationSlots} slots
                 used
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div class="bg-blue-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Settlers at Home</div>
-                  <div class="text-2xl font-bold text-blue-700">{detail.expansion.settlersAtHome}</div>
+                  <div class="text-2xl font-bold text-blue-700">{expansion.settlersAtHome}</div>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Settlers Deployed</div>
-                  <div class="text-2xl font-bold text-purple-700">{detail.expansion.settlersDeployed}</div>
+                  <div class="text-2xl font-bold text-purple-700">{expansion.settlersDeployed}</div>
                 </div>
                 <div class="bg-amber-50 p-4 rounded-lg">
                   <div class="text-sm text-gray-600 mb-1">Trainable Settlers</div>
-                  <div class="text-2xl font-bold text-amber-700">{detail.expansion.maxSettlersTrainable}</div>
+                  <div class="text-2xl font-bold text-amber-700">{expansion.maxSettlersTrainable}</div>
                 </div>
               </div>
             </div>
@@ -1338,7 +1578,7 @@ export function BuildingPage({
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Remaining</span>
                       <LiveCountdown
-                        seconds={job.timeRemainingSecs}
+                        seconds={secondsUntil(job.finishesAt)}
                         onElapsed={() => {
                           void onMutate();
                         }}
@@ -1367,7 +1607,7 @@ export function BuildingPage({
                     <div class="flex items-center justify-between text-xs text-gray-600">
                       <span>Time remaining</span>
                       <LiveCountdown
-                        seconds={job.timeRemainingSecs}
+                        seconds={secondsUntil(job.finishesAt)}
                         onElapsed={() => {
                           void onMutate();
                         }}
@@ -1380,7 +1620,7 @@ export function BuildingPage({
 
             <div>
               <div class="text-sm text-gray-500 uppercase">Research available</div>
-              {detail.academy.readyUnits.length === 0 ? (
+              {detail.academy.readyUnits.length === 0 && detail.academy.lockedUnits.length === 0 ? (
                 <p class="text-sm text-gray-500 mt-2">No research available.</p>
               ) : (
                 <div class="space-y-4 mt-3">
@@ -1395,27 +1635,70 @@ export function BuildingPage({
                 </div>
               )}
             </div>
+            {detail.academy.lockedUnits.length > 0 ? (
+              <div>
+                <div class="text-sm text-gray-500 uppercase">Locked research</div>
+                <div class="space-y-4 mt-3">
+                  {detail.academy.lockedUnits.map((option) => (
+                    <AcademyOptionCard
+                      key={option.unitName}
+                      option={option}
+                      detail={detail}
+                      onMutate={onMutate}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
 
         {detail.buildingType === "smithy" && detail.smithy ? (
-          <div>
-            <div class="text-sm text-gray-500 uppercase">Smithy upgrades</div>
-            {detail.smithy.units.length === 0 ? (
-              <p class="text-sm text-gray-500 mt-2">No units to upgrade.</p>
-            ) : (
-              <div class="space-y-4 mt-3">
-                {detail.smithy.units.map((option) => (
-                  <SmithyOptionCard
-                    key={option.unitName}
-                    option={option}
-                    detail={detail}
-                    onMutate={onMutate}
-                  />
+          <>
+            {detail.smithy.queue.length > 0 ? (
+              <div class="border rounded-md p-4 bg-gray-50 space-y-3">
+                <div class="text-sm text-gray-500 uppercase">Upgrade queue</div>
+                {detail.smithy.queue.map((job, index) => (
+                  <div key={`${job.unitName}-${job.targetLevel}-${index}`} class="bg-white border rounded-md p-3 text-sm space-y-1">
+                    <div class="flex items-center justify-between">
+                      <span class="font-semibold text-gray-900">
+                        {unitLabel(job.unitName)} to level {job.targetLevel}
+                      </span>
+                      <span class={job.isProcessing ? "text-xs font-semibold text-emerald-600" : "text-xs font-semibold text-gray-500"}>
+                        {job.isProcessing ? "In progress" : "Pending"}
+                      </span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-600">
+                      <span>Time remaining</span>
+                      <LiveCountdown
+                        seconds={secondsUntil(job.finishesAt)}
+                        onElapsed={() => {
+                          void onMutate();
+                        }}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
+            ) : null}
+            <div>
+              <div class="text-sm text-gray-500 uppercase">Smithy upgrades</div>
+              {detail.smithy.units.length === 0 ? (
+                <p class="text-sm text-gray-500 mt-2">No units to upgrade.</p>
+              ) : (
+                <div class="space-y-4 mt-3">
+                  {detail.smithy.units.map((option) => (
+                    <SmithyOptionCard
+                      key={option.unitName}
+                      option={option}
+                      detail={detail}
+                      onMutate={onMutate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         ) : null}
 
         {detail.buildingType === "marketplace" ? (
