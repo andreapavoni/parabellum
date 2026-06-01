@@ -25,7 +25,7 @@ use super::fixtures::{
     EsScenario, academy, barracks, deployed_units, granary, home_units,
     insert_corrupt_scheduled_action, main_building, marketplace, process_due_until, rally_point,
     refill_resources, research_and_complete, resources, scheduled_action_status_count,
-    setup_village, smithy, stationed_units, train_and_complete, village_busy_merchants,
+    setup_village, smithy, stationed_units, test_server_speed, train_and_complete, village_busy_merchants,
     village_owner, village_stocks, warehouse, with_test_pool,
 };
 
@@ -536,7 +536,7 @@ async fn village_es_service_schedules_and_completes_merchant_trip() {
                     target_village_id,
                     resources: send,
                     arrives_at: chrono::Utc::now() + chrono::Duration::minutes(5),
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await
@@ -890,7 +890,7 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -1006,7 +1006,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
             player_id,
             army: arriving_army,
             attack_type: AttackType::Normal,
-            catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+            catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
             arrives_at,
             returns_at,
         };
@@ -1160,7 +1160,7 @@ async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_a
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -1236,7 +1236,7 @@ async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Raid,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::MainBuilding],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::MainBuilding)],
                     arrives_at,
                     returns_at,
                 },
@@ -1363,7 +1363,7 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -1465,7 +1465,7 @@ async fn village_es_service_attack_bounty_respects_source_capacity() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Raid,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -1659,7 +1659,7 @@ async fn village_es_service_conquer_is_blocked_without_expansion_prerequisites()
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at: now + chrono::Duration::seconds(2),
                     returns_at: now + chrono::Duration::seconds(5),
                 },
@@ -1793,7 +1793,7 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at: first_now + chrono::Duration::seconds(2),
                     returns_at: first_now + chrono::Duration::seconds(4),
                 },
@@ -1825,7 +1825,7 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at: second_now + chrono::Duration::seconds(2),
                     returns_at: second_now + chrono::Duration::seconds(4),
                 },
@@ -1850,8 +1850,7 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
 async fn village_es_service_loyalty_regenerates_with_residence_over_time() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        let action_repo = PostgresScheduledActionRepository::new(pool.clone());
-        let (_user_id, player_id, village_id) = setup_village(
+        let (_user_id, _player_id, village_id) = setup_village(
             &pool,
             &service,
             "Loyalty Regen",
@@ -1872,58 +1871,89 @@ async fn village_es_service_loyalty_regenerates_with_residence_over_time() {
         )
         .await;
 
-        sqlx::query("UPDATE rm_village SET loyalty = 80 WHERE village_id = $1")
+        let speed = (test_server_speed() as i64).max(1);
+        let tick_secs = ((3 * 3600) / speed).max(1) + 60;
+        sqlx::query(
+            "UPDATE rm_village
+             SET loyalty = 80, loyalty_updated_at = NOW() - ($2::bigint * INTERVAL '1 second')
+             WHERE village_id = $1",
+        )
             .bind(village_id as i32)
+            .bind(tick_secs)
             .execute(&pool)
             .await
             .unwrap();
 
-        let action_id = Uuid::new_v4();
-        let execute_at = chrono::Utc::now();
-        let payload = ScheduledActionPayload::LoyaltyRegen {
-            action_id,
-            village_id,
-            player_id,
-            execute_at,
-        };
-        action_repo
-            .add(&ScheduledAction {
-                id: action_id,
-                action_type: payload.action_type(),
-                execute_at,
-                payload: serde_json::to_value(payload).unwrap(),
-                status: ScheduledActionStatus::Pending,
-            })
-            .await
-            .unwrap();
+        let after_read = service.get_village(village_id).await.unwrap();
+        assert_eq!(after_read.loyalty, 82);
+    })
+    .await;
+}
 
-        let pending_regen = service
-            .get_village_scheduled_action_status_count(
-                village_id,
-                models::ScheduledActionType::LoyaltyRegen,
-                ScheduledActionStatus::Pending,
+#[tokio::test]
+async fn village_es_service_loyalty_regen_accelerates_with_higher_residence_level() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_user_id_a, _player_id_a, village_a) = setup_village(
+            &pool,
+            &service,
+            "Loyalty Residence 1",
+            Position { x: 11, y: 11 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(10),
+                VillageBuilding {
+                    slot_id: 22,
+                    building: Building::new(BuildingName::Residence, 1)
+                        .at_level(1, 1)
+                        .unwrap(),
+                },
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+        let (_user_id_b, _player_id_b, village_b) = setup_village(
+            &pool,
+            &service,
+            "Loyalty Residence 5",
+            Position { x: 12, y: 12 },
+            parabellum_types::tribe::Tribe::Roman,
+            vec![
+                main_building(10),
+                VillageBuilding {
+                    slot_id: 22,
+                    building: Building::new(BuildingName::Residence, 1)
+                        .at_level(5, 1)
+                        .unwrap(),
+                },
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let speed = (test_server_speed() as i64).max(1);
+        let tick_secs = ((3 * 3600) / speed).max(1) + 60;
+        for village_id in [village_a, village_b] {
+            sqlx::query(
+                "UPDATE rm_village
+                 SET loyalty = 80, loyalty_updated_at = NOW() - ($2::bigint * INTERVAL '1 second')
+                 WHERE village_id = $1",
             )
+            .bind(village_id as i32)
+            .bind(tick_secs)
+            .execute(&pool)
             .await
             .unwrap();
-        assert_eq!(pending_regen, 1);
+        }
 
-        service
-            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(24), 50)
-            .await
-            .unwrap();
-
-        let after_tick = service.get_village(village_id).await.unwrap();
-        assert_eq!(after_tick.loyalty, 82);
-
-        let pending_next = service
-            .get_village_scheduled_action_status_count(
-                village_id,
-                models::ScheduledActionType::LoyaltyRegen,
-                ScheduledActionStatus::Pending,
-            )
-            .await
-            .unwrap();
-        assert_eq!(pending_next, 1);
+        let low_level = service.get_village(village_a).await.unwrap();
+        let high_level = service.get_village(village_b).await.unwrap();
+        assert_eq!(low_level.loyalty, 82, "residence level 1 should regen +2 per tick");
+        assert_eq!(high_level.loyalty, 90, "residence level 5 should regen +10 per tick");
     })
     .await;
 }

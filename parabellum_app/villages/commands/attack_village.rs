@@ -20,7 +20,7 @@ pub struct AttackVillage {
     pub units: TroopSet,
     pub hero_id: Option<Uuid>,
     pub attack_type: AttackType,
-    pub catapult_targets: [BuildingName; 2],
+    pub catapult_targets: [Option<BuildingName>; 2],
     pub arrives_at: DateTime<Utc>,
     pub returns_at: DateTime<Utc>,
 }

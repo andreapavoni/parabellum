@@ -20,6 +20,7 @@ use parabellum_app::read_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::village::Village;
 use parabellum_types::map::ValleyTopology;
+use parabellum_types::buildings::BuildingName;
 
 use crate::{
     api::{
@@ -165,6 +166,15 @@ pub struct MapFieldDetailResponse {
     pub valley: Option<ValleyDistribution>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oasis: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oasis_bonus: Option<ValleyDistribution>,
+    pub can_preview_founding: bool,
+    pub has_marketplace: bool,
+    pub has_rally_point: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub marketplace_slot_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rally_point_slot_id: Option<u8>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -616,7 +626,7 @@ pub async fn map_field(
     headers: HeaderMap,
     Path(field_id): Path<u32>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let _user = authenticated_user(&state, &headers).await?;
+    let user = authenticated_user(&state, &headers).await?;
     let field = state
         .game_app
         .get_map_field(field_id)
@@ -628,16 +638,82 @@ pub async fn map_field(
         .await
         .map_err(|err| map_application_error("unable_to_load_map_field_tile", err))?;
 
-    let (tile_type, valley, oasis) = match field.topology {
-        MapFieldTopology::Oasis(variant) => (TileType::Oasis, None, Some(format!("{variant:?}"))),
+    let (tile_type, valley, oasis, oasis_bonus) = match field.topology {
+        MapFieldTopology::Oasis(variant) => {
+            let (lumber, clay, iron, crop) = match variant {
+                parabellum_types::map::OasisTopology::Lumber => (25, 0, 0, 0),
+                parabellum_types::map::OasisTopology::LumberCrop => (25, 0, 0, 25),
+                parabellum_types::map::OasisTopology::Clay => (0, 25, 0, 0),
+                parabellum_types::map::OasisTopology::ClayCrop => (0, 25, 0, 25),
+                parabellum_types::map::OasisTopology::Iron => (0, 0, 25, 0),
+                parabellum_types::map::OasisTopology::IronCrop => (0, 0, 25, 25),
+                parabellum_types::map::OasisTopology::Crop => (0, 0, 0, 25),
+                parabellum_types::map::OasisTopology::Crop50 => (0, 0, 0, 50),
+            };
+            (
+                TileType::Oasis,
+                None,
+                Some(format!("{variant:?}")),
+                Some(ValleyDistribution {
+                    lumber,
+                    clay,
+                    iron,
+                    crop,
+                }),
+            )
+        }
         MapFieldTopology::Valley(valley) => {
             let tile_type = if field.village_id.is_some() {
                 TileType::Village
             } else {
                 TileType::Valley
             };
-            (tile_type, Some(valley.into()), None)
+            (tile_type, Some(valley.into()), None, None)
         }
+    };
+
+    let marketplace_slot = user.village.get_building_by_name(&BuildingName::Marketplace);
+    let rally_point_slot = user.village.get_building_by_name(&BuildingName::RallyPoint);
+    let has_marketplace = marketplace_slot.is_some();
+    let has_rally_point = rally_point_slot.is_some();
+
+    let can_preview_founding = if matches!(tile_type, TileType::Valley) && field.village_id.is_none() {
+        let settlers_ready = user.village.count_settlers_at_home() >= 3;
+        let has_rally = has_rally_point;
+        let has_resources = user
+            .village
+            .has_enough_resources(&parabellum_types::common::ResourceGroup::new(800, 800, 800, 800));
+        let expansion_info = state
+            .game_app
+            .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
+            .await
+            .ok();
+        let cp_ok = expansion_info
+            .as_ref()
+            .map(|info| info.player_culture_points >= info.next_cp_required)
+            .unwrap_or(false);
+        let owned_villages = state
+            .game_app
+            .list_villages_by_player_id(user.player.id)
+            .await
+            .ok();
+        let child_villages_count = owned_villages
+            .as_ref()
+            .map(|villages| {
+                villages
+                    .iter()
+                    .filter(|v| v.parent_village_id == Some(user.village.id))
+                    .count() as u8
+            })
+            .unwrap_or(0);
+        let free_slot = user
+            .village
+            .max_foundation_slots()
+            .saturating_sub(child_villages_count)
+            > 0;
+        settlers_ready && has_rally && has_resources && cp_ok && free_slot
+    } else {
+        false
     };
 
     Ok(Json(MapFieldDetailResponse {
@@ -653,6 +729,12 @@ pub async fn map_field(
         is_capital: region_tile.as_ref().and_then(|t| t.is_capital),
         valley,
         oasis,
+        oasis_bonus,
+        can_preview_founding,
+        has_marketplace,
+        has_rally_point,
+        marketplace_slot_id: marketplace_slot.map(|slot| slot.slot_id),
+        rally_point_slot_id: rally_point_slot.map(|slot| slot.slot_id),
     }))
 }
 

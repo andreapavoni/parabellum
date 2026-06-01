@@ -192,9 +192,13 @@ pub struct CurrentTroopDto {
 #[serde(rename_all = "camelCase")]
 pub struct TroopMovementSummaryDto {
     pub incoming_attacks_raids: usize,
+    pub incoming_attacks_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
     pub incoming_returns_reinforcements: usize,
+    pub incoming_returns_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
     pub outgoing_attacks_raids: usize,
+    pub outgoing_attacks_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
     pub outgoing_reinforcements: usize,
+    pub outgoing_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -601,41 +605,39 @@ pub fn village_resources_response(
 ) -> VillageResourcesResponse {
     use parabellum_app::ports::queries::TroopMovementType;
     let queue_views = building_queue_to_views(&queues.building);
-    let incoming_attacks_raids = movements
-        .incoming
-        .iter()
-        .filter(|movement| {
-            matches!(
-                movement.movement_type,
-                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
-            )
-        })
-        .count();
-    let incoming_returns_reinforcements = movements
-        .incoming
-        .iter()
-        .filter(|movement| {
-            matches!(
-                movement.movement_type,
-                TroopMovementType::Return | TroopMovementType::Reinforcement
-            )
-        })
-        .count();
-    let outgoing_attacks_raids = movements
-        .outgoing
-        .iter()
-        .filter(|movement| {
-            matches!(
-                movement.movement_type,
-                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
-            )
-        })
-        .count();
-    let outgoing_reinforcements = movements
-        .outgoing
-        .iter()
-        .filter(|movement| movement.movement_type == TroopMovementType::Reinforcement)
-        .count();
+    let summarize = |items: &[parabellum_app::ports::queries::TroopMovement],
+                     predicate: fn(TroopMovementType) -> bool| {
+        let mut count = 0usize;
+        let mut next_at: Option<chrono::DateTime<chrono::Utc>> = None;
+        for movement in items {
+            if predicate(movement.movement_type) {
+                count += 1;
+                next_at = match next_at {
+                    Some(current) => Some(std::cmp::min(current, movement.arrives_at)),
+                    None => Some(movement.arrives_at),
+                };
+            }
+        }
+        (count, next_at)
+    };
+    let (incoming_attacks_raids, incoming_attacks_raids_next_at) = summarize(
+        &movements.incoming,
+        |kind| matches!(kind, TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout),
+    );
+    let (
+        incoming_returns_reinforcements,
+        incoming_returns_reinforcements_next_at,
+    ) = summarize(&movements.incoming, |kind| {
+        matches!(kind, TroopMovementType::Return | TroopMovementType::Reinforcement)
+    });
+    let (outgoing_attacks_raids, outgoing_attacks_raids_next_at) = summarize(
+        &movements.outgoing,
+        |kind| matches!(kind, TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout),
+    );
+    let (outgoing_reinforcements, outgoing_reinforcements_next_at) = summarize(
+        &movements.outgoing,
+        |kind| kind == TroopMovementType::Reinforcement,
+    );
     VillageResourcesResponse {
         server_time: Utc::now().timestamp(),
         village: village_summary(village),
@@ -644,9 +646,13 @@ pub fn village_resources_response(
         current_troops: current_troops(army_state),
         troop_movement_summary: TroopMovementSummaryDto {
             incoming_attacks_raids,
+            incoming_attacks_raids_next_at,
             incoming_returns_reinforcements,
+            incoming_returns_reinforcements_next_at,
             outgoing_attacks_raids,
+            outgoing_attacks_raids_next_at,
             outgoing_reinforcements,
+            outgoing_reinforcements_next_at,
         },
     }
 }

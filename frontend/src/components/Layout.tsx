@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { MeContextResponse, SessionResponse, VillageListItem } from "@/types/api";
 import { CapitalBadge } from "@/components/CapitalBadge";
+import { ResourceSprite, type ResourceSpriteKind } from "@/components/ResourceSprite";
 import { api } from "@/lib/api";
 import { Link } from "./Link";
 
@@ -14,8 +15,13 @@ type LayoutProps = {
   children: ComponentChildren;
 };
 
-function resourceLabel(value: number, capacity: number, icon: string) {
-  return `${icon} ${value}/${capacity}`;
+function resourceLabel(value: number, capacity: number, kind: ResourceSpriteKind, label: string) {
+  return (
+    <span class="inline-flex items-center gap-1">
+      <ResourceSprite kind={kind} size={14} label={label} />
+      {value}/{capacity}
+    </span>
+  );
 }
 
 type LiveResources = {
@@ -112,7 +118,7 @@ export function Layout(props: LayoutProps) {
   const isGuestHome = !player && props.active === "home";
   const showVillageSwitcher =
     Boolean(player) &&
-    (props.active === "village" || props.active === "building") &&
+    (props.active === "village" || props.active === "building" || props.active === "resources") &&
     villages.length > 0;
 
   return (
@@ -134,7 +140,7 @@ export function Layout(props: LayoutProps) {
             </div>
 
             <div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
-              <NavIcon active={props.active === "resources"} to="/resources" label="🌾" />
+              <NavIcon active={props.active === "resources"} to="/resources" label={<ResourceSprite kind="crop" size={16} label="Resources" />} />
               <NavIcon active={props.active === "village"} to="/village" label="🏠" />
               <NavIcon active={props.active === "map"} to="/map" label="🗺️" />
               <NavIcon active={props.active === "stats"} to="/stats" label="📊" />
@@ -151,10 +157,10 @@ export function Layout(props: LayoutProps) {
 
             {village ? (
               <div class="flex justify-center items-center py-2 bg-white flex-wrap px-2">
-                <div class="res-item">{resourceLabel(Math.floor(liveResources?.lumber ?? village.resources.lumber), village.warehouseCapacity, "🌲")}</div>
-                <div class="res-item">{resourceLabel(Math.floor(liveResources?.clay ?? village.resources.clay), village.warehouseCapacity, "🧱")}</div>
-                <div class="res-item">{resourceLabel(Math.floor(liveResources?.iron ?? village.resources.iron), village.warehouseCapacity, "⛏️")}</div>
-                <div class="res-item">{resourceLabel(Math.floor(liveResources?.crop ?? village.resources.crop), village.granaryCapacity, "🌾")}</div>
+                <div class="res-item">{resourceLabel(Math.floor(liveResources?.lumber ?? village.resources.lumber), village.warehouseCapacity, "lumber", "Lumber")}</div>
+                <div class="res-item">{resourceLabel(Math.floor(liveResources?.clay ?? village.resources.clay), village.warehouseCapacity, "clay", "Clay")}</div>
+                <div class="res-item">{resourceLabel(Math.floor(liveResources?.iron ?? village.resources.iron), village.warehouseCapacity, "iron", "Iron")}</div>
+                <div class="res-item">{resourceLabel(Math.floor(liveResources?.crop ?? village.resources.crop), village.granaryCapacity, "crop", "Crop")}</div>
                 <div class="res-item">👤 {village.population}</div>
                 {village.isCapital ? <div class="res-item">🏛️ Capital</div> : null}
               </div>
@@ -218,7 +224,7 @@ function NavIcon({
   active: boolean;
   alert?: boolean;
   to: string;
-  label: string;
+  label: ComponentChildren;
 }) {
   const className = [
     "nav-icon",
@@ -241,11 +247,17 @@ function VillagesList({
   villages: VillageListItem[];
   onSwitchVillage: (villageId: number) => void;
 }) {
+  const villagesByName = [...villages].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    if (byName !== 0) return byName;
+    return a.id - b.id;
+  });
+
   return (
     <div class="w-full max-w-[400px] md:w-56 border-t border-gray-200 md:border-none pt-4 md:pt-0">
       <h3 class="font-bold mb-3 text-sm border-b border-gray-300 pb-2">Villages:</h3>
       <ul class="text-xs space-y-2 list-none pl-0">
-        {villages.map((village) => (
+        {villagesByName.map((village) => (
           <li
             key={village.id}
             class={

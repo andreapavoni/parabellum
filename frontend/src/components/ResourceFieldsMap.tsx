@@ -1,5 +1,6 @@
 import type { ResourceSlot } from "@/types/api";
 import { buildingLabel } from "@/lib/labels";
+import { BuildingSprite } from "@/components/BuildingSprite";
 import { navigate, shouldUseClientNavigation } from "@/lib/router";
 
 const hexPositions = [
@@ -92,9 +93,13 @@ export function ResourceFieldsMap({ slots }: { slots: ResourceSlot[] }) {
                 transform={`translate(${tx}, ${ty})`}
               >
                 <use href="#hex-shape" fill={hexColor(slot.buildingName)} stroke="none" />
-                <text x="0" y="5" text-anchor="middle">
-                  {slot.level}
-                </text>
+                {slot.buildingName ? (
+                  <foreignObject x="-32" y="-32" width="64" height="64">
+                    <div class="pointer-events-none">
+                      <BuildingSprite buildingName={slot.buildingName} size={64} label={buildingLabel(slot.buildingName)} />
+                    </div>
+                  </foreignObject>
+                ) : null}
                 <title>
                   {buildingLabel(slot.buildingName)} (Level {slot.level})
                 </title>

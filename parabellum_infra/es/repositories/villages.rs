@@ -64,6 +64,10 @@ impl PostgresVillageRepository {
                 deployed_armies = $18,
                 total_merchants = $19,
                 busy_merchants = $20,
+                loyalty_updated_at = CASE
+                    WHEN loyalty <> $10 THEN NOW()
+                    ELSE loyalty_updated_at
+                END,
                 updated_at = NOW()
             WHERE village_id = $1
             "#,
@@ -245,6 +249,27 @@ impl PostgresVillageRepository {
         refreshed.population = hydrated.population;
         refreshed.culture_points_production = hydrated.culture_points_production;
         refreshed.total_merchants = hydrated.total_merchants;
+        let residence_or_palace_level = refreshed
+            .buildings
+            .iter()
+            .filter(|b| {
+                matches!(
+                    b.building.name,
+                    BuildingName::Residence | BuildingName::Palace
+                )
+            })
+            .map(|b| b.building.level)
+            .max()
+            .unwrap_or(0);
+        if refreshed.loyalty < 100 && residence_or_palace_level > 0 {
+            let elapsed_secs = (chrono::Utc::now() - refreshed.loyalty_updated_at).num_seconds();
+            if elapsed_secs > 0 {
+                let speed = (parabellum_app::config::Config::from_env().speed as f64).max(1.0);
+                let rate_per_sec = (2.0 * residence_or_palace_level as f64 * speed) / (3.0 * 3600.0);
+                let gained = (elapsed_secs as f64 * rate_per_sec).floor() as u8;
+                refreshed.loyalty = refreshed.loyalty.saturating_add(gained).min(100);
+            }
+        }
         // Busy merchants are operational state managed by movement/marketplace flows,
         // and `Village::from_persistence` resets it to zero internally.
         // Preserve the persisted value from the read model.
@@ -272,7 +297,7 @@ impl PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -395,7 +420,7 @@ impl PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -432,6 +457,7 @@ struct DbVillageModelRow {
     deployed_armies: Json<Vec<Army>>,
     total_merchants: i16,
     busy_merchants: i16,
+    loyalty_updated_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -456,6 +482,7 @@ impl TryFrom<DbVillageModelRow> for VillageModel {
             academy_research: value.academy_research.0,
             total_merchants: value.total_merchants as u8,
             busy_merchants: value.busy_merchants as u8,
+            loyalty_updated_at: value.loyalty_updated_at,
             updated_at: value.updated_at,
             parent_village_id: value.parent_village_id.map(|v| v as u32),
             army: value.army.0,
@@ -509,7 +536,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE player_id = $1
             ORDER BY village_id ASC
@@ -541,7 +568,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = ANY($1)
             ORDER BY village_id ASC
@@ -626,12 +653,12 @@ impl VillageRepository for PostgresVillageRepository {
             INSERT INTO rm_village (
                 village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                 population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                army, reinforcements, deployed_armies, total_merchants, busy_merchants
+                army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8,
                 $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20
+                $16, $17, $18, $19, $20, NOW()
             )
             ON CONFLICT (village_id)
             DO UPDATE SET
@@ -654,6 +681,7 @@ impl VillageRepository for PostgresVillageRepository {
                 deployed_armies = EXCLUDED.deployed_armies,
                 total_merchants = EXCLUDED.total_merchants,
                 busy_merchants = EXCLUDED.busy_merchants,
+                loyalty_updated_at = EXCLUDED.loyalty_updated_at,
                 updated_at = NOW()
             "#,
         )
@@ -775,7 +803,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -938,7 +966,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, updated_at
+                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,

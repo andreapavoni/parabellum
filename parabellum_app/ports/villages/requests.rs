@@ -22,6 +22,13 @@ pub struct UpgradeBuildingRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct RenameVillageRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub village_name: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct TrainUnitsRequest {
     pub player_id: Uuid,
     pub village_id: u32,
@@ -61,7 +68,7 @@ pub struct SendAttackRequest {
     pub units: TroopSet,
     pub hero_id: Option<Uuid>,
     pub attack_type: AttackType,
-    pub catapult_targets: [BuildingName; 2],
+    pub catapult_targets: [Option<BuildingName>; 2],
 }
 
 #[derive(Debug, Clone)]

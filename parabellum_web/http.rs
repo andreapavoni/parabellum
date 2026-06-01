@@ -22,8 +22,9 @@ use crate::{
     api::{
         actions::{
             accept_marketplace_offer, add_building, cancel_marketplace_offer,
-            create_marketplace_offer, found_village, preview_found_village, preview_troops,
-            recall_troops, release_reinforcements, research_academy, research_smithy,
+            create_marketplace_offer, found_village, preview_found_village, preview_send_resources,
+            preview_troops,
+            recall_troops, release_reinforcements, rename_village, research_academy, research_smithy,
             send_resources, send_troops, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
@@ -93,12 +94,14 @@ impl WebRouter {
             .route("/me/village/current", post(switch_village))
             .route("/buildings/add", post(add_building))
             .route("/buildings/upgrade", post(upgrade_building))
+            .route("/villages/rename", post(rename_village))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))
             .route("/army/preview", post(preview_troops))
             .route("/army/recall", post(recall_troops))
             .route("/army/release", post(release_reinforcements))
             .route("/marketplace/send", post(send_resources))
+            .route("/marketplace/send/preview", post(preview_send_resources))
             .route("/marketplace/offers", post(create_marketplace_offer))
             .route(
                 "/marketplace/offers/{offer_id}/accept",

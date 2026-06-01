@@ -16,7 +16,7 @@ use crate::es::VillageEsService;
 use super::fixtures::{
     EsScenario, academy, barracks, deployed_units, granary, main_building, process_due_until,
     rally_point, research_and_complete, resources, setup_village, setup_village_for_player,
-    train_and_complete, warehouse, with_test_pool,
+    test_server_speed, train_and_complete, warehouse, with_test_pool,
 };
 
 #[tokio::test]
@@ -78,7 +78,7 @@ async fn village_es_service_attack_projects_single_audience_report_for_same_play
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -171,7 +171,7 @@ async fn village_es_service_attack_projects_two_audiences_for_cross_player() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -341,7 +341,7 @@ async fn village_es_service_attack_projects_reinforcement_owner_audience() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -454,7 +454,7 @@ async fn village_es_service_reports_query_and_mark_read_use_rm_tables() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at,
                     returns_at,
                 },
@@ -574,7 +574,7 @@ async fn village_es_service_reinforcement_and_merchant_reports_are_projected() {
                     target_village_id,
                     resources: ResourceGroup::new(200, 50, 25, 10),
                     arrives_at: merchants_arrive_at,
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await

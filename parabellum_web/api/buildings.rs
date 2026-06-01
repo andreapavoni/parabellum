@@ -121,9 +121,6 @@ pub struct ExpansionDetailDto {
     pub next_cp_required: u32,
     pub max_foundation_slots: u8,
     pub child_villages_count: u32,
-    pub settlers_at_home: u32,
-    pub settlers_deployed: u32,
-    pub max_settlers_trainable: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -622,35 +619,6 @@ pub async fn building_detail(
                     (chiefs_moving, settlers_moving),
                 );
                 let training_queue = training_queue_for_slot(slot_id, &queues.training);
-                let settler_idx = user
-                    .village
-                    .tribe
-                    .get_unit_idx_by_name(&UnitName::Settler)
-                    .unwrap_or(9);
-                let army_state = state
-                    .game_app
-                    .get_village_army_state_view(user.village.id)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_village_army_state", err)
-                    })?;
-                let settlers_at_home = army_state
-                    .home_army
-                    .as_ref()
-                    .map(|a| a.units().get(settler_idx))
-                    .unwrap_or(0);
-                let settlers_deployed: u32 = army_state
-                    .deployed_armies
-                    .iter()
-                    .map(|army| army.units().get(settler_idx))
-                    .sum();
-                let max_settlers_trainable = if available_slots > 0 {
-                    (available_slots as u32 * 3)
-                        .saturating_sub(settlers_at_home + settlers_deployed)
-                } else {
-                    0
-                };
-
                 BuildingDetailDto {
                     slot_id,
                     village_id: user.village.id,
@@ -681,9 +649,6 @@ pub async fn building_detail(
                         next_cp_required,
                         max_foundation_slots: max_slots,
                         child_villages_count,
-                        settlers_at_home,
-                        settlers_deployed,
-                        max_settlers_trainable,
                     }),
                     academy: None,
                     smithy: None,

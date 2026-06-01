@@ -16,7 +16,7 @@ use crate::es::{ReplayMode, ReplayRequest, ReplayService, ReplayTarget, VillageE
 use super::fixtures::{
     EsScenario, academy, deployed_units, granary, insert_corrupt_scheduled_action, main_building,
     marketplace, refill_resources, research_and_complete, resources, scheduled_action_status_count,
-    stationed_units, train_and_complete, warehouse, with_test_pool,
+    stationed_units, test_server_speed, train_and_complete, warehouse, with_test_pool,
 };
 
 #[tokio::test]
@@ -282,7 +282,7 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await
@@ -465,7 +465,7 @@ async fn replay_full_mode_is_idempotent_for_attack_outcome_window() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at: now + chrono::Duration::seconds(2),
                     returns_at: now + chrono::Duration::seconds(5),
                 },

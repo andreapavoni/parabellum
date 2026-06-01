@@ -65,6 +65,9 @@ pub enum GameError {
     #[error("Village {village_id} is already founded")]
     VillageAlreadyFounded { village_id: u32 },
 
+    #[error("Village name must be between 1 and 32 characters")]
+    InvalidVillageName,
+
     #[error("Village {village_id} cannot target itself")]
     VillageCannotTargetItself { village_id: u32 },
 

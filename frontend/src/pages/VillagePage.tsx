@@ -2,13 +2,16 @@ import type { VillageOverviewResponse } from "@/types/api";
 import { CapitalBadge } from "@/components/CapitalBadge";
 import { QueueList } from "@/components/QueueList";
 import { VillageMap } from "@/components/VillageMap";
+import { VillageRenameInline } from "@/components/VillageRenameInline";
 
 export function VillagePage({
   data,
   onQueueElapsed,
+  onVillageRenamed,
 }: {
   data: VillageOverviewResponse;
   onQueueElapsed?: () => void;
+  onVillageRenamed?: () => Promise<void> | void;
 }) {
   return (
     <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col items-center gap-8 pb-12">
@@ -17,6 +20,11 @@ export function VillagePage({
           {data.village.name} ({data.village.x}|{data.village.y})
           {data.village.isCapital ? <CapitalBadge /> : null}
         </h1>
+        <VillageRenameInline
+          villageId={data.village.id}
+          currentName={data.village.name}
+          onRenamed={onVillageRenamed}
+        />
         <div class="w-full mb-3">
           <span class="text-xs text-gray-600">Loyalty: </span>
           <span

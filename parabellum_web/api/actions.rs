@@ -20,6 +20,7 @@ use parabellum_app::ports::villages::{
     CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
+    RenameVillageRequest as RenameVillageUseCaseRequest,
     ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
     ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
     SendAttackRequest as SendAttackUseCaseRequest,
@@ -67,6 +68,14 @@ pub struct AddBuildingRequest {
 /// Payload for upgrading a building by slot.
 pub struct UpgradeBuildingRequest {
     pub slot_id: u8,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for village rename action.
+pub struct RenameVillageRequest {
+    pub village_id: u32,
+    pub village_name: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -159,7 +168,14 @@ pub struct SendTroopsRequest {
     pub units: Vec<i32>,
     pub scouting_target: Option<ScoutingTargetKind>,
     #[schema(value_type = Option<Vec<String>>)]
-    pub catapult_targets: Option<Vec<BuildingName>>,
+    pub catapult_targets: Option<Vec<CatapultTargetInput>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum CatapultTargetInput {
+    Building(BuildingName),
+    Text(String),
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -201,6 +217,18 @@ pub struct PreviewTroopsRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct PreviewSendResourcesRequest {
+    pub slot_id: u8,
+    pub target_x: i32,
+    pub target_y: i32,
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PreviewFoundVillageRequest {
     pub target_x: i32,
     pub target_y: i32,
@@ -223,6 +251,13 @@ pub enum PreviewDetectedKind {
     ScoutOnly,
     Reinforcement,
     FoundVillage,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendResourcesPreviewResponse {
+    #[schema(value_type = String)]
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Starts a building construction job on an empty slot.
@@ -275,6 +310,32 @@ pub async fn upgrade_building(
             player_id: user.player.id,
             village_id: user.village.id,
             slot_id: payload.slot_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+/// Renames an owned village.
+#[utoipa::path(
+    post,
+    path = "/villages/rename",
+    request_body = RenameVillageRequest,
+    responses((status = 200, body = ActionResponse))
+)]
+pub async fn rename_village(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<RenameVillageRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    state
+        .game_app
+        .rename_village(RenameVillageUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            village_name: payload.village_name,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;
@@ -416,6 +477,44 @@ pub async fn send_resources(
         .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/marketplace/send/preview",
+    request_body = PreviewSendResourcesRequest,
+    responses((status = 200, body = SendResourcesPreviewResponse))
+)]
+pub async fn preview_send_resources(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewSendResourcesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    ensure_slot(payload.slot_id)?;
+    ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Marketplace)?;
+
+    let total_resources = payload.lumber + payload.clay + payload.iron + payload.crop;
+    if total_resources == 0 {
+        return Err(ApiError::unprocessable("At least one resource amount must be greater than zero"));
+    }
+
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let merchant_speed = ((user.village.tribe.merchant_stats().speed as u32) * state.server_speed as u32)
+        .min(u8::MAX as u32) as u8;
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position,
+        merchant_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    Ok(Json(SendResourcesPreviewResponse { arrives_at }))
 }
 
 /// Creates a marketplace offer from current village.
@@ -895,14 +994,32 @@ fn parse_troop_set(values: &[i32]) -> Result<TroopSet, ApiError> {
 }
 
 fn parse_catapult_targets(
-    targets: Option<Vec<BuildingName>>,
-) -> Result<[BuildingName; 2], ApiError> {
+    targets: Option<Vec<CatapultTargetInput>>,
+) -> Result<[Option<BuildingName>; 2], ApiError> {
+    let parse_one = |input: &CatapultTargetInput| -> Result<Option<BuildingName>, ApiError> {
+        match input {
+            CatapultTargetInput::Building(name) => Ok(Some(name.clone())),
+            CatapultTargetInput::Text(value) if value.trim().eq_ignore_ascii_case("random") => {
+                Ok(None)
+            }
+            CatapultTargetInput::Text(_) => Err(ApiError::unprocessable(
+                "catapultTargets entries must be a building name or 'random'",
+            )),
+        }
+    };
+
     match targets {
-        None => Ok([BuildingName::MainBuilding, BuildingName::Warehouse]),
-        Some(values) if values.len() == 1 => Ok([values[0].clone(), values[0].clone()]),
-        Some(values) if values.len() == 2 => Ok([values[0].clone(), values[1].clone()]),
+        None => Ok([
+            Some(BuildingName::MainBuilding),
+            Some(BuildingName::Warehouse),
+        ]),
+        Some(values) if values.len() == 1 => {
+            let first = parse_one(&values[0])?;
+            Ok([first.clone(), first])
+        }
+        Some(values) if values.len() == 2 => Ok([parse_one(&values[0])?, parse_one(&values[1])?]),
         Some(_) => Err(ApiError::unprocessable(
-            "catapultTargets must contain 1 or 2 building names",
+            "catapultTargets must contain 1 or 2 entries",
         )),
     }
 }

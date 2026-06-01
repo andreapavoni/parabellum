@@ -102,6 +102,9 @@ impl Aggregate for VillageAggregate {
             VillageEvent::VillageConquered { player_id, .. } => {
                 self.village.village.player_id = *player_id;
             }
+            VillageEvent::VillageRenamed { village_name, .. } => {
+                self.village.village.name = village_name.clone();
+            }
             VillageEvent::VillageResourcesSet { resources, .. } => {
                 self.village.set_resources(resources.clone());
             }
@@ -141,9 +144,6 @@ impl Aggregate for VillageAggregate {
                     .unwrap_or_else(|| Army::new_village_army(&self.village.village));
                 home_army.set_hero(Some(hero.clone()));
                 let _ = self.village.village.set_army(Some(&home_army));
-            }
-            VillageEvent::LoyaltyRegenerated { loyalty_after, .. } => {
-                self.village.village.regenerate_loyalty_to(*loyalty_after);
             }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}

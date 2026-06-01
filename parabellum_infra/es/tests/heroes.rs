@@ -736,7 +736,7 @@ async fn village_es_service_attack_with_hero_returns_hero_home() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: Some(hero_id),
                     attack_type: AttackType::Normal,
-                    catapult_targets: [BuildingName::MainBuilding, BuildingName::Warehouse],
+                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
                     arrives_at: now + Duration::seconds(2),
                     returns_at: now + Duration::seconds(4),
                 },

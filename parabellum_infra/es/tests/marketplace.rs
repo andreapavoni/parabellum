@@ -10,7 +10,8 @@ use parabellum_types::{
 use crate::es::VillageEsService;
 
 use super::fixtures::{
-    granary, main_building, marketplace, resources, setup_village, warehouse, with_test_pool,
+    granary, main_building, marketplace, resources, setup_village, test_server_speed, warehouse,
+    with_test_pool,
 };
 
 #[tokio::test]
@@ -73,7 +74,7 @@ async fn village_es_service_marketplace_offer_create_accept_flow() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Lumber, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await
@@ -167,7 +168,7 @@ async fn village_es_service_marketplace_offer_create_cancel_flow() {
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Clay, 1_200),
                     seek_resources: ResourceQuantity::new(ResourceKind::Iron, 900),
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await
@@ -264,7 +265,7 @@ async fn village_es_service_marketplace_offer_accept_closes_offer_and_rejects_ca
                     player_id: owner_player_id,
                     offer_resources: ResourceQuantity::new(ResourceKind::Iron, 1_000),
                     seek_resources: ResourceQuantity::new(ResourceKind::Crop, 900),
-                    speed: parabellum_app::config::Config::from_env().speed,
+                    speed: test_server_speed(),
                 },
             )
             .await

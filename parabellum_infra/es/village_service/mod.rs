@@ -41,9 +41,9 @@ use parabellum_app::villages::repositories::{
 use parabellum_app::villages::{
     AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer, CreateHero,
     CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero,
-    ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources,
-    TrainUnits, UpgradeBuilding, VillageService,
+    ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle,
+    ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
+    SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
 };
 use parabellum_game::models::map::MapField;
 use parabellum_game::models::marketplace::MarketplaceOffer;
@@ -324,6 +324,17 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.upgrade_building(village_id, command).await
+    }
+
+    /// Renames a village for its owner.
+    pub async fn rename_village(
+        &self,
+        village_id: u32,
+        command: &RenameVillage,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.rename_village(village_id, command).await
     }
 
     pub async fn downgrade_building(
@@ -663,7 +674,6 @@ impl VillageEsService {
                 "requeued failed smithy actions to pending"
             );
         }
-
         let actions = repo
             .take_due_pending(before_or_equal, limit)
             .await

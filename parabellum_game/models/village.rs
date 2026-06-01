@@ -839,7 +839,11 @@ impl Village {
             && let Some(mut home_army) = self.army.take()
         {
             home_army.apply_battle_report(defender_report);
-            self.army = Some(home_army);
+            self.army = if home_army.immensity() > 0 {
+                Some(home_army)
+            } else {
+                None
+            };
         }
 
         for report in &report.reinforcements {
@@ -853,6 +857,7 @@ impl Village {
                 let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
             }
         }
+        self.reinforcements.retain(|army| army.immensity() > 0);
         self.update_state();
 
         // Building damages
@@ -869,15 +874,27 @@ impl Village {
         // Catapult damages to other buildings
         for damage_report in &report.catapult_damage {
             if damage_report.level_after < damage_report.level_before
-                && let Some(target) = self.get_building_by_name(&damage_report.name)
+                && let Some(target) = self
+                    .buildings
+                    .iter()
+                    .filter(|b| b.building.name == damage_report.name)
+                    .find(|b| b.building.level == damage_report.level_before)
+                    .or_else(|| {
+                        self.buildings
+                            .iter()
+                            .filter(|b| b.building.name == damage_report.name)
+                            .max_by_key(|b| b.building.level)
+                    })
+                    .cloned()
             {
+                let next_level = damage_report.level_after.min(target.building.level);
                 self.set_building_level_at_slot(
                     target.slot_id,
-                    damage_report.level_after,
+                    next_level,
                     server_speed,
                 )?;
 
-                if damage_report.level_after == 0
+                if next_level == 0
                     && target.building.group != BuildingGroup::Resources
                 {
                     self.remove_building_at_slot(target.slot_id, server_speed)?;
@@ -1129,7 +1146,6 @@ impl Village {
         let time_elapsed = (now - self.updated_at).num_seconds() as f64;
 
         if time_elapsed <= 0.0 {
-            self.updated_at = now;
             return;
         }
 
@@ -1568,6 +1584,52 @@ mod tests {
             v.stocks.crop, 800,
             "Crop should be capped at granary capacity"
         );
+    }
+
+    #[test]
+    fn test_update_resources_x5_elapsed_growth_matches_effective_hourly_production() {
+        let mut v = village_factory(VillageFactoryOptions {
+            server_speed: Some(5),
+            ..Default::default()
+        });
+
+        // Start from empty stocks and simulate exactly one hour elapsed.
+        v.stocks = VillageStocks {
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
+            ..v.stocks
+        };
+        v.updated_at = Utc::now() - Duration::seconds(3600);
+
+        let expected_lumber = v.production.effective.lumber;
+        let expected_clay = v.production.effective.clay;
+        let expected_iron = v.production.effective.iron;
+        let expected_crop = v.production.effective.crop;
+
+        v.update_state();
+
+        assert_eq!(v.stocks.lumber, expected_lumber);
+        assert_eq!(v.stocks.clay, expected_clay);
+        assert_eq!(v.stocks.iron, expected_iron);
+        assert_eq!(v.stocks.crop, expected_crop);
+    }
+
+    #[test]
+    fn test_update_resources_does_not_touch_updated_at_when_elapsed_is_non_positive() {
+        let mut v = village_factory(Default::default());
+        let before_updated_at = Utc::now() + Duration::hours(2);
+        v.updated_at = before_updated_at;
+        let before_stocks = v.stocks.clone();
+
+        v.update_state();
+
+        assert_eq!(v.updated_at, before_updated_at);
+        assert_eq!(v.stocks.lumber, before_stocks.lumber);
+        assert_eq!(v.stocks.clay, before_stocks.clay);
+        assert_eq!(v.stocks.iron, before_stocks.iron);
+        assert_eq!(v.stocks.crop, before_stocks.crop);
     }
 
     #[test]

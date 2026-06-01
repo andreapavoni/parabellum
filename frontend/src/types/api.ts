@@ -112,9 +112,13 @@ export type VillageResourcesResponse = {
   }[];
   troopMovementSummary: {
     incomingAttacksRaids: number;
+    incomingAttacksRaidsNextAt?: string;
     incomingReturnsReinforcements: number;
+    incomingReturnsReinforcementsNextAt?: string;
     outgoingAttacksRaids: number;
+    outgoingAttacksRaidsNextAt?: string;
     outgoingReinforcements: number;
+    outgoingReinforcementsNextAt?: string;
   };
 };
 
@@ -233,6 +237,17 @@ export type MapFieldDetailResponse = {
     crop: number;
   };
   oasis?: string;
+  oasisBonus?: {
+    lumber: number;
+    clay: number;
+    iron: number;
+    crop: number;
+  };
+  canPreviewFounding: boolean;
+  hasMarketplace: boolean;
+  hasRallyPoint: boolean;
+  marketplaceSlotId?: number;
+  rallyPointSlotId?: number;
 };
 
 export type MovementPreviewResponse = {
@@ -240,6 +255,10 @@ export type MovementPreviewResponse = {
   detectedKind: "attack_or_raid" | "scout_only" | "reinforcement" | "found_village";
   supportsScoutingTargetChoice: boolean;
   hasCatapultUnits: boolean;
+};
+
+export type SendResourcesPreviewResponse = {
+  arrivesAt: string;
 };
 
 export type Requirement = {
@@ -352,9 +371,6 @@ export type BuildingDetail = {
     nextCpRequired: number;
     maxFoundationSlots: number;
     childVillagesCount: number;
-    settlersAtHome: number;
-    settlersDeployed: number;
-    maxSettlersTrainable: number;
   };
   academy?: {
     readyUnits: AcademyResearchOption[];

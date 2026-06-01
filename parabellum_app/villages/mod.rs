@@ -12,9 +12,9 @@ pub use aggregate::VillageAggregate;
 pub use commands::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
     CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
-    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
-    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy,
+    ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer,
+    SendReinforcement, SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 pub use events::VillageEvent;
 pub use service::VillageService;

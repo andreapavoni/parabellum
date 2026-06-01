@@ -15,7 +15,6 @@ use parabellum_game::models::village::Village;
 use parabellum_types::army::TroopSet;
 use parabellum_types::battle::AttackType;
 use parabellum_types::common::ResourceGroup;
-use parabellum_types::buildings::BuildingName;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -144,82 +143,6 @@ impl VillageProjector {
             .add_in_tx(tx, action)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
-    }
-
-    fn loyalty_regen_building_level(model: &VillageModel) -> u8 {
-        model
-            .buildings
-            .iter()
-            .filter(|b| {
-                matches!(
-                    b.building.name,
-                    BuildingName::Residence | BuildingName::Palace
-                )
-            })
-            .map(|b| b.building.level)
-            .max()
-            .unwrap_or(0)
-    }
-
-    fn loyalty_regen_interval(speed: i8) -> chrono::Duration {
-        let speed = (speed as i64).max(1);
-        chrono::Duration::seconds(((3 * 60 * 60) / speed).max(1))
-    }
-
-    async fn ensure_loyalty_regen_scheduled_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village: &VillageModel,
-        now: chrono::DateTime<chrono::Utc>,
-        exclude_action_id: Option<Uuid>,
-    ) -> Result<(), CqrsError> {
-        if !self.project_operational_actions || village.loyalty >= 100 {
-            return Ok(());
-        }
-        let building_level = Self::loyalty_regen_building_level(village);
-        if building_level == 0 {
-            return Ok(());
-        }
-        let has_active: bool = sqlx::query_scalar(
-            r#"
-            SELECT EXISTS(
-                SELECT 1
-                FROM rm_scheduled_actions
-                WHERE action_type = 'LoyaltyRegen'
-                  AND (payload->>'village_id')::int = $1
-                  AND status IN ('pending', 'processing')
-                  AND ($2::uuid IS NULL OR id <> $2)
-            )
-            "#,
-        )
-        .bind(village.village_id as i32)
-        .bind(exclude_action_id)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        if has_active {
-            return Ok(());
-        }
-
-        let execute_at = now + Self::loyalty_regen_interval(parabellum_app::config::Config::from_env().speed);
-        let action_id = Uuid::new_v4();
-        let payload = ScheduledActionPayload::LoyaltyRegen {
-            action_id,
-            village_id: village.village_id,
-            player_id: village.player_id,
-            execute_at,
-        };
-        self.add_scheduled_action_in_tx(
-            tx,
-            &ScheduledAction {
-                id: action_id,
-                action_type: payload.action_type(),
-                execute_at,
-                payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                status: ScheduledActionStatus::Pending,
-            },
-        )
-        .await
     }
 
     async fn set_stored_resources_in_tx(
@@ -405,7 +328,7 @@ impl VillageProjector {
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 conquered.player_id = player_id;
                 conquered.parent_village_id = Some(owner_village_id);
-                conquered.loyalty = 100;
+                conquered.loyalty = 0;
                 self.village
                     .replace_village_state_in_tx(tx, &conquered)
                     .await
@@ -1382,10 +1305,15 @@ impl VillageProjector {
                 target_next.production = target_production;
                 target_next.population = target_population;
                 target_next.stocks = target_stocks;
-                target_next.army = target_army;
-                target_next.reinforcements = target_reinforcements;
+                target_next.army = target_army.filter(|army| army.immensity() > 0);
+                target_next.reinforcements = target_reinforcements
+                    .into_iter()
+                    .filter(|army| army.immensity() > 0)
+                    .collect();
                 if let Some(stationed_attacker) = stationed_attacker_army {
-                    target_next.reinforcements.push(stationed_attacker.clone());
+                    if stationed_attacker.immensity() > 0 {
+                        target_next.reinforcements.push(stationed_attacker.clone());
+                    }
                 }
 
                 let mut before_ids: HashSet<Uuid> = HashSet::new();
@@ -1474,13 +1402,6 @@ impl VillageProjector {
                     .replace_village_state_in_tx(tx, &target_next)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                self.ensure_loyalty_regen_scheduled_in_tx(
-                    tx,
-                    &target_next,
-                    chrono::Utc::now(),
-                    None,
-                )
-                    .await?;
 
                 let mut before_by_home: std::collections::HashMap<u32, Vec<uuid::Uuid>> =
                     std::collections::HashMap::new();
@@ -2225,6 +2146,22 @@ impl VillageProjector {
                 self.set_busy_merchants_in_tx(tx, village_id, busy_merchants)
                     .await
             }
+            VillageEvent::VillageRenamed {
+                village_id,
+                village_name,
+                ..
+            } => {
+                let mut village = self
+                    .village
+                    .get_by_village_id_in_tx(tx, village_id)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                village.village_name = village_name.clone();
+                self.village
+                    .replace_village_state_in_tx(tx, &village)
+                    .await
+                    .map_err(|e| CqrsError::EventStore(e.to_string()))
+            }
             VillageEvent::MerchantsArrived { .. } => Ok(()),
             VillageEvent::BuildingAdded {
                 village_id,
@@ -2254,42 +2191,7 @@ impl VillageProjector {
                     .update_building_in_tx(tx, village_id, slot_id, building_name, level, speed)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                let village = self
-                    .village
-                    .get_by_village_id_in_tx(tx, village_id)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                self.ensure_loyalty_regen_scheduled_in_tx(
-                    tx,
-                    &village,
-                    chrono::Utc::now(),
-                    None,
-                )
-                    .await
-            }
-            VillageEvent::LoyaltyRegenerated {
-                action_id,
-                village_id,
-                loyalty_after,
-                ..
-            } => {
-                let mut village = self
-                    .village
-                    .get_by_village_id_in_tx(tx, village_id)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                village.loyalty = loyalty_after;
-                self.village
-                    .replace_village_state_in_tx(tx, &village)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                self.ensure_loyalty_regen_scheduled_in_tx(
-                    tx,
-                    &village,
-                    chrono::Utc::now(),
-                    Some(action_id),
-                )
-                    .await
+                Ok(())
             }
             VillageEvent::ReportMarkedAsRead { .. } => Ok(()),
         }

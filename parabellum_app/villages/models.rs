@@ -30,6 +30,7 @@ pub struct VillageModel {
     pub stocks: VillageStocks,
     pub population: u32,
     pub loyalty: u8,
+    pub loyalty_updated_at: DateTime<Utc>,
     pub is_capital: bool,
     pub culture_points_production: u32,
     pub smithy_upgrades: SmithyUpgrades,
@@ -184,7 +185,6 @@ pub enum ScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
-    LoyaltyRegen,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -232,7 +232,7 @@ pub enum ScheduledActionPayload {
         player_id: Uuid,
         army: Army,
         attack_type: AttackType,
-        catapult_targets: [BuildingName; 2],
+        catapult_targets: [Option<BuildingName>; 2],
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
     },
@@ -336,12 +336,6 @@ pub enum ScheduledActionPayload {
         reset: bool,
         revive_at: DateTime<Utc>,
     },
-    LoyaltyRegen {
-        action_id: Uuid,
-        village_id: u32,
-        player_id: Uuid,
-        execute_at: DateTime<Utc>,
-    },
 }
 
 impl ScheduledActionPayload {
@@ -367,7 +361,6 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
             ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
             ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
-            ScheduledActionPayload::LoyaltyRegen { .. } => ScheduledActionType::LoyaltyRegen,
         }
     }
 }

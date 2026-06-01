@@ -191,7 +191,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Users and Auth**: Login/register/logout, needs password recovery
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 - [x] **Settler Expansion**: Training settlers, tracking culture points, founding new villages.
-- [x] **i18n System**: builtin i18n support (actually only English for now).
+- [x] **Chief Expansion**: Battle calculation for loyalty and conquest
 
 ### In Progress
 **API / UI**: Getting the minimal viable views to navigate the game:
@@ -224,6 +224,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] Map
 
 ### ToDo (Not Started)
+- [ ] **i18n System**: builtin i18n support (refactor)
 - [ ] **Edit Player Profile**: have a bare profile to show
 - [ ] **Messages**
   - [ ] Player-Player
@@ -237,7 +238,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
   - [ ] Resources bonus when conquered.
   - [ ] Resource production and spawn Nature army in free oases.
 - [ ] **Alliances**: Creating and managing alliances.
-- [ ] **Chief Expansion**: Add battle calculation for loyalty and conquest. Chiefs are already researchable in Academy and trainable in Palace/Residence.
+ Chiefs are already researchable in Academy and trainable in Palace/Residence.
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **End Game**: Wonder of the World, Natars, etc.
 - [ ] **Admin UI**: a minimal dashboard to manage the game.

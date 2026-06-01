@@ -1,13 +1,13 @@
 const ICON_SIZE = 16;
-const ICON_STRIDE = 19;
+const ICON_STRIDE = 20;
 
 function spritePathForTribe(tribe?: string) {
   const normalized = String(tribe ?? "").toLowerCase();
-  if (normalized === "roman") return "/static/units/romans.gif";
-  if (normalized === "gaul") return "/static/units/gauls.gif";
-  if (normalized === "teuton") return "/static/units/teutons.gif";
-  if (normalized === "nature") return "/static/units/nature.gif";
-  if (normalized === "natar") return "/static/units/natars.gif";
+  if (normalized === "roman") return "/static/units/romans.png";
+  if (normalized === "gaul") return "/static/units/gauls.png";
+  if (normalized === "teuton") return "/static/units/teutons.png";
+  if (normalized === "nature") return "/static/units/nature.png";
+  if (normalized === "natar") return "/static/units/natars.png";
   return null;
 }
 

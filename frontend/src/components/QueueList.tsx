@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { BuildingQueueItem } from "@/types/api";
 import { Link } from "./Link";
 import { buildingLabel } from "@/lib/labels";
-
-function formatDuration(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((value) => value.toString().padStart(2, "0")).join(":");
-}
+import { formatDurationHms } from "@/lib/time";
 
 function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
   const ZERO_RETRY_MAX = 5;
@@ -65,7 +59,7 @@ function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () =>
     return () => window.clearTimeout(retryTimer);
   }, [remaining, onElapsed]);
 
-  return <span class="font-semibold text-gray-800">{formatDuration(remaining)}</span>;
+  return <span class="font-semibold text-gray-800">{formatDurationHms(remaining)}</span>;
 }
 
 export function QueueList({

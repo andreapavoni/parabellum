@@ -2,6 +2,7 @@ import type {
   BuildingPageResponse,
   MapFieldDetailResponse,
   MovementPreviewResponse,
+  SendResourcesPreviewResponse,
   MapRegionResponse,
   MeContextResponse,
   PlayerProfileResponse,
@@ -273,6 +274,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  renameVillage: (payload: { villageId: number; villageName: string }) =>
+    request<{ success: boolean }>("/villages/rename", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   trainUnits: (payload: {
     slotId: number;
     unitIdx: number;
@@ -303,6 +309,19 @@ export const api = {
     crop: number;
   }) =>
     request<{ success: boolean }>("/marketplace/send", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  previewSendResources: (payload: {
+    slotId: number;
+    targetX: number;
+    targetY: number;
+    lumber: number;
+    clay: number;
+    iron: number;
+    crop: number;
+  }) =>
+    request<SendResourcesPreviewResponse>("/marketplace/send/preview", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

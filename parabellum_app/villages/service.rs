@@ -3,9 +3,9 @@ use mini_cqrs_es::{Cqrs, CqrsError};
 use crate::villages::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
     CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
-    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ResearchAcademy, ResearchSmithy,
-    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy,
+    ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer,
+    SendReinforcement, SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {
@@ -177,6 +177,14 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         self.cqrs
             .execute::<UpgradeBuilding>(&village_id, command)
             .await
+    }
+
+    pub async fn rename_village(
+        &self,
+        village_id: u32,
+        command: &RenameVillage,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute::<RenameVillage>(&village_id, command).await
     }
 
     pub async fn downgrade_building(

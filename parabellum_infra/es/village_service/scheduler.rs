@@ -22,8 +22,8 @@ use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::{Village, VillageBuilding};
 use parabellum_types::army::UnitRole;
-use parabellum_types::buildings::BuildingName;
 use parabellum_types::map::ValleyTopology;
+use parabellum_types::buildings::BuildingName;
 
 struct ComputedAttackOutcome {
     source: ResolveAttackBattle,
@@ -35,12 +35,6 @@ struct ComputedScoutOutcome {
 }
 
 const DEFAULT_FOUNDATION_SPEED: i8 = 1;
-fn loyalty_regen_building_level(village: &Village) -> u8 {
-    village
-        .get_palace_or_residence()
-        .map(|(building, _)| building.level)
-        .unwrap_or(0)
-}
 
 fn default_founded_village_buildings(
     topology: &ValleyTopology,
@@ -819,41 +813,6 @@ pub(super) async fn execute_action(
             )])
             .await?;
         }
-        ScheduledActionPayload::LoyaltyRegen {
-            action_id,
-            village_id,
-            player_id,
-            execute_at,
-        } => {
-            let model = svc.get_village(village_id).await?;
-            if model.player_id != player_id {
-                return Ok(());
-            }
-            let village = Village::try_from(model).map_err(CqrsError::domain_source)?;
-            let current_loyalty = village.loyalty();
-            if current_loyalty >= 100 {
-                return Ok(());
-            }
-            let building_level = loyalty_regen_building_level(&village);
-            if building_level == 0 {
-                return Ok(());
-            }
-            let regen_points = building_level.saturating_mul(2);
-            let loyalty_after = current_loyalty.saturating_add(regen_points).min(100);
-            svc.append_village_workflow_events(vec![(
-                village_id,
-                VillageEvent::LoyaltyRegenerated {
-                    action_id,
-                    village_id,
-                    player_id,
-                    loyalty_before: current_loyalty,
-                    loyalty_after,
-                    building_level,
-                    regenerated_at: execute_at,
-                },
-            )])
-            .await?;
-        }
     }
     Ok(())
 }
@@ -869,7 +828,7 @@ async fn build_attack_outcome_command(
     target_village_id: u32,
     army: Army,
     attack_type: parabellum_types::battle::AttackType,
-    catapult_targets: [parabellum_types::buildings::BuildingName; 2],
+    catapult_targets: [Option<parabellum_types::buildings::BuildingName>; 2],
     returns_at: chrono::DateTime<chrono::Utc>,
 ) -> Result<ComputedAttackOutcome, CqrsError> {
     let source = svc.get_village(source_village_id).await?;
@@ -906,8 +865,15 @@ async fn build_attack_outcome_command(
 
     let mut selected_targets: Vec<Building> = Vec::new();
     for name in catapult_targets {
-        match defender_village.get_building_by_name(&name) {
-            Some(slot) => selected_targets.push(slot.building.clone()),
+        match name {
+            Some(name) => match defender_village.get_building_by_name(&name) {
+                Some(slot) => selected_targets.push(slot.building.clone()),
+                None => {
+                    if let Some(random) = defender_village.get_random_buildings(1).pop() {
+                        selected_targets.push(random);
+                    }
+                }
+            },
             None => {
                 if let Some(random) = defender_village.get_random_buildings(1).pop() {
                     selected_targets.push(random);

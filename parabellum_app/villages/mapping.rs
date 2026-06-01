@@ -63,6 +63,7 @@ mod tests {
             academy_research: academy.clone(),
             total_merchants: 0,
             busy_merchants: 0,
+            loyalty_updated_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             parent_village_id: None,
             army: None,

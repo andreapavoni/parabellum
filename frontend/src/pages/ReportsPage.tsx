@@ -1,5 +1,6 @@
 import type { ReportDetailResponse, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
+import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite } from "@/components/UnitSprite";
 import { useAppStore } from "@/state/appStore";
 import { useMemo, useState } from "preact/hooks";
@@ -44,7 +45,19 @@ function parseResourceGroup(resources: unknown) {
 
 function formatResourceSummary(resources: unknown) {
   const { lumber, clay, iron, crop } = parseResourceGroup(resources);
-  return `🌲 ${lumber} 🧱 ${clay} ⛏️ ${iron} 🌾 ${crop}`;
+  return `lumber ${lumber}, clay ${clay}, iron ${iron}, crop ${crop}`;
+}
+
+function ResourceSummaryInline({ resources }: { resources: unknown }) {
+  const { lumber, clay, iron, crop } = parseResourceGroup(resources);
+  return (
+    <span class="inline-flex items-center gap-2">
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="lumber" size={12} label="Lumber" />{lumber}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="clay" size={12} label="Clay" />{clay}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="iron" size={12} label="Iron" />{iron}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="crop" size={12} label="Crop" />{crop}</span>
+    </span>
+  );
 }
 
 function normalizeScoutingTarget(target: unknown): "resources" | "defenses" | "unknown" {
@@ -378,7 +391,7 @@ function BattleReportDetail({
           {scoutingTarget === "resources" ? (
             <div class="rounded bg-white p-3 text-sm text-gray-700">
               <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed resources</p>
-              <p class="font-mono">{formatResourceSummary(parseScoutingResources(scoutingTargetReport))}</p>
+              <p class="font-mono"><ResourceSummaryInline resources={parseScoutingResources(scoutingTargetReport)} /></p>
             </div>
           ) : null}
           {scoutingTarget === "defenses" ? (
@@ -436,7 +449,7 @@ function BattleReportDetail({
 
       <div class="border rounded-md p-4">
         <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Bounty</p>
-        <p class="font-mono text-gray-800">{formatResourceSummary(bounty)}</p>
+        <p class="font-mono text-gray-800"><ResourceSummaryInline resources={bounty} /></p>
       </div>
 
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
@@ -500,7 +513,7 @@ function MarketplaceDeliveryReportDetail({
       <div class="border rounded-md p-4 bg-white">
         <p class="text-sm text-gray-700">
           {villageFieldLink(readString(payload, "sender_village", "Unknown"), payload.sender_position, worldSize)}{" "}
-          delivered {formatResourceSummary(resources)} to{" "}
+          delivered <ResourceSummaryInline resources={resources} /> to{" "}
           {villageFieldLink(readString(payload, "receiver_village", "Unknown"), payload.receiver_position, worldSize)}.
         </p>
       </div>

@@ -156,6 +156,7 @@ export function App() {
             reloadKey={reloadKey}
             onVillageLoaded={syncVillageFromPage}
             onQueueElapsed={refreshFromQueueElapsed}
+            onVillageRenamed={runMutation}
           />
         );
       case "resources":
@@ -166,6 +167,7 @@ export function App() {
             reloadKey={reloadKey}
             onVillageLoaded={syncVillageFromPage}
             onQueueElapsed={refreshFromQueueElapsed}
+            onVillageRenamed={runMutation}
           />
         );
       case "building":
@@ -201,6 +203,7 @@ export function App() {
             fieldId={route.fieldId}
             reloadKey={reloadKey}
             onMutate={runMutation}
+            currentPlayerId={session.authenticated ? session.user?.playerId : undefined}
           />
         );
       case "login":
@@ -293,11 +296,13 @@ function ProtectedVillage({
   reloadKey,
   onVillageLoaded,
   onQueueElapsed,
+  onVillageRenamed,
 }: {
   villageId: number;
   reloadKey: number;
   onVillageLoaded?: (village: VillageSummary) => void;
   onQueueElapsed?: () => void;
+  onVillageRenamed?: () => Promise<void> | void;
 }) {
   const { data, error, loading } = usePageData(
     () => api.villageOverview(villageId),
@@ -309,7 +314,13 @@ function ProtectedVillage({
   }, [data, onVillageLoaded]);
   if (loading) return <Loading label="Loading village..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load village."} />;
-  return <VillagePage data={data} onQueueElapsed={onQueueElapsed} />;
+  return (
+    <VillagePage
+      data={data}
+      onQueueElapsed={onQueueElapsed}
+      onVillageRenamed={onVillageRenamed}
+    />
+  );
 }
 
 function ProtectedResources({
@@ -317,11 +328,13 @@ function ProtectedResources({
   reloadKey,
   onVillageLoaded,
   onQueueElapsed,
+  onVillageRenamed,
 }: {
   villageId: number;
   reloadKey: number;
   onVillageLoaded?: (village: VillageSummary) => void;
   onQueueElapsed?: () => void;
+  onVillageRenamed?: () => Promise<void> | void;
 }) {
   const { data, error, loading } = usePageData(
     () => api.villageResources(villageId),
@@ -333,7 +346,13 @@ function ProtectedResources({
   }, [data, onVillageLoaded]);
   if (loading) return <Loading label="Loading resources..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load resources."} />;
-  return <ResourcesPage data={data} onQueueElapsed={onQueueElapsed} />;
+  return (
+    <ResourcesPage
+      data={data}
+      onQueueElapsed={onQueueElapsed}
+      onVillageRenamed={onVillageRenamed}
+    />
+  );
 }
 
 function ProtectedStats({ page, reloadKey }: { page: number; reloadKey: number }) {
@@ -395,15 +414,17 @@ function ProtectedMapField({
   fieldId,
   reloadKey,
   onMutate,
+  currentPlayerId,
 }: {
   fieldId: number;
   reloadKey: number;
   onMutate: () => Promise<void>;
+  currentPlayerId?: string;
 }) {
   const { data, error, loading } = usePageData(() => api.mapField(fieldId), [fieldId, reloadKey]);
   if (loading) return <Loading label="Loading field..." />;
   if (error || !data) return <ErrorState message={error ?? "Unable to load field."} />;
-  return <MapFieldPage data={data} onMutate={onMutate} />;
+  return <MapFieldPage data={data} onMutate={onMutate} currentPlayerId={currentPlayerId} />;
 }
 
 function ProtectedBuilding({

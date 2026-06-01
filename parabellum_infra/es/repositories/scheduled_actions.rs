@@ -351,7 +351,6 @@ enum DbScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
-    LoyaltyRegen,
 }
 
 impl From<DbScheduledActionStatus> for ScheduledActionStatus {
@@ -393,7 +392,6 @@ impl From<DbScheduledActionType> for ScheduledActionType {
             DbScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             DbScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             DbScheduledActionType::HeroRevival => Self::HeroRevival,
-            DbScheduledActionType::LoyaltyRegen => Self::LoyaltyRegen,
         }
     }
 }
@@ -415,7 +413,6 @@ impl From<ScheduledActionType> for DbScheduledActionType {
             ScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             ScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             ScheduledActionType::HeroRevival => Self::HeroRevival,
-            ScheduledActionType::LoyaltyRegen => Self::LoyaltyRegen,
         }
     }
 }

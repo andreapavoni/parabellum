@@ -14,16 +14,17 @@ use parabellum_app::{
         villages::{
             AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
             CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
-            ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
-            ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
-            SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
-            VillageCommandsPort,
+            ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
+            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+            SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
         AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, RecallReinforcements,
-        ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-        SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
+        ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero,
+        ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits,
+        UpgradeBuilding,
     },
 };
 use parabellum_types::{
@@ -197,6 +198,20 @@ impl VillageCommandsPort for VillageEsAdapter {
                     player_id: request.player_id,
                     slot_id: request.slot_id,
                     speed: self.config.speed,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn rename_village(&self, request: RenameVillageRequest) -> Result<(), ApplicationError> {
+        self.service
+            .rename_village(
+                request.village_id,
+                &RenameVillage {
+                    player_id: request.player_id,
+                    village_name: request.village_name,
                 },
             )
             .await

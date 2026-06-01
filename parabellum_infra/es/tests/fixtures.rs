@@ -26,6 +26,11 @@ use parabellum_types::army::UnitName;
 static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
 static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
 const TEST_DB_ADVISORY_LOCK_KEY: i64 = 9_842_771;
+const TEST_SERVER_SPEED: i8 = 1;
+
+pub fn test_server_speed() -> i8 {
+    TEST_SERVER_SPEED
+}
 
 pub struct EsScenario<'a> {
     pub pool: &'a sqlx::PgPool,
@@ -109,7 +114,12 @@ impl<'a> EsScenario<'a> {
 }
 
 pub async fn setup_pool() -> sqlx::PgPool {
+    // Keep tests independent from local/dev runtime config.
+    unsafe {
+        std::env::set_var("PARABELLUM_SERVER_SPEED", TEST_SERVER_SPEED.to_string());
+    }
     // Run embedded migrations once for the shared test database.
+    // NOTE: migration sources are embedded at compile time by `sqlx::migrate!`.
     let pool = establish_test_connection_pool()
         .await
         .expect("TEST_DATABASE_URL connection must be available");

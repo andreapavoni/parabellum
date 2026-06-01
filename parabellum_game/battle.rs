@@ -164,8 +164,16 @@ impl Battle {
             1.0 + total_attacker_infantry_points as f64 + total_attacker_cavalry_points as f64;
 
         // 2.2: Total defense power
-        let infantry_ratio_f64 = (total_attacker_infantry_points as f64) / total_attack_power_f64;
-        let cavalry_ratio_f64 = (total_attacker_cavalry_points as f64) / total_attack_power_f64;
+        let (infantry_ratio_f64, cavalry_ratio_f64) =
+            if total_attacker_infantry_points == 0 && total_attacker_cavalry_points == 0 {
+                // Settlers/chiefs-only attacks still defend against infantry defense.
+                (1.0, 0.0)
+            } else {
+                (
+                    (total_attacker_infantry_points as f64) / total_attack_power_f64,
+                    (total_attacker_cavalry_points as f64) / total_attack_power_f64,
+                )
+            };
 
         let total_defense_power_f64 = (total_defender_infantry_points as f64 * infantry_ratio_f64)
             + (total_defender_cavalry_points as f64 * cavalry_ratio_f64);
