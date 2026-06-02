@@ -16,8 +16,8 @@ export function RallyPointBuilding({
   onMutate: () => Promise<void>;
 }) {
   const query = new URLSearchParams(window.location.search);
-  const initialTargetX = Number(query.get("target_x") ?? "0") || 0;
-  const initialTargetY = Number(query.get("target_y") ?? "0") || 0;
+  const initialTargetX = Number(query.get("x") ?? "0") || 0;
+  const initialTargetY = Number(query.get("y") ?? "0") || 0;
   const [targetX, setTargetX] = useState(initialTargetX);
   const [targetY, setTargetY] = useState(initialTargetY);
   const [movement, setMovement] = useState<"attack" | "raid" | "reinforcement">("attack");
@@ -278,7 +278,7 @@ export function RallyPointBuilding({
                     units: toUnitsArray(),
                   });
                   await onMutate();
-                  window.location.assign(`/app/build/39?target_x=${targetX}&target_y=${targetY}`);
+                  window.location.assign(`/app/build/39?x=${targetX}&y=${targetY}`);
                 } catch (err) {
                   setError((err as Error).message);
                 } finally {
@@ -435,4 +435,3 @@ export function RallyPointBuilding({
     </>
   );
 }
-

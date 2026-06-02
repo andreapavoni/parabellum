@@ -141,7 +141,7 @@ impl PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET busy_merchants = $2, updated_at = NOW()
+            SET busy_merchants = $2
             WHERE village_id = $1
             "#,
         )
@@ -162,7 +162,7 @@ impl PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET army = $2, updated_at = NOW()
+            SET army = $2
             WHERE village_id = $1
             "#,
         )
@@ -183,7 +183,7 @@ impl PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET reinforcements = $2, updated_at = NOW()
+            SET reinforcements = $2
             WHERE village_id = $1
             "#,
         )
@@ -204,7 +204,7 @@ impl PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET deployed_armies = $2, updated_at = NOW()
+            SET deployed_armies = $2
             WHERE village_id = $1
             "#,
         )
@@ -344,7 +344,34 @@ impl PostgresVillageRepository {
             .max()
             .unwrap_or(0);
 
-        let mut next_stocks = model.stocks.clone();
+        let current_stocks = {
+            let current = parabellum_game::models::village::Village::from_persistence(
+                model.village_id,
+                model.village_name.clone(),
+                model.player_id,
+                model.position.clone(),
+                model.tribe.clone(),
+                model.buildings.clone(),
+                vec![],
+                model.population,
+                model.army.clone(),
+                model.reinforcements.clone(),
+                model.deployed_armies.clone(),
+                model.loyalty,
+                model.production.clone(),
+                model.is_capital,
+                model.smithy_upgrades,
+                model.stocks.clone(),
+                model.academy_research.clone(),
+                0,
+                model.culture_points_production,
+                model.updated_at,
+                model.parent_village_id,
+            );
+            current.stocks().clone()
+        };
+
+        let mut next_stocks = current_stocks;
         next_stocks.warehouse_capacity = warehouse_capacity;
         next_stocks.granary_capacity = granary_capacity;
         next_stocks.lumber = next_stocks.lumber.min(warehouse_capacity);
@@ -739,7 +766,7 @@ impl VillageRepository for PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET army = $2, updated_at = NOW()
+            SET army = $2
             WHERE village_id = $1
             "#,
         )
@@ -759,7 +786,7 @@ impl VillageRepository for PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET reinforcements = $2, updated_at = NOW()
+            SET reinforcements = $2
             WHERE village_id = $1
             "#,
         )
@@ -779,7 +806,7 @@ impl VillageRepository for PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET deployed_armies = $2, updated_at = NOW()
+            SET deployed_armies = $2
             WHERE village_id = $1
             "#,
         )
@@ -850,7 +877,34 @@ impl VillageRepository for PostgresVillageRepository {
             .max()
             .unwrap_or(0);
 
-        let mut next_stocks = model.stocks.clone();
+        let current_stocks = {
+            let current = parabellum_game::models::village::Village::from_persistence(
+                model.village_id,
+                model.village_name.clone(),
+                model.player_id,
+                model.position.clone(),
+                model.tribe.clone(),
+                model.buildings.clone(),
+                vec![],
+                model.population,
+                model.army.clone(),
+                model.reinforcements.clone(),
+                model.deployed_armies.clone(),
+                model.loyalty,
+                model.production.clone(),
+                model.is_capital,
+                model.smithy_upgrades,
+                model.stocks.clone(),
+                model.academy_research.clone(),
+                0,
+                model.culture_points_production,
+                model.updated_at,
+                model.parent_village_id,
+            );
+            current.stocks().clone()
+        };
+
+        let mut next_stocks = current_stocks;
         next_stocks.warehouse_capacity = warehouse_capacity;
         next_stocks.granary_capacity = granary_capacity;
         next_stocks.lumber = next_stocks.lumber.min(warehouse_capacity);
@@ -949,7 +1003,7 @@ impl VillageRepository for PostgresVillageRepository {
         sqlx::query(
             r#"
             UPDATE rm_village
-            SET busy_merchants = $2, updated_at = NOW()
+            SET busy_merchants = $2
             WHERE village_id = $1
             "#,
         )

@@ -1143,6 +1143,12 @@ impl Village {
     /// It should be called whenever the village is loaded from the DB.
     fn update_resources(&mut self) {
         let now = Utc::now();
+        if self.updated_at > now {
+            // Guard against local clock skew/sleep/manual time adjustments:
+            // keep state monotonic so resource growth can resume on next reads/actions.
+            self.updated_at = now;
+            return;
+        }
         let time_elapsed = (now - self.updated_at).num_seconds() as f64;
 
         if time_elapsed <= 0.0 {
@@ -1617,7 +1623,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_resources_does_not_touch_updated_at_when_elapsed_is_non_positive() {
+    fn test_update_resources_clamps_future_updated_at_and_keeps_stocks_unchanged() {
         let mut v = village_factory(Default::default());
         let before_updated_at = Utc::now() + Duration::hours(2);
         v.updated_at = before_updated_at;
@@ -1625,7 +1631,7 @@ mod tests {
 
         v.update_state();
 
-        assert_eq!(v.updated_at, before_updated_at);
+        assert!(v.updated_at <= Utc::now());
         assert_eq!(v.stocks.lumber, before_stocks.lumber);
         assert_eq!(v.stocks.clay, before_stocks.clay);
         assert_eq!(v.stocks.iron, before_stocks.iron);

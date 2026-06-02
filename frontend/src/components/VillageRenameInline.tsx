@@ -7,12 +7,14 @@ export function VillageRenameInline({
   onRenamed,
   className = "w-full mb-3",
   linkClassName = "p-0 text-xs text-green-700 underline hover:text-green-800 bg-transparent border-0",
+  label = "Rename village",
 }: {
   villageId: number;
   currentName: string;
   onRenamed?: () => Promise<void> | void;
   className?: string;
   linkClassName?: string;
+  label?: string;
 }) {
   const [editingName, setEditingName] = useState(false);
   const [villageName, setVillageName] = useState(currentName);
@@ -31,7 +33,7 @@ export function VillageRenameInline({
             setEditingName(true);
           }}
         >
-          Rename village
+          {label}
         </button>
       ) : (
         <form

@@ -1,23 +1,17 @@
-import type { VNode } from "preact";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSpriteByName } from "@/components/UnitSprite";
 import { LiveCountdown } from "@/components/buildings/buildingShared";
+import { AcademyOptionCard } from "@/components/buildings/buildingCards";
 import { secondsUntilIso } from "@/lib/time";
 import { unitLabel } from "@/lib/labels";
-import type { AcademyResearchOption, BuildingPageResponse } from "@/types/api";
+import type { BuildingPageResponse } from "@/types/api";
 
 export function AcademyBuilding({
   detail,
   onMutate,
-  AcademyOptionCard,
 }: {
   detail: BuildingPageResponse["detail"];
   onMutate: () => Promise<void>;
-  AcademyOptionCard: (props: {
-    option: AcademyResearchOption;
-    detail: BuildingPageResponse["detail"];
-    onMutate: () => Promise<void>;
-  }) => VNode;
 }) {
   if (detail.buildingType !== "academy" || !detail.academy) return null;
   return (

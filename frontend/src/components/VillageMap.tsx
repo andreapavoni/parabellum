@@ -26,6 +26,33 @@ const buildingPositions = [
 ] as const;
 const VILLAGE_ICON_SIZE = 128;
 
+function LevelBadge({
+  x,
+  y,
+  level,
+}: {
+  x: number;
+  y: number;
+  level: number;
+}) {
+  return (
+    <g class="pointer-events-none">
+      <circle cx={x} cy={y} r="16" fill="#f7f2df" stroke="#4a3a23" stroke-width="2.5" />
+      <text
+        x={x}
+        y={y}
+        dy="0.35em"
+        text-anchor="middle"
+        font-weight="700"
+        font-size="16"
+        fill="#2f2315"
+      >
+        {level}
+      </text>
+    </g>
+  );
+}
+
 function title(slot?: BuildingSlot) {
   if (!slot?.buildingName) return "Empty slot";
   return `${buildingLabel(slot.buildingName)} (Level ${slot.level})`;
@@ -83,6 +110,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               stroke="#E88C30"
               stroke-width="18"
             />
+            {wallSlot.buildingName ? <LevelBadge x={500} y={78} level={wallSlot.level} /> : null}
             <title>{title(wallSlot)}</title>
           </a>
         ) : null}
@@ -100,15 +128,18 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               />
               {(() => {
                 return rallyPoint.buildingName ? (
-                  <foreignObject x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                    <div class="pointer-events-none">
-                      <BuildingSprite
-                        buildingName={rallyPoint.buildingName}
-                        size={VILLAGE_ICON_SIZE}
-                        label={buildingLabel(rallyPoint.buildingName!)}
-                      />
-                    </div>
-                  </foreignObject>
+                  <>
+                    <foreignObject x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={rallyPoint.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(rallyPoint.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={652} y={622} level={rallyPoint.level} />
+                  </>
                 ) : null;
               })()}
             </g>
@@ -138,15 +169,18 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
                   />
                 ) : null}
                 {!isEmpty && slot?.buildingName ? (
-                  <foreignObject x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                    <div class="pointer-events-none">
-                      <BuildingSprite
-                        buildingName={slot.buildingName}
-                        size={VILLAGE_ICON_SIZE}
-                        label={buildingLabel(slot!.buildingName!)}
-                      />
-                    </div>
-                  </foreignObject>
+                  <>
+                    <foreignObject x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={slot.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(slot!.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={cx + 38} y={cy - 20} level={slot.level} />
+                  </>
                 ) : null}
                 {isEmpty ? (
                   <text
@@ -170,30 +204,37 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
         {mainBuilding ? (
           <a href={buildingHref(19, mainBuilding)} onClick={(event) => onMapLinkClick(event, buildingHref(19, mainBuilding))}>
             <g id="village-main-node">
-              <circle cx="500" cy="520" r="65" fill="none" stroke="white" stroke-width="5" opacity="0.8" />
-              <circle cx="500" cy="520" r="55" fill="#EDF4E1" />
-              <text
-                x="500"
-                y="520"
-                dy="0.35em"
-                text-anchor="middle"
-                font-family="Arial, sans-serif"
-                font-weight="900"
-                font-size="32"
-                fill="#1a3a10"
-              >
-              </text>
+              {!mainBuilding.buildingName ? (
+                <>
+                  <circle cx="500" cy="520" r="65" fill="none" stroke="white" stroke-width="5" opacity="0.8" />
+                  <circle cx="500" cy="520" r="55" fill="#EDF4E1" />
+                  <text
+                    x="500"
+                    y="520"
+                    dy="0.35em"
+                    text-anchor="middle"
+                    font-weight="bold"
+                    font-size="28"
+                    fill="#3e2b18"
+                  >
+                    -
+                  </text>
+                </>
+              ) : null}
               {(() => {
                 return mainBuilding.buildingName ? (
-                  <foreignObject x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                    <div class="pointer-events-none">
-                      <BuildingSprite
-                        buildingName={mainBuilding.buildingName}
-                        size={VILLAGE_ICON_SIZE}
-                        label={buildingLabel(mainBuilding.buildingName!)}
-                      />
-                    </div>
-                  </foreignObject>
+                  <>
+                    <foreignObject x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={mainBuilding.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(mainBuilding.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={566} y={454} level={mainBuilding.level} />
+                  </>
                 ) : null;
               })()}
               <title>{title(mainBuilding)}</title>

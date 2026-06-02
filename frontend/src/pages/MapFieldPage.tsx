@@ -128,7 +128,7 @@ export function MapFieldPage({
               {data.hasMarketplace && data.marketplaceSlotId ? (
                 <div>
                   <Link
-                    to={`/app/build/${data.marketplaceSlotId}?target_x=${data.x}&target_y=${data.y}`}
+                    to={`/app/build/${data.marketplaceSlotId}?x=${data.x}&y=${data.y}`}
                     class="text-green-700 hover:underline"
                   >
                     Send resources from marketplace
@@ -140,7 +140,7 @@ export function MapFieldPage({
               {data.hasRallyPoint && data.rallyPointSlotId ? (
                 <div>
                   <Link
-                    to={`/app/build/${data.rallyPointSlotId}?target_x=${data.x}&target_y=${data.y}`}
+                    to={`/app/build/${data.rallyPointSlotId}?x=${data.x}&y=${data.y}`}
                     class="text-green-700 hover:underline"
                   >
                     Open rally point for this target
@@ -156,7 +156,7 @@ export function MapFieldPage({
               {data.hasRallyPoint && data.rallyPointSlotId ? (
                 <div>
                   <Link
-                    to={`/app/build/${data.rallyPointSlotId}?target_x=${data.x}&target_y=${data.y}`}
+                    to={`/app/build/${data.rallyPointSlotId}?x=${data.x}&y=${data.y}`}
                     class="text-green-700 hover:underline"
                   >
                     Open rally point for this target
@@ -217,7 +217,7 @@ export function MapFieldPage({
                           targetY: data.y,
                         });
                         await onMutate();
-                        window.location.assign(`/app/build/39?target_x=${data.x}&target_y=${data.y}`);
+                        window.location.assign(`/app/build/39?x=${data.x}&y=${data.y}`);
                       } catch (err) {
                         setError((err as Error).message);
                       } finally {

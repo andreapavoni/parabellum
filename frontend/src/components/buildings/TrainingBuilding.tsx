@@ -1,22 +1,16 @@
-import type { VNode } from "preact";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { LiveCountdown } from "@/components/buildings/buildingShared";
+import { TrainingUnitCard } from "@/components/buildings/buildingCards";
 import { formatDurationHms, secondsUntilIso } from "@/lib/time";
 import { unitLabel } from "@/lib/labels";
-import type { BuildingPageResponse, TrainingUnitOption } from "@/types/api";
+import type { BuildingPageResponse } from "@/types/api";
 
 export function TrainingBuilding({
   detail,
   onMutate,
-  TrainingUnitCard,
 }: {
   detail: BuildingPageResponse["detail"];
   onMutate: () => Promise<void>;
-  TrainingUnitCard: (props: {
-    option: TrainingUnitOption;
-    detail: BuildingPageResponse["detail"];
-    onMutate: () => Promise<void>;
-  }) => VNode;
 }) {
   if ((detail.buildingType !== "training" && detail.buildingType !== "expansion") || !detail.training) return null;
   return (

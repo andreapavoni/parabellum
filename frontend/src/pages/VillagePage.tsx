@@ -14,8 +14,8 @@ export function VillagePage({
   onVillageRenamed?: () => Promise<void> | void;
 }) {
   return (
-    <div class="container mx-auto mt-4 md:mt-6 px-2 md:px-4 flex flex-col items-center gap-8 pb-12">
-      <div class="flex flex-col items-center w-full md:w-auto">
+    <div class="mx-auto mt-4 md:mt-6 w-full max-w-4xl px-2 md:px-3 flex flex-col items-center gap-4 pb-12">
+      <div class="flex flex-col items-center w-full max-w-[400px]">
         <h1 class="text-xl font-bold mb-4 w-full text-left">
           {data.village.name} ({data.village.x}|{data.village.y})
           {data.village.isCapital ? <CapitalBadge /> : null}

@@ -1045,8 +1045,13 @@ pub async fn building_detail(
             }
         }
     } else {
-        let queued = queues.building.iter().find(|item| item.slot_id == slot_id);
-        let has_queue_for_slot = queued.is_some();
+        let queued_for_slot: Vec<&BuildingQueueItem> = queues
+            .building
+            .iter()
+            .filter(|item| item.slot_id == slot_id)
+            .collect();
+        let queued = queued_for_slot.last().copied();
+        let has_queue_for_slot = !queued_for_slot.is_empty();
         let (buildable_buildings, locked_buildings) = if has_queue_for_slot {
             (vec![], vec![])
         } else {

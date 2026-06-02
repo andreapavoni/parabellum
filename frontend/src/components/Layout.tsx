@@ -120,6 +120,7 @@ export function Layout(props: LayoutProps) {
     Boolean(player) &&
     (props.active === "village" || props.active === "building" || props.active === "resources") &&
     villages.length > 0;
+  const mapHref = village ? `/map?x=${village.x}&y=${village.y}` : "/map";
 
   return (
     <>
@@ -142,7 +143,7 @@ export function Layout(props: LayoutProps) {
             <div class="flex justify-center space-x-2 md:space-x-3 py-3 bg-gray-100 border-b border-gray-300 px-2 overflow-x-auto scrollbar-hide">
               <NavIcon active={props.active === "resources"} to="/resources" label={<ResourceSprite kind="crop" size={16} label="Resources" />} />
               <NavIcon active={props.active === "village"} to="/village" label="🏠" />
-              <NavIcon active={props.active === "map"} to="/map" label="🗺️" />
+              <NavIcon active={props.active === "map"} to={mapHref} label="🗺️" />
               <NavIcon active={props.active === "stats"} to="/stats" label="📊" />
               <NavIcon
                 active={props.active === "reports"}

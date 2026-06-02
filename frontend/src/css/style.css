@@ -364,9 +364,9 @@
  }
 
  /* ---------- SVG Village Map -------- */
- .village-svg-container {
-   width: 400px;
-   height: 400px;
+.village-svg-container {
+  width: 380px;
+  height: 380px;
    max-width: 100%;
    background-color: #7BB642;
    border-radius: 360px;
@@ -375,12 +375,12 @@
    transition: transform 0.3s ease;
  }
 
- @media (max-width: 600px) {
-   .village-svg-container {
-     width: 400px;
-     height: 400px;
-   }
- }
+@media (max-width: 600px) {
+  .village-svg-container {
+    width: 360px;
+    height: 360px;
+  }
+}
 
  .village-svg-container svg {
    width: 100%;
@@ -483,20 +483,20 @@
  }
 
  /* ---------- SVG Resource Fields Map -------- */
- .resource-fields-svg-container {
-   width: 450px;
-   height: 450px;
+.resource-fields-svg-container {
+  width: 420px;
+  height: 420px;
    max-width: 100%;
    position: relative;
    margin: 0 auto;
  }
 
- @media (max-width: 620px) {
-   .resource-fields-svg-container {
-     width: 360px;
-     height: 360px;
-   }
- }
+@media (max-width: 620px) {
+  .resource-fields-svg-container {
+    width: 340px;
+    height: 340px;
+  }
+}
 
  .resource-fields-svg-container svg {
    width: 100%;

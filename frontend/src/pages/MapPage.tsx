@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "@/lib/api";
 import { navigate } from "@/lib/router";
+import { ResourceSprite } from "@/components/ResourceSprite";
 import type { MapTile, MapRegionResponse } from "@/types/api";
 
 type MapPageProps = {
@@ -16,8 +17,8 @@ type HoveredTile = {
   tile: MapTile | null;
   x: number;
   y: number;
-  icon: string;
   title: string;
+  bonuses?: Array<{ kind: "lumber" | "clay" | "iron" | "crop"; percent: number }>;
   left: number;
   top: number;
 };
@@ -31,7 +32,6 @@ function wrapCoordinate(value: number, worldSize: number) {
 function tileVisual(tile: MapTile | null, isHome: boolean) {
   if (!tile) {
     return {
-      icon: "",
       typeClass: "",
       title: "Unknown",
       oasisBg: "",
@@ -40,7 +40,6 @@ function tileVisual(tile: MapTile | null, isHome: boolean) {
 
   if (tile.villageId) {
     return {
-      icon: "🏠",
       typeClass: isHome ? "is-own-village" : "is-village",
       title: `${tile.villageName ?? "Village"}${tile.isCapital ? " (Capital)" : ""}`,
       oasisBg: "",
@@ -49,13 +48,6 @@ function tileVisual(tile: MapTile | null, isHome: boolean) {
 
   if (tile.tileType === "oasis") {
     const oasis = (tile.oasis ?? "oasis").toLowerCase();
-    const icon = oasis.includes("lumber")
-      ? "🌲"
-      : oasis.includes("clay")
-        ? "🧱"
-        : oasis.includes("iron")
-          ? "⛰️"
-          : "🌾";
     const oasisBg = oasis.includes("lumber")
       ? "#c5e1a5"
       : oasis.includes("clay")
@@ -64,20 +56,48 @@ function tileVisual(tile: MapTile | null, isHome: boolean) {
           ? "#e0e0e0"
           : "#fff9c4";
     return {
-      icon,
       typeClass: `oasis-${oasis.replace(/[^a-z0-9]/g, "-")}`,
-      title: tile.oasis ?? "Oasis",
+      title: "Oasis",
       oasisBg,
     };
   }
 
   const valley = tile.valley ? `${tile.valley.lumber}-${tile.valley.clay}-${tile.valley.iron}-${tile.valley.crop}` : "";
   return {
-    icon: "",
     typeClass: "",
     title: valley ? `Valley ${valley}` : "Valley",
     oasisBg: "",
   };
+}
+
+function oasisIconUrls(tile: MapTile | null): string[] {
+  if (!tile || tile.tileType !== "oasis") return [];
+  const oasis = (tile.oasis ?? "").toLowerCase();
+  if (oasis === "crop50" || (oasis.includes("crop") && oasis.includes("50") && !oasis.includes("lumber") && !oasis.includes("clay") && !oasis.includes("iron"))) {
+    return [
+      "/static/misc/buildings/cropland.png",
+      "/static/misc/buildings/cropland.png",
+    ];
+  }
+  const icons: string[] = [];
+  if (oasis.includes("lumber")) icons.push("/static/misc/buildings/woodcutter.png");
+  if (oasis.includes("clay")) icons.push("/static/misc/buildings/clay_pit.png");
+  if (oasis.includes("iron")) icons.push("/static/misc/buildings/iron_mine.png");
+  if (oasis.includes("crop")) icons.push("/static/misc/buildings/cropland.png");
+  return icons.length > 0 ? icons.slice(0, 2) : ["/static/misc/buildings/cropland.png"];
+}
+
+function oasisBonuses(tile: MapTile | null): Array<{ kind: "lumber" | "clay" | "iron" | "crop"; percent: number }> {
+  if (!tile || tile.tileType !== "oasis") return [];
+  const oasis = (tile.oasis ?? "").toLowerCase();
+  const isFifty = oasis.includes("50");
+  const percent = isFifty ? 50 : 25;
+  const result: Array<{ kind: "lumber" | "clay" | "iron" | "crop"; percent: number }> = [];
+  if (oasis.includes("lumber")) result.push({ kind: "lumber", percent });
+  if (oasis.includes("clay")) result.push({ kind: "clay", percent });
+  if (oasis.includes("iron")) result.push({ kind: "iron", percent });
+  if (oasis.includes("crop")) result.push({ kind: "crop", percent });
+  return result;
 }
 
 function detailsPosition(tileEl: SVGGElement, containerEl: HTMLDivElement) {
@@ -158,6 +178,7 @@ export function MapPage({
       setRegion(next);
       setXInput(String(next.center.x));
       setYInput(String(next.center.y));
+      window.history.replaceState(null, "", `/map?x=${next.center.x}&y=${next.center.y}`);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -281,8 +302,8 @@ export function MapPage({
                           tile,
                           x: wrappedX,
                           y: wrappedY,
-                          icon: visual.icon || "🌲",
                           title: visual.title,
+                          bonuses: oasisBonuses(tile),
                           left: position.left,
                           top: position.top,
                         });
@@ -297,26 +318,86 @@ export function MapPage({
                       {visual.oasisBg ? <rect width={cellSize} height={cellSize} fill={visual.oasisBg} /> : null}
                       {tile?.villageId ? (
                         <rect
-                          x={cellSize * 0.05}
-                          y={cellSize * 0.05}
-                          width={cellSize * 0.9}
-                          height={cellSize * 0.9}
+                          x={cellSize * 0.06}
+                          y={cellSize * 0.06}
+                          width={cellSize * 0.88}
+                          height={cellSize * 0.88}
                           fill="none"
                           stroke={isHome ? "orange" : "green"}
-                          strokeWidth={cellSize * 0.09}
+                          strokeWidth={6}
                         />
                       ) : null}
-                      {visual.icon ? (
-                        <text
-                          x={cellSize / 2}
-                          y={cellSize / 2}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fontSize={cellSize * 0.6}
+                      {tile?.villageId ? (
+                        <foreignObject
+                          x={cellSize * 0.12}
+                          y={cellSize * 0.12}
+                          width={cellSize * 0.76}
+                          height={cellSize * 0.76}
                           pointerEvents="none"
                         >
-                          {visual.icon}
-                        </text>
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: `${cellSize * 0.62}px`,
+                              lineHeight: "1",
+                            }}
+                          >
+                            <span>🏠</span>
+                          </div>
+                        </foreignObject>
+                      ) : null}
+                      {tile?.tileType === "oasis" ? (
+                        (() => {
+                          const icons = oasisIconUrls(tile);
+                          const bonuses = oasisBonuses(tile);
+                          const isOnly25Bonus =
+                            bonuses.length > 0 && bonuses.every((bonus) => bonus.percent === 25);
+                          if (icons.length === 1) {
+                            const size = isOnly25Bonus ? cellSize * 0.66 : cellSize * 0.82;
+                            return (
+                              <image
+                                href={icons[0]}
+                                x={(cellSize - size) / 2}
+                                y={(cellSize - size) / 2}
+                                width={size}
+                                height={size}
+                                preserveAspectRatio="xMidYMid meet"
+                                style={{ imageRendering: "pixelated" }}
+                              />
+                            );
+                          }
+                          const size = isOnly25Bonus ? cellSize * 0.38 : cellSize * 0.44;
+                          const gap = cellSize * 0.015;
+                          const total = size * 2 + gap;
+                          const startX = (cellSize - total) / 2;
+                          const y = (cellSize - size) / 2;
+                          return (
+                            <>
+                              <image
+                                href={icons[0]}
+                                x={startX}
+                                y={y}
+                                width={size}
+                                height={size}
+                                preserveAspectRatio="xMidYMid meet"
+                                style={{ imageRendering: "pixelated" }}
+                              />
+                              <image
+                                href={icons[1]}
+                                x={startX + size + gap}
+                                y={y}
+                                width={size}
+                                height={size}
+                                preserveAspectRatio="xMidYMid meet"
+                                style={{ imageRendering: "pixelated" }}
+                              />
+                            </>
+                          );
+                        })()
                       ) : null}
                       {tile?.villageId && tile.isCapital ? (
                         <text
@@ -383,8 +464,20 @@ export function MapPage({
         {hovered ? (
           <div class="details-panel" style={{ left: `${hovered.left}px`, top: `${hovered.top}px` }}>
             <div class="text-center mb-4">
-              <div class="text-4xl mb-2">{hovered.icon}</div>
+              <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                {hovered.tile?.tileType ?? "field"}
+              </div>
               <div class="font-bold text-sm text-gray-800">{hovered.title}</div>
+              {hovered.bonuses && hovered.bonuses.length > 0 ? (
+                <div class="text-xs text-gray-700 mt-1 flex flex-wrap items-center justify-center gap-2">
+                  {hovered.bonuses.map((bonus, idx) => (
+                    <span key={`${bonus.kind}-${idx}`} class="inline-flex items-center justify-center gap-1 min-w-[56px]">
+                      <ResourceSprite kind={bonus.kind} size={14} />
+                      <span>+{bonus.percent}%</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <div class="text-xs text-gray-500 mt-1">
                 <span class="font-mono font-bold text-black">
                   {hovered.x}|{hovered.y}

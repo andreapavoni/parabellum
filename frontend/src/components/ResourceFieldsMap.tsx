@@ -24,6 +24,33 @@ const hexPositions = [
   [18, 521, 610],
 ] as const;
 
+function LevelBadge({
+  x,
+  y,
+  level,
+}: {
+  x: number;
+  y: number;
+  level: number;
+}) {
+  return (
+    <g class="pointer-events-none">
+      <circle cx={x} cy={y} r="16" fill="#f7f2df" stroke="#4a3a23" stroke-width="2.5" />
+      <text
+        x={x}
+        y={y}
+        dy="0.35em"
+        text-anchor="middle"
+        font-weight="700"
+        font-size="10"
+        fill="#2f2315"
+      >
+        {level}
+      </text>
+    </g>
+  );
+}
+
 function hexColor(buildingName: string) {
   switch (buildingName) {
     case "Woodcutter":
@@ -94,11 +121,14 @@ export function ResourceFieldsMap({ slots }: { slots: ResourceSlot[] }) {
               >
                 <use href="#hex-shape" fill={hexColor(slot.buildingName)} stroke="none" />
                 {slot.buildingName ? (
-                  <foreignObject x="-32" y="-32" width="64" height="64">
-                    <div class="pointer-events-none">
-                      <BuildingSprite buildingName={slot.buildingName} size={64} label={buildingLabel(slot.buildingName)} />
-                    </div>
-                  </foreignObject>
+                  <>
+                    <foreignObject x="-32" y="-32" width="64" height="64">
+                      <div class="pointer-events-none">
+                        <BuildingSprite buildingName={slot.buildingName} size={64} label={buildingLabel(slot.buildingName)} />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={0} y={32} level={slot.level} />
+                  </>
                 ) : null}
                 <title>
                   {buildingLabel(slot.buildingName)} (Level {slot.level})

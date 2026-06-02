@@ -151,6 +151,30 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
             .await
             .unwrap();
 
+        let after_first_upgrade = service.get_village(village_id).await.unwrap();
+        let hydrated_after_first_upgrade =
+            parabellum_game::models::village::Village::try_from(after_first_upgrade.clone()).unwrap();
+        assert_eq!(
+            after_first_upgrade.culture_points_production,
+            hydrated_after_first_upgrade.culture_points_production
+        );
+
+        service
+            .upgrade_building(
+                village_id,
+                &UpgradeBuilding {
+                    player_id,
+                    slot_id: 22,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+            .await
+            .unwrap();
+
         let after_upgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_upgrade =
             parabellum_game::models::village::Village::try_from(after_upgrade.clone()).unwrap();
