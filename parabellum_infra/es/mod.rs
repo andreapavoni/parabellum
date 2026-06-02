@@ -17,6 +17,7 @@ mod stream;
 mod tests;
 mod village_service;
 mod worker;
+pub(crate) mod workflows;
 
 pub use mini_cqrs_es::{
     Aggregate, AggregateManager, AggregateSnapshot, Command, Cqrs, CqrsError, EventConsumer,

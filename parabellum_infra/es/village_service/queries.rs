@@ -153,9 +153,7 @@ impl VillageEsService {
         let village = villages
             .iter()
             .find(|v| v.village_id == village_id)
-            .ok_or_else(|| {
-                CqrsError::domain_source(DbError::VillageNotFound(village_id))
-            })?;
+            .ok_or_else(|| CqrsError::domain_source(DbError::VillageNotFound(village_id)))?;
 
         let speed = match server_speed {
             1 => parabellum_types::common::Speed::X1,
@@ -258,24 +256,9 @@ impl VillageEsService {
                 continue;
             };
             let (slot_id, building_name, target_level) = match payload {
-                ScheduledActionPayload::AddBuilding {
-                    slot_id,
-                    building_name,
-                    level,
-                    ..
+                ScheduledActionPayload::Building { workflow } => {
+                    (workflow.slot_id, workflow.building_name, workflow.level)
                 }
-                | ScheduledActionPayload::UpgradeBuilding {
-                    slot_id,
-                    building_name,
-                    level,
-                    ..
-                }
-                | ScheduledActionPayload::DowngradeBuilding {
-                    slot_id,
-                    building_name,
-                    level,
-                    ..
-                } => (slot_id, building_name, level),
                 _ => continue,
             };
             building.push(BuildingQueueItem {
@@ -292,22 +275,17 @@ impl VillageEsService {
         let mut training = Vec::new();
         let training_actions = self.get_village_training_queue(village_id).await?;
         for action in training_actions {
-            let Ok(ScheduledActionPayload::TrainUnit {
-                slot_id,
-                unit,
-                quantity_remaining,
-                time_per_unit,
-                ..
-            }) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
+            let Ok(ScheduledActionPayload::Training { workflow }) =
+                serde_json::from_value::<ScheduledActionPayload>(action.payload)
             else {
                 continue;
             };
             training.push(TrainingQueueItem {
                 job_id: action.id,
-                slot_id,
-                unit,
-                quantity: quantity_remaining,
-                time_per_unit,
+                slot_id: workflow.slot_id,
+                unit: workflow.unit,
+                quantity: workflow.quantity_remaining,
+                time_per_unit: workflow.time_per_unit,
                 status: action.status,
                 finishes_at: action.execute_at,
             });
@@ -317,14 +295,14 @@ impl VillageEsService {
         let mut academy = Vec::new();
         let academy_actions = self.get_village_academy_queue(village_id).await?;
         for action in academy_actions {
-            let Ok(ScheduledActionPayload::ResearchAcademy { unit, .. }) =
+            let Ok(ScheduledActionPayload::Research { workflow }) =
                 serde_json::from_value::<ScheduledActionPayload>(action.payload)
             else {
                 continue;
             };
             academy.push(AcademyQueueItem {
                 job_id: action.id,
-                unit,
+                unit: workflow.unit,
                 status: action.status,
                 finishes_at: action.execute_at,
             });
@@ -334,14 +312,14 @@ impl VillageEsService {
         let mut smithy = Vec::new();
         let smithy_actions = self.get_village_smithy_queue(village_id).await?;
         for action in smithy_actions {
-            let Ok(ScheduledActionPayload::ResearchSmithy { unit, .. }) =
+            let Ok(ScheduledActionPayload::Research { workflow }) =
                 serde_json::from_value::<ScheduledActionPayload>(action.payload)
             else {
                 continue;
             };
             smithy.push(SmithyQueueItem {
                 job_id: action.id,
-                unit,
+                unit: workflow.unit,
                 status: action.status,
                 finishes_at: action.execute_at,
             });
@@ -607,7 +585,9 @@ impl VillageEsService {
         let village_id = report
             .actor_village_id
             .or(report.target_village_id)
-            .ok_or_else(|| CqrsError::EventStore("report has no village stream anchor".to_string()))?;
+            .ok_or_else(|| {
+                CqrsError::EventStore("report has no village stream anchor".to_string())
+            })?;
 
         let cqrs = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&cqrs);

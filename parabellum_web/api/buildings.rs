@@ -973,9 +973,7 @@ pub async fn building_detail(
                                 RallyMovementKindDto::Attack
                             }
                             crate::view_helpers::MovementKind::Raid => RallyMovementKindDto::Raid,
-                            crate::view_helpers::MovementKind::Scout => {
-                                RallyMovementKindDto::Scout
-                            }
+                            crate::view_helpers::MovementKind::Scout => RallyMovementKindDto::Scout,
                             crate::view_helpers::MovementKind::Reinforcement => {
                                 RallyMovementKindDto::Reinforcement
                             }
@@ -1356,7 +1354,10 @@ fn training_options_for_group(
     let mut settlers_queued = 0u32;
     for item in training_queue {
         let qty = item.quantity.max(0) as u32;
-        if matches!(item.unit, UnitName::Chief | UnitName::Senator | UnitName::Chieftain) {
+        if matches!(
+            item.unit,
+            UnitName::Chief | UnitName::Senator | UnitName::Chieftain
+        ) {
             chiefs_queued = chiefs_queued.saturating_add(qty);
         } else if matches!(item.unit, UnitName::Settler) {
             settlers_queued = settlers_queued.saturating_add(qty);
@@ -1376,13 +1377,14 @@ fn training_options_for_group(
                 } else {
                     settlers_total
                 };
-                let max_trainable = parabellum_game::models::village::Village::max_expansion_unit_trainable(
-                    unit.role.clone(),
-                    available_slots,
-                    chiefs_total,
-                    settlers_total,
-                    committed_this_unit,
-                );
+                let max_trainable =
+                    parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                        unit.role.clone(),
+                        available_slots,
+                        chiefs_total,
+                        settlers_total,
+                        committed_this_unit,
+                    );
                 if max_trainable == 0 {
                     return None;
                 }
@@ -1415,7 +1417,11 @@ fn troop_upkeep_for_tribe(tribe: &Tribe, units: &[u32; 10]) -> u32 {
         .units()
         .iter()
         .enumerate()
-        .map(|(idx, unit)| unit.cost.upkeep.saturating_mul(*units.get(idx).unwrap_or(&0)))
+        .map(|(idx, unit)| {
+            unit.cost
+                .upkeep
+                .saturating_mul(*units.get(idx).unwrap_or(&0))
+        })
         .sum()
 }
 

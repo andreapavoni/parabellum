@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use parabellum_game::models::village::VillageBuilding;
 use parabellum_game::models::map::MapQuadrant;
+use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::common::{Player, ResourceGroup, User};
 use parabellum_types::errors::ApplicationError;
 use parabellum_types::tribe::Tribe;

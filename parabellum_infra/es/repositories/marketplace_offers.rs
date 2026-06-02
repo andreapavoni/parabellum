@@ -318,14 +318,14 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'target_village_id')::int AS target_village_id,
-                payload->'resources' AS resources,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'arrives_at')::timestamptz AS arrives_at
+                COALESCE(payload->>'source_village_id', payload->'workflow'->>'source_village_id')::int AS source_village_id,
+                COALESCE(payload->>'target_village_id', payload->'workflow'->>'target_village_id')::int AS target_village_id,
+                COALESCE(payload->'resources', payload->'workflow'->'resources') AS resources,
+                COALESCE(payload->>'merchants_used', payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                COALESCE(payload->>'arrives_at', payload->'workflow'->>'arrives_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantArrival'
-              AND (payload->>'village_id')::int = $1
+              AND COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -341,14 +341,15 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
                 id,
                 COALESCE(
                     (payload->>'target_village_id')::int,
-                    (payload->>'village_id')::int
+                    (payload->'workflow'->>'target_village_id')::int,
+                    COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int
                 ) AS origin_village_id,
-                (payload->>'source_village_id')::int AS destination_village_id,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'returns_at')::timestamptz AS arrives_at
+                COALESCE(payload->>'source_village_id', payload->'workflow'->>'source_village_id')::int AS destination_village_id,
+                COALESCE(payload->>'merchants_used', payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                COALESCE(payload->>'returns_at', payload->'workflow'->>'returns_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantReturn'
-              AND (payload->>'village_id')::int = $1
+              AND COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -404,14 +405,14 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'target_village_id')::int AS target_village_id,
-                payload->'resources' AS resources,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'arrives_at')::timestamptz AS arrives_at
+                COALESCE(payload->>'source_village_id', payload->'workflow'->>'source_village_id')::int AS source_village_id,
+                COALESCE(payload->>'target_village_id', payload->'workflow'->>'target_village_id')::int AS target_village_id,
+                COALESCE(payload->'resources', payload->'workflow'->'resources') AS resources,
+                COALESCE(payload->>'merchants_used', payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                COALESCE(payload->>'arrives_at', payload->'workflow'->>'arrives_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantArrival'
-              AND (payload->>'target_village_id')::int = $1
+              AND COALESCE(payload->>'target_village_id', payload->'workflow'->>'target_village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,

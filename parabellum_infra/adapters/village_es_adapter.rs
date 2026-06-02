@@ -15,9 +15,9 @@ use parabellum_app::{
             AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
             CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
             ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
-            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-            SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+            SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+            UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
@@ -125,10 +125,16 @@ impl VillageEsAdapter {
                 ));
             }
             mini_cqrs_es::CqrsError::Other(other) => {
-                if let Some(game_error) = other.chain().find_map(|cause| cause.downcast_ref::<GameError>()) {
+                if let Some(game_error) = other
+                    .chain()
+                    .find_map(|cause| cause.downcast_ref::<GameError>())
+                {
                     return ApplicationError::Game(game_error.clone());
                 }
-                if let Some(app_error) = other.chain().find_map(|cause| cause.downcast_ref::<AppError>()) {
+                if let Some(app_error) = other
+                    .chain()
+                    .find_map(|cause| cause.downcast_ref::<AppError>())
+                {
                     return ApplicationError::App(app_error.clone());
                 }
                 return ApplicationError::Unknown(other.to_string());
@@ -286,7 +292,9 @@ impl VillageCommandsPort for VillageEsAdapter {
                 .count() as u8;
             let free_slots = max_slots.saturating_sub(child_villages_count);
             if free_slots == 0 {
-                return Err(ApplicationError::Game(GameError::NoFoundationSlotsAvailable));
+                return Err(ApplicationError::Game(
+                    GameError::NoFoundationSlotsAvailable,
+                ));
             }
 
             let chiefs_at_home = source_village.count_chiefs_at_home();
@@ -314,16 +322,17 @@ impl VillageCommandsPort for VillageEsAdapter {
                 >(action.payload) else {
                     continue;
                 };
-                if let parabellum_app::villages::models::ScheduledActionPayload::TrainUnit {
-                    unit,
-                    quantity_remaining,
-                    ..
+                if let parabellum_app::villages::models::ScheduledActionPayload::Training {
+                    workflow,
                 } = payload
                 {
-                    let qty = quantity_remaining.max(0) as u32;
-                    if matches!(unit, UnitName::Chief | UnitName::Senator | UnitName::Chieftain) {
+                    let qty = workflow.quantity_remaining.max(0) as u32;
+                    if matches!(
+                        workflow.unit,
+                        UnitName::Chief | UnitName::Senator | UnitName::Chieftain
+                    ) {
                         chiefs_queued = chiefs_queued.saturating_add(qty);
-                    } else if matches!(unit, UnitName::Settler) {
+                    } else if matches!(workflow.unit, UnitName::Settler) {
                         settlers_queued = settlers_queued.saturating_add(qty);
                     }
                 }
@@ -354,15 +363,18 @@ impl VillageCommandsPort for VillageEsAdapter {
             } else {
                 settlers_total
             };
-            let max_trainable = parabellum_game::models::village::Village::max_expansion_unit_trainable(
-                unit.role.clone(),
-                free_slots,
-                chiefs_total,
-                settlers_total,
-                committed_this_unit,
-            );
+            let max_trainable =
+                parabellum_game::models::village::Village::max_expansion_unit_trainable(
+                    unit.role.clone(),
+                    free_slots,
+                    chiefs_total,
+                    settlers_total,
+                    committed_this_unit,
+                );
             if request.quantity as u32 > max_trainable {
-                return Err(ApplicationError::Game(GameError::NoFoundationSlotsAvailable));
+                return Err(ApplicationError::Game(
+                    GameError::NoFoundationSlotsAvailable,
+                ));
             }
         }
 

@@ -203,11 +203,7 @@ impl ReplayService {
     }
 
     async fn reset_projection_target(&self, target: ReplayTarget) -> Result<(), CqrsError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
 
         if matches!(target, ReplayTarget::Reports | ReplayTarget::All) {
             sqlx::query("DELETE FROM rm_report_reads")
@@ -247,9 +243,7 @@ impl ReplayService {
                 .map_err(CqrsError::domain_source)?;
         }
 
-        tx.commit()
-            .await
-            .map_err(CqrsError::domain_source)
+        tx.commit().await.map_err(CqrsError::domain_source)
     }
 
     fn update_sequence_bounds(&self, summary: &mut ReplaySummary, event: &StoredEvent) {

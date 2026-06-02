@@ -888,15 +888,9 @@ impl Village {
                     .cloned()
             {
                 let next_level = damage_report.level_after.min(target.building.level);
-                self.set_building_level_at_slot(
-                    target.slot_id,
-                    next_level,
-                    server_speed,
-                )?;
+                self.set_building_level_at_slot(target.slot_id, next_level, server_speed)?;
 
-                if next_level == 0
-                    && target.building.group != BuildingGroup::Resources
-                {
+                if next_level == 0 && target.building.group != BuildingGroup::Resources {
                     self.remove_building_at_slot(target.slot_id, server_speed)?;
                 }
             }
@@ -1378,7 +1372,10 @@ mod tests {
     use chrono::{Duration, Utc};
     use parabellum_types::{
         army::{TroopSet, UnitName},
-        buildings::BuildingName, common::ResourceGroup, errors::GameError, map::ValleyTopology,
+        buildings::BuildingName,
+        common::ResourceGroup,
+        errors::GameError,
+        map::ValleyTopology,
         tribe::Tribe,
     };
 
@@ -1725,7 +1722,9 @@ mod tests {
     #[test]
     fn test_horse_drinking_trough_reduces_cavalry_training_time() {
         let mut baseline = village_factory(Default::default());
-        let stable = Building::new(BuildingName::Stable, 1).at_level(1, 1).unwrap();
+        let stable = Building::new(BuildingName::Stable, 1)
+            .at_level(1, 1)
+            .unwrap();
         baseline.add_building_at_slot(stable.clone(), 21).unwrap();
         baseline.set_academy_research_for_test(&UnitName::EquitesLegati, true);
         let unit_idx = baseline
@@ -1737,7 +1736,9 @@ mod tests {
             .unwrap();
 
         let mut v = village_factory(Default::default());
-        let stable = Building::new(BuildingName::Stable, 1).at_level(1, 1).unwrap();
+        let stable = Building::new(BuildingName::Stable, 1)
+            .at_level(1, 1)
+            .unwrap();
         v.add_building_at_slot(stable, 21).unwrap();
         let trough = Building::new(BuildingName::HorseDrinkingTrough, 1)
             .at_level(20, 1)
@@ -1749,7 +1750,10 @@ mod tests {
             .init_unit_training(unit_idx, &BuildingName::Stable, 1, 1)
             .unwrap();
 
-        assert_eq!(time_per_unit, (base_time_per_unit as f64 * 0.8).floor() as u32);
+        assert_eq!(
+            time_per_unit,
+            (base_time_per_unit as f64 * 0.8).floor() as u32
+        );
     }
 
     #[test]
@@ -1761,7 +1765,10 @@ mod tests {
         v.add_building_at_slot(trough, 20).unwrap();
 
         let mut units = TroopSet::default();
-        let legati_idx = v.tribe.get_unit_idx_by_name(&UnitName::EquitesLegati).unwrap();
+        let legati_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesLegati)
+            .unwrap();
         let imperatoris_idx = v
             .tribe
             .get_unit_idx_by_name(&UnitName::EquitesImperatoris)

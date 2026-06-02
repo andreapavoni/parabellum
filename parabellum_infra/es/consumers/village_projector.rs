@@ -5,8 +5,8 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{
-    MovementDirection, MovementType, ScheduledAction, ScheduledActionPayload,
-    ScheduledActionStatus, VillageModel, VillageMovement,
+    BuildingWorkflowKind, MovementDirection, MovementType, ScheduledAction, VillageModel,
+    VillageMovement,
 };
 use parabellum_app::villages::repositories::VillageRepository;
 use parabellum_game::models::army::Army;
@@ -19,6 +19,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+use crate::es::workflows;
 use crate::es::{
     PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
     PostgresScheduledActionRepository, PostgresVillageMovementRepository,
@@ -250,33 +251,13 @@ impl VillageProjector {
                 revive_at,
                 ..
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::HeroRevival {
-                            action_id,
-                            village_id,
-                            player_id,
-                            hero: hero.clone(),
-                            reset,
-                            revive_at,
-                        }
-                        .action_type(),
-                        execute_at: revive_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::HeroRevival {
-                            action_id,
-                            village_id,
-                            player_id,
-                            hero,
-                            reset,
-                            revive_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::heroes::revival_scheduled_action(
+                    action_id,
+                    workflows::heroes::revival_workflow(
+                        village_id, player_id, hero, reset, revive_at,
+                    ),
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::HeroRevived {
                 village_id, hero, ..
@@ -395,37 +376,18 @@ impl VillageProjector {
                     .upsert_in_tx(tx, &incoming)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: movement_id,
-                        action_type: ScheduledActionPayload::ReinforcementArrival {
-                            movement_id,
-                            army_id,
-                            player_id,
-                            source_village_id,
-                            target_village_id,
-                            army: army.clone(),
-                            arrives_at,
-                        }
-                        .action_type(),
-                        execute_at: arrives_at,
-                        payload: serde_json::to_value(
-                            ScheduledActionPayload::ReinforcementArrival {
-                                movement_id,
-                                army_id,
-                                player_id,
-                                source_village_id,
-                                target_village_id,
-                                army,
-                                arrives_at,
-                            },
-                        )
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::reinforcement_arrival_scheduled_action(
+                    workflows::movements::reinforcement_arrival_workflow(
+                        movement_id,
+                        army_id,
+                        player_id,
+                        source_village_id,
+                        target_village_id,
+                        army,
+                        arrives_at,
+                    ),
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::ReinforcementArrived {
                 movement_id,
@@ -641,41 +603,19 @@ impl VillageProjector {
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
 
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::ArmyReturn {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: home_village_id,
-                            source_village_id: home_village_id,
-                            target_village_id: stationed_village_id,
-                            player_id,
-                            army: army.clone(),
-                            bounty: None,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: home_village_id,
-                            source_village_id: home_village_id,
-                            target_village_id: stationed_village_id,
-                            player_id,
-                            army,
-                            bounty: None,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::army_return_scheduled_action(
+                    action_id,
+                    movement_id,
+                    army_id,
+                    home_village_id,
+                    home_village_id,
+                    stationed_village_id,
+                    player_id,
+                    army,
+                    None,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::ReinforcementsReleased {
                 action_id,
@@ -788,41 +728,19 @@ impl VillageProjector {
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
 
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::ArmyReturn {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: home_village_id,
-                            source_village_id: home_village_id,
-                            target_village_id: stationed_village_id,
-                            player_id,
-                            army: army.clone(),
-                            bounty: None,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: home_village_id,
-                            source_village_id: home_village_id,
-                            target_village_id: stationed_village_id,
-                            player_id,
-                            army,
-                            bounty: None,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::army_return_scheduled_action(
+                    action_id,
+                    movement_id,
+                    army_id,
+                    home_village_id,
+                    home_village_id,
+                    stationed_village_id,
+                    player_id,
+                    army,
+                    None,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::SettlersSent {
                 action_id,
@@ -837,7 +755,7 @@ impl VillageProjector {
                 army,
                 arrives_at,
                 ..
-                } => {
+            } => {
                 self.armies
                     .upsert_moving_in_tx(tx, &army, source_village_id, player_id)
                     .await
@@ -890,46 +808,25 @@ impl VillageProjector {
                 )
                 .await?;
 
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::SettlersArrival {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            target_position: target_position.clone(),
-                            player_id,
-                            village_name: village_name.clone(),
-                            tribe: tribe.clone(),
-                            arrives_at,
-                        }
-                        .action_type(),
-                        execute_at: arrives_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::SettlersArrival {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            target_position,
-                            player_id,
-                            village_name,
-                            tribe,
-                            arrives_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::settlers_arrival_scheduled_action(
+                    action_id,
+                    movement_id,
+                    army_id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    target_position,
+                    player_id,
+                    village_name,
+                    tribe,
+                    arrives_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::SettlersArrived {
-                movement_id, army_id, ..
+                movement_id,
+                army_id,
+                ..
             } => {
                 self.movements
                     .delete_by_movement_id_in_tx(tx, movement_id)
@@ -1009,47 +906,22 @@ impl VillageProjector {
                 arrives_at,
                 returns_at,
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::AttackArrival {
-                            action_id,
-                            movement_id,
-                            return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army_id,
-                            army: army.clone(),
-                            attack_type: attack_type.clone(),
-                            catapult_targets: catapult_targets.clone(),
-                            arrives_at,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: arrives_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::AttackArrival {
-                            action_id,
-                            movement_id,
-                            return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army_id,
-                            army,
-                            attack_type,
-                            catapult_targets,
-                            arrives_at,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::attack_arrival_scheduled_action(
+                    action_id,
+                    movement_id,
+                    army_id,
+                    return_action_id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    army,
+                    attack_type,
+                    catapult_targets,
+                    arrives_at,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::ScoutSent {
                 movement_id,
@@ -1100,47 +972,22 @@ impl VillageProjector {
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: arrival_action_id,
-                        action_type: ScheduledActionPayload::ScoutArrival {
-                            action_id: arrival_action_id,
-                            movement_id,
-                            army_id,
-                            return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: army.clone(),
-                            target: target.clone(),
-                            attack_type: attack_type.clone(),
-                            arrives_at,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: arrives_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ScoutArrival {
-                            action_id: arrival_action_id,
-                            movement_id,
-                            army_id,
-                            return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army,
-                            target,
-                            attack_type,
-                            arrives_at,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::scout_arrival_scheduled_action(
+                    arrival_action_id,
+                    movement_id,
+                    army_id,
+                    return_action_id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    army,
+                    target,
+                    attack_type,
+                    arrives_at,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::AttackArrived {
                 movement_id,
@@ -1240,41 +1087,19 @@ impl VillageProjector {
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: return_action_id,
-                        action_type: ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id: return_army.id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: return_army.clone(),
-                            bounty: report.bounty.clone(),
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id: return_army.id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: return_army,
-                            bounty: report.bounty,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::army_return_scheduled_action(
+                    return_action_id,
+                    movement_id,
+                    return_army.id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    return_army,
+                    report.bounty,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::BattleOutcomeAppliedToVillage {
                 source_village_id,
@@ -1513,41 +1338,19 @@ impl VillageProjector {
                         .await
                         .map_err(|e| CqrsError::EventStore(e.to_string()))?;
                 }
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: return_action_id,
-                        action_type: ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id: return_army.id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: return_army.clone(),
-                            bounty: None,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id: return_army.id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: return_army,
-                            bounty: None,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::movements::army_return_scheduled_action(
+                    return_action_id,
+                    movement_id,
+                    return_army.id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    return_army,
+                    None,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::ArmyReturned {
                 movement_id,
@@ -1637,33 +1440,18 @@ impl VillageProjector {
                 cost,
                 execute_at,
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::AddBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name: building_name.clone(),
-                            level,
-                            speed,
-                        }
-                        .action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::AddBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name: building_name.clone(),
-                            level,
-                            speed,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                let action = workflows::buildings::scheduled_action(
+                    action_id,
+                    execute_at,
+                    BuildingWorkflowKind::Add,
+                    village_id,
+                    player_id,
+                    slot_id,
+                    building_name.clone(),
+                    level,
+                    speed,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await?;
                 self.deduct_village_resources_in_tx(tx, village_id, &cost)
                     .await
             }
@@ -1678,33 +1466,18 @@ impl VillageProjector {
                 cost,
                 execute_at,
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::UpgradeBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name: building_name.clone(),
-                            level,
-                            speed,
-                        }
-                        .action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::UpgradeBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name: building_name.clone(),
-                            level,
-                            speed,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                let action = workflows::buildings::scheduled_action(
+                    action_id,
+                    execute_at,
+                    BuildingWorkflowKind::Upgrade,
+                    village_id,
+                    player_id,
+                    slot_id,
+                    building_name.clone(),
+                    level,
+                    speed,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await?;
                 self.deduct_village_resources_in_tx(tx, village_id, &cost)
                     .await
             }
@@ -1718,33 +1491,18 @@ impl VillageProjector {
                 speed,
                 execute_at,
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: ScheduledActionPayload::DowngradeBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name: building_name.clone(),
-                            level,
-                            speed,
-                        }
-                        .action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::DowngradeBuilding {
-                            village_id,
-                            player_id,
-                            slot_id,
-                            building_name,
-                            level,
-                            speed,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await
+                let action = workflows::buildings::scheduled_action(
+                    action_id,
+                    execute_at,
+                    BuildingWorkflowKind::Downgrade,
+                    village_id,
+                    player_id,
+                    slot_id,
+                    building_name,
+                    level,
+                    speed,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await
             }
             VillageEvent::UnitTrainingScheduled {
                 action_id,
@@ -1757,27 +1515,17 @@ impl VillageProjector {
                 cost,
                 execute_at,
             } => {
-                let payload = ScheduledActionPayload::TrainUnit {
+                let action = workflows::training::scheduled_action(
                     action_id,
+                    execute_at,
                     village_id,
                     player_id,
                     slot_id,
-                    unit: unit.clone(),
+                    unit.clone(),
                     time_per_unit,
                     quantity_remaining,
-                    execute_at,
-                };
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: payload.action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await?;
                 self.deduct_village_resources_in_tx(tx, village_id, &cost)
                     .await
             }
@@ -1824,23 +1572,15 @@ impl VillageProjector {
                 cost,
                 execute_at,
             } => {
-                let payload = ScheduledActionPayload::ResearchAcademy {
+                let action = workflows::research::scheduled_action(
                     action_id,
+                    execute_at,
+                    workflows::research::ResearchWorkflowKind::Academy,
                     village_id,
                     player_id,
-                    unit: unit.clone(),
-                };
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: payload.action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                    unit.clone(),
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await?;
                 self.deduct_village_resources_in_tx(tx, village_id, &cost)
                     .await
             }
@@ -1871,23 +1611,15 @@ impl VillageProjector {
                 cost,
                 execute_at,
             } => {
-                let payload = ScheduledActionPayload::ResearchSmithy {
+                let action = workflows::research::scheduled_action(
                     action_id,
+                    execute_at,
+                    workflows::research::ResearchWorkflowKind::Smithy,
                     village_id,
                     player_id,
-                    unit: unit.clone(),
-                };
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: action_id,
-                        action_type: payload.action_type(),
-                        execute_at,
-                        payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                    unit.clone(),
+                )?;
+                self.add_scheduled_action_in_tx(tx, &action).await?;
                 self.deduct_village_resources_in_tx(tx, village_id, &cost)
                     .await
             }
@@ -1922,67 +1654,28 @@ impl VillageProjector {
                 arrives_at,
                 returns_at,
             } => {
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: arrival_action_id,
-                        action_type: ScheduledActionPayload::MerchantsArrival {
-                            action_id: arrival_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            resources: resources.clone(),
-                            merchants_used,
-                            arrives_at,
-                        }
-                        .action_type(),
-                        execute_at: arrives_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::MerchantsArrival {
-                            action_id: arrival_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            resources: resources.clone(),
-                            merchants_used,
-                            arrives_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                let arrival_action = workflows::merchants::arrival_scheduled_action(
+                    arrival_action_id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    resources.clone(),
+                    merchants_used,
+                    arrives_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &arrival_action).await?;
 
-                self.add_scheduled_action_in_tx(
-                    tx,
-                    &ScheduledAction {
-                        id: return_action_id,
-                        action_type: ScheduledActionPayload::MerchantsReturn {
-                            action_id: return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id: Some(target_village_id),
-                            player_id,
-                            merchants_used,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::MerchantsReturn {
-                            action_id: return_action_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id: Some(target_village_id),
-                            player_id,
-                            merchants_used,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    },
-                )
-                .await?;
+                let return_action = workflows::merchants::return_scheduled_action(
+                    return_action_id,
+                    source_village_id,
+                    source_village_id,
+                    Some(target_village_id),
+                    player_id,
+                    merchants_used,
+                    returns_at,
+                )?;
+                self.add_scheduled_action_in_tx(tx, &return_action).await?;
 
                 if !resources_already_reserved {
                     let source = self

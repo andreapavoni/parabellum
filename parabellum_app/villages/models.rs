@@ -187,6 +187,171 @@ pub enum ScheduledActionType {
     HeroRevival,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BuildingWorkflowKind {
+    Add,
+    Upgrade,
+    Downgrade,
+}
+
+impl BuildingWorkflowKind {
+    pub fn action_type(&self) -> ScheduledActionType {
+        match self {
+            Self::Add => ScheduledActionType::AddBuilding,
+            Self::Upgrade => ScheduledActionType::UpgradeBuilding,
+            Self::Downgrade => ScheduledActionType::DowngradeBuilding,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BuildingWorkflow {
+    pub kind: BuildingWorkflowKind,
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub slot_id: u8,
+    pub building_name: BuildingName,
+    pub level: u8,
+    pub speed: i8,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainingWorkflow {
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub slot_id: u8,
+    pub unit: parabellum_types::army::UnitName,
+    pub time_per_unit: i32,
+    pub quantity_remaining: i32,
+    pub execute_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResearchWorkflowKind {
+    Academy,
+    Smithy,
+}
+
+impl ResearchWorkflowKind {
+    pub fn action_type(&self) -> ScheduledActionType {
+        match self {
+            Self::Academy => ScheduledActionType::ResearchAcademy,
+            Self::Smithy => ScheduledActionType::ResearchSmithy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResearchWorkflow {
+    pub kind: ResearchWorkflowKind,
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub unit: parabellum_types::army::UnitName,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HeroRevivalWorkflow {
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub hero: Hero,
+    pub reset: bool,
+    pub revive_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MerchantArrivalWorkflow {
+    pub village_id: u32,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub player_id: Uuid,
+    pub resources: ResourceGroup,
+    pub merchants_used: u8,
+    pub arrives_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MerchantReturnWorkflow {
+    pub village_id: u32,
+    pub source_village_id: u32,
+    pub target_village_id: Option<u32>,
+    pub player_id: Uuid,
+    pub merchants_used: u8,
+    pub returns_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArmyReturnWorkflow {
+    pub village_id: u32,
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub player_id: Uuid,
+    pub army: Army,
+    pub bounty: Option<ResourceGroup>,
+    pub returns_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReinforcementArrivalWorkflow {
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub player_id: Uuid,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub army: Army,
+    pub arrives_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScoutArrivalWorkflow {
+    pub action_id: Uuid,
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub return_action_id: Uuid,
+    pub village_id: u32,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub player_id: Uuid,
+    pub army: Army,
+    pub target: ScoutingTarget,
+    pub attack_type: AttackType,
+    pub arrives_at: DateTime<Utc>,
+    pub returns_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettlersArrivalWorkflow {
+    pub action_id: Uuid,
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub village_id: u32,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub target_position: Position,
+    pub player_id: Uuid,
+    pub village_name: String,
+    pub tribe: Tribe,
+    pub arrives_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AttackArrivalWorkflow {
+    pub action_id: Uuid,
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub return_action_id: Uuid,
+    pub village_id: u32,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub player_id: Uuid,
+    pub army: Army,
+    pub attack_type: AttackType,
+    pub catapult_targets: [Option<BuildingName>; 2],
+    pub arrives_at: DateTime<Utc>,
+    pub returns_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScheduledAction {
     pub id: Uuid,
@@ -200,141 +365,37 @@ pub struct ScheduledAction {
 #[serde(tag = "type")]
 pub enum ScheduledActionPayload {
     ReinforcementArrival {
-        movement_id: Uuid,
-        army_id: Uuid,
-        player_id: Uuid,
-        source_village_id: u32,
-        target_village_id: u32,
-        army: Army,
-        arrives_at: DateTime<Utc>,
+        workflow: ReinforcementArrivalWorkflow,
     },
     SettlersArrival {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        target_position: Position,
-        player_id: Uuid,
-        village_name: String,
-        tribe: Tribe,
-        arrives_at: DateTime<Utc>,
+        workflow: SettlersArrivalWorkflow,
     },
     AttackArrival {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        return_action_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        player_id: Uuid,
-        army: Army,
-        attack_type: AttackType,
-        catapult_targets: [Option<BuildingName>; 2],
-        arrives_at: DateTime<Utc>,
-        returns_at: DateTime<Utc>,
+        workflow: AttackArrivalWorkflow,
     },
     ArmyReturn {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        player_id: Uuid,
-        army: Army,
-        bounty: Option<parabellum_types::common::ResourceGroup>,
-        returns_at: DateTime<Utc>,
+        workflow: ArmyReturnWorkflow,
     },
     ScoutArrival {
-        action_id: Uuid,
-        movement_id: Uuid,
-        army_id: Uuid,
-        return_action_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        player_id: Uuid,
-        army: Army,
-        target: ScoutingTarget,
-        attack_type: AttackType,
-        arrives_at: DateTime<Utc>,
-        returns_at: DateTime<Utc>,
+        workflow: ScoutArrivalWorkflow,
     },
     MerchantsArrival {
-        action_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: u32,
-        player_id: Uuid,
-        resources: parabellum_types::common::ResourceGroup,
-        merchants_used: u8,
-        arrives_at: DateTime<Utc>,
+        workflow: MerchantArrivalWorkflow,
     },
     MerchantsReturn {
-        action_id: Uuid,
-        village_id: u32,
-        source_village_id: u32,
-        target_village_id: Option<u32>,
-        player_id: Uuid,
-        merchants_used: u8,
-        returns_at: DateTime<Utc>,
+        workflow: MerchantReturnWorkflow,
     },
-    AddBuilding {
-        village_id: u32,
-        player_id: Uuid,
-        slot_id: u8,
-        building_name: BuildingName,
-        level: u8,
-        speed: i8,
+    Building {
+        workflow: BuildingWorkflow,
     },
-    UpgradeBuilding {
-        village_id: u32,
-        player_id: Uuid,
-        slot_id: u8,
-        building_name: BuildingName,
-        level: u8,
-        speed: i8,
+    Training {
+        workflow: TrainingWorkflow,
     },
-    DowngradeBuilding {
-        village_id: u32,
-        player_id: Uuid,
-        slot_id: u8,
-        building_name: BuildingName,
-        level: u8,
-        speed: i8,
-    },
-    TrainUnit {
-        action_id: Uuid,
-        village_id: u32,
-        player_id: Uuid,
-        slot_id: u8,
-        unit: parabellum_types::army::UnitName,
-        time_per_unit: i32,
-        quantity_remaining: i32,
-        execute_at: DateTime<Utc>,
-    },
-    ResearchAcademy {
-        action_id: Uuid,
-        village_id: u32,
-        player_id: Uuid,
-        unit: parabellum_types::army::UnitName,
-    },
-    ResearchSmithy {
-        action_id: Uuid,
-        village_id: u32,
-        player_id: Uuid,
-        unit: parabellum_types::army::UnitName,
+    Research {
+        workflow: ResearchWorkflow,
     },
     HeroRevival {
-        action_id: Uuid,
-        village_id: u32,
-        player_id: Uuid,
-        hero: Hero,
-        reset: bool,
-        revive_at: DateTime<Utc>,
+        workflow: HeroRevivalWorkflow,
     },
 }
 
@@ -352,14 +413,9 @@ impl ScheduledActionPayload {
                 ScheduledActionType::MerchantsArrival
             }
             ScheduledActionPayload::MerchantsReturn { .. } => ScheduledActionType::MerchantsReturn,
-            ScheduledActionPayload::AddBuilding { .. } => ScheduledActionType::AddBuilding,
-            ScheduledActionPayload::UpgradeBuilding { .. } => ScheduledActionType::UpgradeBuilding,
-            ScheduledActionPayload::DowngradeBuilding { .. } => {
-                ScheduledActionType::DowngradeBuilding
-            }
-            ScheduledActionPayload::TrainUnit { .. } => ScheduledActionType::TrainUnit,
-            ScheduledActionPayload::ResearchAcademy { .. } => ScheduledActionType::ResearchAcademy,
-            ScheduledActionPayload::ResearchSmithy { .. } => ScheduledActionType::ResearchSmithy,
+            ScheduledActionPayload::Building { workflow } => workflow.kind.action_type(),
+            ScheduledActionPayload::Training { .. } => ScheduledActionType::TrainUnit,
+            ScheduledActionPayload::Research { workflow } => workflow.kind.action_type(),
             ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
         }
     }

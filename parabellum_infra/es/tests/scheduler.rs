@@ -1,7 +1,7 @@
+use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::models::{
     self, ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
-use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_app::villages::{
     AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
@@ -25,8 +25,8 @@ use super::fixtures::{
     EsScenario, academy, barracks, deployed_units, granary, home_units,
     insert_corrupt_scheduled_action, main_building, marketplace, process_due_until, rally_point,
     refill_resources, research_and_complete, resources, scheduled_action_status_count,
-    setup_village, smithy, stationed_units, test_server_speed, train_and_complete, village_busy_merchants,
-    village_owner, village_stocks, warehouse, with_test_pool,
+    setup_village, smithy, stationed_units, test_server_speed, train_and_complete,
+    village_busy_merchants, village_owner, village_stocks, warehouse, with_test_pool,
 };
 
 fn minus(
@@ -801,8 +801,8 @@ async fn village_es_service_queued_upgrades_use_incremental_levels_and_exact_cum
             .iter()
             .map(|a| {
                 match serde_json::from_value::<ScheduledActionPayload>(a.payload.clone()).unwrap() {
-                    ScheduledActionPayload::UpgradeBuilding { level, .. } => level,
-                    _ => panic!("expected UpgradeBuilding payload"),
+                    ScheduledActionPayload::Building { workflow } => workflow.level,
+                    _ => panic!("expected building payload"),
                 }
             })
             .collect();
@@ -890,7 +890,10 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at,
                     returns_at,
                 },
@@ -996,19 +999,24 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
         let return_action_id = Uuid::new_v4();
 
         let payload = ScheduledActionPayload::AttackArrival {
-            action_id: arrival_action_id,
-            movement_id: Uuid::new_v4(),
-            army_id: Uuid::new_v4(),
-            return_action_id,
-            village_id: village_id,
-            source_village_id: village_id,
-            target_village_id,
-            player_id,
-            army: arriving_army,
-            attack_type: AttackType::Normal,
-            catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
-            arrives_at,
-            returns_at,
+            workflow: parabellum_app::villages::models::AttackArrivalWorkflow {
+                action_id: arrival_action_id,
+                movement_id: Uuid::new_v4(),
+                army_id: Uuid::new_v4(),
+                return_action_id,
+                village_id,
+                source_village_id: village_id,
+                target_village_id,
+                player_id,
+                army: arriving_army,
+                attack_type: AttackType::Normal,
+                catapult_targets: [
+                    Some(BuildingName::MainBuilding),
+                    Some(BuildingName::Warehouse),
+                ],
+                arrives_at,
+                returns_at,
+            },
         };
         let repo = PostgresScheduledActionRepository::new(pool.clone());
         repo.add(&ScheduledAction {
@@ -1160,7 +1168,10 @@ async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_a
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at,
                     returns_at,
                 },
@@ -1236,7 +1247,10 @@ async fn village_es_service_attack_return_clamps_bounty_to_storage_capacity() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Raid,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::MainBuilding)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::MainBuilding),
+                    ],
                     arrives_at,
                     returns_at,
                 },
@@ -1363,7 +1377,10 @@ async fn village_es_service_attack_wipeout_skips_return_scheduling() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at,
                     returns_at,
                 },
@@ -1465,7 +1482,10 @@ async fn village_es_service_attack_bounty_respects_source_capacity() {
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Raid,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at,
                     returns_at,
                 },
@@ -1567,7 +1587,10 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             .await
             .unwrap();
 
-        let movements_after_scout_send = service.get_village_troop_movements(village_id).await.unwrap();
+        let movements_after_scout_send = service
+            .get_village_troop_movements(village_id)
+            .await
+            .unwrap();
         assert_eq!(movements_after_scout_send.outgoing.len(), 1);
         assert_eq!(
             movements_after_scout_send.outgoing[0].movement_type,
@@ -1659,7 +1682,10 @@ async fn village_es_service_conquer_is_blocked_without_expansion_prerequisites()
                     units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at: now + chrono::Duration::seconds(2),
                     returns_at: now + chrono::Duration::seconds(5),
                 },
@@ -1793,7 +1819,10 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at: first_now + chrono::Duration::seconds(2),
                     returns_at: first_now + chrono::Duration::seconds(4),
                 },
@@ -1825,7 +1854,10 @@ async fn village_es_service_conquer_consumes_only_one_surviving_chief_unit() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 2, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at: second_now + chrono::Duration::seconds(2),
                     returns_at: second_now + chrono::Duration::seconds(4),
                 },
@@ -1878,11 +1910,11 @@ async fn village_es_service_loyalty_regenerates_with_residence_over_time() {
              SET loyalty = 80, loyalty_updated_at = NOW() - ($2::bigint * INTERVAL '1 second')
              WHERE village_id = $1",
         )
-            .bind(village_id as i32)
-            .bind(tick_secs)
-            .execute(&pool)
-            .await
-            .unwrap();
+        .bind(village_id as i32)
+        .bind(tick_secs)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let after_read = service.get_village(village_id).await.unwrap();
         assert!(

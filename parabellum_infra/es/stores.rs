@@ -72,19 +72,13 @@ impl PostgresEventStore {
         // Workflow boundary: all stream version checks and all inserts happen in
         // one DB transaction. We fail fast on the first conflict and commit only
         // if every stream append is valid.
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
 
         let stored = self
             .append_workflow_events_in_tx(&mut tx, aggregate_type, streams)
             .await?;
 
-        tx.commit()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        tx.commit().await.map_err(CqrsError::domain_source)?;
 
         Ok(stored)
     }
@@ -178,9 +172,7 @@ fn row_to_stored_event(row: PgRow) -> Result<StoredEvent, CqrsError> {
         .map_err(CqrsError::domain_source)? as u64;
 
     Ok(StoredEvent {
-        id: row
-            .try_get("event_id")
-            .map_err(CqrsError::domain_source)?,
+        id: row.try_get("event_id").map_err(CqrsError::domain_source)?,
         aggregate_id: row
             .try_get("aggregate_id")
             .map_err(CqrsError::domain_source)?,
@@ -213,11 +205,7 @@ impl EventStore for PostgresEventStore {
         events: &[NewEvent],
         expected_version: u64,
     ) -> Result<Vec<StoredEvent>, CqrsError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
 
         let current_version: i64 = sqlx::query_scalar(
             r#"
@@ -285,9 +273,7 @@ impl EventStore for PostgresEventStore {
             });
         }
 
-        tx.commit()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        tx.commit().await.map_err(CqrsError::domain_source)?;
 
         Ok(stored)
     }

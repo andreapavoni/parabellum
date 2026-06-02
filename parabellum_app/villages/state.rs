@@ -300,7 +300,10 @@ impl VillageState {
             .collect();
         let mut current = self.find_building_by_slot(slot_id);
         if current.is_none() {
-            let Some(first_queued) = queued_for_slot.iter().min_by_key(|action| action.execute_at) else {
+            let Some(first_queued) = queued_for_slot
+                .iter()
+                .min_by_key(|action| action.execute_at)
+            else {
                 return Err(GameError::EmptySlot { slot_id }.into());
             };
             let queued_level = queued_for_slot
@@ -323,7 +326,11 @@ impl VillageState {
             .iter()
             .filter(|action| action.slot_id == slot_id)
             .count() as u8)
-            .saturating_sub(if self.find_building_by_slot(slot_id).is_some() { 0 } else { current.building.level });
+            .saturating_sub(if self.find_building_by_slot(slot_id).is_some() {
+                0
+            } else {
+                current.building.level
+            });
         let max = get_building_data(&current.building.name)
             .map_err(ApplicationError::from)?
             .rules

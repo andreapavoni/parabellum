@@ -620,24 +620,31 @@ pub fn village_resources_response(
         }
         (count, next_at)
     };
-    let (incoming_attacks_raids, incoming_attacks_raids_next_at) = summarize(
-        &movements.incoming,
-        |kind| matches!(kind, TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout),
-    );
-    let (
-        incoming_returns_reinforcements,
-        incoming_returns_reinforcements_next_at,
-    ) = summarize(&movements.incoming, |kind| {
-        matches!(kind, TroopMovementType::Return | TroopMovementType::Reinforcement)
-    });
-    let (outgoing_attacks_raids, outgoing_attacks_raids_next_at) = summarize(
-        &movements.outgoing,
-        |kind| matches!(kind, TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout),
-    );
-    let (outgoing_reinforcements, outgoing_reinforcements_next_at) = summarize(
-        &movements.outgoing,
-        |kind| kind == TroopMovementType::Reinforcement,
-    );
+    let (incoming_attacks_raids, incoming_attacks_raids_next_at) =
+        summarize(&movements.incoming, |kind| {
+            matches!(
+                kind,
+                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
+            )
+        });
+    let (incoming_returns_reinforcements, incoming_returns_reinforcements_next_at) =
+        summarize(&movements.incoming, |kind| {
+            matches!(
+                kind,
+                TroopMovementType::Return | TroopMovementType::Reinforcement
+            )
+        });
+    let (outgoing_attacks_raids, outgoing_attacks_raids_next_at) =
+        summarize(&movements.outgoing, |kind| {
+            matches!(
+                kind,
+                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
+            )
+        });
+    let (outgoing_reinforcements, outgoing_reinforcements_next_at) =
+        summarize(&movements.outgoing, |kind| {
+            kind == TroopMovementType::Reinforcement
+        });
     VillageResourcesResponse {
         server_time: Utc::now().timestamp(),
         village: village_summary(village),

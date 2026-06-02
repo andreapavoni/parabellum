@@ -1,8 +1,8 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
-use parabellum_types::tribe::Tribe;
 use parabellum_types::errors::AppError;
+use parabellum_types::tribe::Tribe;
 use uuid::Uuid;
 
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};

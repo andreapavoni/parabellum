@@ -496,14 +496,17 @@ pub async fn preview_send_resources(
 
     let total_resources = payload.lumber + payload.clay + payload.iron + payload.crop;
     if total_resources == 0 {
-        return Err(ApiError::unprocessable("At least one resource amount must be greater than zero"));
+        return Err(ApiError::unprocessable(
+            "At least one resource amount must be greater than zero",
+        ));
     }
 
     let target_position = Position {
         x: payload.target_x,
         y: payload.target_y,
     };
-    let merchant_speed = ((user.village.tribe.merchant_stats().speed as u32) * state.server_speed as u32)
+    let merchant_speed = ((user.village.tribe.merchant_stats().speed as u32)
+        * state.server_speed as u32)
         .min(u8::MAX as u32) as u8;
     let travel_time_secs = user.village.position.calculate_travel_time_secs(
         target_position,
@@ -750,15 +753,17 @@ pub async fn preview_troops(
         .units()
         .iter()
         .enumerate()
-        .filter_map(|(idx, unit)| {
-            if units.get(idx) > 0 {
-                Some(unit)
-            } else {
-                None
-            }
-        })
+        .filter_map(
+            |(idx, unit)| {
+                if units.get(idx) > 0 { Some(unit) } else { None }
+            },
+        )
         .collect::<Vec<_>>();
-    let min_speed = selected_units.iter().map(|unit| unit.speed).min().unwrap_or(1);
+    let min_speed = selected_units
+        .iter()
+        .map(|unit| unit.speed)
+        .min()
+        .unwrap_or(1);
     let scout_only = !selected_units.is_empty()
         && selected_units
             .iter()
@@ -927,7 +932,13 @@ pub async fn preview_found_village(
         return Err(ApiError::unprocessable("Target field is not available"));
     }
 
-    let settlers_speed = user.village.tribe.units().get(9).map(|u| u.speed).unwrap_or(1);
+    let settlers_speed = user
+        .village
+        .tribe
+        .units()
+        .get(9)
+        .map(|u| u.speed)
+        .unwrap_or(1);
     let travel_time_secs = user.village.position.calculate_travel_time_secs(
         target_position,
         settlers_speed,

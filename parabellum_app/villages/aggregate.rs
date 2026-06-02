@@ -48,7 +48,8 @@ impl VillageAggregate {
         resources: parabellum_types::common::ResourceGroup,
         server_speed: i8,
     ) -> Result<u8, parabellum_types::errors::ApplicationError> {
-        self.village.schedule_send_resources(resources, server_speed)
+        self.village
+            .schedule_send_resources(resources, server_speed)
     }
 
     pub fn village(&self) -> &VillageState {

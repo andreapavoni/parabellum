@@ -265,7 +265,8 @@ impl PostgresVillageRepository {
             let elapsed_secs = (chrono::Utc::now() - refreshed.loyalty_updated_at).num_seconds();
             if elapsed_secs > 0 {
                 let speed = (parabellum_app::config::Config::from_env().speed as f64).max(1.0);
-                let rate_per_sec = (2.0 * residence_or_palace_level as f64 * speed) / (3.0 * 3600.0);
+                let rate_per_sec =
+                    (2.0 * residence_or_palace_level as f64 * speed) / (3.0 * 3600.0);
                 let gained = (elapsed_secs as f64 * rate_per_sec).floor() as u8;
                 refreshed.loyalty = refreshed.loyalty.saturating_add(gained).min(100);
             }

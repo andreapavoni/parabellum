@@ -19,8 +19,8 @@ use uuid::Uuid;
 use parabellum_app::read_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::village::Village;
-use parabellum_types::map::ValleyTopology;
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::map::ValleyTopology;
 
 use crate::{
     api::{
@@ -672,49 +672,54 @@ pub async fn map_field(
         }
     };
 
-    let marketplace_slot = user.village.get_building_by_name(&BuildingName::Marketplace);
+    let marketplace_slot = user
+        .village
+        .get_building_by_name(&BuildingName::Marketplace);
     let rally_point_slot = user.village.get_building_by_name(&BuildingName::RallyPoint);
     let has_marketplace = marketplace_slot.is_some();
     let has_rally_point = rally_point_slot.is_some();
 
-    let can_preview_founding = if matches!(tile_type, TileType::Valley) && field.village_id.is_none() {
-        let settlers_ready = user.village.count_settlers_at_home() >= 3;
-        let has_rally = has_rally_point;
-        let has_resources = user
-            .village
-            .has_enough_resources(&parabellum_types::common::ResourceGroup::new(800, 800, 800, 800));
-        let expansion_info = state
-            .game_app
-            .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
-            .await
-            .ok();
-        let cp_ok = expansion_info
-            .as_ref()
-            .map(|info| info.player_culture_points >= info.next_cp_required)
-            .unwrap_or(false);
-        let owned_villages = state
-            .game_app
-            .list_villages_by_player_id(user.player.id)
-            .await
-            .ok();
-        let child_villages_count = owned_villages
-            .as_ref()
-            .map(|villages| {
-                villages
-                    .iter()
-                    .filter(|v| v.parent_village_id == Some(user.village.id))
-                    .count() as u8
-            })
-            .unwrap_or(0);
-        let free_slot = user
-            .village
-            .max_foundation_slots()
-            .saturating_sub(child_villages_count)
-            > 0;
-        settlers_ready && has_rally && has_resources && cp_ok && free_slot
-    } else {
-        false
-    };
+    let can_preview_founding =
+        if matches!(tile_type, TileType::Valley) && field.village_id.is_none() {
+            let settlers_ready = user.village.count_settlers_at_home() >= 3;
+            let has_rally = has_rally_point;
+            let has_resources =
+                user.village
+                    .has_enough_resources(&parabellum_types::common::ResourceGroup::new(
+                        800, 800, 800, 800,
+                    ));
+            let expansion_info = state
+                .game_app
+                .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
+                .await
+                .ok();
+            let cp_ok = expansion_info
+                .as_ref()
+                .map(|info| info.player_culture_points >= info.next_cp_required)
+                .unwrap_or(false);
+            let owned_villages = state
+                .game_app
+                .list_villages_by_player_id(user.player.id)
+                .await
+                .ok();
+            let child_villages_count = owned_villages
+                .as_ref()
+                .map(|villages| {
+                    villages
+                        .iter()
+                        .filter(|v| v.parent_village_id == Some(user.village.id))
+                        .count() as u8
+                })
+                .unwrap_or(0);
+            let free_slot = user
+                .village
+                .max_foundation_slots()
+                .saturating_sub(child_villages_count)
+                > 0;
+            settlers_ready && has_rally && has_resources && cp_ok && free_slot
+        } else {
+            false
+        };
 
     Ok(Json(MapFieldDetailResponse {
         id: field.id,

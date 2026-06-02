@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use parabellum_app::config::Config;
-use parabellum_app::ports::identity::{InitialVillageSetup, IdentityPort, RegisterPlayerRequest};
+use parabellum_app::ports::identity::{IdentityPort, InitialVillageSetup, RegisterPlayerRequest};
 use parabellum_app::villages::{FoundVillage, SetVillageResources};
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
@@ -116,8 +116,8 @@ fn default_quadrant() -> SeedQuadrant {
 }
 
 pub fn parse_seed_file(raw: &str) -> Result<SeedFile, ApplicationError> {
-    let parsed: SeedFile =
-        serde_json::from_str(raw).map_err(|e| ApplicationError::Unknown(format!("invalid seed JSON: {e}")))?;
+    let parsed: SeedFile = serde_json::from_str(raw)
+        .map_err(|e| ApplicationError::Unknown(format!("invalid seed JSON: {e}")))?;
     if parsed.players.is_empty() {
         return Err(ApplicationError::Unknown(
             "invalid seed JSON: players cannot be empty".to_string(),
@@ -158,7 +158,10 @@ pub async fn run_seed(
             .email
             .clone()
             .unwrap_or_else(|| format!("{}@example.com", player.username));
-        let password = player.password.clone().unwrap_or_else(|| player.username.clone());
+        let password = player
+            .password
+            .clone()
+            .unwrap_or_else(|| player.username.clone());
         let player_id = Uuid::new_v4();
         let identity = IdentityService::new(pool.clone(), std::sync::Arc::new(config.clone()));
 
@@ -213,20 +216,26 @@ pub async fn run_seed(
         let mut previous_village_id = Some(first.village_id);
         for (village_idx, village) in player.villages.iter().enumerate().skip(1) {
             let village = resolve_village_from_template(village, seed_file_path)?;
-            let (village_id, village_position, soft_reserved) = if let Some(pos) = village.position.clone() {
+            let (village_id, village_position, soft_reserved) = if let Some(pos) =
+                village.position.clone()
+            {
                 let village_id = pos.to_id(config.world_size as i32);
                 ensure_map_field_is_free(pool, village_id).await?;
                 reserve_map_field_for_player(pool, village_id, player_id).await?;
                 (village_id, pos, true)
             } else {
-                claim_random_unoccupied_valley(pool, &map_repository, &village.quadrant, player_id).await?
+                claim_random_unoccupied_valley(pool, &map_repository, &village.quadrant, player_id)
+                    .await?
             };
 
             let speed = village.speed.unwrap_or(config.speed);
             let topology = load_valley_topology(pool, village_id).await?;
 
-            let mut resource_buildings =
-                topology_resource_buildings(&topology, speed, village.resource_fields_target_level)?;
+            let mut resource_buildings = topology_resource_buildings(
+                &topology,
+                speed,
+                village.resource_fields_target_level,
+            )?;
             let mut extra_buildings = village_buildings(speed, &village)?
                 .into_iter()
                 .filter(|b| b.slot_id >= 19)
@@ -322,7 +331,9 @@ fn resolve_village_from_template(
             "cannot resolve seed template directory".to_string(),
         ));
     };
-    let template_path = seed_dir.join("templates").join(format!("{template_name}.json"));
+    let template_path = seed_dir
+        .join("templates")
+        .join(format!("{template_name}.json"));
     let raw = fs::read_to_string(&template_path).map_err(|e| {
         ApplicationError::Unknown(format!(
             "cannot read template {}: {e}",
@@ -463,14 +474,13 @@ async fn ensure_map_field_is_free(
     pool: &sqlx::PgPool,
     village_id: u32,
 ) -> Result<(), ApplicationError> {
-    let occupied: bool =
-        sqlx::query_scalar(
-            "SELECT village_id IS NOT NULL OR player_id IS NOT NULL FROM rm_map_fields WHERE id = $1",
-        )
-            .bind(village_id as i32)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    let occupied: bool = sqlx::query_scalar(
+        "SELECT village_id IS NOT NULL OR player_id IS NOT NULL FROM rm_map_fields WHERE id = $1",
+    )
+    .bind(village_id as i32)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
     if occupied {
         return Err(ApplicationError::Unknown(format!(
             "target map field {} is already occupied",

@@ -1,8 +1,8 @@
 use std::{fs, path::PathBuf};
 
 use parabellum_app::config::Config;
-use parabellum_infra::seed::{parse_seed_file, run_seed};
 use parabellum_infra::establish_connection_pool;
+use parabellum_infra::seed::{parse_seed_file, run_seed};
 use parabellum_types::errors::ApplicationError;
 
 fn seed_inputs_from_args() -> PathBuf {

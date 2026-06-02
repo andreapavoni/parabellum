@@ -14,13 +14,14 @@ use crate::ports::{
     identity::{IdentityPort, RegisterPlayerRequest},
     queries::VillageQueryPort,
     scheduler::SchedulerPort,
-        villages::{
-            AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-            CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest, RenameVillageRequest,
-            ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
-            SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-            SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
-        },
+    villages::{
+        AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
+        CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
+        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+        ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+        SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+        UpgradeBuildingRequest, VillageCommandsPort,
+    },
 };
 
 #[derive(Clone)]

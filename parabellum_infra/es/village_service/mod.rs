@@ -283,7 +283,9 @@ impl VillageEsService {
             .player_has_pending_hero_revival(command.player_id)
             .await?
         {
-            return Err(CqrsError::domain_source(GameError::HeroRevivalAlreadyPending));
+            return Err(CqrsError::domain_source(
+                GameError::HeroRevivalAlreadyPending,
+            ));
         }
         if self.player_has_alive_hero(command.player_id).await? {
             return Err(CqrsError::domain_source(GameError::HeroAlreadyExists));
@@ -477,7 +479,9 @@ impl VillageEsService {
             .await
             .map_err(CqrsError::domain_source)?
         else {
-            return Err(CqrsError::domain_source(GameError::MarketplaceOfferNoLongerValid));
+            return Err(CqrsError::domain_source(
+                GameError::MarketplaceOfferNoLongerValid,
+            ));
         };
         if accepting_village_id == offer.owner_village_id
             || accepting_player_id == offer.owner_player_id
@@ -502,10 +506,12 @@ impl VillageEsService {
             .get_building_by_name(&BuildingName::Marketplace)
             .is_none_or(|slot| slot.building.level == 0)
         {
-            return Err(CqrsError::domain_source(GameError::BuildingRequirementsNotMet {
-                building: BuildingName::Marketplace,
-                level: 1,
-            }));
+            return Err(CqrsError::domain_source(
+                GameError::BuildingRequirementsNotMet {
+                    building: BuildingName::Marketplace,
+                    level: 1,
+                },
+            ));
         }
         if !accepting_village.has_enough_resources(&seek_group) {
             return Err(CqrsError::domain_source(GameError::NotEnoughResources));
@@ -768,11 +774,7 @@ impl VillageEsService {
         let store = PostgresEventStore::new(self.pool.clone());
         let streams = self.build_village_workflow_appends(workflow_events).await?;
 
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
         let mut stored = store
             .append_workflow_events_in_tx(&mut tx, aggregate_type, &streams)
             .await?;
@@ -784,9 +786,7 @@ impl VillageEsService {
             village_projector.process_in_tx(&mut tx, event).await?;
             report_projector.process_in_tx(&mut tx, event).await?;
         }
-        tx.commit()
-            .await
-            .map_err(CqrsError::domain_source)?;
+        tx.commit().await.map_err(CqrsError::domain_source)?;
         Ok(())
     }
 }

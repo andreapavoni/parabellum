@@ -69,7 +69,7 @@ impl PostgresScheduledActionRepository {
                 FROM rm_scheduled_actions
                 WHERE action_type = 'HeroRevival'
                   AND status = 'pending'
-                  AND payload->>'player_id' = $1
+                  AND COALESCE(payload->>'player_id', payload->'workflow'->>'player_id') = $1
             )
             "#,
         )
@@ -205,7 +205,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int = $2
             ORDER BY execute_at ASC, created_at ASC
             "#,
         )
@@ -228,7 +228,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'target_village_id')::int = $2
+              AND COALESCE(payload->>'target_village_id', payload->'workflow'->>'target_village_id')::int = $2
             ORDER BY execute_at ASC, created_at ASC
             "#,
         )
@@ -251,7 +251,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int = $2
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -275,7 +275,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'target_village_id')::int = $2
+              AND COALESCE(payload->>'target_village_id', payload->'workflow'->>'target_village_id')::int = $2
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -305,7 +305,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
               COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::bigint AS failed_count
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND COALESCE(payload->>'village_id', payload->'workflow'->>'village_id')::int = $2
               AND ($3::scheduled_action_status IS NULL OR status = $3)
             "#,
         )

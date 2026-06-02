@@ -149,7 +149,5 @@ Command-side rule:
 ## API Surface
 
 - HTTP API is served under `/api/v1`.
-- Contracts and error envelopes are documented in [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md).
 - Workflow fact contracts are documented in [`docs/EVENT_CONTRACTS.md`](docs/EVENT_CONTRACTS.md).
-- Current migration snapshot is tracked in [`docs/ARCHITECTURE_STATUS.md`](docs/ARCHITECTURE_STATUS.md).
 - Machine-readable contract entrypoint: `GET /api/v1/openapi.json`.

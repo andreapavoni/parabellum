@@ -74,7 +74,11 @@ fn loyalty_reduction_per_chief(
         5
     } else {
         0
-    }) - (if defender_great_celebration_active { 5 } else { 0 });
+    }) - (if defender_great_celebration_active {
+        5
+    } else {
+        0
+    });
 
     (rolled + celebration_modifier).clamp(0, 100) as u8
 }

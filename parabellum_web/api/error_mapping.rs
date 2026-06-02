@@ -31,7 +31,7 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
             tracing::warn!(context = context, error = %game_err, "api domain error");
             match game_err {
                 GameError::VillageNotOwned { .. } => {
-                ApiError::not_found("Village not available for the current player")
+                    ApiError::not_found("Village not available for the current player")
                 }
                 GameError::InvalidMarketplaceOffer | GameError::MarketplaceOfferNoLongerValid => {
                     ApiError::conflict(game_err.to_string())
@@ -51,7 +51,9 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
                 AppError::QueueLimitReached { .. } | AppError::QueueItemAlreadyQueued { .. } => {
                     ApiError::conflict(app_err.to_string())
                 }
-                AppError::InvalidAggregateTarget { .. } => ApiError::bad_request(app_err.to_string()),
+                AppError::InvalidAggregateTarget { .. } => {
+                    ApiError::bad_request(app_err.to_string())
+                }
                 _ => internal_error(context, app_err),
             }
         }

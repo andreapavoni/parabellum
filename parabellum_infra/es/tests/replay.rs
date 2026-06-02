@@ -465,7 +465,10 @@ async fn replay_full_mode_is_idempotent_for_attack_outcome_window() {
                     units: TroopSet::new([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]),
                     hero_id: None,
                     attack_type: AttackType::Normal,
-                    catapult_targets: [Some(BuildingName::MainBuilding), Some(BuildingName::Warehouse)],
+                    catapult_targets: [
+                        Some(BuildingName::MainBuilding),
+                        Some(BuildingName::Warehouse),
+                    ],
                     arrives_at: now + chrono::Duration::seconds(2),
                     returns_at: now + chrono::Duration::seconds(5),
                 },

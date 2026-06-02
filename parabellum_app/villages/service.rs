@@ -184,7 +184,9 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         village_id: u32,
         command: &RenameVillage,
     ) -> Result<u32, CqrsError> {
-        self.cqrs.execute::<RenameVillage>(&village_id, command).await
+        self.cqrs
+            .execute::<RenameVillage>(&village_id, command)
+            .await
     }
 
     pub async fn downgrade_building(
@@ -243,6 +245,8 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         village_id: u32,
         command: &MarkReportRead,
     ) -> Result<u32, CqrsError> {
-        self.cqrs.execute::<MarkReportRead>(&village_id, command).await
+        self.cqrs
+            .execute::<MarkReportRead>(&village_id, command)
+            .await
     }
 }

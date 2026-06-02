@@ -1,5 +1,5 @@
-use parabellum_app::villages::{SendSettlers, TrainUnits};
 use parabellum_app::ports::queries::TroopMovementType;
+use parabellum_app::villages::{SendSettlers, TrainUnits};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::{map::Position, tribe::Tribe};
@@ -185,14 +185,9 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
                 .count(),
             18
         );
-        assert!(
-            founded
-                .buildings
-                .iter()
-                .any(|b| b.slot_id == 19
-                    && b.building.name == BuildingName::MainBuilding
-                    && b.building.level == 1)
-        );
+        assert!(founded.buildings.iter().any(|b| b.slot_id == 19
+            && b.building.name == BuildingName::MainBuilding
+            && b.building.level == 1));
         assert_eq!(founded.stocks.lumber, 800);
         assert_eq!(founded.stocks.clay, 800);
         assert_eq!(founded.stocks.iron, 800);
@@ -203,7 +198,6 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
             .await
             .unwrap();
         assert_eq!(source_movements.outgoing.len(), 0);
-
     })
     .await;
 }

@@ -114,7 +114,11 @@ impl IdentityService {
             self.config.speed,
         );
 
-        let server_speed = req.initial_village.as_ref().and_then(|s| s.speed).unwrap_or(self.config.speed);
+        let server_speed = req
+            .initial_village
+            .as_ref()
+            .and_then(|s| s.speed)
+            .unwrap_or(self.config.speed);
         let (village_name, buildings) = village_setup_from_request(&req, &village, server_speed)?;
         let village_id = village.id;
         let found = FoundVillage {
@@ -181,7 +185,11 @@ impl IdentityService {
             return Err(e);
         }
 
-        if let Some(resources) = req.initial_village.as_ref().and_then(|s| s.resources.clone()) {
+        if let Some(resources) = req
+            .initial_village
+            .as_ref()
+            .and_then(|s| s.resources.clone())
+        {
             VillageEsService::new(self.pool.clone())
                 .set_village_resources(
                     village_id,
@@ -263,11 +271,7 @@ impl IdentityService {
             .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(game_map_field.id)))
     }
 
-    async fn authenticate(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> Result<User, ApplicationError> {
+    async fn authenticate(&self, username: &str, password: &str) -> Result<User, ApplicationError> {
         let user = self.user_by_username(username).await?;
         parabellum_app::auth::verify_password(user.password_hash(), password)
             .map_err(|_| ApplicationError::App(AppError::WrongAuthCredentials))?;
@@ -398,7 +402,10 @@ fn upsert_building(buildings: &mut Vec<VillageBuilding>, building: VillageBuildi
     buildings.push(building);
 }
 
-fn ensure_rally_point_minimum(buildings: &mut Vec<VillageBuilding>, speed: i8) -> Result<(), ApplicationError> {
+fn ensure_rally_point_minimum(
+    buildings: &mut Vec<VillageBuilding>,
+    speed: i8,
+) -> Result<(), ApplicationError> {
     if buildings.iter().any(|b| b.slot_id == 39) {
         return Ok(());
     }

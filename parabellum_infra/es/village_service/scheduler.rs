@@ -14,6 +14,7 @@
 //!   canonical fact(s) -> append via `append_village_workflow_events`.
 
 use super::*;
+use crate::es::workflows;
 use parabellum_app::villages::VillageEvent;
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -22,8 +23,8 @@ use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::{Village, VillageBuilding};
 use parabellum_types::army::UnitRole;
-use parabellum_types::map::ValleyTopology;
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::map::ValleyTopology;
 
 struct ComputedAttackOutcome {
     source: ResolveAttackBattle,
@@ -70,177 +71,6 @@ fn default_founded_village_buildings(
     Ok(buildings)
 }
 
-fn build_army_return_fact(
-    action_id: uuid::Uuid,
-    movement_id: uuid::Uuid,
-    army_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    source_village_id: u32,
-    target_village_id: u32,
-    army: Army,
-    bounty: Option<parabellum_types::common::ResourceGroup>,
-    returns_at: chrono::DateTime<chrono::Utc>,
-) -> VillageEvent {
-    VillageEvent::ArmyReturned {
-        action_id,
-        movement_id,
-        army_id,
-        player_id,
-        source_village_id,
-        target_village_id,
-        army,
-        bounty,
-        returns_at,
-    }
-}
-
-fn build_merchant_return_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    source_village_id: u32,
-    merchants_used: u8,
-    returns_at: chrono::DateTime<chrono::Utc>,
-) -> VillageEvent {
-    VillageEvent::MerchantsReturned {
-        action_id,
-        player_id,
-        source_village_id,
-        merchants_used,
-        returns_at,
-    }
-}
-
-fn build_building_added_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    slot_id: u8,
-    building_name: parabellum_types::buildings::BuildingName,
-    level: u8,
-    speed: i8,
-) -> VillageEvent {
-    VillageEvent::BuildingAdded {
-        action_id,
-        player_id,
-        village_id,
-        slot_id,
-        building_name,
-        level,
-        speed,
-    }
-}
-
-fn build_building_upgraded_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    slot_id: u8,
-    building_name: parabellum_types::buildings::BuildingName,
-    level: u8,
-    speed: i8,
-) -> VillageEvent {
-    VillageEvent::BuildingUpgraded {
-        action_id,
-        player_id,
-        village_id,
-        slot_id,
-        building_name,
-        level,
-        speed,
-    }
-}
-
-fn build_building_downgraded_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    slot_id: u8,
-    building_name: parabellum_types::buildings::BuildingName,
-    level: u8,
-    speed: i8,
-) -> VillageEvent {
-    VillageEvent::BuildingDowngraded {
-        action_id,
-        player_id,
-        village_id,
-        slot_id,
-        building_name,
-        level,
-        speed,
-    }
-}
-
-fn build_train_unit_completion_facts(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    slot_id: u8,
-    unit: parabellum_types::army::UnitName,
-    time_per_unit: i32,
-    quantity_remaining: i32,
-    execute_at: chrono::DateTime<chrono::Utc>,
-) -> Vec<(u32, VillageEvent)> {
-    if quantity_remaining <= 0 {
-        return vec![];
-    }
-    let mut workflow_events = vec![(
-        village_id,
-        VillageEvent::UnitTrained {
-            action_id,
-            player_id,
-            village_id,
-            unit: unit.clone(),
-            quantity_trained: 1,
-        },
-    )];
-    let remaining_after = quantity_remaining - 1;
-    if remaining_after > 0 {
-        workflow_events.push((
-            village_id,
-            VillageEvent::UnitTrainingScheduled {
-                action_id: uuid::Uuid::new_v4(),
-                player_id,
-                village_id,
-                slot_id,
-                unit,
-                time_per_unit,
-                quantity_remaining: remaining_after,
-                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
-                execute_at: execute_at + chrono::Duration::seconds(time_per_unit.max(1) as i64),
-            },
-        ));
-    }
-    workflow_events
-}
-
-fn build_academy_research_completed_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    unit: parabellum_types::army::UnitName,
-) -> VillageEvent {
-    VillageEvent::AcademyResearchCompleted {
-        action_id,
-        player_id,
-        village_id,
-        unit,
-    }
-}
-
-fn build_smithy_research_completed_fact(
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    village_id: u32,
-    unit: parabellum_types::army::UnitName,
-) -> VillageEvent {
-    VillageEvent::SmithyResearchCompleted {
-        action_id,
-        player_id,
-        village_id,
-        unit,
-    }
-}
-
 /// Executes one scheduled action payload by appending canonical workflow fact(s).
 pub(super) async fn execute_action(
     svc: &VillageEsService,
@@ -256,71 +86,20 @@ pub(super) async fn execute_action(
     let payload: ScheduledActionPayload =
         serde_json::from_value(action.payload.clone()).map_err(CqrsError::Serialization)?;
     match payload {
-        ScheduledActionPayload::ReinforcementArrival {
-            movement_id,
-            army_id,
-            player_id,
-            source_village_id,
-            target_village_id,
-            army,
-            arrives_at,
-        } => {
+        ScheduledActionPayload::ReinforcementArrival { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let target_village_id = workflow.target_village_id;
             let source = svc.get_village(source_village_id).await?;
             let target = svc.get_village(target_village_id).await?;
-            let hero_alone_transfer = army.hero().is_some()
-                && army.units().immensity() == 0
-                && source.player_id == target.player_id
-                && source.buildings.iter().any(|b| {
-                    b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
-                        && b.building.level > 0
-                })
-                && target.buildings.iter().any(|b| {
-                    b.building.name == parabellum_types::buildings::BuildingName::HeroMansion
-                        && b.building.level > 0
-                });
-            svc.append_village_workflow_events(vec![
-                (
-                    source_village_id,
-                    VillageEvent::ReinforcementArrived {
-                        movement_id,
-                        army_id,
-                        player_id,
-                        source_village_id,
-                        target_village_id,
-                        army: army.clone(),
-                        hero_alone_transfer,
-                        arrives_at,
-                    },
-                ),
-                (
-                    target_village_id,
-                    VillageEvent::ReinforcementAppliedToVillage {
-                        movement_id,
-                        army_id,
-                        player_id,
-                        source_village_id,
-                        target_village_id,
-                        army,
-                        hero_alone_transfer,
-                        arrives_at,
-                    },
-                ),
-            ])
+            svc.append_village_workflow_events(workflows::movements::reinforcement_arrival_facts(
+                workflow, &source, &target,
+            ))
             .await?;
         }
-        ScheduledActionPayload::SettlersArrival {
-            action_id,
-            movement_id,
-            army_id,
-            village_id: _,
-            source_village_id,
-            target_village_id,
-            target_position,
-            player_id,
-            village_name,
-            tribe,
-            arrives_at,
-        } => {
+        ScheduledActionPayload::SettlersArrival { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let target_village_id = workflow.target_village_id;
+            let player_id = workflow.player_id;
             let field_exists: bool =
                 sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rm_map_fields WHERE id = $1)")
                     .bind(target_village_id as i32)
@@ -363,39 +142,13 @@ pub(super) async fn execute_action(
                 let default_buildings =
                     default_founded_village_buildings(&topology, DEFAULT_FOUNDATION_SPEED)?;
 
-                svc.append_village_workflow_events(vec![
-                    (
-                        source_village_id,
-                        VillageEvent::SettlersArrived {
-                            action_id,
-                            movement_id,
-                            army_id,
-                            player_id,
-                            source_village_id,
-                            target_village_id,
-                            target_position: target_position.clone(),
-                            village_name: village_name.clone(),
-                            tribe: tribe.clone(),
-                            arrives_at,
-                        },
-                    ),
-                    (
-                        target_village_id,
-                        VillageEvent::VillageFounded {
-                            village_id: target_village_id,
-                            village_name,
-                            position: target_position,
-                            tribe,
-                            player_id,
-                            parent_village_id: Some(source_village_id),
-                            buildings: default_buildings,
-                        },
-                    ),
-                ])
+                svc.append_village_workflow_events(
+                    workflows::movements::settlers_foundation_facts(workflow, default_buildings),
+                )
                 .await?;
             } else {
                 tracing::warn!(
-                    action_id = %action_id,
+                    action_id = %workflow.action_id,
                     player_id = %player_id,
                     source_village_id,
                     target_village_id,
@@ -404,102 +157,59 @@ pub(super) async fn execute_action(
                 let army_repo: Arc<dyn ArmyRepository> =
                     Arc::new(PostgresArmyRepository::new(svc.pool.clone()));
                 let army = army_repo
-                    .get_moving_army(army_id)
+                    .get_moving_army(workflow.army_id)
                     .await
                     .map_err(CqrsError::domain_source)?;
                 let source = svc.get_village(source_village_id).await?;
                 let cfg = parabellum_app::config::Config::from_env();
                 let travel_secs = source.position.calculate_travel_time_secs(
-                    target_position.clone(),
+                    workflow.target_position.clone(),
                     army.speed(),
                     cfg.world_size as i32,
                     cfg.speed as u8,
                 ) as i64;
                 let returns_at =
-                    arrives_at + chrono::Duration::seconds(std::cmp::max(1, travel_secs));
+                    workflow.arrives_at + chrono::Duration::seconds(std::cmp::max(1, travel_secs));
                 let return_action_id = uuid::Uuid::new_v4();
+                let return_action = workflows::movements::army_return_scheduled_action(
+                    return_action_id,
+                    workflow.movement_id,
+                    workflow.army_id,
+                    source_village_id,
+                    source_village_id,
+                    target_village_id,
+                    player_id,
+                    army,
+                    None,
+                    returns_at,
+                )?;
                 PostgresScheduledActionRepository::new(svc.pool.clone())
-                    .add(&ScheduledAction {
-                        id: return_action_id,
-                        action_type: ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army: army.clone(),
-                            bounty: None,
-                            returns_at,
-                        }
-                        .action_type(),
-                        execute_at: returns_at,
-                        payload: serde_json::to_value(ScheduledActionPayload::ArmyReturn {
-                            action_id: return_action_id,
-                            movement_id,
-                            army_id,
-                            village_id: source_village_id,
-                            source_village_id,
-                            target_village_id,
-                            player_id,
-                            army,
-                            bounty: None,
-                            returns_at,
-                        })
-                        .map_err(CqrsError::Serialization)?,
-                        status: ScheduledActionStatus::Pending,
-                    })
+                    .add(&return_action)
                     .await
                     .map_err(CqrsError::domain_source)?;
             }
         }
-        ScheduledActionPayload::AttackArrival {
-            action_id,
-            movement_id,
-            army_id,
-            return_action_id,
-            village_id: _,
-            source_village_id,
-            target_village_id,
-            player_id,
-            army,
-            attack_type,
-            catapult_targets,
-            arrives_at,
-            returns_at,
-        } => {
+        ScheduledActionPayload::AttackArrival { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let target_village_id = workflow.target_village_id;
             svc.append_village_workflow_events(vec![(
                 source_village_id,
-                VillageEvent::AttackArrived {
-                    movement_id,
-                    army_id,
-                    action_id,
-                    return_action_id,
-                    player_id,
-                    source_village_id,
-                    target_village_id,
-                    army: army.clone(),
-                    attack_type: attack_type.clone(),
-                    catapult_targets: catapult_targets.clone(),
-                    arrives_at,
-                    returns_at,
-                },
+                workflows::movements::attack_arrived_fact(&workflow),
             )])
             .await?;
             let outcome = build_attack_outcome_command(
                 svc,
-                action_id,
-                movement_id,
-                return_action_id,
-                army_id,
-                player_id,
-                source_village_id,
-                target_village_id,
-                army,
-                attack_type,
-                catapult_targets,
-                returns_at,
+                workflow.action_id,
+                workflow.movement_id,
+                workflow.return_action_id,
+                workflow.army_id,
+                workflow.player_id,
+                workflow.source_village_id,
+                workflow.target_village_id,
+                workflow.army,
+                workflow.attack_type,
+                workflow.catapult_targets,
+                workflow.returns_at,
             )
             .await?;
             svc.append_village_workflow_events(vec![
@@ -543,243 +253,78 @@ pub(super) async fn execute_action(
             ])
             .await?;
         }
-        ScheduledActionPayload::ArmyReturn {
-            action_id,
-            movement_id,
-            army_id,
-            village_id: _,
-            source_village_id,
-            target_village_id,
-            player_id,
-            army,
-            returns_at,
-            bounty,
-        } => {
-            let fact = build_army_return_fact(
-                action_id,
-                movement_id,
-                army_id,
-                player_id,
-                source_village_id,
-                target_village_id,
-                army,
-                bounty,
-                returns_at,
-            );
+        ScheduledActionPayload::ArmyReturn { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let fact = workflows::movements::army_return_fact(action.id, workflow);
             svc.append_village_workflow_events(vec![(source_village_id, fact)])
                 .await?;
         }
-        ScheduledActionPayload::ScoutArrival {
-            action_id,
-            movement_id,
-            army_id,
-            return_action_id,
-            village_id: _,
-            source_village_id,
-            target_village_id,
-            player_id,
-            army,
-            target,
-            attack_type,
-            arrives_at,
-            returns_at,
-        } => {
+        ScheduledActionPayload::ScoutArrival { workflow } => {
+            let source_village_id = workflow.source_village_id;
             let outcome = build_scout_outcome_fact(
                 svc,
-                action_id,
-                movement_id,
-                return_action_id,
-                army_id,
-                player_id,
-                source_village_id,
-                target_village_id,
-                army.clone(),
-                target.clone(),
-                attack_type.clone(),
-                returns_at,
+                workflow.action_id,
+                workflow.movement_id,
+                workflow.return_action_id,
+                workflow.army_id,
+                workflow.player_id,
+                workflow.source_village_id,
+                workflow.target_village_id,
+                workflow.army.clone(),
+                workflow.target.clone(),
+                workflow.attack_type.clone(),
+                workflow.returns_at,
             )
             .await?;
             svc.append_village_workflow_events(vec![
                 (
                     source_village_id,
-                    VillageEvent::ScoutArrived {
-                        movement_id,
-                        army_id,
-                        action_id,
-                        return_action_id,
-                        player_id,
-                        source_village_id,
-                        target_village_id,
-                        army,
-                        target,
-                        attack_type,
-                        arrives_at,
-                        returns_at,
-                    },
+                    workflows::movements::scout_arrived_fact(&workflow),
                 ),
                 (source_village_id, outcome.fact),
             ])
             .await?;
         }
-        ScheduledActionPayload::MerchantsArrival {
-            action_id,
-            village_id: _,
-            source_village_id,
-            target_village_id,
-            player_id,
-            resources,
-            merchants_used,
-            arrives_at,
-        } => {
-            let (arrival_fact, applied_fact) = build_merchant_arrival_facts(
-                svc,
-                action_id,
-                player_id,
-                source_village_id,
-                target_village_id,
-                resources,
-                merchants_used,
-                arrives_at,
-            )
-            .await?;
+        ScheduledActionPayload::MerchantsArrival { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let target_village_id = workflow.target_village_id;
+            let target = svc.get_village(target_village_id).await?;
+            let (arrival_fact, applied_fact) =
+                workflows::merchants::arrival_facts(action.id, workflow, &target);
             svc.append_village_workflow_events(vec![
                 (source_village_id, arrival_fact),
                 (target_village_id, applied_fact),
             ])
             .await?;
         }
-        ScheduledActionPayload::MerchantsReturn {
-            action_id,
-            village_id: _,
-            source_village_id,
-            target_village_id: _,
-            player_id,
-            merchants_used,
-            returns_at,
-        } => {
-            let fact = build_merchant_return_fact(
-                action_id,
-                player_id,
-                source_village_id,
-                merchants_used,
-                returns_at,
-            );
+        ScheduledActionPayload::MerchantsReturn { workflow } => {
+            let source_village_id = workflow.source_village_id;
+            let fact = workflows::merchants::return_fact(action.id, workflow);
             svc.append_village_workflow_events(vec![(source_village_id, fact)])
                 .await?;
         }
-        ScheduledActionPayload::AddBuilding {
-            village_id,
-            player_id,
-            slot_id,
-            building_name,
-            level,
-            speed,
-        } => {
-            let fact = build_building_added_fact(
-                action.id,
-                player_id,
-                village_id,
-                slot_id,
-                building_name,
-                level,
-                speed,
-            );
+        ScheduledActionPayload::Building { workflow } => {
+            let village_id = workflow.village_id;
+            let fact = workflows::buildings::completion_fact(action.id, workflow);
             svc.append_village_workflow_events(vec![(village_id, fact)])
                 .await?;
         }
-        ScheduledActionPayload::UpgradeBuilding {
-            village_id,
-            player_id,
-            slot_id,
-            building_name,
-            level,
-            speed,
-        } => {
-            let fact = build_building_upgraded_fact(
-                action.id,
-                player_id,
-                village_id,
-                slot_id,
-                building_name,
-                level,
-                speed,
-            );
-            svc.append_village_workflow_events(vec![(village_id, fact)])
-                .await?;
-        }
-        ScheduledActionPayload::DowngradeBuilding {
-            village_id,
-            player_id,
-            slot_id,
-            building_name,
-            level,
-            speed,
-        } => {
-            let fact = build_building_downgraded_fact(
-                action.id,
-                player_id,
-                village_id,
-                slot_id,
-                building_name,
-                level,
-                speed,
-            );
-            svc.append_village_workflow_events(vec![(village_id, fact)])
-                .await?;
-        }
-        ScheduledActionPayload::TrainUnit {
-            action_id,
-            village_id,
-            player_id,
-            slot_id,
-            unit,
-            time_per_unit,
-            quantity_remaining,
-            execute_at,
-        } => {
-            let workflow_events = build_train_unit_completion_facts(
-                action_id,
-                player_id,
-                village_id,
-                slot_id,
-                unit,
-                time_per_unit,
-                quantity_remaining,
-                execute_at,
-            );
+        ScheduledActionPayload::Training { workflow } => {
+            let workflow_events = workflows::training::completion_facts(action.id, workflow);
             if !workflow_events.is_empty() {
                 svc.append_village_workflow_events(workflow_events).await?;
             }
         }
-        ScheduledActionPayload::ResearchAcademy {
-            action_id,
-            village_id,
-            player_id,
-            unit,
-        } => {
-            let fact =
-                build_academy_research_completed_fact(action_id, player_id, village_id, unit);
+        ScheduledActionPayload::Research { workflow } => {
+            let village_id = workflow.village_id;
+            let fact = workflows::research::completion_fact(action.id, workflow);
             svc.append_village_workflow_events(vec![(village_id, fact)])
                 .await?;
         }
-        ScheduledActionPayload::ResearchSmithy {
-            action_id,
-            village_id,
-            player_id,
-            unit,
-        } => {
-            let fact = build_smithy_research_completed_fact(action_id, player_id, village_id, unit);
-            svc.append_village_workflow_events(vec![(village_id, fact)])
-                .await?;
-        }
-        ScheduledActionPayload::HeroRevival {
-            action_id,
-            village_id,
-            player_id,
-            hero,
-            reset,
-            revive_at,
-        } => {
+        ScheduledActionPayload::HeroRevival { workflow } => {
+            let village_id = workflow.village_id;
+            let player_id = workflow.player_id;
+            let hero_id = workflow.hero.id;
             let village = svc.get_village(village_id).await?;
             if village.player_id != player_id {
                 return Err(CqrsError::domain_source(
@@ -789,27 +334,14 @@ pub(super) async fn execute_action(
                     },
                 ));
             }
-            if hero.player_id != player_id {
+            if workflow.hero.player_id != player_id {
                 return Err(CqrsError::domain_source(
-                    parabellum_types::errors::GameError::HeroNotOwned {
-                        hero_id: hero.id,
-                        player_id,
-                    },
+                    parabellum_types::errors::GameError::HeroNotOwned { hero_id, player_id },
                 ));
             }
 
-            let mut revived_hero = hero;
-            revived_hero.resurrect(village_id, reset);
-            svc.append_village_workflow_events(vec![(
-                village_id,
-                VillageEvent::HeroRevived {
-                    action_id,
-                    player_id,
-                    village_id,
-                    hero: revived_hero,
-                    reset,
-                    revived_at: revive_at,
-                },
+            svc.append_village_workflow_events(vec![workflows::heroes::revived_fact(
+                action.id, workflow,
             )])
             .await?;
         }
@@ -847,8 +379,7 @@ async fn build_attack_outcome_command(
     let can_attempt_conquer = attack_type == parabellum_types::battle::AttackType::Normal
         && can_attempt_conquer(svc, &source, &target, &army).await?;
 
-    let attacker_village =
-        Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
     let mut defender_village =
         Village::try_from(target.clone()).map_err(CqrsError::domain_source)?;
     let no_smithy: SmithyUpgrades = [0; 8];
@@ -979,50 +510,6 @@ async fn build_attack_outcome_command(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn build_merchant_arrival_facts(
-    svc: &VillageEsService,
-    action_id: uuid::Uuid,
-    player_id: uuid::Uuid,
-    source_village_id: u32,
-    target_village_id: u32,
-    resources: parabellum_types::common::ResourceGroup,
-    merchants_used: u8,
-    arrives_at: chrono::DateTime<chrono::Utc>,
-) -> Result<(VillageEvent, VillageEvent), CqrsError> {
-    let target = svc.get_village(target_village_id).await?;
-    let target_stocks = parabellum_game::models::village::VillageStocks {
-        warehouse_capacity: target.stocks.warehouse_capacity,
-        granary_capacity: target.stocks.granary_capacity,
-        lumber: target.stocks.lumber.saturating_add(resources.lumber()),
-        clay: target.stocks.clay.saturating_add(resources.clay()),
-        iron: target.stocks.iron.saturating_add(resources.iron()),
-        crop: target.stocks.crop.saturating_add(resources.crop() as i64),
-    };
-
-    Ok((
-        VillageEvent::MerchantsArrived {
-            action_id,
-            player_id,
-            source_village_id,
-            target_village_id,
-            resources: resources.clone(),
-            merchants_used,
-            arrives_at,
-        },
-        VillageEvent::MerchantTransferAppliedToVillage {
-            action_id,
-            player_id,
-            source_village_id,
-            target_village_id,
-            resources,
-            merchants_used,
-            arrives_at,
-            target_stocks,
-        },
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
 async fn build_scout_outcome_fact(
     svc: &VillageEsService,
     action_id: uuid::Uuid,
@@ -1039,8 +526,7 @@ async fn build_scout_outcome_fact(
 ) -> Result<ComputedScoutOutcome, CqrsError> {
     let source = svc.get_village(source_village_id).await?;
     let target_village_model = svc.get_village(target_village_id).await?;
-    let attacker_village =
-        Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
     let defender_village =
         Village::try_from(target_village_model).map_err(CqrsError::domain_source)?;
     let no_smithy: SmithyUpgrades = [0; 8];

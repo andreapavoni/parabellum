@@ -12,20 +12,20 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use parabellum_app::{application::GameApplication, config::Config};
+use parabellum_types::{Result, errors::ApplicationError};
 use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
-use parabellum_app::{application::GameApplication, config::Config};
-use parabellum_types::{Result, errors::ApplicationError};
 
 use crate::{
     api::{
         actions::{
             accept_marketplace_offer, add_building, cancel_marketplace_offer,
             create_marketplace_offer, found_village, preview_found_village, preview_send_resources,
-            preview_troops,
-            recall_troops, release_reinforcements, rename_village, research_academy, research_smithy,
-            send_resources, send_troops, train_units, upgrade_building,
+            preview_troops, recall_troops, release_reinforcements, rename_village,
+            research_academy, research_smithy, send_resources, send_troops, train_units,
+            upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
