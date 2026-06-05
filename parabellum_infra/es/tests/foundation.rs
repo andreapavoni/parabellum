@@ -1,14 +1,18 @@
+use parabellum_app::ports::map::MapRepository;
 use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::{SendSettlers, TrainUnits};
+use parabellum_game::models::map::{MapQuadrant, Valley};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::{map::Position, tribe::Tribe};
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
+use crate::map::PostgresMapRepository;
 
 use super::fixtures::{
-    granary, main_building, rally_point, resources, setup_village, warehouse, with_test_pool,
+    granary, home_army, latest_stream_version, main_building, rally_point, resources,
+    setup_village, snapshot_version, warehouse, with_test_pool,
 };
 
 fn residence(level: u8) -> VillageBuilding {
@@ -18,6 +22,13 @@ fn residence(level: u8) -> VillageBuilding {
             .at_level(level, 1)
             .expect("residence should be buildable in tests"),
     }
+}
+
+async fn unoccupied_valley(pool: &sqlx::PgPool) -> Valley {
+    PostgresMapRepository::new(pool.clone())
+        .find_unoccupied_valley(&MapQuadrant::NorthEast)
+        .await
+        .expect("test map should have an unoccupied valley")
 }
 
 async fn train_settlers(
@@ -72,7 +83,10 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
 
         let source_before = service.get_village(source_village_id).await.unwrap();
         assert_eq!(
-            source_before.army.as_ref().map(|a| a.units().get(9)),
+            home_army(&pool, source_village_id)
+                .await
+                .as_ref()
+                .map(|a| a.units().get(9)),
             Some(3)
         );
         let before = source_before.stocks.clone();
@@ -110,8 +124,8 @@ async fn village_es_service_send_settlers_schedules_arrival_and_withdraws_resour
         let source_after = service.get_village(source_village_id).await.unwrap();
         let after = source_after.stocks.clone();
         assert_eq!(
-            source_after
-                .army
+            home_army(&pool, source_village_id)
+                .await
                 .as_ref()
                 .map(|a| a.units().get(9))
                 .unwrap_or(0),
@@ -147,8 +161,9 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
         .await;
         train_settlers(&service, source_village_id, player_id, 3).await;
 
-        let target_position = Position { x: 30, y: 30 };
-        let target_field_id = target_position.to_id(100);
+        let target = unoccupied_valley(&pool).await;
+        let target_position = target.position.clone();
+        let target_field_id = target.id;
         service
             .send_settlers(
                 source_village_id,
@@ -192,6 +207,16 @@ async fn village_es_service_settlers_arrival_founds_new_village_with_default_sto
         assert_eq!(founded.stocks.clay, 800);
         assert_eq!(founded.stocks.iron, 800);
         assert_eq!(founded.stocks.crop, 800);
+        assert_eq!(
+            snapshot_version(&pool, source_village_id).await,
+            Some(latest_stream_version(&pool, source_village_id).await),
+            "workflow source stream snapshot should be current"
+        );
+        assert_eq!(
+            snapshot_version(&pool, target_field_id).await,
+            Some(latest_stream_version(&pool, target_field_id).await),
+            "workflow target stream snapshot should be current"
+        );
 
         let source_movements = service
             .get_village_troop_movements(source_village_id)
@@ -311,8 +336,9 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
             train_settlers(&service, source_village_id, player_id, 3).await;
         }
 
-        let target_position = Position { x: 45, y: -45 };
-        let target_field_id = target_position.to_id(100);
+        let target = unoccupied_valley(&pool).await;
+        let target_position = target.position.clone();
+        let target_field_id = target.id;
         let now = chrono::Utc::now();
         service
             .send_settlers(

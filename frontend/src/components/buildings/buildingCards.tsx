@@ -450,7 +450,7 @@ export function SmithyOptionCard({
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.smithy?.queueFull ?? false;
   const canUpgrade = option.canUpgrade && affordable && !queueFull && !submitting;
-  const nextLevel = Math.min(option.currentLevel + 1, option.maxLevel);
+  const nextLevel = Math.min(option.nextLevel, option.maxLevel);
   const reachedMaxLevel = option.currentLevel >= option.maxLevel;
   const alreadyQueued = detail.smithy?.queue.some((job) => job.unitName === option.unitName) ?? false;
   return (

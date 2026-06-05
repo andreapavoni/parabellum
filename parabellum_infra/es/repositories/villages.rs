@@ -1,8 +1,8 @@
 use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::repositories::{
-    ExpansionCultureSnapshot, ExpansionOwnershipSnapshot, VillageRepository,
+    ArmyRepository, ExpansionCultureSnapshot, ExpansionOwnershipSnapshot, VillageRepository,
 };
-use parabellum_game::models::army::Army;
+use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
@@ -12,6 +12,8 @@ use parabellum_types::{
 };
 use sqlx::{FromRow, PgPool, types::Json};
 use uuid::Uuid;
+
+use super::PostgresArmyRepository;
 
 #[derive(Debug, Clone)]
 pub struct PostgresVillageRepository {
@@ -61,11 +63,8 @@ impl PostgresVillageRepository {
                 smithy_upgrades = $13,
                 academy_research = $14,
                 parent_village_id = $15,
-                army = $16,
-                reinforcements = $17,
-                deployed_armies = $18,
-                total_merchants = $19,
-                busy_merchants = $20,
+                total_merchants = $16,
+                busy_merchants = $17,
                 loyalty_updated_at = CASE
                     WHEN loyalty <> $10 THEN NOW()
                     ELSE loyalty_updated_at
@@ -89,9 +88,6 @@ impl PostgresVillageRepository {
         .bind(Json(&model.smithy_upgrades))
         .bind(Json(&model.academy_research))
         .bind(model.parent_village_id.map(|id| id as i32))
-        .bind(Json(&model.army))
-        .bind(Json(&model.reinforcements))
-        .bind(Json(&model.deployed_armies))
         .bind(model.total_merchants as i16)
         .bind(model.busy_merchants as i16)
         .execute(&mut **tx)
@@ -155,69 +151,6 @@ impl PostgresVillageRepository {
         Ok(())
     }
 
-    pub async fn update_army_in_tx(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        village_id: u32,
-        army: &Option<Army>,
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET army = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(army))
-        .execute(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
-    pub async fn update_reinforcements_in_tx(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        village_id: u32,
-        reinforcements: &[Army],
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET reinforcements = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(reinforcements))
-        .execute(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
-    pub async fn update_deployed_armies_in_tx(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        village_id: u32,
-        deployed_armies: &[Army],
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET deployed_armies = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(deployed_armies))
-        .execute(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
     pub async fn set_map_occupancy_in_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -243,8 +176,160 @@ impl PostgresVillageRepository {
         Ok(())
     }
 
-    fn refresh_materialized_village_state(model: VillageModel) -> VillageModel {
-        let hydrated: parabellum_game::models::village::Village = model.clone().into();
+    pub async fn upsert_from_village_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+        player_id: Uuid,
+        village_name: &str,
+        position: &Position,
+        tribe: Tribe,
+        parent_village_id: Option<u32>,
+        buildings: &[VillageBuilding],
+    ) -> Result<(), ApplicationError> {
+        self.upsert_from_village_inner(
+            Some(tx),
+            village_id,
+            player_id,
+            village_name,
+            position,
+            tribe,
+            parent_village_id,
+            buildings,
+        )
+        .await
+    }
+
+    async fn upsert_from_village_inner(
+        &self,
+        tx: Option<&mut sqlx::Transaction<'_, sqlx::Postgres>>,
+        village_id: u32,
+        player_id: Uuid,
+        village_name: &str,
+        position: &Position,
+        tribe: Tribe,
+        parent_village_id: Option<u32>,
+        buildings: &[VillageBuilding],
+    ) -> Result<(), ApplicationError> {
+        let warehouse_capacity = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Warehouse)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let granary_capacity = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Granary)
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or(800);
+        let total_merchants = buildings
+            .iter()
+            .filter(|b| b.building.name == BuildingName::Marketplace)
+            .map(|b| b.building.level)
+            .max()
+            .unwrap_or(0);
+        let stocks = VillageStocks {
+            warehouse_capacity,
+            granary_capacity,
+            lumber: 800.min(warehouse_capacity),
+            clay: 800.min(warehouse_capacity),
+            iron: 800.min(warehouse_capacity),
+            crop: (800_i64).min(granary_capacity as i64),
+        };
+        let projected = parabellum_game::models::village::Village::from_persistence(
+            village_id,
+            village_name.to_string(),
+            player_id,
+            position.clone(),
+            tribe.clone(),
+            buildings.to_vec(),
+            vec![],
+            2,
+            None,
+            vec![],
+            vec![],
+            100,
+            VillageProduction::default(),
+            parent_village_id.is_none(),
+            [0_u8; 8],
+            stocks.clone(),
+            parabellum_game::models::village::AcademyResearch::default(),
+            0,
+            0,
+            chrono::Utc::now(),
+            parent_village_id,
+        );
+
+        let q = sqlx::query(
+            r#"
+            INSERT INTO rm_village (
+                village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   total_merchants, busy_merchants, loyalty_updated_at
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8,
+                $9, $10, $11, $12, $13, $14, $15,
+                $16, $17, NOW()
+            )
+            ON CONFLICT (village_id)
+            DO UPDATE SET
+                player_id = EXCLUDED.player_id,
+                village_name = EXCLUDED.village_name,
+                position = EXCLUDED.position,
+                tribe = EXCLUDED.tribe,
+                buildings = EXCLUDED.buildings,
+                production = EXCLUDED.production,
+                stocks = EXCLUDED.stocks,
+                population = EXCLUDED.population,
+                loyalty = EXCLUDED.loyalty,
+                is_capital = EXCLUDED.is_capital,
+                culture_points_production = EXCLUDED.culture_points_production,
+                smithy_upgrades = EXCLUDED.smithy_upgrades,
+                academy_research = EXCLUDED.academy_research,
+                parent_village_id = EXCLUDED.parent_village_id,
+                total_merchants = EXCLUDED.total_merchants,
+                busy_merchants = EXCLUDED.busy_merchants,
+                loyalty_updated_at = EXCLUDED.loyalty_updated_at,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(player_id)
+        .bind(village_name)
+        .bind(Json(position))
+        .bind(DbTribe::from(tribe))
+        .bind(Json(buildings))
+        .bind(Json(projected.production.clone()))
+        .bind(Json(stocks))
+        .bind(projected.population as i32)
+        .bind(100_i16)
+        .bind(parent_village_id.is_none())
+        .bind(projected.culture_points_production as i32)
+        .bind(Json([0_u8; 8]))
+        .bind(Json(parabellum_game::models::village::AcademyResearch::default()))
+        .bind(parent_village_id.map(|id| id as i32))
+        .bind(total_merchants as i16)
+        .bind(0_i16);
+        if let Some(tx) = tx {
+            q.execute(&mut **tx)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        } else {
+            q.execute(&self.pool)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        }
+        Ok(())
+    }
+
+    fn refresh_materialized_village_state(
+        model: VillageModel,
+        army_context: VillageArmyContext,
+    ) -> VillageModel {
+        let hydrated = hydrate_village(model.clone(), army_context);
+        let busy_merchants = model.busy_merchants;
         let mut refreshed = model;
         refreshed.production = hydrated.production.clone();
         refreshed.stocks = hydrated.stocks().clone();
@@ -276,15 +361,42 @@ impl PostgresVillageRepository {
         // Busy merchants are operational state managed by movement/marketplace flows,
         // and `Village::from_persistence` resets it to zero internally.
         // Preserve the persisted value from the read model.
+        refreshed.busy_merchants = busy_merchants.min(refreshed.total_merchants);
         refreshed.updated_at = hydrated.updated_at;
         refreshed
+    }
+
+    async fn load_army_context(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageArmyContext, ApplicationError> {
+        let armies = PostgresArmyRepository::new(self.pool.clone());
+        Ok(VillageArmyContext {
+            home: armies.get_home_army(village_id).await?,
+            stationed: armies.list_stationed_armies(village_id).await?,
+            deployed: armies.list_deployed_armies(village_id).await?,
+        })
+    }
+
+    async fn load_army_context_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+    ) -> Result<VillageArmyContext, ApplicationError> {
+        let armies = PostgresArmyRepository::new(self.pool.clone());
+        Ok(VillageArmyContext {
+            home: armies.get_home_army_in_tx(tx, village_id).await?,
+            stationed: armies.list_stationed_armies_in_tx(tx, village_id).await?,
+            deployed: armies.list_deployed_armies_in_tx(tx, village_id).await?,
+        })
     }
 
     async fn refresh_for_read(
         &self,
         model: VillageModel,
     ) -> Result<VillageModel, ApplicationError> {
-        Ok(Self::refresh_materialized_village_state(model))
+        let army = self.load_army_context(model.village_id).await?;
+        Ok(Self::refresh_materialized_village_state(model, army))
     }
 
     pub async fn update_building_in_tx(
@@ -300,7 +412,7 @@ impl PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -348,29 +460,8 @@ impl PostgresVillageRepository {
             .unwrap_or(0);
 
         let current_stocks = {
-            let current = parabellum_game::models::village::Village::from_persistence(
-                model.village_id,
-                model.village_name.clone(),
-                model.player_id,
-                model.position.clone(),
-                model.tribe.clone(),
-                model.buildings.clone(),
-                vec![],
-                model.population,
-                model.army.clone(),
-                model.reinforcements.clone(),
-                model.deployed_armies.clone(),
-                model.loyalty,
-                model.production.clone(),
-                model.is_capital,
-                model.smithy_upgrades,
-                model.stocks.clone(),
-                model.academy_research.clone(),
-                0,
-                model.culture_points_production,
-                model.updated_at,
-                model.parent_village_id,
-            );
+            let army_context = self.load_army_context_in_tx(tx, model.village_id).await?;
+            let current = hydrate_village(model.clone(), army_context);
             current.stocks().clone()
         };
 
@@ -382,29 +473,14 @@ impl PostgresVillageRepository {
         next_stocks.iron = next_stocks.iron.min(warehouse_capacity);
         next_stocks.crop = next_stocks.crop.min(granary_capacity as i64);
 
-        let hydrated = parabellum_game::models::village::Village::from_persistence(
-            model.village_id,
-            model.village_name.clone(),
-            model.player_id,
-            model.position,
-            model.tribe,
-            next_buildings.clone(),
-            vec![],
-            model.population,
-            model.army.clone(),
-            model.reinforcements.clone(),
-            model.deployed_armies.clone(),
-            model.loyalty,
-            model.production.clone(),
-            model.is_capital,
-            model.smithy_upgrades,
-            next_stocks.clone(),
-            model.academy_research.clone(),
-            0,
-            model.culture_points_production,
-            chrono::Utc::now(),
-            model.parent_village_id,
-        );
+        let mut next_model = model;
+        next_model.buildings = next_buildings.clone();
+        next_model.stocks = next_stocks.clone();
+        next_model.updated_at = chrono::Utc::now();
+        let army_context = self
+            .load_army_context_in_tx(tx, next_model.village_id)
+            .await?;
+        let hydrated = hydrate_village(next_model, army_context);
 
         sqlx::query(
             r#"
@@ -437,8 +513,8 @@ impl PostgresVillageRepository {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         model: VillageModel,
     ) -> Result<VillageModel, ApplicationError> {
-        let _ = tx;
-        Ok(Self::refresh_materialized_village_state(model))
+        let army = self.load_army_context_in_tx(tx, model.village_id).await?;
+        Ok(Self::refresh_materialized_village_state(model, army))
     }
 
     pub async fn get_by_village_id_in_tx(
@@ -450,7 +526,7 @@ impl PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -482,9 +558,6 @@ struct DbVillageModelRow {
     smithy_upgrades: Json<SmithyUpgrades>,
     academy_research: Json<parabellum_game::models::village::AcademyResearch>,
     parent_village_id: Option<i32>,
-    army: Json<Option<Army>>,
-    reinforcements: Json<Vec<Army>>,
-    deployed_armies: Json<Vec<Army>>,
     total_merchants: i16,
     busy_merchants: i16,
     loyalty_updated_at: chrono::DateTime<chrono::Utc>,
@@ -515,9 +588,6 @@ impl TryFrom<DbVillageModelRow> for VillageModel {
             loyalty_updated_at: value.loyalty_updated_at,
             updated_at: value.updated_at,
             parent_village_id: value.parent_village_id.map(|v| v as u32),
-            army: value.army.0,
-            reinforcements: value.reinforcements.0,
-            deployed_armies: value.deployed_armies.0,
         })
     }
 }
@@ -566,7 +636,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE player_id = $1
             ORDER BY village_id ASC
@@ -598,7 +668,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = ANY($1)
             ORDER BY village_id ASC
@@ -709,119 +779,18 @@ impl VillageRepository for PostgresVillageRepository {
         tribe: Tribe,
         parent_village_id: Option<u32>,
         buildings: &[VillageBuilding],
-        army: &Option<Army>,
     ) -> Result<(), ApplicationError> {
-        let warehouse_capacity = buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Warehouse)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
-        let granary_capacity = buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Granary)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
-        let total_merchants = buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Marketplace)
-            .map(|b| b.building.level)
-            .max()
-            .unwrap_or(0);
-        let stocks = VillageStocks {
-            warehouse_capacity,
-            granary_capacity,
-            lumber: 800.min(warehouse_capacity),
-            clay: 800.min(warehouse_capacity),
-            iron: 800.min(warehouse_capacity),
-            crop: (800_i64).min(granary_capacity as i64),
-        };
-        let projected = parabellum_game::models::village::Village::from_persistence(
+        self.upsert_from_village_inner(
+            None,
             village_id,
-            village_name.to_string(),
             player_id,
-            position.clone(),
-            tribe.clone(),
-            buildings.to_vec(),
-            vec![],
-            2,
-            army.clone(),
-            vec![],
-            vec![],
-            100,
-            VillageProduction::default(),
-            parent_village_id.is_none(),
-            [0_u8; 8],
-            stocks.clone(),
-            parabellum_game::models::village::AcademyResearch::default(),
-            0,
-            0,
-            chrono::Utc::now(),
+            village_name,
+            position,
+            tribe,
             parent_village_id,
-        );
-
-        sqlx::query(
-            r#"
-            INSERT INTO rm_village (
-                village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at
-            )
-            VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8,
-                $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, $19, $20, NOW()
-            )
-            ON CONFLICT (village_id)
-            DO UPDATE SET
-                player_id = EXCLUDED.player_id,
-                village_name = EXCLUDED.village_name,
-                position = EXCLUDED.position,
-                tribe = EXCLUDED.tribe,
-                buildings = EXCLUDED.buildings,
-                production = EXCLUDED.production,
-                stocks = EXCLUDED.stocks,
-                population = EXCLUDED.population,
-                loyalty = EXCLUDED.loyalty,
-                is_capital = EXCLUDED.is_capital,
-                culture_points_production = EXCLUDED.culture_points_production,
-                smithy_upgrades = EXCLUDED.smithy_upgrades,
-                academy_research = EXCLUDED.academy_research,
-                parent_village_id = EXCLUDED.parent_village_id,
-                army = EXCLUDED.army,
-                reinforcements = EXCLUDED.reinforcements,
-                deployed_armies = EXCLUDED.deployed_armies,
-                total_merchants = EXCLUDED.total_merchants,
-                busy_merchants = EXCLUDED.busy_merchants,
-                loyalty_updated_at = EXCLUDED.loyalty_updated_at,
-                updated_at = NOW()
-            "#,
+            buildings,
         )
-        .bind(village_id as i32)
-        .bind(player_id)
-        .bind(village_name)
-        .bind(Json(position))
-        .bind(DbTribe::from(tribe))
-        .bind(Json(buildings))
-        .bind(Json(projected.production.clone()))
-        .bind(Json(stocks))
-        .bind(projected.population as i32)
-        .bind(100_i16)
-        .bind(parent_village_id.is_none())
-        .bind(projected.culture_points_production as i32)
-        .bind(Json([0_u8; 8]))
-        .bind(Json(parabellum_game::models::village::AcademyResearch::default()))
-        .bind(parent_village_id.map(|id| id as i32))
-        .bind(Json(army))
-        .bind(Json(Vec::<Army>::new()))
-        .bind(Json(Vec::<Army>::new()))
-        .bind(total_merchants as i16)
-        .bind(0_i16)
-        .execute(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
     }
 
     async fn update_player_id(
@@ -844,66 +813,6 @@ impl VillageRepository for PostgresVillageRepository {
         Ok(())
     }
 
-    async fn update_army(
-        &self,
-        village_id: u32,
-        army: &Option<Army>,
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET army = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(army))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
-    async fn update_reinforcements(
-        &self,
-        village_id: u32,
-        reinforcements: &[Army],
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET reinforcements = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(reinforcements))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
-    async fn update_deployed_armies(
-        &self,
-        village_id: u32,
-        deployed_armies: &[Army],
-    ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_village
-            SET deployed_armies = $2
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .bind(Json(deployed_armies))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(())
-    }
-
     async fn update_building(
         &self,
         village_id: u32,
@@ -916,7 +825,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,
@@ -964,29 +873,8 @@ impl VillageRepository for PostgresVillageRepository {
             .unwrap_or(0);
 
         let current_stocks = {
-            let current = parabellum_game::models::village::Village::from_persistence(
-                model.village_id,
-                model.village_name.clone(),
-                model.player_id,
-                model.position.clone(),
-                model.tribe.clone(),
-                model.buildings.clone(),
-                vec![],
-                model.population,
-                model.army.clone(),
-                model.reinforcements.clone(),
-                model.deployed_armies.clone(),
-                model.loyalty,
-                model.production.clone(),
-                model.is_capital,
-                model.smithy_upgrades,
-                model.stocks.clone(),
-                model.academy_research.clone(),
-                0,
-                model.culture_points_production,
-                model.updated_at,
-                model.parent_village_id,
-            );
+            let army_context = self.load_army_context(model.village_id).await?;
+            let current = hydrate_village(model.clone(), army_context);
             current.stocks().clone()
         };
 
@@ -998,29 +886,12 @@ impl VillageRepository for PostgresVillageRepository {
         next_stocks.iron = next_stocks.iron.min(warehouse_capacity);
         next_stocks.crop = next_stocks.crop.min(granary_capacity as i64);
 
-        let hydrated = parabellum_game::models::village::Village::from_persistence(
-            model.village_id,
-            model.village_name.clone(),
-            model.player_id,
-            model.position,
-            model.tribe,
-            next_buildings.clone(),
-            vec![],
-            model.population,
-            model.army.clone(),
-            model.reinforcements.clone(),
-            model.deployed_armies.clone(),
-            model.loyalty,
-            model.production.clone(),
-            model.is_capital,
-            model.smithy_upgrades,
-            next_stocks.clone(),
-            model.academy_research.clone(),
-            0,
-            model.culture_points_production,
-            chrono::Utc::now(),
-            model.parent_village_id,
-        );
+        let mut next_model = model;
+        next_model.buildings = next_buildings.clone();
+        next_model.stocks = next_stocks.clone();
+        next_model.updated_at = chrono::Utc::now();
+        let army_context = self.load_army_context(next_model.village_id).await?;
+        let hydrated = hydrate_village(next_model, army_context);
 
         sqlx::query(
             r#"
@@ -1106,7 +977,7 @@ impl VillageRepository for PostgresVillageRepository {
             r#"
             SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                    population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   army, reinforcements, deployed_armies, total_merchants, busy_merchants, loyalty_updated_at, updated_at
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
             FROM rm_village
             WHERE village_id = $1
             "#,

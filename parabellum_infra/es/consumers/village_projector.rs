@@ -3,8 +3,8 @@
 //! This consumer runs in the command transaction scope and must keep read-model
 //! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
-use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{ScheduledAction, VillageModel};
+use parabellum_app::villages::{VillageArmyContext, VillageEvent, hydrate_village};
 use parabellum_game::models::village::Village;
 use parabellum_types::common::ResourceGroup;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -56,6 +56,32 @@ impl VillageProjector {
 
     pub(super) fn village_from_model(model: &VillageModel) -> Village {
         Village::from(model.clone())
+    }
+
+    pub(super) async fn village_from_model_with_armies_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        model: VillageModel,
+    ) -> Result<Village, CqrsError> {
+        let village_id = model.village_id;
+        let armies = VillageArmyContext {
+            home: self
+                .armies
+                .get_home_army_in_tx(tx, village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            stationed: self
+                .armies
+                .list_stationed_armies_in_tx(tx, village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            deployed: self
+                .armies
+                .list_deployed_armies_in_tx(tx, village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+        };
+        Ok(hydrate_village(model, armies))
     }
 
     pub(super) async fn deduct_village_resources_in_tx(

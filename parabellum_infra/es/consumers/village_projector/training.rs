@@ -63,23 +63,17 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, *village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut village = Self::village_from_model(&current);
+        let player_id = current.player_id;
+        let mut village = self
+            .village_from_model_with_armies_in_tx(tx, current)
+            .await?;
         village
             .add_trained_units_home(unit.clone(), *quantity_trained)
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let next_army = village.army().cloned();
-        self.village
-            .update_army_in_tx(tx, *village_id, &next_army)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let refreshed = self
-            .village
-            .get_by_village_id_in_tx(tx, *village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        if let Some(army) = &refreshed.army {
+        if let Some(army) = &next_army {
             self.armies
-                .upsert_home_in_tx(tx, army, refreshed.player_id)
+                .upsert_home_in_tx(tx, army, player_id)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }

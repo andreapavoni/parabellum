@@ -24,7 +24,7 @@ logic belongs before adding new abstractions or persistence queries.
 - `parabellum_infra`
   - Infrastructure adapters and persistence.
   - Implements app ports using Postgres/SQLx.
-  - Hosts CQRS runtime wiring, event store/snapshot store, projectors, scheduler worker, and read-model repositories.
+  - Hosts CQRS runtime wiring, event store, projectors, scheduler worker, and read-model repositories.
 
 - `parabellum_web`
   - HTTP API and session/auth token handling.
@@ -74,6 +74,15 @@ Placement checklist:
 ## CQRS/ES Boundaries
 
 - Aggregate granularity: one village aggregate per village id (`u32`).
+- The live aggregate runtime uses `SnapshotAggregateManager` with
+  `es_snapshots` for aggregate loading. Normal commands save snapshots through
+  the CQRS runtime after events are appended and projected.
+- Scheduled workflow facts are appended outside `SimpleCqrs::execute`, so the
+  workflow append boundary refreshes snapshots for every affected aggregate
+  stream after the workflow events are committed.
+- Projectors run synchronously in the command/workflow transaction. There is no
+  projector-offset table because offsets are only needed for asynchronous
+  catch-up consumers.
 - Scheduling:
   - validations at scheduling time
   - deterministic canonical fact production
@@ -230,13 +239,18 @@ To avoid drift, each gameplay concern has exactly one canonical read-model owner
 - `rm_armies`:
   - canonical source for troop state (`home`, `stationed`, `moving`)
   - canonical source for UI troop availability and army cards
+  - canonical source for troop crop upkeep by current location
+  - stored as queryable columns (`army_id`, home/current village ids,
+    `player_id`, `tribe`, `state`, `units`, `smithy_upgrades`, optional
+    `hero_id`), not as an opaque domain payload
 - `rm_village_movements`:
   - canonical source for movement timeline (outgoing/incoming/return)
 - `rm_village`:
   - canonical source for village economy/buildings/production/research
   - canonical source for village CPP/day (`culture_points_production`)
   - village cumulative CP is not authoritative
-  - `army`/`reinforcements`/`deployed_armies` fields are compatibility snapshots, not query authority
+  - does not contain army snapshots; troop state must be loaded from
+    `rm_armies`
 
 - `players`:
   - canonical source for cumulative culture points (`culture_points`)
@@ -244,7 +258,16 @@ To avoid drift, each gameplay concern has exactly one canonical read-model owner
 
 Command-side rule:
 - `VillageAggregate` remains fully aware of army data for invariants and domain behavior.
-- Projectors materialize that state into read models with the ownership split above.
+- Projectors materialize aggregate army facts into `rm_armies`. When a village
+  read model must be hydrated for production or command context, current army
+  context is loaded from `rm_armies`.
+- `VillageModel` is the village economy/read-model shape. Converting it with
+  `From<VillageModel>` creates an economy-only domain village. Code that needs
+  troop-aware domain methods must load `VillageArmyContext` from `rm_armies`
+  and call `hydrate_village(model, context)`.
+- Report projectors follow the same read-model rule: reports are
+  notifications, but scout/battle report payloads still load troop rows from
+  `rm_armies` when visibility requires them.
 
 Domain mechanics and application policies:
 - Pure game mechanics live on `parabellum_game` domain models. Examples:
@@ -287,6 +310,8 @@ Domain mechanics and application policies:
 - Projectors persist scheduled rows and apply immediate read-model effects such
   as resource deductions, busy-merchants updates, movement rows, and moving
   army rows.
+- Projectors write army effects only through `rm_armies`; they must not keep
+  duplicate troop snapshots in `rm_village`.
 - Projectors apply canonical fact values directly when the fact carries the
   target state (for example projected stocks or busy merchants). When a
   projector must derive state from an operational event, it should instantiate

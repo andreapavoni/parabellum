@@ -3,7 +3,7 @@
 //! This module owns battle outcome materialization that replaces target village
 //! state, synchronizes army read models, and applies conquest-side occupancy.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::HashSet;
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
@@ -15,6 +15,12 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::es::consumers::village_projector::VillageProjector;
+
+struct BattleTargetState {
+    village: VillageModel,
+    home: Option<Army>,
+    stationed: Vec<Army>,
+}
 
 impl VillageProjector {
     pub(super) async fn project_battle_event_in_tx(
@@ -54,10 +60,16 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
+        let target_before_army_ids = self.target_army_ids(tx, *target_village_id).await?;
         let mut target_next = target_state_after_battle(&target_before, event);
 
-        self.sync_target_armies(tx, *target_village_id, &target_before, &target_next)
-            .await?;
+        self.sync_target_armies(
+            tx,
+            *target_village_id,
+            &target_before_army_ids,
+            &target_next,
+        )
+        .await?;
 
         if *target_player_id != target_before.player_id {
             self.apply_conquest_to_target(
@@ -65,36 +77,28 @@ impl VillageProjector {
                 *source_village_id,
                 *target_village_id,
                 *target_player_id,
-                &mut target_next,
+                &mut target_next.village,
             )
             .await?;
         }
 
         self.village
-            .replace_village_state_in_tx(tx, &target_next)
+            .replace_village_state_in_tx(tx, &target_next.village)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-
-        self.sync_home_deployed_armies(
-            tx,
-            &target_before.reinforcements,
-            &target_next.reinforcements,
-        )
-        .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     async fn sync_target_armies(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         target_village_id: u32,
-        target_before: &VillageModel,
-        target_next: &VillageModel,
+        before_ids: &HashSet<Uuid>,
+        target_next: &BattleTargetState,
     ) -> Result<(), CqrsError> {
-        let before_ids = target_army_ids(target_before);
         let mut after_ids: HashSet<Uuid> = HashSet::new();
-        if let Some(after_home) = target_next.army.as_ref() {
+        if let Some(after_home) = target_next.home.as_ref() {
             self.armies
-                .upsert_home_in_tx(tx, after_home, target_next.player_id)
+                .upsert_home_in_tx(tx, after_home, target_next.village.player_id)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(hero) = after_home.hero() {
@@ -105,7 +109,7 @@ impl VillageProjector {
             }
             after_ids.insert(after_home.id);
         }
-        for after_reinforcement in &target_next.reinforcements {
+        for after_reinforcement in &target_next.stationed {
             self.armies
                 .upsert_stationed_in_tx(
                     tx,
@@ -130,6 +134,31 @@ impl VillageProjector {
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }
         Ok(())
+    }
+
+    async fn target_army_ids(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        target_village_id: u32,
+    ) -> Result<HashSet<Uuid>, CqrsError> {
+        let mut ids = HashSet::new();
+        if let Some(home) = self
+            .armies
+            .get_home_army_in_tx(tx, target_village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+        {
+            ids.insert(home.id);
+        }
+        ids.extend(
+            self.armies
+                .list_stationed_armies_in_tx(tx, target_village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?
+                .into_iter()
+                .map(|army| army.id),
+        );
+        Ok(ids)
     }
 
     async fn apply_conquest_to_target(
@@ -167,94 +196,12 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
-
-    async fn sync_home_deployed_armies(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        target_before_reinforcements: &[Army],
-        target_next_reinforcements: &[Army],
-    ) -> Result<(), CqrsError> {
-        let before_by_home = reinforcement_ids_by_home(target_before_reinforcements);
-        let after_by_home = reinforcements_by_home(target_next_reinforcements);
-        let homes = changed_reinforcement_homes(&before_by_home, &after_by_home);
-        for home_village_id in homes {
-            let home = self
-                .village
-                .get_by_village_id_in_tx(tx, home_village_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            let mut next_deployed = home.deployed_armies.clone();
-            let before_ids = before_by_home
-                .get(&home_village_id)
-                .cloned()
-                .unwrap_or_default();
-            for removed in before_ids {
-                if let Some(pos) = next_deployed.iter().position(|army| army.id == removed) {
-                    next_deployed.remove(pos);
-                }
-            }
-            let after_armies = after_by_home
-                .get(&home_village_id)
-                .cloned()
-                .unwrap_or_default();
-            for updated in after_armies {
-                if let Some(pos) = next_deployed.iter().position(|army| army.id == updated.id) {
-                    next_deployed[pos] = updated;
-                } else {
-                    next_deployed.push(updated);
-                }
-            }
-            self.village
-                .update_deployed_armies_in_tx(tx, home_village_id, &next_deployed)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        }
-        Ok(())
-    }
 }
 
-fn target_army_ids(target: &VillageModel) -> HashSet<Uuid> {
-    let mut ids = HashSet::new();
-    if let Some(home) = target.army.as_ref() {
-        ids.insert(home.id);
-    }
-    ids.extend(target.reinforcements.iter().map(|army| army.id));
-    ids
-}
-
-fn reinforcement_ids_by_home(reinforcements: &[Army]) -> HashMap<u32, Vec<Uuid>> {
-    let mut by_home: HashMap<u32, Vec<Uuid>> = HashMap::new();
-    for reinforcement in reinforcements {
-        by_home
-            .entry(reinforcement.village_id)
-            .or_default()
-            .push(reinforcement.id);
-    }
-    by_home
-}
-
-fn reinforcements_by_home(reinforcements: &[Army]) -> HashMap<u32, Vec<Army>> {
-    let mut by_home: HashMap<u32, Vec<Army>> = HashMap::new();
-    for reinforcement in reinforcements {
-        by_home
-            .entry(reinforcement.village_id)
-            .or_default()
-            .push(reinforcement.clone());
-    }
-    by_home
-}
-
-fn changed_reinforcement_homes(
-    before_by_home: &HashMap<u32, Vec<Uuid>>,
-    after_by_home: &HashMap<u32, Vec<Army>>,
-) -> BTreeSet<u32> {
-    let mut homes = BTreeSet::new();
-    homes.extend(before_by_home.keys().copied());
-    homes.extend(after_by_home.keys().copied());
-    homes
-}
-
-fn target_state_after_battle(target_before: &VillageModel, event: &VillageEvent) -> VillageModel {
+fn target_state_after_battle(
+    target_before: &VillageModel,
+    event: &VillageEvent,
+) -> BattleTargetState {
     let VillageEvent::BattleOutcomeAppliedToVillage {
         target_player_id,
         target_parent_village_id,
@@ -274,16 +221,16 @@ fn target_state_after_battle(target_before: &VillageModel, event: &VillageEvent)
         );
     };
 
-    let mut target_next = target_before.clone();
-    target_next.player_id = *target_player_id;
-    target_next.parent_village_id = *target_parent_village_id;
-    target_next.loyalty = *target_loyalty;
-    target_next.buildings = target_buildings.clone();
-    target_next.production = target_production.clone();
-    target_next.population = *target_population;
-    target_next.stocks = target_stocks.clone();
-    target_next.army = target_army.clone().filter(|army| army.immensity() > 0);
-    target_next.reinforcements = target_reinforcements
+    let mut village = target_before.clone();
+    village.player_id = *target_player_id;
+    village.parent_village_id = *target_parent_village_id;
+    village.loyalty = *target_loyalty;
+    village.buildings = target_buildings.clone();
+    village.production = target_production.clone();
+    village.population = *target_population;
+    village.stocks = target_stocks.clone();
+    let home = target_army.clone().filter(|army| army.immensity() > 0);
+    let mut stationed: Vec<Army> = target_reinforcements
         .iter()
         .filter(|army| army.immensity() > 0)
         .cloned()
@@ -291,10 +238,14 @@ fn target_state_after_battle(target_before: &VillageModel, event: &VillageEvent)
     if let Some(stationed_attacker) = stationed_attacker_army
         && stationed_attacker.immensity() > 0
     {
-        target_next.reinforcements.push(stationed_attacker.clone());
+        stationed.push(stationed_attacker.clone());
     }
 
-    target_next
+    BattleTargetState {
+        village,
+        home,
+        stationed,
+    }
 }
 
 fn remove_tribe_incompatible_buildings(village: &mut Village) {

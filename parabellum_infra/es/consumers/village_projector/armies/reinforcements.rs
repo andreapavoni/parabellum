@@ -67,19 +67,7 @@ impl VillageProjector {
                 "project_reinforcement_arrived called with non-ReinforcementArrived event"
             );
         };
-        let source = self
-            .village
-            .get_by_village_id_in_tx(tx, *source_village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        if !hero_alone_transfer {
-            let mut source_deployed = source.deployed_armies;
-            source_deployed.push(army.clone());
-            self.village
-                .update_deployed_armies_in_tx(tx, *source_village_id, &source_deployed)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        }
+        let _ = (source_village_id, army, hero_alone_transfer);
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
@@ -113,9 +101,11 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if *hero_alone_transfer {
-            let mut target_army = target
-                .army
-                .clone()
+            let mut target_army = self
+                .armies
+                .get_home_army_in_tx(tx, *target_village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?
                 .unwrap_or_else(|| Army::new_village_army(&Self::village_from_model(&target)));
             target_army.set_hero(army.hero());
             let next_target_army = if target_army.immensity() == 0 {
@@ -123,10 +113,6 @@ impl VillageProjector {
             } else {
                 Some(target_army)
             };
-            self.village
-                .update_army_in_tx(tx, *target_village_id, &next_target_army)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(ref home_army) = next_target_army {
                 self.armies
                     .upsert_home_in_tx(tx, home_army, target.player_id)
@@ -141,12 +127,6 @@ impl VillageProjector {
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
         } else {
-            let mut target_reinforcements = target.reinforcements;
-            target_reinforcements.push(army.clone());
-            self.village
-                .update_reinforcements_in_tx(tx, *target_village_id, &target_reinforcements)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             self.armies
                 .upsert_stationed_in_tx(tx, army, *target_village_id, *player_id)
                 .await
@@ -225,8 +205,6 @@ impl VillageProjector {
             _ => unreachable!("project_reinforcement_return called with non-return event"),
         };
 
-        self.remove_returning_deployed_army(tx, *home_village_id, *army_id, army)
-            .await?;
         self.remove_returning_stationed_army(tx, *stationed_village_id, *army_id, army)
             .await?;
 
@@ -281,40 +259,6 @@ impl VillageProjector {
         self.add_scheduled_action_in_tx(tx, &action).await
     }
 
-    async fn remove_returning_deployed_army(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        home_village_id: u32,
-        army_id: uuid::Uuid,
-        returning_army: &Army,
-    ) -> Result<(), CqrsError> {
-        let source = self
-            .village
-            .get_by_village_id_in_tx(tx, home_village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut next_deployed = source.deployed_armies;
-        if let Some(idx) = next_deployed.iter().position(|a| a.id == army_id) {
-            let existing = next_deployed[idx].clone();
-            let remaining = Self::remaining_after_split(
-                &existing,
-                returning_army.units().clone(),
-                returning_army.hero().is_some(),
-                home_village_id,
-            )?;
-            if let Some(remaining) = remaining {
-                next_deployed[idx] = remaining;
-            } else {
-                next_deployed.remove(idx);
-            }
-            self.village
-                .update_deployed_armies_in_tx(tx, home_village_id, &next_deployed)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        }
-        Ok(())
-    }
-
     async fn remove_returning_stationed_army(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -322,52 +266,43 @@ impl VillageProjector {
         army_id: uuid::Uuid,
         returning_army: &Army,
     ) -> Result<(), CqrsError> {
-        let stationed = self
-            .village
-            .get_by_village_id_in_tx(tx, stationed_village_id)
+        let Some(existing) = self
+            .armies
+            .list_stationed_armies_in_tx(tx, stationed_village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut next_reinforcements = stationed.reinforcements;
-        if let Some(idx) = next_reinforcements.iter().position(|a| a.id == army_id) {
-            let existing = next_reinforcements[idx].clone();
-            let remaining = Self::remaining_after_split(
-                &existing,
-                returning_army.units().clone(),
-                returning_army.hero().is_some(),
-                stationed_village_id,
-            )?;
-            if let Some(remaining) = remaining {
-                next_reinforcements[idx] = remaining.clone();
-                self.armies
-                    .upsert_stationed_in_tx(
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?
+            .into_iter()
+            .find(|army| army.id == army_id)
+        else {
+            return Ok(());
+        };
+
+        let remaining = Self::remaining_after_split(
+            &existing,
+            returning_army.units().clone(),
+            returning_army.hero().is_some(),
+            stationed_village_id,
+        )?;
+        if let Some(remaining) = remaining {
+            self.armies
+                .upsert_stationed_in_tx(tx, &remaining, stationed_village_id, remaining.player_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            if let Some(hero) = remaining.hero() {
+                self.heroes
+                    .upsert_in_tx(
                         tx,
-                        &remaining,
+                        &hero,
+                        hero.village_id,
                         stationed_village_id,
-                        remaining.player_id,
+                        "stationed",
                     )
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                if let Some(hero) = remaining.hero() {
-                    self.heroes
-                        .upsert_in_tx(
-                            tx,
-                            &hero,
-                            hero.village_id,
-                            stationed_village_id,
-                            "stationed",
-                        )
-                        .await
-                        .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                }
-            } else {
-                next_reinforcements.remove(idx);
-                self.armies
-                    .delete_in_tx(tx, army_id)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
-            self.village
-                .update_reinforcements_in_tx(tx, stationed_village_id, &next_reinforcements)
+        } else {
+            self.armies
+                .delete_in_tx(tx, army_id)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }

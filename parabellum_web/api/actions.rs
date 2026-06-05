@@ -505,9 +505,7 @@ pub async fn preview_send_resources(
         x: payload.target_x,
         y: payload.target_y,
     };
-    let merchant_speed = ((user.village.tribe.merchant_stats().speed as u32)
-        * state.server_speed as u32)
-        .min(u8::MAX as u32) as u8;
+    let merchant_speed = user.village.tribe.merchant_stats().speed;
     let travel_time_secs = user.village.position.calculate_travel_time_secs(
         target_position,
         merchant_speed,

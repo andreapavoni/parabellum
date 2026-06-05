@@ -11,6 +11,7 @@ use parabellum_app::villages::models::{AttackArrivalWorkflow, ScoutArrivalWorkfl
 use parabellum_app::villages::repositories::{ArmyRepository, VillageRepository};
 use parabellum_app::villages::{
     ApplyBattleOutcomeToVillage, ConquestAttempt, ResolveAttackBattle, ResolveScoutBattle,
+    VillageArmyContext, hydrate_village,
 };
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -56,6 +57,29 @@ pub(crate) async fn resolve_scout(
     Ok(scout_resolution_events(outcome))
 }
 
+async fn hydrate_village_with_current_armies(
+    svc: &VillageEsService,
+    model: VillageModel,
+) -> Result<Village, CqrsError> {
+    let army_repo = PostgresArmyRepository::new(svc.pool().clone());
+    let village_id = model.village_id;
+    let armies = VillageArmyContext {
+        home: army_repo
+            .get_home_army(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?,
+        stationed: army_repo
+            .list_stationed_armies(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?,
+        deployed: army_repo
+            .list_deployed_armies(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?,
+    };
+    Ok(hydrate_village(model, armies))
+}
+
 pub(crate) fn scout_resolution_events(source: ResolveScoutBattle) -> super::WorkflowEvents {
     let source_village_id = source.source_village_id;
 
@@ -67,24 +91,12 @@ async fn build_attack_outcome(
     workflow: AttackArrivalWorkflow,
 ) -> Result<AttackOutcome, CqrsError> {
     let source = svc.get_village(workflow.source_village_id).await?;
-    let mut target = svc.get_village(workflow.target_village_id).await?;
-    let army_repo = PostgresArmyRepository::new(svc.pool().clone());
-    let target_home_army = army_repo
-        .get_home_army(workflow.target_village_id)
-        .await
-        .map_err(CqrsError::domain_source)?;
-    let target_reinforcements = army_repo
-        .list_stationed_armies(workflow.target_village_id)
-        .await
-        .map_err(CqrsError::domain_source)?;
-    target.army = target_home_army;
-    target.reinforcements = target_reinforcements;
+    let target = svc.get_village(workflow.target_village_id).await?;
     let can_attempt_conquer = workflow.attack_type == parabellum_types::battle::AttackType::Normal
         && can_attempt_conquer(svc, &source, &target, &workflow.army).await?;
 
     let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
-    let mut defender_village =
-        Village::try_from(target.clone()).map_err(CqrsError::domain_source)?;
+    let mut defender_village = hydrate_village_with_current_armies(svc, target.clone()).await?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
         Some(workflow.army_id),
@@ -219,8 +231,7 @@ async fn build_scout_outcome(
     let source = svc.get_village(workflow.source_village_id).await?;
     let target_village_model = svc.get_village(workflow.target_village_id).await?;
     let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
-    let defender_village =
-        Village::try_from(target_village_model).map_err(CqrsError::domain_source)?;
+    let defender_village = hydrate_village_with_current_armies(svc, target_village_model).await?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
         Some(workflow.army_id),

@@ -2,7 +2,6 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::repositories::VillageRepository;
 use sqlx::{Postgres, Transaction};
 
 use crate::es::consumers::village_projector::VillageProjector;
@@ -51,7 +50,8 @@ impl VillageProjector {
             unreachable!("project_village_founded called with non-VillageFounded event");
         };
         self.village
-            .upsert_from_village(
+            .upsert_from_village_in_tx(
+                tx,
                 *village_id,
                 *player_id,
                 village_name,
@@ -59,7 +59,6 @@ impl VillageProjector {
                 tribe.clone(),
                 *parent_village_id,
                 buildings,
-                &None,
             )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;

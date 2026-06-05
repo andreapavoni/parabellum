@@ -12,8 +12,9 @@ use uuid::Uuid;
 use crate::es::{PostgresHeroRepository, VillageEsService};
 
 use super::fixtures::{
-    barracks, deployed_units, granary, main_building, rally_point, resources, setup_village,
-    setup_village_for_player, stationed_units, warehouse, with_test_pool,
+    barracks, deployed_units, granary, home_army, main_building, rally_point, resources,
+    setup_village, setup_village_for_player, stationed_armies, stationed_units, warehouse,
+    with_test_pool,
 };
 
 fn hero_mansion(level: u8) -> VillageBuilding {
@@ -288,9 +289,12 @@ async fn village_es_service_hero_alone_reinforcement_transfers_home_when_both_ha
 
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
-        let target = service.get_village(target_village_id).await.unwrap();
         assert_eq!(
-            target.army.as_ref().and_then(|a| a.hero()).map(|h| h.id),
+            home_army(&pool, target_village_id)
+                .await
+                .as_ref()
+                .and_then(|a| a.hero())
+                .map(|h| h.id),
             Some(hero_id)
         );
 
@@ -391,8 +395,8 @@ async fn village_es_service_hero_with_troops_reinforcement_does_not_transfer_hom
 
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 1);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 1);
-        let target = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(target.reinforcements[0].hero().map(|h| h.id), Some(hero_id));
+        let target_reinforcements = stationed_armies(&pool, target_village_id).await;
+        assert_eq!(target_reinforcements[0].hero().map(|h| h.id), Some(hero_id));
 
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert_eq!(hero_after.village_id, source_village_id);
@@ -466,8 +470,8 @@ async fn village_es_service_hero_alone_to_village_without_hero_mansion_does_not_
             .unwrap();
 
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
-        let target = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(target.reinforcements[0].hero().map(|h| h.id), Some(hero_id));
+        let target_reinforcements = stationed_armies(&pool, target_village_id).await;
+        assert_eq!(target_reinforcements[0].hero().map(|h| h.id), Some(hero_id));
 
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert_eq!(hero_after.village_id, source_village_id);
@@ -756,11 +760,10 @@ async fn village_es_service_attack_with_hero_returns_hero_home() {
             .await
             .unwrap();
 
-        let source_after = service.get_village(source_village_id).await.unwrap();
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(
-            source_after
-                .army
+            home_army(&pool, source_village_id)
+                .await
                 .as_ref()
                 .and_then(|a| a.hero())
                 .map(|h| h.id),

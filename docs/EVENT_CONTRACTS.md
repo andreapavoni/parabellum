@@ -21,7 +21,7 @@ Producer:
 Projection responsibilities:
 1. `VillageProjector` materializes village/army/movement state.
 2. `ReportProjector` emits user-visible battle reports.
-3. `VillageProjector` synchronizes reinforcement owners' deployed-army snapshots from post-battle stationed armies.
+3. `VillageProjector` writes post-battle home/stationed army rows to `rm_armies`.
 4. `ReportProjector` includes reinforcement owners in battle-report audiences.
 
 Invariants:

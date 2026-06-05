@@ -19,6 +19,7 @@ pub use commands::{
     UpgradeBuilding,
 };
 pub use events::VillageEvent;
+pub use mapping::{VillageArmyContext, hydrate_village};
 pub use policies::army_dispatch::{ArmyDispatch, ArmyDispatchRequest};
 pub use policies::expansion::{ConquestAttempt, ExpansionSlotUsage, ExpansionTrainingCommitment};
 pub use policies::marketplace::{MarketplaceAcceptance, MarketplaceOfferCreation};

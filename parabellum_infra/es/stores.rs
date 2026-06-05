@@ -1,4 +1,3 @@
-use chrono::Utc;
 use mini_cqrs_es::{
     Aggregate, AggregateSnapshot, CqrsError, EventMetadata, EventStore, NewEvent, SnapshotStore,
     StoredEvent,
@@ -337,19 +336,18 @@ impl SnapshotStore for PostgresSnapshotStore {
         sqlx::query(
             r#"
             INSERT INTO es_snapshots (aggregate_type, aggregate_id, stream_version, state, updated_at)
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, NOW())
             ON CONFLICT (aggregate_type, aggregate_id)
             DO UPDATE SET
                 stream_version = EXCLUDED.stream_version,
                 state = EXCLUDED.state,
-                updated_at = EXCLUDED.updated_at
+                updated_at = NOW()
             "#,
         )
         .bind(aggregate_type)
         .bind(aggregate_id)
         .bind(snapshot.version as i64)
         .bind(Json(&state))
-        .bind(Utc::now())
         .execute(&self.pool)
         .await
         .map_err(|e| CqrsError::SnapshotStore(e.to_string()))?;
@@ -380,7 +378,9 @@ impl SnapshotStore for PostgresSnapshotStore {
         .await
         .map_err(|e| CqrsError::SnapshotStore(e.to_string()))?;
 
-        let row = row.ok_or_else(|| CqrsError::AggregateNotFound(aggregate_id.to_string()))?;
+        let row = row.ok_or_else(|| {
+            CqrsError::SnapshotStore(format!("snapshot not found for aggregate `{aggregate_id}`"))
+        })?;
         let version = row
             .try_get::<i64, _>("stream_version")
             .map_err(|e| CqrsError::SnapshotStore(e.to_string()))? as u64;

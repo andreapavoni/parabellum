@@ -22,7 +22,7 @@ use crate::es::repositories::PostgresScheduledActionRepository;
 use crate::es::tests::fixtures::setup_village_for_player;
 
 use super::fixtures::{
-    EsScenario, academy, barracks, deployed_units, granary, home_units,
+    EsScenario, academy, barracks, deployed_units, granary, home_army, home_units,
     insert_corrupt_scheduled_action, main_building, marketplace, process_due_until, rally_point,
     refill_resources, research_and_complete, resources, scheduled_action_status_count,
     setup_village, smithy, stationed_units, test_server_speed, train_and_complete,
@@ -999,8 +999,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
         let now = chrono::Utc::now();
         let arrives_at = now + chrono::Duration::seconds(2);
         let returns_at = now + chrono::Duration::seconds(4);
-        let source = service.get_village(village_id).await.unwrap();
-        let mut arriving_army = source.army.clone().unwrap();
+        let mut arriving_army = home_army(&pool, village_id).await.unwrap();
         arriving_army.update_units(&TroopSet::default());
         let arrival_action_id = Uuid::new_v4();
         let return_action_id = Uuid::new_v4();
@@ -1062,7 +1061,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
 }
 
 #[tokio::test]
-async fn village_es_service_battle_keeps_reinforcement_owner_deployed_snapshot_aligned() {
+async fn village_es_service_battle_keeps_reinforcement_owner_army_rows_aligned() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
 

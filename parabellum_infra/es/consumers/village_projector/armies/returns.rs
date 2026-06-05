@@ -44,20 +44,7 @@ impl VillageProjector {
                 "project_attack_battle_resolved called with non-AttackBattleResolved event"
             );
         };
-        let source = self
-            .village
-            .get_by_village_id_in_tx(tx, *source_village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-
-        if let Some(stationed_attacker) = stationed_attacker_army.clone() {
-            let mut source_deployed = source.deployed_armies;
-            source_deployed.push(stationed_attacker);
-            self.village
-                .update_deployed_armies_in_tx(tx, *source_village_id, &source_deployed)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        }
+        let _ = stationed_attacker_army;
 
         let Some(return_army) = returning_army else {
             return Ok(());
@@ -196,24 +183,17 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut source_village = Self::village_from_model(&source);
-        let mut source_deployed = source.deployed_armies;
+        let source_stocks = source.stocks.clone();
+        let mut source_village = self
+            .village_from_model_with_armies_in_tx(tx, source)
+            .await?;
         source_village
             .merge_army(army)
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        source_deployed.retain(|army| army.id != *movement_id);
         let next_source_army = source_village
             .army()
             .cloned()
             .filter(|army| army.immensity() > 0);
-        self.village
-            .update_army_in_tx(tx, *source_village_id, &next_source_army)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        self.village
-            .update_deployed_armies_in_tx(tx, *source_village_id, &source_deployed)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
@@ -241,10 +221,10 @@ impl VillageProjector {
 
         if let Some(bounty) = bounty {
             let next_resources = ResourceGroup::new(
-                source.stocks.lumber.saturating_add(bounty.lumber()),
-                source.stocks.clay.saturating_add(bounty.clay()),
-                source.stocks.iron.saturating_add(bounty.iron()),
-                (source.stocks.crop.max(0) as u32).saturating_add(bounty.crop()),
+                source_stocks.lumber.saturating_add(bounty.lumber()),
+                source_stocks.clay.saturating_add(bounty.clay()),
+                source_stocks.iron.saturating_add(bounty.iron()),
+                (source_stocks.crop.max(0) as u32).saturating_add(bounty.crop()),
             );
             self.set_stored_resources_in_tx(tx, *source_village_id, next_resources)
                 .await?;

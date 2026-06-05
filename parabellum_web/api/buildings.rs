@@ -236,6 +236,7 @@ pub struct SmithyDetailDto {
 pub struct SmithyUpgradeOptionDto {
     pub unit_name: String,
     pub current_level: u8,
+    pub next_level: u8,
     pub max_level: u8,
     pub cost: ResourceAmountsDto,
     pub time_secs: u32,
@@ -1585,6 +1586,7 @@ fn smithy_options_for_village(
         let current_level = smithy_levels[idx];
         let queued = queue_counts.get(&unit.name).copied().unwrap_or(0);
         let effective_level = current_level.saturating_add(queued);
+        let next_level = effective_level.saturating_add(1).min(smithy_level_cap);
         let available_for_upgrade =
             is_researched && effective_level < smithy_level_cap && smithy_level_cap > 0;
         let can_upgrade = available_for_upgrade && queued == 0 && !queue_full;
@@ -1614,6 +1616,7 @@ fn smithy_options_for_village(
         options.push(SmithyUpgradeOptionDto {
             unit_name: unit_key(&unit.name),
             current_level,
+            next_level,
             max_level: smithy_level_cap,
             cost: resource_group_to_dto(&cost),
             time_secs,

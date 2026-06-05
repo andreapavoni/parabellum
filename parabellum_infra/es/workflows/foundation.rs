@@ -19,8 +19,6 @@ use crate::es::{
 };
 use crate::map::PostgresMapRepository;
 
-const DEFAULT_FOUNDATION_SPEED: i8 = 1;
-
 enum FoundationTarget {
     Available(ValleyTopology),
     Unavailable,
@@ -31,8 +29,8 @@ pub(crate) async fn settlers_arrival_events(
     workflow: SettlersArrivalWorkflow,
 ) -> Result<super::WorkflowEvents, CqrsError> {
     if let FoundationTarget::Available(topology) = foundation_target(svc, &workflow).await? {
-        let default_buildings =
-            default_founded_village_buildings(&topology, DEFAULT_FOUNDATION_SPEED)?;
+        let cfg = parabellum_app::config::Config::from_env();
+        let default_buildings = default_founded_village_buildings(&topology, cfg.speed)?;
         return Ok(settlers_foundation_events(workflow, default_buildings));
     }
 

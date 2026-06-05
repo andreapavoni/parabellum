@@ -94,9 +94,14 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let previous_home_army_id = current.army.as_ref().map(|a| a.id);
+        let current_home_army = self
+            .armies
+            .get_home_army_in_tx(tx, village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let previous_home_army_id = current_home_army.as_ref().map(|a| a.id);
 
-        let next_army = if let Some(mut home_army) = current.army.clone() {
+        let next_army = if let Some(mut home_army) = current_home_army {
             let detached_hero_id = detached_army.hero().map(|hero| hero.id);
             let home_hero_id = home_army.hero().map(|hero| hero.id);
             let hero_id = (detached_hero_id == home_hero_id)
@@ -112,10 +117,6 @@ impl VillageProjector {
             None
         };
 
-        self.village
-            .update_army_in_tx(tx, village_id, &next_army)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if let Some(home_army) = &next_army {
             self.armies
                 .upsert_home_in_tx(tx, home_army, current.player_id)

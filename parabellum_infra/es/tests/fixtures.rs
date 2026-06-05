@@ -209,10 +209,6 @@ pub async fn reset_tables(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM es_projector_offsets")
-        .execute(pool)
-        .await
-        .unwrap();
     sqlx::query("DELETE FROM es_events")
         .execute(pool)
         .await
@@ -344,6 +340,36 @@ pub async fn home_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -
         .unwrap_or(0)
 }
 
+pub async fn home_army(
+    pool: &sqlx::PgPool,
+    village_id: u32,
+) -> Option<parabellum_game::models::army::Army> {
+    PostgresArmyRepository::new(pool.clone())
+        .get_home_army(village_id)
+        .await
+        .unwrap()
+}
+
+pub async fn stationed_armies(
+    pool: &sqlx::PgPool,
+    village_id: u32,
+) -> Vec<parabellum_game::models::army::Army> {
+    PostgresArmyRepository::new(pool.clone())
+        .list_stationed_armies(village_id)
+        .await
+        .unwrap()
+}
+
+pub async fn deployed_armies(
+    pool: &sqlx::PgPool,
+    village_id: u32,
+) -> Vec<parabellum_game::models::army::Army> {
+    PostgresArmyRepository::new(pool.clone())
+        .list_deployed_armies(village_id)
+        .await
+        .unwrap()
+}
+
 pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
     PostgresArmyRepository::new(pool.clone())
         .list_stationed_armies(village_id)
@@ -373,6 +399,40 @@ pub async fn village_stocks(
     village_id: u32,
 ) -> parabellum_game::models::village::VillageStocks {
     service.get_village(village_id).await.unwrap().stocks
+}
+
+pub async fn snapshot_version(pool: &sqlx::PgPool, village_id: u32) -> Option<u64> {
+    let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT stream_version
+        FROM es_snapshots
+        WHERE aggregate_type = $1 AND aggregate_id = $2
+        "#,
+    )
+    .bind(aggregate_type)
+    .bind(village_id.to_string())
+    .fetch_optional(pool)
+    .await
+    .unwrap()
+    .map(|version| version as u64)
+}
+
+pub async fn latest_stream_version(pool: &sqlx::PgPool, village_id: u32) -> u64 {
+    let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+    sqlx::query_scalar::<_, Option<i64>>(
+        r#"
+        SELECT MAX(stream_version)
+        FROM es_events
+        WHERE aggregate_type = $1 AND aggregate_id = $2
+        "#,
+    )
+    .bind(aggregate_type)
+    .bind(village_id.to_string())
+    .fetch_one(pool)
+    .await
+    .unwrap()
+    .unwrap_or(0) as u64
 }
 
 pub async fn village_busy_merchants(service: &VillageEsService, village_id: u32) -> u8 {

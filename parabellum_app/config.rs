@@ -20,7 +20,7 @@ impl Config {
         };
 
         let speed = match env::var("PARABELLUM_SERVER_SPEED") {
-            Ok(val) => val.parse::<i8>().unwrap_or(1).clamp(1, 5),
+            Ok(val) => val.parse::<i8>().unwrap_or(1).clamp(1, 10),
             Err(_) => 1,
         };
 

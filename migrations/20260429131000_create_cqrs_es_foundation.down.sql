@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS rm_map_fields;
-DROP TABLE IF EXISTS rm_heroes;
 DROP TABLE IF EXISTS rm_armies;
+DROP TABLE IF EXISTS rm_heroes;
 DROP TABLE IF EXISTS rm_report_reads;
 DROP TABLE IF EXISTS rm_reports;
 DROP TABLE IF EXISTS rm_marketplace_offers;
@@ -12,6 +12,5 @@ DROP TYPE IF EXISTS scheduled_action_type;
 DROP TYPE IF EXISTS scheduled_action_status;
 DROP TYPE IF EXISTS movement_type;
 DROP TYPE IF EXISTS movement_direction;
-DROP TABLE IF EXISTS es_projector_offsets;
 DROP TABLE IF EXISTS es_snapshots;
 DROP TABLE IF EXISTS es_events;

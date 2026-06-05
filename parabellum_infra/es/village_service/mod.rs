@@ -8,7 +8,10 @@
 //! Public API remains centered on `VillageEsService`.
 
 use mini_cqrs_es::anyhow::Result;
-use mini_cqrs_es::{CqrsError, EventMetadata, EventPayload, EventStore, NewEvent};
+use mini_cqrs_es::{
+    Aggregate, AggregateSnapshot, CqrsError, EventMetadata, EventPayload, EventStore, NewEvent,
+    SnapshotStore,
+};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::village::Village;
 use sqlx::PgPool;
@@ -34,7 +37,8 @@ use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::workflows;
 use crate::es::{
     PostgresEventStore, PostgresMarketplaceRepository, PostgresScheduledActionRepository,
-    ReportProjector, VillageProjector, WorkflowStreamAppend, village_cqrs_runtime,
+    PostgresSnapshotStore, ReportProjector, VillageProjector, WorkflowStreamAppend,
+    village_cqrs_runtime,
 };
 use crate::map::PostgresMapRepository;
 
@@ -670,6 +674,35 @@ impl VillageEsService {
             report_projector.process_in_tx(&mut tx, event).await?;
         }
         tx.commit().await.map_err(CqrsError::domain_source)?;
+        self.refresh_workflow_snapshots(&streams).await?;
+        Ok(())
+    }
+
+    async fn refresh_workflow_snapshots(
+        &self,
+        streams: &[WorkflowStreamAppend],
+    ) -> Result<(), CqrsError> {
+        let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
+        let event_store = PostgresEventStore::new(self.pool.clone());
+        let snapshot_store = PostgresSnapshotStore::new(self.pool.clone());
+
+        for stream in streams {
+            let (events, version) = event_store
+                .load_events(aggregate_type, &stream.aggregate_id)
+                .await?;
+            let mut aggregate = parabellum_app::villages::VillageAggregate::default();
+            aggregate.set_aggregate_id(
+                stream
+                    .aggregate_id
+                    .parse()
+                    .map_err(|_| CqrsError::EventStore("invalid village aggregate id".into()))?,
+            );
+            aggregate.apply_events(&events).await?;
+            aggregate.set_version(version);
+            snapshot_store
+                .save_snapshot(AggregateSnapshot::new(&aggregate, Some(version))?)
+                .await?;
+        }
         Ok(())
     }
 

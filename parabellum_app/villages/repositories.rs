@@ -34,27 +34,11 @@ pub trait VillageRepository: Send + Sync {
         tribe: Tribe,
         parent_village_id: Option<u32>,
         buildings: &[parabellum_game::models::village::VillageBuilding],
-        army: &Option<parabellum_game::models::army::Army>,
     ) -> Result<(), ApplicationError>;
     async fn update_player_id(
         &self,
         village_id: u32,
         player_id: Uuid,
-    ) -> Result<(), ApplicationError>;
-    async fn update_army(
-        &self,
-        village_id: u32,
-        army: &Option<parabellum_game::models::army::Army>,
-    ) -> Result<(), ApplicationError>;
-    async fn update_reinforcements(
-        &self,
-        village_id: u32,
-        reinforcements: &[parabellum_game::models::army::Army],
-    ) -> Result<(), ApplicationError>;
-    async fn update_deployed_armies(
-        &self,
-        village_id: u32,
-        deployed_armies: &[parabellum_game::models::army::Army],
     ) -> Result<(), ApplicationError>;
     async fn update_building(
         &self,

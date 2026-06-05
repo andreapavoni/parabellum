@@ -23,12 +23,6 @@ CREATE TABLE es_snapshots (
     PRIMARY KEY (aggregate_type, aggregate_id)
 );
 
-CREATE TABLE es_projector_offsets (
-    projector_name TEXT PRIMARY KEY,
-    last_global_seq BIGINT NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TYPE movement_direction AS ENUM ('Incoming', 'Outgoing');
 CREATE TYPE movement_type AS ENUM ('Attack', 'Raid', 'Scout', 'Reinforcement', 'Return', 'FoundVillage');
 CREATE TYPE scheduled_action_status AS ENUM ('pending', 'processing', 'completed', 'failed');
@@ -66,9 +60,6 @@ CREATE TABLE rm_village (
     smithy_upgrades JSONB NOT NULL DEFAULT '{}'::jsonb,
     academy_research JSONB NOT NULL DEFAULT '{"researches":{}}'::jsonb,
     parent_village_id INTEGER NULL,
-    army JSONB NOT NULL DEFAULT 'null'::jsonb,
-    reinforcements JSONB NOT NULL DEFAULT '[]'::jsonb,
-    deployed_armies JSONB NOT NULL DEFAULT '[]'::jsonb,
     total_merchants SMALLINT NOT NULL DEFAULT 0,
     busy_merchants SMALLINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -148,21 +139,6 @@ CREATE INDEX idx_rm_report_reads_player_created
 CREATE INDEX idx_rm_reports_created_at
     ON rm_reports (created_at DESC);
 
-CREATE TABLE rm_armies (
-    army_id UUID PRIMARY KEY,
-    village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
-    current_village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
-    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-    state TEXT NOT NULL CHECK (state IN ('home', 'stationed', 'moving')),
-    payload JSONB NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_rm_armies_village_id ON rm_armies(village_id);
-CREATE INDEX idx_rm_armies_current_village_id ON rm_armies(current_village_id);
-CREATE INDEX idx_rm_armies_player_id ON rm_armies(player_id);
-CREATE INDEX idx_rm_armies_state ON rm_armies(state);
-
 CREATE TABLE rm_heroes (
     hero_id UUID PRIMARY KEY,
     player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -187,6 +163,28 @@ CREATE INDEX idx_rm_heroes_player_id ON rm_heroes(player_id);
 CREATE INDEX idx_rm_heroes_home_village_id ON rm_heroes(home_village_id);
 CREATE INDEX idx_rm_heroes_current_village_id ON rm_heroes(current_village_id);
 CREATE INDEX idx_rm_heroes_state ON rm_heroes(state);
+
+CREATE TABLE rm_armies (
+    army_id UUID PRIMARY KEY,
+    village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
+    current_village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
+    current_map_field_id INTEGER NULL,
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    tribe tribe NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('home', 'stationed', 'moving')),
+    units INTEGER[] NOT NULL,
+    smithy_upgrades SMALLINT[] NOT NULL,
+    hero_id UUID NULL REFERENCES rm_heroes(hero_id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (array_length(units, 1) = 10),
+    CHECK (array_length(smithy_upgrades, 1) = 8)
+);
+
+CREATE UNIQUE INDEX uniq_rm_armies_home_village ON rm_armies(village_id) WHERE state = 'home';
+CREATE INDEX idx_rm_armies_village_state ON rm_armies(village_id, state);
+CREATE INDEX idx_rm_armies_current_village_state ON rm_armies(current_village_id, state);
+CREATE INDEX idx_rm_armies_player_state ON rm_armies(player_id, state);
+CREATE INDEX idx_rm_armies_hero_id ON rm_armies(hero_id);
 
 CREATE TABLE rm_map_fields (
     id INTEGER PRIMARY KEY,

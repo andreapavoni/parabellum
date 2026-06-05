@@ -309,6 +309,7 @@ export type AcademyQueueItem = {
 export type SmithyUpgradeOption = {
   unitName: string;
   currentLevel: number;
+  nextLevel: number;
   maxLevel: number;
   cost: ResourceAmounts;
   timeSecs: number;

@@ -157,14 +157,12 @@ fn scout_battle_payload(
             Some(BattlePartyPayload {
                 tribe: context.target.tribe.clone(),
                 army_before: context
-                    .target
-                    .army
+                    .target_home_army
                     .as_ref()
                     .map(|a| a.units().clone())
                     .unwrap_or_default(),
                 survivors: context
-                    .target
-                    .army
+                    .target_home_army
                     .as_ref()
                     .map(|a| a.units().clone())
                     .unwrap_or_default(),
@@ -175,8 +173,7 @@ fn scout_battle_payload(
         },
         reinforcements: if scouting_success {
             context
-                .target
-                .reinforcements
+                .target_reinforcements
                 .iter()
                 .map(|r| BattlePartyPayload {
                     tribe: r.tribe.clone(),
