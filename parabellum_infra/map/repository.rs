@@ -3,13 +3,15 @@ use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};
 use uuid::Uuid;
 
 use parabellum_app::{ports::map::MapRepository, read_models::MapRegionTile};
-use parabellum_game::models::map::{MapField, MapQuadrant, Valley, generate_new_map};
+use parabellum_game::models::map::{
+    MapField, MapFieldTopology, MapQuadrant, Valley, generate_new_map,
+};
 use parabellum_types::{
     errors::{
         ApplicationError,
         DbError::{self},
     },
-    map::Position,
+    map::{Position, ValleyTopology},
 };
 
 use crate::persistence::models as db_models;
@@ -198,6 +200,48 @@ impl MapRepository for PostgresMapRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(is_unoccupied_valley)
+    }
+
+    async fn get_foundation_target_topology(
+        &self,
+        field_id: u32,
+        player_id: Uuid,
+    ) -> Result<Option<ValleyTopology>, ApplicationError> {
+        let (field_exists, topology_json): (bool, Option<Value>) = sqlx::query_as(
+            r#"
+            SELECT
+              EXISTS(SELECT 1 FROM rm_map_fields WHERE id = $1) AS field_exists,
+              (
+                SELECT topology
+                FROM rm_map_fields
+                WHERE id = $1
+                  AND village_id IS NULL
+                  AND (player_id IS NULL OR player_id = $2)
+                  AND topology ? 'Valley'
+              ) AS topology
+            "#,
+        )
+        .bind(field_id as i32)
+        .bind(player_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        if !field_exists {
+            return Err(ApplicationError::Db(DbError::MapFieldNotFound(field_id)));
+        }
+
+        let Some(topology_json) = topology_json else {
+            return Ok(None);
+        };
+        let topology = serde_json::from_value::<MapFieldTopology>(topology_json)
+            .ok()
+            .and_then(|topology| match topology {
+                MapFieldTopology::Valley(valley) => Some(valley),
+                _ => None,
+            });
+
+        Ok(topology)
     }
 }
 

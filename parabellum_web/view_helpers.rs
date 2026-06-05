@@ -351,8 +351,8 @@ pub fn prepare_merchant_movements(
             let destination_info = village_info.get(&movement.destination_village_id);
             MerchantMovementView {
                 job_id: movement.job_id.to_string(),
-                direction: direction.clone(),
-                kind: movement.kind.clone(),
+                direction,
+                kind: movement.kind,
                 origin_name: origin_info
                     .map(|info| info.name.clone())
                     .unwrap_or_else(|| format!("Village #{}", movement.origin_village_id)),

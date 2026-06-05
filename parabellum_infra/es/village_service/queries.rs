@@ -3,7 +3,43 @@
 //! These methods are side-effect free with respect to aggregate mutations:
 //! they compose read models, CQRS query projections, and derived views for API use.
 
-use super::*;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
+
+use mini_cqrs_es::{CqrsError, QueryRunner};
+use parabellum_app::ports::identity::PlayerRepository;
+use parabellum_app::ports::map::MapRepository;
+use parabellum_app::ports::queries::{
+    ExpansionCultureInfo, LeaderboardPage, MarketplaceData, TroopMovement, TroopMovementDirection,
+    VillageArmyStateView, VillageQueues, VillageTroopMovements,
+};
+use parabellum_app::read_models::{MapRegionTile, VillageInfo};
+use parabellum_app::villages::VillageService;
+use parabellum_app::villages::models::{
+    ReportModel, ScheduledActionStatus, ScheduledActionType, VillageModel,
+};
+use parabellum_app::villages::queries::{
+    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer, ListReportsForPlayer,
+    ScheduledActionStatusCounts,
+};
+use parabellum_app::villages::repositories::{
+    ArmyRepository, HeroRepository, MarketplaceRepository, ReportRepository,
+    ScheduledActionRepository, VillageMovementRepository, VillageRepository,
+};
+use parabellum_game::models::culture_points::required_cp;
+use parabellum_game::models::map::MapField;
+use parabellum_game::models::marketplace::MarketplaceOffer;
+use parabellum_types::errors::DbError;
+
+use crate::es::{
+    PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
+    PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
+    PostgresVillageRepository, village_cqrs_runtime,
+};
+use crate::identity::repositories::PostgresPlayerRepository;
+use crate::map::PostgresMapRepository;
+
+use super::{ReinforcementContext, VillageEsService};
 
 impl VillageEsService {
     pub async fn get_village_troop_movements(
@@ -15,12 +51,26 @@ impl VillageEsService {
             .list_by_village_id(village_id)
             .await
             .map_err(CqrsError::domain_source)?;
+        let fallback_village_ids = movements
+            .iter()
+            .flat_map(|m| [m.origin_village_id, m.target_village_id])
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let village_repo = PostgresVillageRepository::new(self.pool.clone());
+        let fallback_villages = village_repo
+            .list_by_village_ids(&fallback_village_ids)
+            .await
+            .map_err(CqrsError::domain_source)?
+            .into_iter()
+            .map(|v| (v.village_id, v))
+            .collect::<HashMap<_, _>>();
 
         let mut outgoing = Vec::new();
         let mut incoming = Vec::new();
         for movement in movements {
-            let origin_model = self.get_village(movement.origin_village_id).await.ok();
-            let target_model = self.get_village(movement.target_village_id).await.ok();
+            let origin_model = fallback_villages.get(&movement.origin_village_id);
+            let target_model = fallback_villages.get(&movement.target_village_id);
 
             let mapped = TroopMovement {
                 job_id: movement.movement_id,
@@ -36,23 +86,23 @@ impl VillageEsService {
                 origin_village_id: movement.origin_village_id,
                 origin_village_name: movement
                     .origin_village_name
-                    .or_else(|| origin_model.as_ref().map(|v| v.village_name.clone())),
+                    .or_else(|| origin_model.map(|v| v.village_name.clone())),
                 origin_player_id: movement.origin_player_id,
                 origin_position: movement
                     .origin_position
-                    .or_else(|| origin_model.as_ref().map(|v| v.position.clone()))
+                    .or_else(|| origin_model.map(|v| v.position.clone()))
                     .unwrap_or(parabellum_types::map::Position { x: 0, y: 0 }),
                 target_village_id: movement.target_village_id,
                 target_village_name: movement
                     .target_village_name
-                    .or_else(|| target_model.as_ref().map(|v| v.village_name.clone())),
+                    .or_else(|| target_model.map(|v| v.village_name.clone())),
                 target_player_id: movement
                     .target_player_id
-                    .or_else(|| target_model.as_ref().map(|v| v.player_id))
+                    .or_else(|| target_model.map(|v| v.player_id))
                     .unwrap_or(movement.origin_player_id),
                 target_position: movement
                     .target_position
-                    .or_else(|| target_model.as_ref().map(|v| v.position.clone()))
+                    .or_else(|| target_model.map(|v| v.position.clone()))
                     .unwrap_or(parabellum_types::map::Position { x: 0, y: 0 }),
                 arrives_at: movement.arrives_at,
                 time_seconds: movement.time_seconds.unwrap_or(0),
@@ -64,9 +114,9 @@ impl VillageEsService {
                             movement.movement_type,
                             parabellum_app::villages::models::MovementType::Return
                         ) {
-                            target_model.as_ref().map(|v| v.tribe.clone())
+                            target_model.map(|v| v.tribe.clone())
                         } else {
-                            origin_model.as_ref().map(|v| v.tribe.clone())
+                            origin_model.map(|v| v.tribe.clone())
                         }
                     })
                     .unwrap_or(parabellum_types::tribe::Tribe::Nature),
@@ -127,6 +177,17 @@ impl VillageEsService {
             .map_err(CqrsError::domain_source)
     }
 
+    pub async fn count_child_villages(
+        &self,
+        player_id: uuid::Uuid,
+        parent_village_id: u32,
+    ) -> Result<u8, CqrsError> {
+        let repo = PostgresVillageRepository::new(self.pool.clone());
+        repo.count_child_villages(player_id, parent_village_id)
+            .await
+            .map_err(CqrsError::domain_source)
+    }
+
     pub async fn get_expansion_culture_info(
         &self,
         player_id: uuid::Uuid,
@@ -135,13 +196,11 @@ impl VillageEsService {
     ) -> Result<ExpansionCultureInfo, CqrsError> {
         let player_repo = PostgresPlayerRepository::new(self.pool.clone());
         let village_repo = PostgresVillageRepository::new(self.pool.clone());
-
-        let villages = village_repo
-            .list_by_player_id(player_id)
+        let culture = village_repo
+            .get_expansion_culture_snapshot(player_id, village_id)
             .await
             .map_err(CqrsError::domain_source)?;
-        let player_culture_points_production: u32 =
-            villages.iter().map(|v| v.culture_points_production).sum();
+
         player_repo
             .update_culture_points(player_id)
             .await
@@ -150,10 +209,6 @@ impl VillageEsService {
             .get_by_id(player_id)
             .await
             .map_err(CqrsError::domain_source)?;
-        let village = villages
-            .iter()
-            .find(|v| v.village_id == village_id)
-            .ok_or_else(|| CqrsError::domain_source(DbError::VillageNotFound(village_id)))?;
 
         let speed = match server_speed {
             1 => parabellum_types::common::Speed::X1,
@@ -163,12 +218,12 @@ impl VillageEsService {
             10 => parabellum_types::common::Speed::X10,
             _ => parabellum_types::common::Speed::X1,
         };
-        let next_cp_required = required_cp(speed, villages.len() + 1);
+        let next_cp_required = required_cp(speed, culture.player_village_count + 1);
 
         Ok(ExpansionCultureInfo {
-            village_culture_points_production: village.culture_points_production,
+            village_culture_points_production: culture.village_culture_points_production,
             player_culture_points: player.culture_points,
-            player_culture_points_production,
+            player_culture_points_production: culture.player_culture_points_production,
             next_cp_required,
         })
     }
@@ -196,142 +251,11 @@ impl VillageEsService {
         ))
     }
 
-    pub async fn get_village_training_queue(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<ScheduledAction>, CqrsError> {
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
-        repo.list_active_by_village_and_type(village_id, ScheduledActionType::TrainUnit)
-            .await
-            .map_err(CqrsError::domain_source)
-    }
-
-    pub async fn get_village_building_queue(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<ScheduledAction>, CqrsError> {
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
-        let mut actions = Vec::new();
-        for action_type in [
-            ScheduledActionType::AddBuilding,
-            ScheduledActionType::UpgradeBuilding,
-            ScheduledActionType::DowngradeBuilding,
-        ] {
-            let mut typed = repo
-                .list_active_by_village_and_type(village_id, action_type)
-                .await
-                .map_err(CqrsError::domain_source)?;
-            actions.append(&mut typed);
-        }
-        actions.sort_by_key(|it| it.execute_at);
-        Ok(actions)
-    }
-
-    pub async fn get_village_smithy_queue(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<ScheduledAction>, CqrsError> {
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
-        repo.list_active_by_village_and_type(village_id, ScheduledActionType::ResearchSmithy)
-            .await
-            .map_err(CqrsError::domain_source)
-    }
-
-    pub async fn get_village_academy_queue(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<ScheduledAction>, CqrsError> {
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
-        repo.list_active_by_village_and_type(village_id, ScheduledActionType::ResearchAcademy)
-            .await
-            .map_err(CqrsError::domain_source)
-    }
-
     pub async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, CqrsError> {
-        let mut building = Vec::new();
-        let building_actions = self.get_village_building_queue(village_id).await?;
-        for action in building_actions {
-            let Ok(payload) = serde_json::from_value::<ScheduledActionPayload>(action.payload)
-            else {
-                continue;
-            };
-            let (slot_id, building_name, target_level) = match payload {
-                ScheduledActionPayload::Building { workflow } => {
-                    (workflow.slot_id, workflow.building_name, workflow.level)
-                }
-                _ => continue,
-            };
-            building.push(BuildingQueueItem {
-                job_id: action.id,
-                slot_id,
-                building_name,
-                target_level,
-                status: action.status,
-                finishes_at: action.execute_at,
-            });
-        }
-        building.sort_by_key(|it| it.finishes_at);
-
-        let mut training = Vec::new();
-        let training_actions = self.get_village_training_queue(village_id).await?;
-        for action in training_actions {
-            let Ok(ScheduledActionPayload::Training { workflow }) =
-                serde_json::from_value::<ScheduledActionPayload>(action.payload)
-            else {
-                continue;
-            };
-            training.push(TrainingQueueItem {
-                job_id: action.id,
-                slot_id: workflow.slot_id,
-                unit: workflow.unit,
-                quantity: workflow.quantity_remaining,
-                time_per_unit: workflow.time_per_unit,
-                status: action.status,
-                finishes_at: action.execute_at,
-            });
-        }
-        training.sort_by_key(|it| it.finishes_at);
-
-        let mut academy = Vec::new();
-        let academy_actions = self.get_village_academy_queue(village_id).await?;
-        for action in academy_actions {
-            let Ok(ScheduledActionPayload::Research { workflow }) =
-                serde_json::from_value::<ScheduledActionPayload>(action.payload)
-            else {
-                continue;
-            };
-            academy.push(AcademyQueueItem {
-                job_id: action.id,
-                unit: workflow.unit,
-                status: action.status,
-                finishes_at: action.execute_at,
-            });
-        }
-        academy.sort_by_key(|it| it.finishes_at);
-
-        let mut smithy = Vec::new();
-        let smithy_actions = self.get_village_smithy_queue(village_id).await?;
-        for action in smithy_actions {
-            let Ok(ScheduledActionPayload::Research { workflow }) =
-                serde_json::from_value::<ScheduledActionPayload>(action.payload)
-            else {
-                continue;
-            };
-            smithy.push(SmithyQueueItem {
-                job_id: action.id,
-                unit: workflow.unit,
-                status: action.status,
-                finishes_at: action.execute_at,
-            });
-        }
-        smithy.sort_by_key(|it| it.finishes_at);
-
-        Ok(VillageQueues {
-            building,
-            training,
-            academy,
-            smithy,
-        })
+        PostgresScheduledActionRepository::new(self.pool.clone())
+            .list_village_queues(village_id)
+            .await
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn get_village_scheduled_action_status_counts(
@@ -375,7 +299,6 @@ impl VillageEsService {
         village_id: u32,
     ) -> Result<MarketplaceData, CqrsError> {
         let marketplace_repo = PostgresMarketplaceRepository::new(self.pool.clone());
-        let all_open_models = self.get_open_marketplace_offers().await?;
 
         let to_offer =
             |m: parabellum_app::villages::models::MarketplaceOfferModel| MarketplaceOffer {
@@ -388,6 +311,14 @@ impl VillageEsService {
                 created_at: m.created_at,
             };
 
+        let own_open_models = marketplace_repo
+            .list_open_by_owner_village_id(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        let global_open_models = marketplace_repo
+            .list_open_excluding_owner_village_id(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?;
         let outgoing_merchants = marketplace_repo
             .list_active_outgoing(village_id)
             .await
@@ -397,8 +328,9 @@ impl VillageEsService {
             .await
             .map_err(CqrsError::domain_source)?;
 
-        let village_ids = all_open_models
+        let village_ids = own_open_models
             .iter()
+            .chain(global_open_models.iter())
             .map(|m| m.owner_village_id)
             .chain(
                 outgoing_merchants
@@ -416,17 +348,8 @@ impl VillageEsService {
         let village_info = self.get_village_info_by_ids(village_ids).await?;
 
         Ok(MarketplaceData {
-            own_offers: all_open_models
-                .iter()
-                .filter(|m| m.owner_village_id == village_id)
-                .cloned()
-                .map(to_offer)
-                .collect(),
-            global_offers: all_open_models
-                .into_iter()
-                .filter(|m| m.owner_village_id != village_id)
-                .map(to_offer)
-                .collect(),
+            own_offers: own_open_models.iter().cloned().map(to_offer).collect(),
+            global_offers: global_open_models.into_iter().map(to_offer).collect(),
             outgoing_merchants,
             incoming_merchants,
             village_info,

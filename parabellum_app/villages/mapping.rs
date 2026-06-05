@@ -71,7 +71,7 @@ mod tests {
             deployed_armies: vec![],
         };
 
-        let village = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let village = parabellum_game::models::village::Village::from(model);
 
         assert_eq!(village.id, village_id);
         assert_eq!(village.culture_points, 0);

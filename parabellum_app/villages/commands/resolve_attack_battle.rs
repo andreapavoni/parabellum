@@ -24,6 +24,25 @@ pub struct ResolveAttackBattle {
     pub returns_at: DateTime<Utc>,
 }
 
+impl ResolveAttackBattle {
+    pub fn into_outcome_event(self) -> VillageEvent {
+        VillageEvent::AttackBattleResolved {
+            action_id: self.action_id,
+            movement_id: self.movement_id,
+            return_action_id: self.return_action_id,
+            army_id: self.army_id,
+            player_id: self.player_id,
+            source_village_id: self.source_village_id,
+            target_village_id: self.target_village_id,
+            attack_type: self.attack_type,
+            report: self.report,
+            returning_army: self.returning_army,
+            stationed_attacker_army: self.stationed_attacker_army,
+            returns_at: self.returns_at,
+        }
+    }
+}
+
 impl Command for ResolveAttackBattle {
     type Aggregate = VillageAggregate;
 
@@ -35,19 +54,6 @@ impl Command for ResolveAttackBattle {
             }));
         }
 
-        Ok(vec![VillageEvent::AttackBattleResolved {
-            action_id: self.action_id,
-            movement_id: self.movement_id,
-            return_action_id: self.return_action_id,
-            army_id: self.army_id,
-            player_id: self.player_id,
-            source_village_id: self.source_village_id,
-            target_village_id: self.target_village_id,
-            attack_type: self.attack_type.clone(),
-            report: self.report.clone(),
-            returning_army: self.returning_army.clone(),
-            stationed_attacker_army: self.stationed_attacker_army.clone(),
-            returns_at: self.returns_at,
-        }])
+        Ok(vec![self.clone().into_outcome_event()])
     }
 }

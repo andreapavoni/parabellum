@@ -21,14 +21,14 @@ use parabellum_app::{
         },
     },
     villages::{
-        AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, RecallReinforcements,
-        ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero,
-        ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits,
-        UpgradeBuilding,
+        AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, ExpansionSlotUsage,
+        RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy,
+        ResearchSmithy, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+        SendSettlers, TrainUnits, UpgradeBuilding,
     },
 };
 use parabellum_types::{
-    army::{UnitName, UnitRole},
+    army::UnitRole,
     errors::{AppError, ApplicationError, DbError, GameError},
     map::Position,
 };
@@ -97,10 +97,10 @@ impl VillageEsAdapter {
     fn map_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
         match err {
             mini_cqrs_es::CqrsError::Conflict { .. } => {
-                return ApplicationError::App(AppError::QueueItemAlreadyQueued {
+                ApplicationError::App(AppError::QueueItemAlreadyQueued {
                     queue: "cqrs",
                     item: "aggregate_version".to_string(),
-                });
+                })
             }
             mini_cqrs_es::CqrsError::DomainSource(source)
             | mini_cqrs_es::CqrsError::CommandInvariantSource(source) => {
@@ -116,14 +116,12 @@ impl VillageEsAdapter {
                     Ok(app_error) => return *app_error,
                     Err(source) => source,
                 };
-                return ApplicationError::Unknown(source.to_string());
+                ApplicationError::Unknown(source.to_string())
             }
             mini_cqrs_es::CqrsError::Domain(msg)
-            | mini_cqrs_es::CqrsError::CommandInvariant(msg) => {
-                return ApplicationError::Unknown(format!(
-                    "unexpected stringly cqrs domain/invariant error: {msg}"
-                ));
-            }
+            | mini_cqrs_es::CqrsError::CommandInvariant(msg) => ApplicationError::Unknown(format!(
+                "unexpected stringly cqrs domain/invariant error: {msg}"
+            )),
             mini_cqrs_es::CqrsError::Other(other) => {
                 if let Some(game_error) = other
                     .chain()
@@ -137,10 +135,10 @@ impl VillageEsAdapter {
                 {
                     return ApplicationError::App(app_error.clone());
                 }
-                return ApplicationError::Unknown(other.to_string());
+                ApplicationError::Unknown(other.to_string())
             }
-            other => return ApplicationError::Unknown(other.to_string()),
-        };
+            other => ApplicationError::Unknown(other.to_string()),
+        }
     }
 
     /// Maps read/query failures that currently cross the ES boundary as
@@ -168,7 +166,7 @@ impl VillageEsAdapter {
                     Ok(app_error) => return ApplicationError::App(*app_error),
                     Err(source) => source,
                 };
-                return ApplicationError::Unknown(source.to_string());
+                ApplicationError::Unknown(source.to_string())
             }
             other => ApplicationError::Unknown(other.to_string()),
         }
@@ -280,102 +278,30 @@ impl VillageCommandsPort for VillageEsAdapter {
             .map_err(ApplicationError::from)?;
         if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
             let source_village: parabellum_game::models::village::Village = source.clone().into();
-            let max_slots = source_village.max_foundation_slots();
-            let owned_villages = self
+            let child_villages = self
                 .service
-                .list_villages_by_player_id(request.player_id)
+                .count_child_villages(request.player_id, request.village_id)
                 .await
                 .map_err(Self::map_query_cqrs_error)?;
-            let child_villages_count = owned_villages
-                .iter()
-                .filter(|v| v.parent_village_id == Some(request.village_id))
-                .count() as u8;
-            let free_slots = max_slots.saturating_sub(child_villages_count);
-            if free_slots == 0 {
-                return Err(ApplicationError::Game(
-                    GameError::NoFoundationSlotsAvailable,
-                ));
-            }
-
-            let chiefs_at_home = source_village.count_chiefs_at_home();
-            let settlers_at_home = source_village.count_settlers_at_home();
-            let chiefs_deployed: u32 = source_village
-                .deployed_armies()
-                .iter()
-                .map(|army| army.units().get(8))
-                .sum();
-            let settlers_deployed: u32 = source_village
-                .deployed_armies()
-                .iter()
-                .map(|army| army.units().get(9))
-                .sum();
-            let training_queue = self
+            let queues = self
                 .service
-                .get_village_training_queue(request.village_id)
+                .get_village_queues(request.village_id)
                 .await
                 .map_err(Self::map_query_cqrs_error)?;
-            let mut chiefs_queued = 0u32;
-            let mut settlers_queued = 0u32;
-            for action in training_queue {
-                let Ok(payload) = serde_json::from_value::<
-                    parabellum_app::villages::models::ScheduledActionPayload,
-                >(action.payload) else {
-                    continue;
-                };
-                if let parabellum_app::villages::models::ScheduledActionPayload::Training {
-                    workflow,
-                } = payload
-                {
-                    let qty = workflow.quantity_remaining.max(0) as u32;
-                    if matches!(
-                        workflow.unit,
-                        UnitName::Chief | UnitName::Senator | UnitName::Chieftain
-                    ) {
-                        chiefs_queued = chiefs_queued.saturating_add(qty);
-                    } else if matches!(workflow.unit, UnitName::Settler) {
-                        settlers_queued = settlers_queued.saturating_add(qty);
-                    }
-                }
-            }
-
             let movements = self
                 .service
                 .get_village_troop_movements(request.village_id)
                 .await
                 .map_err(Self::map_query_cqrs_error)?;
-            let (chiefs_moving, settlers_moving) = movements
-                .outgoing
-                .iter()
-                .chain(movements.incoming.iter())
-                .filter(|m| m.origin_player_id == request.player_id)
-                .fold((0u32, 0u32), |(chiefs, settlers), m| {
-                    (
-                        chiefs.saturating_add(m.units.get(8)),
-                        settlers.saturating_add(m.units.get(9)),
-                    )
-                });
-
-            let chiefs_total = chiefs_at_home + chiefs_deployed + chiefs_queued + chiefs_moving;
-            let settlers_total =
-                settlers_at_home + settlers_deployed + settlers_queued + settlers_moving;
-            let committed_this_unit = if matches!(unit.role, UnitRole::Chief) {
-                chiefs_total
-            } else {
-                settlers_total
-            };
-            let max_trainable =
-                parabellum_game::models::village::Village::max_expansion_unit_trainable(
-                    unit.role.clone(),
-                    free_slots,
-                    chiefs_total,
-                    settlers_total,
-                    committed_this_unit,
-                );
-            if request.quantity as u32 > max_trainable {
-                return Err(ApplicationError::Game(
-                    GameError::NoFoundationSlotsAvailable,
-                ));
-            }
+            ExpansionSlotUsage::from_village_context(
+                &source_village,
+                child_villages,
+                &queues.training,
+                &movements,
+                request.player_id,
+            )
+            .validate_training(unit.role, request.quantity)
+            .map_err(ApplicationError::Game)?;
         }
 
         self.service

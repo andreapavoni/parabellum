@@ -499,7 +499,7 @@ pub async fn player_profile(
                 distance_from_current: user
                     .village
                     .position
-                    .distance(&village.position, state.world_size as i32),
+                    .distance(&village.position, state.world_size),
             })
             .collect(),
     }))

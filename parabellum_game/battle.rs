@@ -633,7 +633,7 @@ fn calculate_hero_xp(kills: &TroopSet, tribe: &Tribe) -> u32 {
     let units = tribe.units();
     let mut total: u32 = 0;
 
-    for (idx, quantity) in kills.units().into_iter().enumerate() {
+    for (idx, quantity) in kills.units().iter().enumerate() {
         total += units[idx].cost.upkeep * quantity;
     }
 
@@ -725,7 +725,7 @@ pub fn calculate_army_losses(army: &Army, percent: f64) -> (TroopSet, TroopSet) 
     let mut survivors = TroopSet::default();
     let mut losses = TroopSet::default();
 
-    for (idx, quantity) in army.units().units().into_iter().enumerate() {
+    for (idx, quantity) in army.units().units().iter().enumerate() {
         let lost = ((*quantity) as f64 * percent).floor() as u32;
         survivors.set(idx, quantity - lost);
         losses.set(idx, lost);

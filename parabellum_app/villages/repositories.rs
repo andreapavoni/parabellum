@@ -10,6 +10,19 @@ use crate::villages::models::{
 };
 use crate::villages::queries::ScheduledActionStatusCounts;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpansionCultureSnapshot {
+    pub village_culture_points_production: u32,
+    pub player_culture_points_production: u32,
+    pub player_village_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpansionOwnershipSnapshot {
+    pub source_child_villages: u8,
+    pub player_village_count: usize,
+}
+
 #[async_trait::async_trait]
 pub trait VillageRepository: Send + Sync {
     async fn upsert_from_village(
@@ -70,6 +83,21 @@ pub trait VillageRepository: Send + Sync {
         &self,
         village_ids: &[u32],
     ) -> Result<Vec<VillageModel>, ApplicationError>;
+    async fn get_expansion_culture_snapshot(
+        &self,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<ExpansionCultureSnapshot, ApplicationError>;
+    async fn count_child_villages(
+        &self,
+        player_id: Uuid,
+        parent_village_id: u32,
+    ) -> Result<u8, ApplicationError>;
+    async fn get_expansion_ownership_snapshot(
+        &self,
+        player_id: Uuid,
+        source_village_id: u32,
+    ) -> Result<ExpansionOwnershipSnapshot, ApplicationError>;
     async fn set_map_occupancy(
         &self,
         field_id: u32,

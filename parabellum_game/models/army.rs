@@ -80,6 +80,15 @@ impl Army {
         &self.units
     }
 
+    /// Returns true when this army can provide every requested unit.
+    pub fn has_units(&self, units: &TroopSet) -> bool {
+        self.units
+            .units()
+            .iter()
+            .zip(units.units().iter())
+            .all(|(available, requested)| available >= requested)
+    }
+
     /// Returns the amount of a given unit.
     pub fn unit_amount(&self, idx: u8) -> u32 {
         self.units.get(idx as usize)
@@ -186,36 +195,58 @@ impl Army {
         self.scouting_points(20)
     }
 
-    /// Updates the current army and returns new deployed army.
-    pub fn deploy(&mut self, set: TroopSet, hero: Option<Hero>) -> Result<Self, GameError> {
-        for (idx, quantity) in set.units().iter().enumerate() {
+    /// Splits units and an optional hero out of this army.
+    ///
+    /// The current army keeps the remainder. The returned army contains the
+    /// selected units and hero, if requested.
+    pub fn split_units(
+        &mut self,
+        units: TroopSet,
+        hero_id: Option<Uuid>,
+        current_village_id: u32,
+    ) -> Result<Self, GameError> {
+        if units.immensity() == 0 && hero_id.is_none() {
+            return Err(GameError::NoUnitsSelected);
+        }
+        if !self.has_units(&units) {
+            return Err(GameError::NotEnoughUnits);
+        }
+
+        let selected_hero = match (hero_id, self.hero.clone()) {
+            (Some(hero_id), Some(hero)) if hero.id == hero_id => Some(hero),
+            (Some(hero_id), _) => {
+                return Err(GameError::HeroNotAtHome {
+                    hero_id,
+                    village_id: current_village_id,
+                });
+            }
+            (None, _) => None,
+        };
+
+        for (idx, quantity) in units.units().iter().enumerate() {
             if *quantity == 0 {
                 continue;
             }
 
-            if self.units.get(idx) >= *quantity {
-                self.units.remove(idx, *quantity);
-            } else {
-                return Err(GameError::NotEnoughUnits);
-            }
+            self.units.remove(idx, *quantity);
         }
 
-        if hero.is_some() {
+        if selected_hero.is_some() {
             self.hero = None;
         }
 
-        let deployed = Self::new(
+        let selected = Self::new(
             None,
             self.village_id,
-            None,
+            self.current_map_field_id,
             self.player_id,
             self.tribe.clone(),
-            &set,
+            &units,
             &self.smithy,
-            hero,
+            selected_hero,
         );
 
-        Ok(deployed)
+        Ok(selected)
     }
 
     /// Returns the actual speed of the Army by taking the speed of slowest unit.
@@ -241,7 +272,7 @@ impl Army {
             .filter(move |(idx, quantity)| {
                 if **quantity > 0 {
                     let unit = self.get_unit_by_idx(*idx as u8).unwrap();
-                    return std::mem::discriminant(&unit.role) == std::mem::discriminant(&role);
+                    return unit.role == role;
                 }
                 false
             })
@@ -325,8 +356,70 @@ mod tests {
 
     use crate::{
         models::army::TroopSet,
-        test_utils::{ArmyFactoryOptions, army_factory},
+        test_utils::{ArmyFactoryOptions, HeroFactoryOptions, army_factory, hero_factory},
     };
+
+    #[test]
+    fn test_army_has_units() {
+        let army = army_factory(ArmyFactoryOptions {
+            units: Some(TroopSet::new([10, 5, 0, 2, 0, 0, 0, 0, 0, 0])),
+            ..Default::default()
+        });
+
+        assert!(army.has_units(&TroopSet::new([10, 4, 0, 2, 0, 0, 0, 0, 0, 0])));
+        assert!(!army.has_units(&TroopSet::new([11, 4, 0, 2, 0, 0, 0, 0, 0, 0])));
+        assert!(!army.has_units(&TroopSet::new([10, 4, 0, 3, 0, 0, 0, 0, 0, 0])));
+    }
+
+    #[test]
+    fn test_army_split_failure_does_not_mutate_units() {
+        let mut army = army_factory(ArmyFactoryOptions {
+            units: Some(TroopSet::new([10, 5, 0, 2, 0, 0, 0, 0, 0, 0])),
+            ..Default::default()
+        });
+        let before = army.units().clone();
+
+        let result = army.split_units(
+            TroopSet::new([5, 6, 0, 0, 0, 0, 0, 0, 0, 0]),
+            None,
+            army.village_id,
+        );
+
+        assert!(result.is_err());
+        assert_eq!(army.units(), &before);
+    }
+
+    #[test]
+    fn test_army_split_moves_selected_units_and_hero() {
+        let village_id = 12;
+        let hero = hero_factory(HeroFactoryOptions {
+            village_id: Some(village_id),
+            ..Default::default()
+        });
+        let hero_id = hero.id;
+        let mut army = army_factory(ArmyFactoryOptions {
+            village_id: Some(village_id),
+            units: Some(TroopSet::new([10, 5, 0, 2, 0, 0, 0, 0, 0, 0])),
+            hero: Some(hero),
+            ..Default::default()
+        });
+
+        let selected = army
+            .split_units(
+                TroopSet::new([4, 0, 0, 2, 0, 0, 0, 0, 0, 0]),
+                Some(hero_id),
+                village_id,
+            )
+            .unwrap();
+
+        assert_eq!(army.units(), &TroopSet::new([6, 5, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert!(army.hero().is_none());
+        assert_eq!(
+            selected.units(),
+            &TroopSet::new([4, 0, 0, 2, 0, 0, 0, 0, 0, 0])
+        );
+        assert_eq!(selected.hero().map(|hero| hero.id), Some(hero_id));
+    }
 
     #[test]
     fn test_army_upkeep() {

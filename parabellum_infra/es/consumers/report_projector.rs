@@ -2,12 +2,6 @@ use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::ports::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::ProjectedReport;
-use parabellum_types::common::ResourceGroup;
-use parabellum_types::reports::{
-    BattlePartyPayload, BattleReportPayload, MarketplaceDeliveryReportPayload,
-    ReinforcementReportPayload, ReportPayload,
-};
 use sqlx::{PgPool, Postgres, Transaction};
 use tracing::warn;
 use uuid::Uuid;
@@ -15,12 +9,24 @@ use uuid::Uuid;
 use crate::es::{PostgresReportRepository, PostgresVillageRepository};
 use crate::identity::repositories::PostgresPlayerRepository;
 
+mod battle;
+mod marketplace;
+mod read_state;
+mod reinforcements;
+
 #[derive(Debug, Clone)]
 pub struct ReportProjector {
     pool: PgPool,
     villages: PostgresVillageRepository,
     reports: PostgresReportRepository,
     players: PostgresPlayerRepository,
+}
+
+pub(super) struct SourceTargetReportContext {
+    pub source: VillageModel,
+    pub target: VillageModel,
+    pub source_player: String,
+    pub target_player: String,
 }
 
 impl ReportProjector {
@@ -40,7 +46,7 @@ impl ReportProjector {
         }
     }
 
-    async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
+    pub(super) async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
         let player = self
             .players
             .get_by_id(player_id)
@@ -49,7 +55,7 @@ impl ReportProjector {
         Ok(player.username)
     }
 
-    async fn try_village_in_tx(
+    pub(super) async fn try_village_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         village_id: u32,
@@ -66,6 +72,37 @@ impl ReportProjector {
         }
     }
 
+    pub(super) async fn source_target_context_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        source_village_id: u32,
+        target_village_id: u32,
+    ) -> Result<Option<SourceTargetReportContext>, CqrsError> {
+        let Some(source) = self.try_village_in_tx(tx, source_village_id).await? else {
+            return Ok(None);
+        };
+        let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
+            return Ok(None);
+        };
+        let source_player = self.player_username(source.player_id).await?;
+        let target_player = self.player_username(target.player_id).await?;
+
+        Ok(Some(SourceTargetReportContext {
+            source,
+            target,
+            source_player,
+            target_player,
+        }))
+    }
+
+    pub(super) fn audience_with_target(actor_player_id: Uuid, target_player_id: Uuid) -> Vec<Uuid> {
+        let mut audiences = vec![actor_player_id];
+        if target_player_id != actor_player_id {
+            audiences.push(target_player_id);
+        }
+        audiences
+    }
+
     pub async fn process_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -77,328 +114,29 @@ impl ReportProjector {
         let projected_report_id = Self::projected_report_id(event);
 
         let domain_event = event.get_payload::<VillageEvent>()?;
-        match domain_event {
-            VillageEvent::ReinforcementArrived {
-                player_id,
-                source_village_id,
-                target_village_id,
-                army,
-                ..
-            } => {
-                let Some(source) = self.try_village_in_tx(tx, source_village_id).await? else {
-                    return Ok(());
-                };
-                let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
-                    return Ok(());
-                };
-                let payload = ReportPayload::Reinforcement(ReinforcementReportPayload {
-                    sender_player: self.player_username(source.player_id).await?,
-                    sender_village: source.village_name.clone(),
-                    sender_position: source.position.clone(),
-                    receiver_player: self.player_username(target.player_id).await?,
-                    receiver_village: target.village_name.clone(),
-                    receiver_position: target.position.clone(),
-                    tribe: army.tribe.clone(),
-                    units: army.units().clone(),
-                });
-                let mut audiences = vec![player_id];
-                if target.player_id != player_id {
-                    audiences.push(target.player_id);
-                }
-                self.reports
-                    .add_projected_in_tx(
-                        tx,
-                        &ProjectedReport {
-                            id: projected_report_id,
-                            report_type: "reinforcement".to_string(),
-                            payload: serde_json::to_value(payload)
-                                .map_err(CqrsError::Serialization)?,
-                            actor_player_id: source.player_id,
-                            actor_village_id: Some(source_village_id),
-                            target_player_id: Some(target.player_id),
-                            target_village_id: Some(target_village_id),
-                        },
-                        &audiences,
-                    )
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                Ok(())
-            }
-            VillageEvent::MerchantsArrived {
-                player_id,
-                source_village_id,
-                target_village_id,
-                resources,
-                merchants_used,
-                ..
-            } => {
-                let Some(source) = self.try_village_in_tx(tx, source_village_id).await? else {
-                    return Ok(());
-                };
-                let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
-                    return Ok(());
-                };
-                let payload =
-                    ReportPayload::MarketplaceDelivery(MarketplaceDeliveryReportPayload {
-                        sender_player: self.player_username(source.player_id).await?,
-                        sender_village: source.village_name.clone(),
-                        sender_position: source.position.clone(),
-                        receiver_player: self.player_username(target.player_id).await?,
-                        receiver_village: target.village_name.clone(),
-                        receiver_position: target.position.clone(),
-                        resources: resources.clone(),
-                        merchants_used,
-                    });
-                let mut audiences = vec![player_id];
-                if target.player_id != player_id {
-                    audiences.push(target.player_id);
-                }
-                self.reports
-                    .add_projected_in_tx(
-                        tx,
-                        &ProjectedReport {
-                            id: projected_report_id,
-                            report_type: "marketplace_delivery".to_string(),
-                            payload: serde_json::to_value(payload)
-                                .map_err(CqrsError::Serialization)?,
-                            actor_player_id: source.player_id,
-                            actor_village_id: Some(source_village_id),
-                            target_player_id: Some(target.player_id),
-                            target_village_id: Some(target_village_id),
-                        },
-                        &audiences,
-                    )
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                Ok(())
-            }
-            VillageEvent::ScoutBattleResolved {
-                player_id,
-                source_village_id,
-                target_village_id,
-                report,
-                ..
-            } => {
-                let Some(source) = self.try_village_in_tx(tx, source_village_id).await? else {
-                    return Ok(());
-                };
-                let Some(target_village) = self.try_village_in_tx(tx, target_village_id).await?
-                else {
-                    return Ok(());
-                };
-                let attacker_payload = BattlePartyPayload {
-                    tribe: report.attacker.army_before.tribe.clone(),
-                    army_before: report.attacker.army_before.units().clone(),
-                    survivors: report.attacker.survivors.clone(),
-                    losses: report.attacker.losses.clone(),
-                };
-                let scouting_success = report
-                    .scouting
-                    .as_ref()
-                    .is_some_and(|_| report.attacker.survivors.units().iter().any(|&u| u > 0));
-                let payload = ReportPayload::Battle(BattleReportPayload {
-                    attack_type: report.attack_type.clone(),
-                    attacker_player: self.player_username(player_id).await?,
-                    attacker_village: source.village_name.clone(),
-                    attacker_position: source.position.clone(),
-                    defender_player: self.player_username(target_village.player_id).await?,
-                    defender_village: target_village.village_name.clone(),
-                    defender_position: target_village.position.clone(),
-                    success: report.attacker.survivors.units().iter().any(|&u| u > 0),
-                    bounty: ResourceGroup::new(0, 0, 0, 0),
-                    attacker: Some(attacker_payload),
-                    defender: if scouting_success {
-                        Some(BattlePartyPayload {
-                            tribe: target_village.tribe.clone(),
-                            army_before: target_village
-                                .army
-                                .as_ref()
-                                .map(|a| a.units().clone())
-                                .unwrap_or_default(),
-                            survivors: target_village
-                                .army
-                                .as_ref()
-                                .map(|a| a.units().clone())
-                                .unwrap_or_default(),
-                            losses: parabellum_types::army::TroopSet::default(),
-                        })
-                    } else {
-                        None
-                    },
-                    reinforcements: if scouting_success {
-                        target_village
-                            .reinforcements
-                            .iter()
-                            .map(|r| BattlePartyPayload {
-                                tribe: r.tribe.clone(),
-                                army_before: r.units().clone(),
-                                survivors: r.units().clone(),
-                                losses: parabellum_types::army::TroopSet::default(),
-                            })
-                            .collect()
-                    } else {
-                        vec![]
-                    },
-                    scouting: if scouting_success {
-                        report.scouting.clone()
-                    } else {
-                        None
-                    },
-                    wall_damage: None,
-                    catapult_damage: vec![],
-                    loyalty_before: None,
-                    loyalty_after: None,
-                    conquered: None,
-                });
-                let mut audiences = vec![player_id];
-                if let Some(scouting) = &report.scouting
-                    && scouting.was_detected
-                    && target_village.player_id != player_id
-                {
-                    audiences.push(target_village.player_id);
-                }
-                self.reports
-                    .add_projected_in_tx(
-                        tx,
-                        &ProjectedReport {
-                            id: projected_report_id,
-                            report_type: "battle".to_string(),
-                            payload: serde_json::to_value(payload)
-                                .map_err(CqrsError::Serialization)?,
-                            actor_player_id: player_id,
-                            actor_village_id: Some(source_village_id),
-                            target_player_id: Some(target_village.player_id),
-                            target_village_id: Some(target_village_id),
-                        },
-                        &audiences,
-                    )
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                Ok(())
-            }
-            VillageEvent::ScoutArrived { .. } => Ok(()),
-            VillageEvent::AttackBattleResolved {
-                player_id,
-                source_village_id,
-                target_village_id,
-                report,
-                ..
-            } => {
-                let Some(source) = self.try_village_in_tx(tx, source_village_id).await? else {
-                    return Ok(());
-                };
-                let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
-                    return Ok(());
-                };
-                let bounty = report
-                    .bounty
-                    .clone()
-                    .unwrap_or_else(|| ResourceGroup::new(0, 0, 0, 0));
-                let attacker_survivors = report.attacker.survivors.immensity();
-                let defender_survivors = report
-                    .defender
-                    .as_ref()
-                    .map(|def| def.survivors.immensity())
-                    .unwrap_or(0);
-                let reinforcements_survivors: u32 = report
-                    .reinforcements
-                    .iter()
-                    .map(|reinf| reinf.survivors.immensity())
-                    .sum();
-                let defending_side_survivors = defender_survivors + reinforcements_survivors;
-                let success = attacker_survivors > 0 && defending_side_survivors == 0;
-                let attacker_payload = BattlePartyPayload {
-                    tribe: report.attacker.army_before.tribe.clone(),
-                    army_before: report.attacker.army_before.units().clone(),
-                    survivors: report.attacker.survivors,
-                    losses: report.attacker.losses,
-                };
-                let defender_payload = report.defender.as_ref().map(|def| BattlePartyPayload {
-                    tribe: def.army_before.tribe.clone(),
-                    army_before: def.army_before.units().clone(),
-                    survivors: def.survivors.clone(),
-                    losses: def.losses.clone(),
-                });
-                let reinforcements_payload: Vec<BattlePartyPayload> = report
-                    .reinforcements
-                    .iter()
-                    .map(|reinf| BattlePartyPayload {
-                        tribe: reinf.army_before.tribe.clone(),
-                        army_before: reinf.army_before.units().clone(),
-                        survivors: reinf.survivors.clone(),
-                        losses: reinf.losses.clone(),
-                    })
-                    .collect();
-                let payload = ReportPayload::Battle(BattleReportPayload {
-                    attack_type: report.attack_type.clone(),
-                    attacker_player: self.player_username(player_id).await?,
-                    attacker_village: source.village_name.clone(),
-                    attacker_position: source.position.clone(),
-                    defender_player: self.player_username(target.player_id).await?,
-                    defender_village: target.village_name.clone(),
-                    defender_position: target.position.clone(),
-                    success,
-                    bounty,
-                    attacker: Some(attacker_payload),
-                    defender: defender_payload,
-                    reinforcements: reinforcements_payload,
-                    scouting: report.scouting,
-                    wall_damage: report.wall_damage,
-                    catapult_damage: report.catapult_damage,
-                    loyalty_before: Some(report.loyalty_before),
-                    loyalty_after: Some(report.loyalty_after),
-                    conquered: Some(success && report.loyalty_after == 0),
-                });
-                let mut audiences = vec![player_id];
-                if target.player_id != player_id {
-                    audiences.push(target.player_id);
-                }
-                for reinforcement in &report.reinforcements {
-                    let owner = reinforcement.army_before.player_id;
-                    if !audiences.contains(&owner) {
-                        audiences.push(owner);
-                    }
-                }
-                self.reports
-                    .add_projected_in_tx(
-                        tx,
-                        &ProjectedReport {
-                            id: projected_report_id,
-                            report_type: "battle".to_string(),
-                            payload: serde_json::to_value(payload)
-                                .map_err(CqrsError::Serialization)?,
-                            actor_player_id: player_id,
-                            actor_village_id: Some(source_village_id),
-                            target_player_id: Some(target.player_id),
-                            target_village_id: Some(target_village_id),
-                        },
-                        &audiences,
-                    )
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                Ok(())
-            }
-            VillageEvent::ReportMarkedAsRead {
-                report_id,
-                player_id,
-                read_at,
-            } => {
-                let updated = self
-                    .reports
-                    .mark_as_read_in_tx(tx, report_id, player_id, read_at)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                if updated {
-                    return Ok(());
-                }
-                self.reports
-                    .mark_latest_unread_as_read_before_in_tx(tx, player_id, read_at)
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-                Ok(())
-            }
-            _ => Ok(()),
+        if let Some(result) = self
+            .project_reinforcement_report_in_tx(tx, projected_report_id, &domain_event)
+            .await
+        {
+            return result;
         }
+        if let Some(result) = self
+            .project_marketplace_report_in_tx(tx, projected_report_id, &domain_event)
+            .await
+        {
+            return result;
+        }
+        if let Some(result) = self
+            .project_battle_report_in_tx(tx, projected_report_id, &domain_event)
+            .await
+        {
+            return result;
+        }
+        if let Some(result) = self.project_read_state_in_tx(tx, &domain_event).await {
+            return result;
+        }
+
+        Ok(())
     }
 }
 

@@ -346,6 +346,73 @@ impl Village {
         Ok(building.calculate_build_time_secs(&server_speed, &mb_level))
     }
 
+    /// Prepares for upgrading a building, applies validations and withdraws resources.
+    /// Returns the upgraded building name, target level, and construction time.
+    pub fn init_building_upgrade(
+        &mut self,
+        slot_id: u8,
+        server_speed: i8,
+    ) -> Result<(BuildingName, u8, u32), GameError> {
+        let current = self
+            .get_building_by_slot_id(slot_id)
+            .ok_or(GameError::EmptySlot { slot_id })?;
+        let data = get_building_data(&current.building.name)?;
+
+        if current.building.level >= data.rules.max_level {
+            return Err(GameError::BuildingMaxLevelReached);
+        }
+
+        let next_level = current.building.level + 1;
+        let target = Building::new(current.building.name.clone(), server_speed)
+            .at_level(next_level, server_speed)?;
+
+        self.validate_building_requirements(data.rules.requirements)?;
+        self.deduct_resources(&target.cost().resources)?;
+
+        let mb_level = self.main_building_level();
+        Ok((
+            current.building.name,
+            next_level,
+            target.calculate_build_time_secs(&server_speed, &mb_level),
+        ))
+    }
+
+    /// Prepares for downgrading a building. Returns the building name, target level,
+    /// and construction time.
+    pub fn init_building_downgrade(
+        &self,
+        slot_id: u8,
+        server_speed: i8,
+    ) -> Result<(BuildingName, u8, u32), GameError> {
+        if self.main_building_level() < 10 {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::MainBuilding,
+                level: 10,
+            });
+        }
+
+        let current = self
+            .get_building_by_slot_id(slot_id)
+            .ok_or(GameError::EmptySlot { slot_id })?;
+        if current.building.level == 0 {
+            return Err(GameError::InvalidBuildingLevel(
+                0,
+                current.building.name.clone(),
+            ));
+        }
+
+        let next_level = current.building.level - 1;
+        let target = Building::new(current.building.name.clone(), server_speed)
+            .at_level(next_level, server_speed)?;
+        let mb_level = self.main_building_level();
+
+        Ok((
+            current.building.name,
+            next_level,
+            target.calculate_build_time_secs(&server_speed, &mb_level),
+        ))
+    }
+
     /// Prepares for starting a research in academy, applies validations and withdraws resources. Returns research time.
     pub fn init_academy_research(
         &mut self,
@@ -449,9 +516,41 @@ impl Village {
         self.stocks.store(resources);
     }
 
+    /// Reserves resources and merchants for an outgoing merchant workflow.
+    pub fn reserve_merchant_transfer(
+        &mut self,
+        resources: &ResourceGroup,
+        merchants_used: u8,
+    ) -> Result<(), GameError> {
+        self.deduct_resources(resources)?;
+        self.busy_merchants = self.busy_merchants.saturating_add(merchants_used);
+        Ok(())
+    }
+
+    /// Releases resources and merchants from a reserved merchant workflow.
+    pub fn release_merchant_transfer(&mut self, resources: &ResourceGroup, merchants_used: u8) {
+        self.store_resources(resources);
+        self.busy_merchants = self.busy_merchants.saturating_sub(merchants_used);
+    }
+
+    /// Marks merchants as returned after an outgoing merchant workflow completes.
+    pub fn return_merchants(&mut self, merchants_used: u8) {
+        self.busy_merchants = self.busy_merchants.saturating_sub(merchants_used);
+    }
+
     /// Returns a snapshot of the currently stored resources.
     pub fn stored_resources(&self) -> ResourceGroup {
         self.stocks.stored()
+    }
+
+    /// Standard resource cost for founding a new village with settlers.
+    pub fn foundation_cost() -> ResourceGroup {
+        ResourceGroup::new(800, 800, 800, 800)
+    }
+
+    /// Withdraws the standard settler foundation resources.
+    pub fn deduct_foundation_resources(&mut self) -> Result<(), GameError> {
+        self.deduct_resources(&Self::foundation_cost())
     }
 
     /// Gets the current warehouse capacity.
@@ -656,7 +755,7 @@ impl Village {
     /// Returns the number of chiefs/senators/chieftains currently in the home army (not deployed).
     pub fn count_chiefs_at_home(&self) -> u32 {
         if let Some(army) = &self.army {
-            return army.units().get(8);
+            army.units().get(8)
         } else {
             0
         }
@@ -671,7 +770,7 @@ impl Village {
         if settlers_count == 0 {
             0
         } else {
-            (settlers_count + Self::SETTLERS_PER_SLOT - 1) / Self::SETTLERS_PER_SLOT
+            settlers_count.div_ceil(Self::SETTLERS_PER_SLOT)
         }
     }
 
@@ -791,9 +890,23 @@ impl Village {
             .army()
             .map_or(Army::new_village_army(self), |a| a.clone());
         home_army.merge(army)?;
+        if home_army.hero().is_none() {
+            home_army.set_hero(army.hero());
+        }
         self.set_army(Some(&home_army))?;
         self.update_state();
         Ok(())
+    }
+
+    /// Adds freshly trained units to the home army.
+    pub fn add_trained_units_home(
+        &mut self,
+        unit: UnitName,
+        quantity: u32,
+    ) -> Result<(), GameError> {
+        let mut trained = Army::new_village_army(self);
+        trained.add_unit(unit, quantity)?;
+        self.merge_army(&trained)
     }
 
     /// Returns reinforcements in village.
@@ -923,6 +1036,58 @@ impl Village {
     /// Returns available merchants.
     pub fn available_merchants(&self) -> u8 {
         self.total_merchants.saturating_sub(self.busy_merchants)
+    }
+
+    /// Returns merchant carrying capacity after applying server speed.
+    pub fn merchant_capacity(&self, server_speed: i8) -> u32 {
+        let speed_multiplier = server_speed.max(1) as u32;
+        self.tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed_multiplier)
+    }
+
+    /// Returns merchants required to move the requested resources.
+    pub fn required_merchants(
+        &self,
+        resources: &ResourceGroup,
+        server_speed: i8,
+    ) -> Result<u8, GameError> {
+        let capacity = self.merchant_capacity(server_speed);
+        if capacity == 0 {
+            return Err(GameError::NotEnoughMerchants);
+        }
+
+        let total = resources.total();
+        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
+        let merchants_needed = if total > 0 { needed.max(1) } else { 0 };
+        if merchants_needed == 0 || merchants_needed > self.available_merchants() {
+            return Err(GameError::NotEnoughMerchants);
+        }
+
+        Ok(merchants_needed)
+    }
+
+    /// Validates and returns merchants required for a resource transfer.
+    pub fn validate_merchant_transfer(
+        &self,
+        resources: &ResourceGroup,
+        server_speed: i8,
+    ) -> Result<u8, GameError> {
+        if self
+            .get_building_by_name(&BuildingName::Marketplace)
+            .is_none_or(|slot| slot.building.level == 0)
+        {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Marketplace,
+                level: 1,
+            });
+        }
+        if !self.has_enough_resources(resources) {
+            return Err(GameError::NotEnoughResources);
+        }
+
+        self.required_merchants(resources, server_speed)
     }
 
     /// Marks a unit name as researched in the academy.
@@ -1317,7 +1482,7 @@ pub struct VillageStocks {
 
 impl VillageStocks {
     /// Returns the currently stored resources as ResourceGroup
-    pub(crate) fn stored(&self) -> ResourceGroup {
+    pub fn stored(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }
 
@@ -1363,7 +1528,11 @@ impl Default for VillageStocks {
 #[allow(clippy::unnecessary_cast)]
 mod tests {
     use crate::{
-        models::{army::Army, buildings::Building, village::VillageStocks},
+        models::{
+            army::Army,
+            buildings::Building,
+            village::{VillageBuilding, VillageStocks},
+        },
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
@@ -1372,7 +1541,7 @@ mod tests {
     use chrono::{Duration, Utc};
     use parabellum_types::{
         army::{TroopSet, UnitName},
-        buildings::BuildingName,
+        buildings::{BuildingGroup, BuildingName},
         common::ResourceGroup,
         errors::GameError,
         map::ValleyTopology,
@@ -1444,6 +1613,38 @@ mod tests {
         // Effective production
         // 12 crop - 2 upkeep = 10 effective crop
         assert_eq!(v.production.effective.crop, 10, "effective crop production");
+    }
+
+    #[test]
+    fn merchant_transfer_reserve_and_release_updates_resources_and_busy_merchants() {
+        let mut village = village_factory(Default::default());
+        village.buildings.push(VillageBuilding {
+            slot_id: 27,
+            building: Building {
+                name: BuildingName::Marketplace,
+                group: BuildingGroup::Infrastructure,
+                value: 0,
+                population: 0,
+                culture_points: 0,
+                level: 2,
+            },
+        });
+        village.update_state();
+        village
+            .deduct_resources(&ResourceGroup::new(300, 0, 0, 0))
+            .unwrap();
+
+        village
+            .reserve_merchant_transfer(&ResourceGroup::new(200, 0, 0, 0), 1)
+            .unwrap();
+
+        assert_eq!(village.busy_merchants, 1);
+        assert_eq!(village.stored_resources().lumber(), 300);
+
+        village.release_merchant_transfer(&ResourceGroup::new(200, 0, 0, 0), 1);
+
+        assert_eq!(village.busy_merchants, 0);
+        assert_eq!(village.stored_resources().lumber(), 500);
     }
 
     #[test]

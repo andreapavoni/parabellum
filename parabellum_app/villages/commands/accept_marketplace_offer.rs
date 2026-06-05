@@ -4,7 +4,8 @@ use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
 use crate::villages::{
-    VillageAggregate, VillageEvent, commands::as_domain_error, models::MarketplaceOfferSnapshot,
+    MarketplaceAcceptance, VillageAggregate, VillageEvent, commands::as_domain_error,
+    models::MarketplaceOfferSnapshot,
 };
 
 #[derive(Debug, Clone)]
@@ -33,17 +34,13 @@ impl Command for AcceptMarketplaceOffer {
                 player_id: self.player_id,
             }));
         }
-        if accepting_village_id == self.offer.owner_village_id
-            || self.player_id == self.offer.owner_player_id
-        {
-            return Err(as_domain_error(GameError::InvalidMarketplaceOffer));
+        MarketplaceAcceptance {
+            accepting_player_id: self.player_id,
+            accepting_village_id,
+            offer: &self.offer,
         }
-        if self.offer.offer_resources.quantity == 0
-            || self.offer.seek_resources.quantity == 0
-            || self.offer.offer_resources.resource == self.offer.seek_resources.resource
-        {
-            return Err(as_domain_error(GameError::InvalidMarketplaceOffer));
-        }
+        .validate()
+        .map_err(as_domain_error)?;
 
         let seek_group: parabellum_types::common::ResourceGroup = self.offer.seek_resources.into();
         let accepting_merchants_used = aggregate

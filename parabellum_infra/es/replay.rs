@@ -3,6 +3,7 @@ use parabellum_app::villages::VillageEvent;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
+use crate::es::advisory_lock::AdvisoryLock;
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::{PostgresEventStore, ReportProjector, VillageProjector};
 
@@ -109,29 +110,17 @@ impl ReplayService {
     }
 
     async fn full_replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
-        let mut conn = self
-            .pool
-            .acquire()
-            .await
-            .map_err(CqrsError::domain_source)?;
-        let acquired = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
-            .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
-            .fetch_one(&mut *conn)
-            .await
-            .map_err(CqrsError::domain_source)?;
-        if !acquired {
+        let Some(lock) =
+            AdvisoryLock::try_acquire(&self.pool, SCHEDULED_ACTION_EXECUTION_LOCK_KEY).await?
+        else {
             warn!("replay lock already held by another process");
             return Err(CqrsError::EventStore(
                 "replay lock already held by another process".to_string(),
             ));
-        }
+        };
 
         let replay_result = self.run_full_replay(request).await;
-        sqlx::query("SELECT pg_advisory_unlock($1)")
-            .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
-            .execute(&mut *conn)
-            .await
-            .map_err(CqrsError::domain_source)?;
+        lock.release().await?;
         info!("replay lock released");
         replay_result
     }

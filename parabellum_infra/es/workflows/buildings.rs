@@ -4,9 +4,16 @@ use parabellum_app::villages::models::{
     BuildingWorkflow, BuildingWorkflowKind, ScheduledAction, ScheduledActionPayload,
 };
 use parabellum_types::buildings::BuildingName;
+use parabellum_types::common::ResourceGroup;
 use uuid::Uuid;
 
-pub(crate) fn scheduled_action(
+pub(crate) struct ScheduledBuildingAction {
+    pub(crate) village_id: u32,
+    pub(crate) action: ScheduledAction,
+    pub(crate) cost: Option<ResourceGroup>,
+}
+
+fn scheduled_action(
     action_id: Uuid,
     execute_at: chrono::DateTime<chrono::Utc>,
     kind: BuildingWorkflowKind,
@@ -34,7 +41,110 @@ pub(crate) fn scheduled_action(
     )
 }
 
-pub(crate) fn completion_fact(action_id: Uuid, workflow: BuildingWorkflow) -> VillageEvent {
+pub(crate) fn scheduled_action_from_event(
+    event: &VillageEvent,
+) -> Result<ScheduledBuildingAction, CqrsError> {
+    let (
+        kind,
+        action_id,
+        player_id,
+        village_id,
+        slot_id,
+        building_name,
+        level,
+        speed,
+        execute_at,
+        cost,
+    ) = match event {
+        VillageEvent::BuildingConstructionScheduled {
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            cost,
+            execute_at,
+        } => (
+            BuildingWorkflowKind::Add,
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            execute_at,
+            Some(cost.clone()),
+        ),
+        VillageEvent::BuildingUpgradeScheduled {
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            cost,
+            execute_at,
+        } => (
+            BuildingWorkflowKind::Upgrade,
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            execute_at,
+            Some(cost.clone()),
+        ),
+        VillageEvent::BuildingDowngradeScheduled {
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            execute_at,
+        } => (
+            BuildingWorkflowKind::Downgrade,
+            action_id,
+            player_id,
+            village_id,
+            slot_id,
+            building_name,
+            level,
+            speed,
+            execute_at,
+            None,
+        ),
+        _ => unreachable!("scheduled_action_from_event called with non-building scheduled event"),
+    };
+
+    Ok(ScheduledBuildingAction {
+        village_id: *village_id,
+        action: scheduled_action(
+            *action_id,
+            *execute_at,
+            kind,
+            *village_id,
+            *player_id,
+            *slot_id,
+            building_name.clone(),
+            *level,
+            *speed,
+        )?,
+        cost,
+    })
+}
+
+pub(crate) fn completion_events(
+    action_id: Uuid,
+    workflow: BuildingWorkflow,
+) -> super::WorkflowEvents {
     let BuildingWorkflow {
         kind,
         player_id,
@@ -45,8 +155,8 @@ pub(crate) fn completion_fact(action_id: Uuid, workflow: BuildingWorkflow) -> Vi
         speed,
     } = workflow;
 
-    match kind {
-        BuildingWorkflowKind::Add => VillageEvent::BuildingAdded {
+    let event = match kind {
+        BuildingWorkflowKind::Add => parabellum_app::villages::VillageEvent::BuildingAdded {
             action_id,
             player_id,
             village_id,
@@ -55,7 +165,7 @@ pub(crate) fn completion_fact(action_id: Uuid, workflow: BuildingWorkflow) -> Vi
             level,
             speed,
         },
-        BuildingWorkflowKind::Upgrade => VillageEvent::BuildingUpgraded {
+        BuildingWorkflowKind::Upgrade => parabellum_app::villages::VillageEvent::BuildingUpgraded {
             action_id,
             player_id,
             village_id,
@@ -64,14 +174,18 @@ pub(crate) fn completion_fact(action_id: Uuid, workflow: BuildingWorkflow) -> Vi
             level,
             speed,
         },
-        BuildingWorkflowKind::Downgrade => VillageEvent::BuildingDowngraded {
-            action_id,
-            player_id,
-            village_id,
-            slot_id,
-            building_name,
-            level,
-            speed,
-        },
-    }
+        BuildingWorkflowKind::Downgrade => {
+            parabellum_app::villages::VillageEvent::BuildingDowngraded {
+                action_id,
+                player_id,
+                village_id,
+                slot_id,
+                building_name,
+                level,
+                speed,
+            }
+        }
+    };
+
+    super::WorkflowEvents::one(village_id, event)
 }

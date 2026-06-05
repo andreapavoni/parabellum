@@ -42,10 +42,10 @@ impl Query for GetScheduledActionStatusCounts {
 
         let mut counts = ScheduledActionStatusCounts::default();
         for action in actions {
-            if let Some(status_filter) = self.status_filter {
-                if action.status != status_filter {
-                    continue;
-                }
+            if let Some(status_filter) = self.status_filter
+                && action.status != status_filter
+            {
+                continue;
             }
             match action.status {
                 ScheduledActionStatus::Pending => counts.pending += 1,

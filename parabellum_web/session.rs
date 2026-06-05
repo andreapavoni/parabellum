@@ -77,11 +77,11 @@ fn select_current_village(
     })
 }
 
-fn village_from_selected_id<'a>(
+fn village_from_selected_id(
     selected_village_id: Option<u32>,
-    villages: &'a [Village],
+    villages: &[Village],
     player_id: Uuid,
-) -> Option<&'a Village> {
+) -> Option<&Village> {
     let village_id = selected_village_id?;
 
     villages

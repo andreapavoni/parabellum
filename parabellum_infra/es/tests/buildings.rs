@@ -153,8 +153,7 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
 
         let after_first_upgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_first_upgrade =
-            parabellum_game::models::village::Village::try_from(after_first_upgrade.clone())
-                .unwrap();
+            parabellum_game::models::village::Village::from(after_first_upgrade.clone());
         assert_eq!(
             after_first_upgrade.culture_points_production,
             hydrated_after_first_upgrade.culture_points_production
@@ -178,7 +177,7 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
 
         let after_upgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_upgrade =
-            parabellum_game::models::village::Village::try_from(after_upgrade.clone()).unwrap();
+            parabellum_game::models::village::Village::from(after_upgrade.clone());
         assert_eq!(
             after_upgrade.culture_points_production,
             hydrated_after_upgrade.culture_points_production
@@ -202,7 +201,7 @@ async fn village_es_service_recomputes_culture_points_production_after_building_
 
         let after_downgrade = service.get_village(village_id).await.unwrap();
         let hydrated_after_downgrade =
-            parabellum_game::models::village::Village::try_from(after_downgrade.clone()).unwrap();
+            parabellum_game::models::village::Village::from(after_downgrade.clone());
         assert_eq!(
             after_downgrade.culture_points_production,
             hydrated_after_downgrade.culture_points_production

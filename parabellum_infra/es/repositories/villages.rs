@@ -1,5 +1,7 @@
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::VillageRepository;
+use parabellum_app::villages::repositories::{
+    ExpansionCultureSnapshot, ExpansionOwnershipSnapshot, VillageRepository,
+};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
@@ -613,6 +615,89 @@ impl VillageRepository for PostgresVillageRepository {
             villages.push(self.refresh_for_read(model).await?);
         }
         Ok(villages)
+    }
+
+    async fn get_expansion_culture_snapshot(
+        &self,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<ExpansionCultureSnapshot, ApplicationError> {
+        let row: Option<(i32, i64, i64)> = sqlx::query_as(
+            r#"
+            SELECT
+              v.culture_points_production AS village_cpp,
+              SUM(rv.culture_points_production)::bigint AS player_cpp,
+              COUNT(rv.village_id)::bigint AS village_count
+            FROM rm_village v
+            JOIN rm_village rv ON rv.player_id = v.player_id
+            WHERE v.village_id = $1
+              AND v.player_id = $2
+            GROUP BY v.village_id, v.culture_points_production
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(player_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let Some((village_cpp, player_cpp, village_count)) = row else {
+            return Err(ApplicationError::Db(DbError::VillageNotFound(village_id)));
+        };
+
+        Ok(ExpansionCultureSnapshot {
+            village_culture_points_production: village_cpp as u32,
+            player_culture_points_production: player_cpp as u32,
+            player_village_count: village_count.max(0) as usize,
+        })
+    }
+
+    async fn count_child_villages(
+        &self,
+        player_id: Uuid,
+        parent_village_id: u32,
+    ) -> Result<u8, ApplicationError> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM rm_village
+            WHERE player_id = $1
+              AND parent_village_id = $2
+            "#,
+        )
+        .bind(player_id)
+        .bind(parent_village_id as i32)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(count.min(u8::MAX as i64) as u8)
+    }
+
+    async fn get_expansion_ownership_snapshot(
+        &self,
+        player_id: Uuid,
+        source_village_id: u32,
+    ) -> Result<ExpansionOwnershipSnapshot, ApplicationError> {
+        let (source_child_villages, player_village_count): (i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+              COUNT(*) FILTER (WHERE parent_village_id = $1)::bigint AS source_child_villages,
+              COUNT(*)::bigint AS player_village_count
+            FROM rm_village
+            WHERE player_id = $2
+            "#,
+        )
+        .bind(source_village_id as i32)
+        .bind(player_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(ExpansionOwnershipSnapshot {
+            source_child_villages: source_child_villages.min(u8::MAX as i64) as u8,
+            player_village_count: player_village_count.max(0) as usize,
+        })
     }
 
     async fn upsert_from_village(

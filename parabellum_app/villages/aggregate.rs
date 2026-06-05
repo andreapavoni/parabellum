@@ -110,18 +110,7 @@ impl Aggregate for VillageAggregate {
                 self.village.set_resources(resources.clone());
             }
             VillageEvent::VillageArmyDetached { army } => {
-                self.village.detach_units(army.units());
-                if army.hero().is_some()
-                    && let Some(mut home_army) = self.village.village.army().cloned()
-                {
-                    home_army.set_hero(None);
-                    let next = if home_army.immensity() == 0 {
-                        None
-                    } else {
-                        Some(home_army)
-                    };
-                    let _ = self.village.village.set_army(next.as_ref());
-                }
+                self.village.detach_army(army);
             }
             VillageEvent::HeroCreated { hero, .. } => {
                 let mut home_army = self
@@ -152,8 +141,7 @@ impl Aggregate for VillageAggregate {
             VillageEvent::ReinforcementsRecalled { .. } => {}
             VillageEvent::ReinforcementsReleased { .. } => {}
             VillageEvent::SettlersSent { .. } => {
-                let resources = parabellum_types::common::ResourceGroup::new(800, 800, 800, 800);
-                let _ = self.village.village.deduct_resources(&resources);
+                let _ = self.village.village.deduct_foundation_resources();
             }
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
@@ -194,7 +182,7 @@ impl Aggregate for VillageAggregate {
                     *target_loyalty,
                     target_production.clone(),
                     current.is_capital,
-                    current.smithy().clone(),
+                    *current.smithy(),
                     target_stocks.clone(),
                     current.academy_research().clone(),
                     current.culture_points,
@@ -249,8 +237,9 @@ impl Aggregate for VillageAggregate {
                 if *owner_village_id == self.id {
                     let resources: parabellum_types::common::ResourceGroup =
                         (*offer_resources).into();
-                    self.village.village.store_resources(&resources);
-                    self.village.apply_merchant_return(*merchants_reserved);
+                    self.village
+                        .village
+                        .release_merchant_transfer(&resources, *merchants_reserved);
                 }
             }
             VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {}

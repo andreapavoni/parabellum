@@ -250,11 +250,12 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert!(after_schedule.crop <= expected_after.crop() as i64);
 
         let first_due = service
-            .get_village_training_queue(village_id)
+            .get_village_queues(village_id)
             .await
             .unwrap()
+            .training
             .iter()
-            .map(|a| a.execute_at)
+            .map(|a| a.finishes_at)
             .min()
             .expect("training queue should contain scheduled actions");
         let first = scenario
@@ -278,14 +279,15 @@ async fn village_es_service_trains_units_in_batched_sequence() {
         assert_eq!(training_counts_after_first.pending, 1);
 
         let queue_after_first = service
-            .get_village_training_queue(village_id)
+            .get_village_queues(village_id)
             .await
-            .unwrap();
+            .unwrap()
+            .training;
         assert_eq!(queue_after_first.len(), 1);
 
         let second_due = queue_after_first
             .iter()
-            .map(|a| a.execute_at)
+            .map(|a| a.finishes_at)
             .min()
             .expect("training queue should have one pending action after first completion");
         let second = scenario
@@ -375,12 +377,12 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
         assert_eq!(after_schedule.iron, expected_after.iron());
         assert!(after_schedule.crop <= expected_after.crop() as i64);
 
-        let smithy_queue = service.get_village_smithy_queue(village_id).await.unwrap();
+        let smithy_queue = service.get_village_queues(village_id).await.unwrap().smithy;
         assert_eq!(smithy_queue.len(), 1);
 
         let due_at = smithy_queue
             .iter()
-            .map(|a| a.execute_at)
+            .map(|a| a.finishes_at)
             .max()
             .expect("smithy queue should contain one scheduled action");
         let smithy_processed = scenario
@@ -399,7 +401,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
         assert_eq!(completed_smithy, 1);
 
         let model = service.get_village(village_id).await.unwrap();
-        let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let hydrated = parabellum_game::models::village::Village::from(model);
         let idx = hydrated
             .tribe
             .get_unit_idx_by_name(&parabellum_types::army::UnitName::Maceman)
@@ -460,12 +462,16 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         assert_eq!(after_schedule.iron, expected_after.iron());
         assert!(after_schedule.crop <= expected_after.crop() as i64);
 
-        let academy_queue = service.get_village_academy_queue(village_id).await.unwrap();
+        let academy_queue = service
+            .get_village_queues(village_id)
+            .await
+            .unwrap()
+            .academy;
         assert_eq!(academy_queue.len(), 1);
 
         let due_at = academy_queue
             .iter()
-            .map(|a| a.execute_at)
+            .map(|a| a.finishes_at)
             .max()
             .expect("academy queue should contain one scheduled action");
         let academy_processed = scenario
@@ -493,7 +499,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         assert_eq!(academy_pending, 0);
 
         let model = service.get_village(village_id).await.unwrap();
-        let hydrated = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let hydrated = parabellum_game::models::village::Village::from(model);
         let idx = hydrated
             .tribe
             .get_unit_idx_by_name(&parabellum_types::army::UnitName::Spearman)
@@ -607,11 +613,12 @@ async fn village_es_service_scheduler_respects_due_time_and_avoids_duplicate_exe
             .unwrap();
 
         let due_at = service
-            .get_village_training_queue(village_id)
+            .get_village_queues(village_id)
             .await
             .unwrap()
+            .training
             .iter()
-            .map(|a| a.execute_at)
+            .map(|a| a.finishes_at)
             .min()
             .expect("training queue should contain one action");
 

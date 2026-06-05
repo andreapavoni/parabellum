@@ -1,7 +1,420 @@
 {
   "players": [
     {
-      "username": "farm-2",
+      "username": "gta-1",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-2",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-3",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-4",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-5",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-6",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-7",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Second Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Third Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fourth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        },
+        {
+          "template": "developed",
+          "quadrant": "NorthEast",
+          "name": "Fifth Settlement",
+          "buildings": [
+            {
+              "slotId": 31,
+              "name": "Residence",
+              "level": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "username": "gta-8",
       "tribe": "Teuton",
       "villages": [
         {

@@ -1,5 +1,7 @@
 use parabellum_game::models::map::{MapField, MapQuadrant, Valley};
 use parabellum_types::errors::ApplicationError;
+use parabellum_types::map::ValleyTopology;
+use uuid::Uuid;
 
 use crate::read_models::MapRegionTile;
 
@@ -28,4 +30,12 @@ pub trait MapRepository: Send + Sync {
     ) -> Result<Option<MapRegionTile>, ApplicationError>;
     /// Checks whether a field is currently an unoccupied valley.
     async fn is_unoccupied_valley(&self, field_id: i32) -> Result<bool, ApplicationError>;
+    /// Returns target valley topology for foundation when available.
+    ///
+    /// Missing map rows are errors. Existing occupied or non-valley rows return `None`.
+    async fn get_foundation_target_topology(
+        &self,
+        field_id: u32,
+        player_id: Uuid,
+    ) -> Result<Option<ValleyTopology>, ApplicationError>;
 }

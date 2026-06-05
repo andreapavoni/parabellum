@@ -1,13 +1,12 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
-use parabellum_game::models::army::Army;
-use parabellum_types::army::{TroopSet, UnitRole};
+use parabellum_types::army::TroopSet;
 use parabellum_types::battle::{AttackType, ScoutingTarget};
-use parabellum_types::buildings::BuildingName;
-use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent, commands::as_domain_error};
+use crate::villages::{
+    ArmyDispatch, ArmyDispatchRequest, VillageAggregate, VillageEvent, commands::as_domain_error,
+};
 
 #[derive(Debug, Clone)]
 pub struct ScoutVillage {
@@ -28,55 +27,20 @@ impl Command for ScoutVillage {
 
     async fn handle(&self, aggregate: &Self::Aggregate) -> Result<Vec<VillageEvent>, CqrsError> {
         let source_village_id = aggregate.aggregate_id();
-        let owner_id = aggregate.village().player_id();
-
-        if owner_id != self.player_id {
-            return Err(as_domain_error(GameError::VillageNotOwned {
-                village_id: source_village_id,
+        let detached_army = ArmyDispatch::detach_from_home(
+            aggregate.village(),
+            ArmyDispatchRequest {
+                army_id: self.movement_id,
+                source_village_id,
+                target_village_id: self.target_village_id,
                 player_id: self.player_id,
-            }));
-        }
-        if source_village_id == self.target_village_id {
-            return Err(as_domain_error(GameError::VillageCannotTargetItself {
-                village_id: source_village_id,
-            }));
-        }
-        if aggregate.village().building_level(BuildingName::RallyPoint) == 0 {
-            return Err(as_domain_error(GameError::BuildingRequirementsNotMet {
-                building: BuildingName::RallyPoint,
-                level: 1,
-            }));
-        }
-        if self.units.immensity() == 0 {
-            return Err(as_domain_error(GameError::NoUnitsSelected));
-        }
-        if !aggregate.village().has_units(&self.units) {
-            return Err(as_domain_error(GameError::NotEnoughUnits));
-        }
-
-        let tribe_units = aggregate.village().village.tribe.units();
-        for (idx, &quantity) in self.units.units().iter().enumerate() {
-            if quantity == 0 {
-                continue;
-            }
-            let unit = tribe_units
-                .get(idx)
-                .ok_or_else(|| as_domain_error(GameError::InvalidUnitIndex(idx as u8)))?;
-            if !matches!(unit.role, UnitRole::Scout) {
-                return Err(as_domain_error(GameError::OnlyScoutUnitsAllowed));
-            }
-        }
-
-        let detached_army = Army::new(
-            Some(self.movement_id),
-            source_village_id,
-            Some(self.target_village_id),
-            self.player_id,
-            aggregate.village().village.tribe.clone(),
-            &self.units,
-            aggregate.village().village.smithy(),
-            None,
-        );
+                units: self.units.clone(),
+                hero_id: None,
+                allow_hero: false,
+                scouts_only: true,
+            },
+        )
+        .map_err(as_domain_error)?;
         Ok(vec![
             VillageEvent::VillageArmyDetached {
                 army: detached_army.clone(),

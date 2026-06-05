@@ -1,6 +1,6 @@
 use chrono::Utc;
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
-use parabellum_game::models::village::VillageStocks;
+use parabellum_game::models::village::{Village, VillageStocks};
 use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
@@ -29,20 +29,11 @@ impl Command for CancelMarketplaceOffer {
 
         let now = Utc::now();
         let refund: parabellum_types::common::ResourceGroup = self.offer.offer_resources.into();
-        let current = aggregate.village().village.stocks();
-        let owner_stocks = VillageStocks {
-            warehouse_capacity: current.warehouse_capacity,
-            granary_capacity: current.granary_capacity,
-            lumber: current.lumber.saturating_add(refund.lumber()),
-            clay: current.clay.saturating_add(refund.clay()),
-            iron: current.iron.saturating_add(refund.iron()),
-            crop: current.crop.saturating_add(refund.crop() as i64),
-        };
-        let owner_busy_merchants = aggregate
-            .village()
-            .village
-            .busy_merchants
-            .saturating_sub(self.offer.merchants_reserved);
+        let release = owner_reservation_after_cancel(
+            aggregate.village().village.clone(),
+            &refund,
+            self.offer.merchants_reserved,
+        );
 
         Ok(vec![
             VillageEvent::MarketplaceOfferCanceled {
@@ -58,10 +49,27 @@ impl Command for CancelMarketplaceOffer {
                 owner_player_id: self.player_id,
                 owner_village_id: village_id,
                 merchants_reserved: self.offer.merchants_reserved,
-                owner_stocks,
-                owner_busy_merchants,
+                owner_stocks: release.stocks,
+                owner_busy_merchants: release.busy_merchants,
                 released_at: now,
             },
         ])
+    }
+}
+
+struct MarketplaceReservationState {
+    stocks: VillageStocks,
+    busy_merchants: u8,
+}
+
+fn owner_reservation_after_cancel(
+    mut owner_village: Village,
+    refund: &parabellum_types::common::ResourceGroup,
+    merchants_reserved: u8,
+) -> MarketplaceReservationState {
+    owner_village.release_merchant_transfer(refund, merchants_reserved);
+    MarketplaceReservationState {
+        stocks: owner_village.stocks().clone(),
+        busy_merchants: owner_village.busy_merchants,
     }
 }

@@ -6,7 +6,8 @@ use parabellum_types::errors::{AppError, GameError};
 use uuid::Uuid;
 
 use crate::villages::{
-    VillageAggregate, VillageEvent, commands::as_domain_error, commands::as_invariant_error,
+    ReinforcementControl, VillageAggregate, VillageEvent, commands::as_domain_error,
+    commands::as_invariant_error,
 };
 
 #[derive(Debug, Clone)]
@@ -38,30 +39,13 @@ impl Command for RecallReinforcements {
                 player_id: self.player_id,
             }));
         }
-        if self.units.immensity() == 0 {
-            return Err(as_domain_error(GameError::NoUnitsSelected));
-        }
-
-        if !has_units(&self.reinforcement_army, &self.units) {
-            return Err(as_domain_error(GameError::NotEnoughUnits));
-        }
-
-        let mut return_army = self.reinforcement_army.clone();
-        return_army.update_units(&self.units);
-        match (self.hero_id, self.reinforcement_army.hero()) {
-            (Some(hero_id), Some(hero)) if hero.id == hero_id => {
-                return_army.set_hero(Some(hero));
-            }
-            (Some(hero_id), _) => {
-                return Err(as_domain_error(GameError::HeroNotAtHome {
-                    hero_id,
-                    village_id: self.stationed_village_id,
-                }));
-            }
-            (None, _) => {
-                return_army.set_hero(None);
-            }
-        }
+        let return_army = ReinforcementControl::returning_army(
+            &self.reinforcement_army,
+            &self.units,
+            self.hero_id,
+            self.stationed_village_id,
+        )
+        .map_err(as_domain_error)?;
 
         Ok(vec![VillageEvent::ReinforcementsRecalled {
             action_id: self.action_id,
@@ -74,12 +58,4 @@ impl Command for RecallReinforcements {
             returns_at: self.returns_at,
         }])
     }
-}
-
-fn has_units(army: &Army, units: &TroopSet) -> bool {
-    army.units()
-        .units()
-        .iter()
-        .zip(units.units().iter())
-        .all(|(available, requested)| available >= requested)
 }

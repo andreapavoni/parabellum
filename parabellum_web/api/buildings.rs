@@ -802,7 +802,7 @@ pub async fn building_detail(
 
                 let mut merchant_movements: Vec<_> = outgoing_movements
                     .into_iter()
-                    .chain(incoming_movements.into_iter())
+                    .chain(incoming_movements)
                     .filter(|movement| {
                         if !matches!(movement.direction, MerchantMovementDirection::Outgoing)
                             || !matches!(
@@ -1062,7 +1062,7 @@ pub async fn building_detail(
                 .ok()
                 .map(|data| item.target_level < data.rules.max_level)
         });
-        let queued_upgrade_preview = queued.and_then(|item| {
+        let queued_upgrade_preview = queued.map(|item| {
             let current_level = item.target_level;
             let building_name = item.building_name.clone();
             let template = Building::new(building_name.clone(), state.server_speed);
@@ -1101,7 +1101,7 @@ pub async fn building_detail(
                 )
             };
 
-            Some(QueuedUpgradePreviewDto {
+            QueuedUpgradePreviewDto {
                 building_name: building_key(&building_name),
                 current_level,
                 next_level,
@@ -1111,7 +1111,7 @@ pub async fn building_detail(
                 at_max_level,
                 next_value,
                 cost,
-            })
+            }
         });
 
         BuildingDetailDto {
@@ -1379,7 +1379,7 @@ fn training_options_for_group(
                 };
                 let max_trainable =
                     parabellum_game::models::village::Village::max_expansion_unit_trainable(
-                        unit.role.clone(),
+                        unit.role,
                         available_slots,
                         chiefs_total,
                         settlers_total,

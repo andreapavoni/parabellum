@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{army::UnitName, buildings::BuildingName, tribe::Tribe};
 
 /// Errors for domain logic (game rules).
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error, Clone, PartialEq)]
 pub enum GameError {
     #[error("Not enough resources")]
     NotEnoughResources,

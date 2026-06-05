@@ -2,9 +2,16 @@ use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{ScheduledAction, ScheduledActionPayload, TrainingWorkflow};
 use parabellum_types::army::UnitName;
+use parabellum_types::common::ResourceGroup;
 use uuid::Uuid;
 
-pub(crate) fn scheduled_action(
+pub(crate) struct ScheduledTrainingAction {
+    pub(crate) village_id: u32,
+    pub(crate) action: ScheduledAction,
+    pub(crate) cost: ResourceGroup,
+}
+
+fn scheduled_action(
     action_id: Uuid,
     execute_at: chrono::DateTime<chrono::Utc>,
     village_id: u32,
@@ -31,10 +38,44 @@ pub(crate) fn scheduled_action(
     )
 }
 
-pub(crate) fn completion_facts(
+pub(crate) fn scheduled_action_from_event(
+    event: &VillageEvent,
+) -> Result<ScheduledTrainingAction, CqrsError> {
+    let VillageEvent::UnitTrainingScheduled {
+        action_id,
+        player_id,
+        village_id,
+        slot_id,
+        unit,
+        time_per_unit,
+        quantity_remaining,
+        cost,
+        execute_at,
+    } = event
+    else {
+        unreachable!("scheduled_action_from_event called with non-UnitTrainingScheduled event");
+    };
+
+    Ok(ScheduledTrainingAction {
+        village_id: *village_id,
+        action: scheduled_action(
+            *action_id,
+            *execute_at,
+            *village_id,
+            *player_id,
+            *slot_id,
+            unit.clone(),
+            *time_per_unit,
+            *quantity_remaining,
+        )?,
+        cost: cost.clone(),
+    })
+}
+
+pub(crate) fn completion_events(
     action_id: Uuid,
     workflow: TrainingWorkflow,
-) -> Vec<(u32, VillageEvent)> {
+) -> super::WorkflowEvents {
     let TrainingWorkflow {
         village_id,
         player_id,
@@ -46,10 +87,10 @@ pub(crate) fn completion_facts(
     } = workflow;
 
     if quantity_remaining <= 0 {
-        return vec![];
+        return super::WorkflowEvents::new();
     }
 
-    let mut events = vec![(
+    let mut events = super::WorkflowEvents::one(
         village_id,
         VillageEvent::UnitTrained {
             action_id,
@@ -58,11 +99,11 @@ pub(crate) fn completion_facts(
             unit: unit.clone(),
             quantity_trained: 1,
         },
-    )];
+    );
 
     let remaining_after = quantity_remaining - 1;
     if remaining_after > 0 {
-        events.push((
+        events.push(
             village_id,
             VillageEvent::UnitTrainingScheduled {
                 action_id: Uuid::new_v4(),
@@ -75,7 +116,7 @@ pub(crate) fn completion_facts(
                 cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
                 execute_at: execute_at + chrono::Duration::seconds(time_per_unit.max(1) as i64),
             },
-        ));
+        );
     }
 
     events

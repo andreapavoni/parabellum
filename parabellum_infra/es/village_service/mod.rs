@@ -7,56 +7,35 @@
 //!
 //! Public API remains centered on `VillageEsService`.
 
-use std::collections::{BTreeSet, HashMap};
-use std::sync::Arc;
-
 use mini_cqrs_es::anyhow::Result;
-use mini_cqrs_es::{CqrsError, EventMetadata, EventPayload, EventStore, NewEvent, QueryRunner};
+use mini_cqrs_es::{CqrsError, EventMetadata, EventPayload, EventStore, NewEvent};
 use parabellum_game::models::army::Army;
-use parabellum_game::models::culture_points::required_cp;
 use parabellum_game::models::village::Village;
-use parabellum_types::buildings::BuildingName;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
-use parabellum_app::ports::queries::{
-    AcademyQueueItem, BuildingQueueItem, ExpansionCultureInfo, LeaderboardPage, MarketplaceData,
-    SmithyQueueItem, TrainingQueueItem, TroopMovement, TroopMovementDirection, TroopMovementType,
-    VillageArmyStateView, VillageQueues, VillageTroopMovements,
-};
-use parabellum_app::ports::{identity::PlayerRepository, map::MapRepository};
-use parabellum_app::read_models::{MapRegionTile, VillageInfo};
+use parabellum_app::ports::map::MapRepository;
+use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::models::{
-    MarketplaceOfferSnapshot, MarketplaceOfferStatus, ReportModel, ScheduledAction,
-    ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType, VillageModel,
+    MarketplaceOfferSnapshot, MarketplaceOfferStatus, ScheduledAction, ScheduledActionStatus,
 };
-use parabellum_app::villages::queries::{
-    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer, ListReportsForPlayer,
-    ScheduledActionStatusCounts,
-};
-use parabellum_app::villages::repositories::{
-    ArmyRepository, HeroRepository, MarketplaceRepository, ReportRepository,
-    ScheduledActionRepository, VillageMovementRepository, VillageRepository,
-};
+use parabellum_app::villages::repositories::{MarketplaceRepository, ScheduledActionRepository};
 use parabellum_app::villages::{
     AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer, CreateHero,
-    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, RecallReinforcements,
-    ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle,
-    ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
-    SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
+    RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy,
+    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
 };
-use parabellum_game::models::map::MapField;
-use parabellum_game::models::marketplace::MarketplaceOffer;
-use parabellum_types::errors::{DbError, GameError};
+use parabellum_types::errors::GameError;
 
+use crate::es::advisory_lock::AdvisoryLock;
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
+use crate::es::workflows;
 use crate::es::{
-    PostgresArmyRepository, PostgresEventStore, PostgresHeroRepository,
-    PostgresMarketplaceRepository, PostgresReportRepository, PostgresScheduledActionRepository,
-    PostgresVillageMovementRepository, PostgresVillageRepository, ReportProjector,
-    VillageProjector, WorkflowStreamAppend, village_cqrs_runtime,
+    PostgresEventStore, PostgresMarketplaceRepository, PostgresScheduledActionRepository,
+    ReportProjector, VillageProjector, WorkflowStreamAppend, village_cqrs_runtime,
 };
-use crate::identity::repositories::PostgresPlayerRepository;
 use crate::map::PostgresMapRepository;
 
 mod queries;
@@ -81,6 +60,10 @@ pub struct ReinforcementContext {
 }
 
 impl VillageEsService {
+    pub(crate) fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     /// Converts unordered `(village_id, event)` facts into stream-grouped append
     /// units with expected versions.
     ///
@@ -469,28 +452,23 @@ impl VillageEsService {
         self.materialize_current_resources_for_command(accepting_village_id, accepting_player_id)
             .await?;
         let offers = PostgresMarketplaceRepository::new(self.pool.clone());
-        let Some(offer) = offers
-            .claim_open_for_accept(
-                offer_id,
-                accepting_player_id,
-                accepting_village_id,
-                chrono::Utc::now(),
-            )
+        let offer = offers
+            .get_by_offer_id(offer_id)
             .await
-            .map_err(CqrsError::domain_source)?
-        else {
+            .map_err(CqrsError::domain_source)?;
+        if offer.status != MarketplaceOfferStatus::Open {
             return Err(CqrsError::domain_source(
                 GameError::MarketplaceOfferNoLongerValid,
             ));
-        };
-        if accepting_village_id == offer.owner_village_id
-            || accepting_player_id == offer.owner_player_id
-            || offer.offer_resources.quantity == 0
-            || offer.seek_resources.quantity == 0
-            || offer.offer_resources.resource == offer.seek_resources.resource
-        {
-            return Err(CqrsError::domain_source(GameError::InvalidMarketplaceOffer));
         }
+        let offer_snapshot = Self::as_offer_snapshot(offer.clone());
+        MarketplaceAcceptance {
+            accepting_player_id,
+            accepting_village_id,
+            offer: &offer_snapshot,
+        }
+        .validate()
+        .map_err(CqrsError::domain_source)?;
 
         let accepting_model = self.get_village(accepting_village_id).await?;
         if accepting_model.player_id != accepting_player_id {
@@ -502,109 +480,45 @@ impl VillageEsService {
         let accepting_village =
             Village::try_from(accepting_model).map_err(CqrsError::domain_source)?;
         let seek_group: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
-        if accepting_village
-            .get_building_by_name(&BuildingName::Marketplace)
-            .is_none_or(|slot| slot.building.level == 0)
-        {
-            return Err(CqrsError::domain_source(
-                GameError::BuildingRequirementsNotMet {
-                    building: BuildingName::Marketplace,
-                    level: 1,
-                },
-            ));
-        }
-        if !accepting_village.has_enough_resources(&seek_group) {
-            return Err(CqrsError::domain_source(GameError::NotEnoughResources));
-        }
-        let speed = parabellum_app::config::Config::from_env().speed.max(1) as u32;
-        let capacity = accepting_village
-            .tribe
-            .merchant_stats()
-            .capacity
-            .saturating_mul(speed);
-        if capacity == 0 {
-            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
-        }
-        let total = seek_group.total();
-        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
-        let accepting_merchants_used = if total > 0 { needed.max(1) } else { 0 };
-        if accepting_merchants_used == 0
-            || accepting_merchants_used > accepting_village.available_merchants()
-        {
-            return Err(CqrsError::domain_source(GameError::NotEnoughMerchants));
-        }
+        let accepting_merchants_used = accepting_village
+            .validate_merchant_transfer(
+                &seek_group,
+                parabellum_app::config::Config::from_env().speed,
+            )
+            .map_err(CqrsError::domain_source)?;
         let mut accepting_after = accepting_village.clone();
         accepting_after
-            .deduct_resources(&seek_group)
+            .reserve_merchant_transfer(&seek_group, accepting_merchants_used)
             .map_err(CqrsError::domain_source)?;
-        accepting_after.busy_merchants = accepting_after
-            .busy_merchants
-            .saturating_add(accepting_merchants_used);
 
         let accepted_at = chrono::Utc::now();
-        let owner_trip_duration =
-            (owner_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
-        let accepting_trip_duration =
-            (accepting_arrives_at - accepted_at).max(chrono::Duration::seconds(1));
-
-        self.append_village_workflow_events(vec![
-            (
+        let Some(offer) = offers
+            .claim_open_for_accept(
+                offer_id,
+                accepting_player_id,
                 accepting_village_id,
-                parabellum_app::villages::VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage {
-                    offer_id: offer.offer_id,
-                    player_id: accepting_player_id,
-                    village_id: accepting_village_id,
-                    stocks: accepting_after.stocks().clone(),
-                    busy_merchants: accepting_after.busy_merchants,
-                    applied_at: accepted_at,
-                },
-            ),
-            (
+                accepted_at,
+            )
+            .await
+            .map_err(CqrsError::domain_source)?
+        else {
+            return Err(CqrsError::domain_source(
+                GameError::MarketplaceOfferNoLongerValid,
+            ));
+        };
+        self.append_workflow_events(workflows::merchants::offer_acceptance_events(
+            workflows::merchants::OfferAcceptanceWorkflowInput {
+                offer: &offer,
+                accepting_player_id,
                 accepting_village_id,
-                parabellum_app::villages::VillageEvent::MarketplaceOfferAccepted {
-                    offer_id: offer.offer_id,
-                    owner_player_id: offer.owner_player_id,
-                    owner_village_id: offer.owner_village_id,
-                    accepting_player_id,
-                    accepting_village_id,
-                    offer_resources: offer.offer_resources,
-                    seek_resources: offer.seek_resources,
-                    owner_merchants_reserved: offer.merchants_reserved,
-                    accepting_merchants_used,
-                    accepted_at,
-                },
-            ),
-            (
-                offer.owner_village_id,
-                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
-                    arrival_action_id: uuid::Uuid::new_v4(),
-                    return_action_id: uuid::Uuid::new_v4(),
-                    player_id: offer.owner_player_id,
-                    source_village_id: offer.owner_village_id,
-                    target_village_id: accepting_village_id,
-                    resources: offer.offer_resources.into(),
-                    merchants_used: offer.merchants_reserved,
-                    resources_already_reserved: true,
-                    arrives_at: owner_arrives_at,
-                    returns_at: owner_arrives_at + owner_trip_duration,
-                },
-            ),
-            (
-                accepting_village_id,
-                parabellum_app::villages::VillageEvent::MerchantsTripScheduled {
-                    arrival_action_id: uuid::Uuid::new_v4(),
-                    return_action_id: uuid::Uuid::new_v4(),
-                    player_id: accepting_player_id,
-                    source_village_id: accepting_village_id,
-                    target_village_id: offer.owner_village_id,
-                    resources: offer.seek_resources.into(),
-                    merchants_used: accepting_merchants_used,
-                    resources_already_reserved: true,
-                    arrives_at: accepting_arrives_at,
-                    returns_at: accepting_arrives_at + accepting_trip_duration,
-                },
-            ),
-        ])
+                accepting_stocks: accepting_after.stocks().clone(),
+                accepting_busy_merchants: accepting_after.busy_merchants,
+                accepting_merchants_used,
+                accepted_at,
+                owner_arrives_at,
+                accepting_arrives_at,
+            },
+        ))
         .await?;
         Ok(accepting_village_id)
     }
@@ -628,23 +542,15 @@ impl VillageEsService {
         before_or_equal: chrono::DateTime<chrono::Utc>,
         limit: i64,
     ) -> Result<usize, CqrsError> {
-        let mut conn = self
-            .pool
-            .acquire()
-            .await
-            .map_err(CqrsError::domain_source)?;
-        let acquired = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
-            .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
-            .fetch_one(&mut *conn)
-            .await
-            .map_err(CqrsError::domain_source)?;
-        if !acquired {
+        let Some(lock) =
+            AdvisoryLock::try_acquire(&self.pool, SCHEDULED_ACTION_EXECUTION_LOCK_KEY).await?
+        else {
             info!(
                 action = "scheduler_skip_locked",
                 "scheduled action execution lock is held; skipping tick"
             );
             return Ok(0);
-        }
+        };
 
         let repo = PostgresScheduledActionRepository::new(self.pool.clone());
         let stale_before = before_or_equal
@@ -659,25 +565,6 @@ impl VillageEsService {
                 requeued,
                 stale_before = %stale_before,
                 "requeued stale processing scheduled actions to pending"
-            );
-        }
-        let requeued_failed_smithy = sqlx::query(
-            r#"
-            UPDATE rm_scheduled_actions
-            SET status = 'pending', updated_at = NOW()
-            WHERE status = 'failed'
-              AND action_type = 'ResearchSmithy'
-            "#,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(CqrsError::domain_source)?
-        .rows_affected();
-        if requeued_failed_smithy > 0 {
-            warn!(
-                action = "scheduler_requeue_failed_smithy",
-                requeued = requeued_failed_smithy,
-                "requeued failed smithy actions to pending"
             );
         }
         let actions = repo
@@ -696,11 +583,7 @@ impl VillageEsService {
         }
 
         let result = self.process_actions(&actions).await;
-        sqlx::query("SELECT pg_advisory_unlock($1)")
-            .bind(SCHEDULED_ACTION_EXECUTION_LOCK_KEY)
-            .execute(&mut *conn)
-            .await
-            .map_err(CqrsError::domain_source)?;
+        lock.release().await?;
         result
     }
 
@@ -788,5 +671,17 @@ impl VillageEsService {
         }
         tx.commit().await.map_err(CqrsError::domain_source)?;
         Ok(())
+    }
+
+    async fn append_workflow_events(
+        &self,
+        workflow_events: workflows::WorkflowEvents,
+    ) -> Result<(), CqrsError> {
+        if workflow_events.is_empty() {
+            return Ok(());
+        }
+
+        self.append_village_workflow_events(workflow_events.into_inner())
+            .await
     }
 }

@@ -6,6 +6,7 @@
 //! - event consumers/projectors
 //! - scheduled-action worker and replay tooling
 
+mod advisory_lock;
 mod consumers;
 pub(crate) mod lock_keys;
 mod replay;

@@ -26,6 +26,28 @@ pub struct ApplyBattleOutcomeToVillage {
     pub stationed_attacker_army: Option<Army>,
 }
 
+impl ApplyBattleOutcomeToVillage {
+    pub fn into_outcome_event(self) -> VillageEvent {
+        VillageEvent::BattleOutcomeAppliedToVillage {
+            action_id: self.action_id,
+            movement_id: self.movement_id,
+            source_village_id: self.source_village_id,
+            target_village_id: self.target_village_id,
+            target_player_id: self.target_player_id,
+            target_tribe: self.target_tribe,
+            target_parent_village_id: self.target_parent_village_id,
+            target_loyalty: self.target_loyalty,
+            target_buildings: self.target_buildings,
+            target_production: self.target_production,
+            target_population: self.target_population,
+            target_stocks: self.target_stocks,
+            target_army: self.target_army,
+            target_reinforcements: self.target_reinforcements,
+            stationed_attacker_army: self.stationed_attacker_army,
+        }
+    }
+}
+
 impl Command for ApplyBattleOutcomeToVillage {
     type Aggregate = VillageAggregate;
 
@@ -37,22 +59,6 @@ impl Command for ApplyBattleOutcomeToVillage {
             }));
         }
 
-        Ok(vec![VillageEvent::BattleOutcomeAppliedToVillage {
-            action_id: self.action_id,
-            movement_id: self.movement_id,
-            source_village_id: self.source_village_id,
-            target_village_id: self.target_village_id,
-            target_player_id: self.target_player_id,
-            target_tribe: self.target_tribe.clone(),
-            target_parent_village_id: self.target_parent_village_id,
-            target_loyalty: self.target_loyalty,
-            target_buildings: self.target_buildings.clone(),
-            target_production: self.target_production.clone(),
-            target_population: self.target_population,
-            target_stocks: self.target_stocks.clone(),
-            target_army: self.target_army.clone(),
-            target_reinforcements: self.target_reinforcements.clone(),
-            stationed_attacker_army: self.stationed_attacker_army.clone(),
-        }])
+        Ok(vec![self.clone().into_outcome_event()])
     }
 }
