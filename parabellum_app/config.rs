@@ -3,6 +3,7 @@ use std::env;
 
 #[derive(Clone)]
 pub struct Config {
+    pub port: u16,
     pub world_size: i16,
     pub speed: i8,
     pub access_token_ttl_secs: i64,
@@ -13,6 +14,11 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Self {
         dotenv().ok();
+
+        let port = match env::var("PORT") {
+            Ok(val) => val.parse::<u16>().unwrap_or(8000),
+            Err(_) => 8000,
+        };
 
         let world_size = match env::var("PARABELLUM_WORLD_SIZE") {
             Ok(val) => val.parse::<i16>().unwrap_or(100),
@@ -43,6 +49,7 @@ impl Config {
         };
 
         Self {
+            port,
             world_size,
             speed,
             access_token_ttl_secs,

@@ -87,6 +87,14 @@ Want to get the server running locally? Here’s how.
               "quadrant": "NorthEast",
               "buildings": [
                 { "slotId": 39, "name": "RallyPoint", "level": 2 }
+              ],
+              "academyResearches": [
+                "Praetorian",
+                "EquitesLegati"
+              ],
+              "startingArmy": [
+                { "unit": "Legionnaire", "quantity": 100 },
+                { "unit": "EquitesLegati", "quantity": 10 }
               ]
             }
           ]
@@ -99,7 +107,7 @@ Want to get the server running locally? Here’s how.
     - `seed/templates/developed.json` (village defaults)
     - `seed/templates/rusher.json` (another village profile)
 
-    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`).
+    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`, unit-based upsert for `startingArmy`, append missing entries for `academyResearches`).
     First village follows signup rules: it is always founded on a random unoccupied valley in the selected `quadrant` (explicit `position` is not allowed for the first village).
     Additional villages can either set an explicit `position` (must be free) or use random unoccupied valley selection with `quadrant`.
     If omitted, login defaults remain deterministic: email is `<username>@example.com`, password is `<username>`.
@@ -124,7 +132,7 @@ Want to get the server running locally? Here’s how.
     cargo run --release
     ```
 
-  From now, you can go to `http://localhost:8080` and see the progress.
+  From now, you can go to `http://localhost:8000` and see the progress.
 
 The frontend is now a `Preact + Vite` SPA served by the Rust app, backed by JSON endpoints under `/api/v1`. Cargo builds the frontend bundle automatically through `parabellum_web/build.rs`; for standalone frontend verification you can also run:
 

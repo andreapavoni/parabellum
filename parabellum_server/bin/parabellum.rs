@@ -19,10 +19,11 @@ async fn main() -> Result<(), ApplicationError> {
     info!("starting parabellum runtime");
     let (config, game_app, es_worker, db_pool) = setup_app().await?;
     let state = AppState::new(game_app, db_pool, &config);
+    let port = config.port;
 
     es_worker.run();
-    info!(port = 8080, "runtime initialized; launching web server");
-    WebRouter::serve(state, 8080).await
+    info!(port, "runtime initialized; launching web server");
+    WebRouter::serve(state, port).await
 }
 
 async fn setup_app() -> Result<

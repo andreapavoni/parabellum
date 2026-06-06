@@ -535,6 +535,7 @@ mod tests {
 
     fn test_config() -> Config {
         Config {
+            port: 8000,
             world_size: 100,
             speed: 1,
             access_token_ttl_secs: 600,

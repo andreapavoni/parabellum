@@ -6,16 +6,18 @@ use parabellum_app::ports::identity::{IdentityPort, InitialVillageSetup, Registe
 use parabellum_app::villages::{FoundVillage, SetVillageResources};
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
+use parabellum_types::army::UnitName;
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
 use parabellum_types::map::{Position, ValleyTopology};
 use parabellum_types::tribe::Tribe;
 use serde::Deserialize;
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::bootstrap_world_map;
-use crate::es::VillageEsService;
+use crate::es::{PostgresArmyRepository, VillageEsService};
 use crate::identity::IdentityService;
 use crate::map::PostgresMapRepository;
 
@@ -43,7 +45,12 @@ pub struct SeedVillage {
     pub name: Option<String>,
     #[serde(default = "default_resource_fields_target_level")]
     pub resource_fields_target_level: u8,
+    #[serde(default)]
     pub buildings: Vec<SeedBuilding>,
+    #[serde(default)]
+    pub academy_researches: Vec<UnitName>,
+    #[serde(default)]
+    pub starting_army: Vec<SeedUnitAmount>,
     pub position: Option<Position>,
     pub resources: Option<ResourceGroup>,
     pub speed: Option<i8>,
@@ -58,6 +65,12 @@ pub struct SeedBuilding {
     pub name: BuildingName,
     #[serde(default = "default_building_level")]
     pub level: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SeedUnitAmount {
+    pub unit: UnitName,
+    pub quantity: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -94,6 +107,8 @@ pub struct SeedRunResult {
 struct SeedVillageTemplate {
     resource_fields_target_level: Option<u8>,
     buildings: Option<Vec<SeedBuilding>>,
+    academy_researches: Option<Vec<UnitName>>,
+    starting_army: Option<Vec<SeedUnitAmount>>,
     resources: Option<ResourceGroup>,
     speed: Option<i8>,
     quadrant: Option<SeedQuadrant>,
@@ -212,6 +227,8 @@ pub async fn run_seed(
             village_id: first.village_id,
             village_position: first.position.clone(),
         });
+        apply_village_seed_state(pool, &service, player_id, first.village_id, &first_village)
+            .await?;
 
         let mut previous_village_id = Some(first.village_id);
         for (village_idx, village) in player.villages.iter().enumerate().skip(1) {
@@ -294,6 +311,7 @@ pub async fn run_seed(
                 village_id,
                 village_position,
             });
+            apply_village_seed_state(pool, &service, player_id, village_id, &village).await?;
             previous_village_id = Some(village_id);
         }
     }
@@ -367,6 +385,22 @@ fn resolve_village_from_template(
         }
         merged.buildings = buildings;
     }
+    if let Some(template_academy_researches) = template.academy_researches {
+        let mut researches = template_academy_researches;
+        for unit in &village.academy_researches {
+            if !researches.contains(unit) {
+                researches.push(unit.clone());
+            }
+        }
+        merged.academy_researches = researches;
+    }
+    if let Some(template_starting_army) = template.starting_army {
+        let mut starting_army = template_starting_army;
+        for unit_amount in &village.starting_army {
+            upsert_unit_amount(&mut starting_army, unit_amount.clone());
+        }
+        merged.starting_army = starting_army;
+    }
     Ok(merged)
 }
 
@@ -376,6 +410,79 @@ fn upsert_building(buildings: &mut Vec<SeedBuilding>, building: SeedBuilding) {
         return;
     }
     buildings.push(building);
+}
+
+fn upsert_unit_amount(units: &mut Vec<SeedUnitAmount>, unit_amount: SeedUnitAmount) {
+    if let Some(existing) = units.iter_mut().find(|u| u.unit == unit_amount.unit) {
+        *existing = unit_amount;
+        return;
+    }
+    units.push(unit_amount);
+}
+
+async fn apply_village_seed_state(
+    pool: &sqlx::PgPool,
+    service: &VillageEsService,
+    player_id: Uuid,
+    village_id: u32,
+    seed: &SeedVillage,
+) -> Result<(), ApplicationError> {
+    if seed.academy_researches.is_empty() && seed.starting_army.is_empty() {
+        return Ok(());
+    }
+
+    let model = service
+        .get_village(village_id)
+        .await
+        .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
+    let mut village = parabellum_game::models::village::Village::from(model);
+
+    for unit in &seed.academy_researches {
+        village
+            .research_academy(unit.clone())
+            .map_err(ApplicationError::from)?;
+    }
+    for unit_amount in &seed.starting_army {
+        if unit_amount.quantity == 0 {
+            continue;
+        }
+        village
+            .add_trained_units_home(unit_amount.unit.clone(), unit_amount.quantity)
+            .map_err(ApplicationError::from)?;
+    }
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    if let Some(army) = village.army() {
+        PostgresArmyRepository::new(pool.clone())
+            .upsert_home_in_tx(&mut tx, army, player_id)
+            .await?;
+    }
+    sqlx::query(
+        r#"
+        UPDATE rm_village
+        SET academy_research = $2,
+            production = $3,
+            population = $4,
+            culture_points_production = $5,
+            updated_at = NOW()
+        WHERE village_id = $1
+        "#,
+    )
+    .bind(village_id as i32)
+    .bind(Json(village.academy_research().clone()))
+    .bind(Json(village.production.clone()))
+    .bind(village.population as i32)
+    .bind(village.culture_points_production as i32)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    tx.commit()
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    Ok(())
 }
 
 fn normalize_buildings_by_slot(buildings: &mut Vec<VillageBuilding>) {
