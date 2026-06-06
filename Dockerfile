@@ -1,7 +1,7 @@
 FROM oven/bun:1.2.20 AS bun
 
 # Build stage
-FROM rust:1.91.1-slim-trixie AS builder
+FROM rust:1.95-slim-trixie AS builder
 WORKDIR /app
 
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
