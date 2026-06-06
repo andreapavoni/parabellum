@@ -33,6 +33,7 @@ export function Layout(props: LayoutProps) {
   const hasUnreadReports = Boolean(props.meContext && props.meContext.unreadReportsCount > 0);
   const villages = props.meContext?.villages ?? [];
   const player = props.meContext?.player;
+  const serverSpeed = props.meContext?.serverSpeed;
   const isGuestHome = !player && props.active === "home";
   const showVillageSwitcher =
     Boolean(player) &&
@@ -55,6 +56,14 @@ export function Layout(props: LayoutProps) {
                   <LogOut size={13} aria-hidden="true" />
                   Logout
                 </Button>
+                {serverSpeed ? (
+                  <span
+                    class="inline-flex h-6 items-center rounded border border-stone-300 bg-white px-2 font-mono text-[11px] font-bold text-stone-700"
+                    title="Server speed"
+                  >
+                    {serverSpeed}x
+                  </span>
+                ) : null}
                 <span class="sm:inline text-[12px] text-stone-600 font-mono">{serverClock}</span>
               </div>
             </div>

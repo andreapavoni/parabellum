@@ -77,28 +77,28 @@ export function ResourcesPage({
       count: data.troopMovementSummary.incomingReturnsReinforcements,
       nextAt: data.troopMovementSummary.incomingReturnsReinforcementsNextAt,
       href: "/app/build/39#incoming",
-      tone: "success" as const,
+      tone: "info" as const,
     },
     {
       label: "outgoing attacks",
       count: data.troopMovementSummary.outgoingAttacks,
       nextAt: data.troopMovementSummary.outgoingAttacksNextAt,
       href: "/app/build/39#outgoing",
-      tone: "danger" as const,
+      tone: "success" as const,
     },
     {
       label: "outgoing raids",
       count: data.troopMovementSummary.outgoingRaids,
       nextAt: data.troopMovementSummary.outgoingRaidsNextAt,
       href: "/app/build/39#outgoing",
-      tone: "warning" as const,
+      tone: "success" as const,
     },
     {
       label: "outgoing reinforcements",
       count: data.troopMovementSummary.outgoingReinforcements,
       nextAt: data.troopMovementSummary.outgoingReinforcementsNextAt,
       href: "/app/build/39#outgoing",
-      tone: "info" as const,
+      tone: "violet" as const,
     },
   ].filter((row) => row.count > 0);
   const lastMovementRefreshAtRef = useRef(0);
@@ -206,7 +206,7 @@ function MovementRow({
   count: number;
   href: string;
   nextAt?: string;
-  tone: "danger" | "warning" | "success" | "info";
+  tone: "danger" | "warning" | "success" | "info" | "violet";
   onElapsed?: () => void;
   clockSkewMs: number;
 }) {
@@ -215,6 +215,7 @@ function MovementRow({
     warning: "border-amber-200 bg-amber-50 text-amber-800",
     success: "border-green-200 bg-green-50 text-green-800",
     info: "border-blue-200 bg-blue-50 text-blue-800",
+    violet: "border-violet-200 bg-violet-50 text-violet-800",
   }[tone];
   return (
     <div class="border-b border-stone-100 pb-1.5">
