@@ -250,6 +250,23 @@ impl ReportRepository for PostgresReportRepository {
             .transpose()?)
     }
 
+    async fn count_unread_for_player(&self, player_id: Uuid) -> Result<i64, ApplicationError> {
+        let row = sqlx::query(
+            r#"
+            SELECT COUNT(*) as count
+            FROM rm_report_reads
+            WHERE player_id = $1 AND read_at IS NULL
+            "#,
+        )
+        .bind(player_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        row.try_get("count")
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))
+    }
+
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError> {
         sqlx::query!(
             r#"

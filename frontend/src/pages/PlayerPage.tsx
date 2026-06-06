@@ -1,13 +1,13 @@
 import type { PlayerProfileResponse } from "@/types/api";
 import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "@/components/Link";
+import { DataTable } from "@/components/ui";
 
 export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
   return (
     <div class="mx-auto max-w-3xl px-4 py-6">
       <h1 class="text-2xl font-semibold text-gray-800">{data.username}</h1>
-      <div class="mt-4 overflow-hidden rounded border bg-white shadow-sm">
-        <table class="min-w-full text-sm">
+      <DataTable class="mt-4">
           <thead class="bg-gray-100 text-left text-gray-600 uppercase text-xs tracking-wide">
             <tr>
               <th class="px-4 py-3">Village</th>
@@ -35,8 +35,7 @@ export function PlayerPage({ data }: { data: PlayerProfileResponse }) {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+      </DataTable>
     </div>
   );
 }

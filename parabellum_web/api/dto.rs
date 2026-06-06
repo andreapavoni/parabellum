@@ -139,7 +139,7 @@ pub struct BuildingQueueItemDto {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-/// Lightweight player summary for `/me/context`.
+/// Lightweight player summary for game context responses.
 pub struct PlayerSummaryDto {
     pub id: Uuid,
     pub username: String,
@@ -148,32 +148,17 @@ pub struct PlayerSummaryDto {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/me/context`.
-pub struct MeContextResponse {
+/// Rich hydration payload for `GET /api/v1/game/context`.
+pub struct GameContextResponse {
     pub server_time: i64,
     pub world_size: i32,
     pub server_speed: i8,
+    pub unread_reports_count: i64,
     pub player: PlayerSummaryDto,
+    pub current_village_id: u32,
     pub current_village: VillageSummaryDto,
     pub villages: Vec<VillageListItemDto>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/villages/{id}/overview`.
-pub struct VillageOverviewResponse {
-    pub server_time: i64,
-    pub village: VillageSummaryDto,
     pub building_slots: Vec<BuildingSlotDto>,
-    pub building_queue: Vec<BuildingQueueItemDto>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/villages/{id}/resources`.
-pub struct VillageResourcesResponse {
-    pub server_time: i64,
-    pub village: VillageSummaryDto,
     pub resource_slots: Vec<ResourceSlotDto>,
     pub building_queue: Vec<BuildingQueueItemDto>,
     pub current_troops: Vec<CurrentTroopDto>,
@@ -191,12 +176,16 @@ pub struct CurrentTroopDto {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TroopMovementSummaryDto {
-    pub incoming_attacks_raids: usize,
-    pub incoming_attacks_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub incoming_attacks: usize,
+    pub incoming_attacks_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub incoming_raids: usize,
+    pub incoming_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
     pub incoming_returns_reinforcements: usize,
     pub incoming_returns_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub outgoing_attacks_raids: usize,
-    pub outgoing_attacks_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub outgoing_attacks: usize,
+    pub outgoing_attacks_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub outgoing_raids: usize,
+    pub outgoing_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
     pub outgoing_reinforcements: usize,
     pub outgoing_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -584,25 +573,17 @@ fn current_troops(
         .collect()
 }
 
-pub fn village_overview_response(
-    village: &Village,
-    queues: &parabellum_app::ports::queries::VillageQueues,
-) -> VillageOverviewResponse {
-    let queue_views = building_queue_to_views(&queues.building);
-    VillageOverviewResponse {
-        server_time: Utc::now().timestamp(),
-        village: village_summary(village),
-        building_slots: building_slots(village, &queue_views),
-        building_queue: building_queue_items(&queue_views),
-    }
-}
-
-pub fn village_resources_response(
+pub fn game_context_response(
+    server_time: i64,
+    world_size: i32,
+    server_speed: i8,
+    unread_reports_count: i64,
+    user: &CurrentUser,
     village: &Village,
     queues: &parabellum_app::ports::queries::VillageQueues,
     army_state: &parabellum_app::ports::queries::VillageArmyStateView,
     movements: &parabellum_app::ports::queries::VillageTroopMovements,
-) -> VillageResourcesResponse {
+) -> GameContextResponse {
     use parabellum_app::ports::queries::TroopMovementType;
     let queue_views = building_queue_to_views(&queues.building);
     let summarize = |items: &[parabellum_app::ports::queries::TroopMovement],
@@ -620,13 +601,11 @@ pub fn village_resources_response(
         }
         (count, next_at)
     };
-    let (incoming_attacks_raids, incoming_attacks_raids_next_at) =
-        summarize(&movements.incoming, |kind| {
-            matches!(
-                kind,
-                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
-            )
-        });
+    let (incoming_attacks, incoming_attacks_next_at) = summarize(&movements.incoming, |kind| {
+        matches!(kind, TroopMovementType::Attack | TroopMovementType::Scout)
+    });
+    let (incoming_raids, incoming_raids_next_at) =
+        summarize(&movements.incoming, |kind| kind == TroopMovementType::Raid);
     let (incoming_returns_reinforcements, incoming_returns_reinforcements_next_at) =
         summarize(&movements.incoming, |kind| {
             matches!(
@@ -634,30 +613,40 @@ pub fn village_resources_response(
                 TroopMovementType::Return | TroopMovementType::Reinforcement
             )
         });
-    let (outgoing_attacks_raids, outgoing_attacks_raids_next_at) =
-        summarize(&movements.outgoing, |kind| {
-            matches!(
-                kind,
-                TroopMovementType::Attack | TroopMovementType::Raid | TroopMovementType::Scout
-            )
-        });
+    let (outgoing_attacks, outgoing_attacks_next_at) = summarize(&movements.outgoing, |kind| {
+        matches!(kind, TroopMovementType::Attack | TroopMovementType::Scout)
+    });
+    let (outgoing_raids, outgoing_raids_next_at) =
+        summarize(&movements.outgoing, |kind| kind == TroopMovementType::Raid);
     let (outgoing_reinforcements, outgoing_reinforcements_next_at) =
         summarize(&movements.outgoing, |kind| {
             kind == TroopMovementType::Reinforcement
         });
-    VillageResourcesResponse {
-        server_time: Utc::now().timestamp(),
-        village: village_summary(village),
+
+    GameContextResponse {
+        server_time,
+        world_size,
+        server_speed,
+        unread_reports_count,
+        player: player_summary(user),
+        current_village_id: village.id,
+        current_village: village_summary(village),
+        villages: village_list(user),
+        building_slots: building_slots(village, &queue_views),
         resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
         current_troops: current_troops(army_state),
         troop_movement_summary: TroopMovementSummaryDto {
-            incoming_attacks_raids,
-            incoming_attacks_raids_next_at,
+            incoming_attacks,
+            incoming_attacks_next_at,
+            incoming_raids,
+            incoming_raids_next_at,
             incoming_returns_reinforcements,
             incoming_returns_reinforcements_next_at,
-            outgoing_attacks_raids,
-            outgoing_attacks_raids_next_at,
+            outgoing_attacks,
+            outgoing_attacks_next_at,
+            outgoing_raids,
+            outgoing_raids_next_at,
             outgoing_reinforcements,
             outgoing_reinforcements_next_at,
         },

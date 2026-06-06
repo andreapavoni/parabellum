@@ -30,8 +30,8 @@ use crate::{
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
         game::{
-            map_field, map_region, me_context, me_session, player_profile, report_detail, reports,
-            stats, switch_village, village_overview, village_resources,
+            game_context, map_field, map_region, me_session, player_profile, report_detail,
+            reports, stats, switch_village,
         },
         openapi::openapi_spec,
     },
@@ -69,10 +69,6 @@ pub struct WebRouter {}
 impl WebRouter {
     /// Starts the HTTP server and blocks until shutdown/error.
     pub async fn serve(state: AppState, port: u16) -> Result<(), ApplicationError> {
-        // Set default locale. We initialize with user locale later
-        rust_i18n::set_locale("en-EN");
-        // rust_i18n::set_locale("it-IT");
-
         tracing::info!("ensuring auth refresh schema");
         state
             .token_service
@@ -86,10 +82,8 @@ impl WebRouter {
             .route("/auth/refresh", post(token_refresh))
             .route("/auth/token/logout", post(token_logout))
             .route("/me/session", get(me_session))
-            .route("/me/context", get(me_context))
+            .route("/game/context", get(game_context))
             .route("/stats", get(stats))
-            .route("/villages/{id}/overview", get(village_overview))
-            .route("/villages/{id}/resources", get(village_resources))
             .route("/buildings/{slot_id}", get(building_detail))
             .route("/me/village/current", post(switch_village))
             .route("/buildings/add", post(add_building))

@@ -4,6 +4,13 @@ import { formatDurationHms, secondsUntilIso } from "@/lib/time";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { LiveCountdown } from "@/components/buildings/buildingShared";
+import { Button, DataTable, Panel, SectionHeader } from "@/components/ui";
+import {
+  useAcceptMarketplaceOfferMutation,
+  useCancelMarketplaceOfferMutation,
+  useCreateMarketplaceOfferMutation,
+  useSendResourcesMutation,
+} from "@/query/mutations";
 import type { BuildingPageResponse, MarketplaceOffer, ResourceAmounts } from "@/types/api";
 
 type ResourceKey = "lumber" | "clay" | "iron" | "crop";
@@ -75,13 +82,12 @@ function OffersTable({
   onAction: (offer: MarketplaceOffer) => Promise<void>;
 }) {
   return (
-    <div class="border rounded-md p-4 bg-white space-y-3">
-      <div class="text-sm text-gray-500 uppercase">{title}</div>
+    <Panel class="space-y-3">
+      <SectionHeader title={title} />
       {offers.length === 0 ? (
         <p class="text-sm text-gray-500">No offers available.</p>
       ) : (
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <DataTable>
             <thead class="text-left text-xs uppercase text-gray-500 border-b">
               <tr>
                 <th class="py-2 pr-4">Village</th>
@@ -110,31 +116,26 @@ function OffersTable({
                         Boolean(enforceTradeRules) &&
                         !isValidMarketplaceOfferShape(offer.offerResources, offer.seekResources);
                       return (
-                        <button
+                        <Button
                           type="button"
-                          class={
-                            invalidTrade
-                              ? "bg-gray-400 text-white text-xs font-semibold px-3 py-1.5 rounded cursor-not-allowed"
-                              : actionLabel === "Cancel"
-                              ? "bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1.5 rounded"
-                              : "bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded"
-                          }
+                          variant={actionLabel === "Cancel" ? "danger" : "primary"}
+                          size="sm"
+                          class={invalidTrade ? "cursor-not-allowed border-stone-400 bg-stone-400 hover:bg-stone-400" : ""}
                           disabled={invalidTrade}
                           title={invalidTrade ? "Invalid offer rules (single-resource and ratio constraints)." : undefined}
                           onClick={() => onAction(offer)}
                         >
                           {actionLabel}
-                        </button>
+                        </Button>
                       );
                     })()}
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </DataTable>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -170,6 +171,10 @@ export function MarketplaceBuilding({
   const [sendPreviewStartedAtMs, setSendPreviewStartedAtMs] = useState<number | null>(null);
   const [sendPreviewTravelSeconds, setSendPreviewTravelSeconds] = useState(0);
   const [sendPreviewTick, setSendPreviewTick] = useState(0);
+  const sendResources = useSendResourcesMutation();
+  const createOffer = useCreateMarketplaceOfferMutation();
+  const cancelOffer = useCancelMarketplaceOfferMutation();
+  const acceptOffer = useAcceptMarketplaceOfferMutation();
 
   useEffect(() => {
     if (!sendPreview) return;
@@ -181,9 +186,9 @@ export function MarketplaceBuilding({
 
   return (
     <>
-      <div class="border rounded-md p-4 bg-white space-y-4">
+      <Panel class="space-y-4">
         <div>
-          <div class="text-sm text-gray-500 uppercase">Send resources</div>
+          <SectionHeader title="Send resources" class="mb-1" />
           <p class="text-sm text-gray-500">
             Available merchants: {detail.marketplace.availableMerchants}/{detail.marketplace.totalMerchants}
           </p>
@@ -227,9 +232,10 @@ export function MarketplaceBuilding({
               />
             </label>
           ))}
-          <button
+          <Button
             type="button"
-            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1.5 rounded"
+            variant="secondary"
+            size="sm"
             disabled={previewingSend || sending}
             onClick={async () => {
               setError(null);
@@ -247,10 +253,10 @@ export function MarketplaceBuilding({
             }}
           >
             {previewingSend ? "Calculating..." : "Preview"}
-          </button>
+          </Button>
         </div>
         {sendPreview ? (
-          <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+          <div class="rounded-md border border-green-200 bg-green-50 p-3 space-y-2 text-sm">
             {(() => {
               void sendPreviewTick;
               void sendPreviewStartedAtMs;
@@ -264,17 +270,16 @@ export function MarketplaceBuilding({
             <div>
               Arrives in: <span class="font-semibold">{formatDurationHms(sendPreviewTravelSeconds)}</span>
             </div>
-            <button
+            <Button
               type="button"
-              class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded"
+              size="sm"
               disabled={sending}
               onClick={async () => {
                 setError(null);
                 try {
                   setSending(true);
-                  await api.sendResources({ slotId: detail.slotId, ...send });
+                  await sendResources.mutateAsync({ slotId: detail.slotId, ...send });
                   setSendPreview(null);
-                  await onMutate();
                 } catch (err) {
                   setError((err as Error).message);
                 } finally {
@@ -283,14 +288,14 @@ export function MarketplaceBuilding({
               }}
             >
               {sending ? "Sending..." : "Confirm and send"}
-            </button>
+            </Button>
           </div>
         ) : null}
-      </div>
+      </Panel>
 
-      <div class="border rounded-md p-4 bg-white space-y-4">
+      <Panel class="space-y-4">
         <div>
-          <div class="text-sm text-gray-500 uppercase">Create offer</div>
+          <SectionHeader title="Create offer" class="mb-1" />
           <p class="text-sm text-gray-500">
             One resource type per side. Offer and seek resources must be different. Ratio must stay
             between 1:3 and 3:1.
@@ -354,9 +359,9 @@ export function MarketplaceBuilding({
               class="w-24 border rounded px-2 py-1.5 text-gray-700"
             />
           </label>
-          <button
+          <Button
             type="button"
-            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded"
+            size="sm"
             onClick={async () => {
               setError(null);
               try {
@@ -372,7 +377,7 @@ export function MarketplaceBuilding({
                   throw new Error("Offer ratio must stay between 1:3 and 3:1.");
                 }
 
-                await api.createMarketplaceOffer({
+                await createOffer.mutateAsync({
                   slotId: detail.slotId,
                   offerLumber: offer.offerResource === "lumber" ? offer.offerAmount : 0,
                   offerClay: offer.offerResource === "clay" ? offer.offerAmount : 0,
@@ -383,33 +388,29 @@ export function MarketplaceBuilding({
                   seekIron: offer.seekResource === "iron" ? offer.seekAmount : 0,
                   seekCrop: offer.seekResource === "crop" ? offer.seekAmount : 0,
                 });
-                await onMutate();
               } catch (err) {
                 setError((err as Error).message);
               }
             }}
           >
             Create offer
-          </button>
+          </Button>
         </div>
-      </div>
+      </Panel>
 
       <OffersTable title="Your offers" offers={detail.marketplace.ownOffers} actionLabel="Cancel" onAction={async (offer) => {
-        await api.cancelMarketplaceOffer({ offerId: offer.offerId, slotId: detail.slotId });
-        await onMutate();
+        await cancelOffer.mutateAsync({ offerId: offer.offerId, slotId: detail.slotId });
       }} />
       <OffersTable title="Global marketplace" offers={detail.marketplace.globalOffers} actionLabel="Accept" enforceTradeRules onAction={async (offer) => {
-        await api.acceptMarketplaceOffer({ offerId: offer.offerId, slotId: detail.slotId });
-        await onMutate();
+        await acceptOffer.mutateAsync({ offerId: offer.offerId, slotId: detail.slotId });
       }} />
 
-      <div class="border rounded-md p-4 bg-white space-y-3">
-        <div class="text-sm text-gray-500 uppercase">Merchant movements</div>
+      <Panel class="space-y-3">
+        <SectionHeader title="Merchant movements" />
         {detail.marketplace.merchantMovements.length === 0 ? (
           <p class="text-sm text-gray-500">No merchant movements to display.</p>
         ) : (
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+          <DataTable>
               <thead class="text-left text-xs uppercase text-gray-500 border-b">
                 <tr>
                   <th class="py-2 pr-4">Direction</th>
@@ -447,13 +448,11 @@ export function MarketplaceBuilding({
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+          </DataTable>
         )}
-      </div>
+      </Panel>
 
       {error ? <div class="text-sm text-red-600">{error}</div> : null}
     </>
   );
 }
-

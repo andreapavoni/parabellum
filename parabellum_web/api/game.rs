@@ -2,7 +2,7 @@
 //!
 //! These handlers expose canonical API data used by the SPA:
 //! - current user context (`/me/*`)
-//! - village resource/overview snapshots (`/villages/{id}/*`)
+//! - game hydration (`/game/context`)
 //! - map, reports, stats and player profile reads
 
 use axum::{
@@ -18,18 +18,15 @@ use uuid::Uuid;
 
 use parabellum_app::read_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
-use parabellum_game::models::village::Village;
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::map::ValleyTopology;
 
 use crate::{
     api::{
         dto::{
-            LeaderboardEntryDto, MeContextResponse, PaginationDto, PlayerProfileResponse,
+            GameContextResponse, LeaderboardEntryDto, PaginationDto, PlayerProfileResponse,
             PlayerVillageDto, ReportDetailPayloadResponse, ReportDetailResponse, ReportListItemDto,
-            ReportsResponse, StatsResponse, VillageOverviewResponse, VillageResourcesResponse,
-            player_summary, session_user, village_list, village_overview_response,
-            village_resources_response, village_summary,
+            ReportsResponse, StatsResponse, game_context_response, session_user,
         },
         errors::ApiError,
     },
@@ -249,67 +246,23 @@ pub async fn me_session(
     }))
 }
 
-/// Returns authenticated user context for SPA shell state.
+/// Returns the canonical SPA game hydration payload.
 #[utoipa::path(
     get,
-    path = "/me/context",
-    responses((status = 200, body = MeContextResponse))
+    path = "/game/context",
+    responses((status = 200, body = GameContextResponse))
 )]
-pub async fn me_context(
+pub async fn game_context(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-    Ok(Json(MeContextResponse {
-        server_time: Utc::now().timestamp(),
-        world_size: state.world_size,
-        server_speed: state.server_speed,
-        player: player_summary(&user),
-        current_village: village_summary(&user.village),
-        villages: village_list(&user),
-    }))
-}
-
-/// Returns village overview (building slots + queue) for owned village.
-#[utoipa::path(
-    get,
-    path = "/villages/{id}/overview",
-    params(
-        ("id" = u32, Path, description = "Village id")
-    ),
-    responses((status = 200, body = VillageOverviewResponse))
-)]
-pub async fn village_overview(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(village_id): Path<u32>,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = authenticated_user(&state, &headers).await?;
-    let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = state
+    let village = user.village.clone();
+    let unread_reports_count = state
         .game_app
-        .get_village_queues(village.id)
+        .count_unread_reports_for_player(user.player.id)
         .await
-        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
-    Ok(Json(village_overview_response(&village, &queues)))
-}
-
-/// Returns village resource fields and queue for owned village.
-#[utoipa::path(
-    get,
-    path = "/villages/{id}/resources",
-    params(
-        ("id" = u32, Path, description = "Village id")
-    ),
-    responses((status = 200, body = VillageResourcesResponse))
-)]
-pub async fn village_resources(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(village_id): Path<u32>,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = authenticated_user(&state, &headers).await?;
-    let village = owned_village_by_id(&state, &user, village_id).await?;
+        .map_err(|err| map_application_error("unable_to_count_unread_reports", err))?;
     let army_state = state
         .game_app
         .get_village_army_state_view(village.id)
@@ -325,7 +278,12 @@ pub async fn village_resources(
         .get_village_troop_movements(village.id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village_troop_movements", e))?;
-    Ok(Json(village_resources_response(
+    Ok(Json(game_context_response(
+        Utc::now().timestamp(),
+        state.world_size,
+        state.server_speed,
+        unread_reports_count,
+        &user,
         &village,
         &queues,
         &army_state,
@@ -797,32 +755,4 @@ fn map_report_summary(report: parabellum_app::villages::models::ReportModel) -> 
         created_at: report.created_at.timestamp(),
         is_read: report.read_at.is_some(),
     }
-}
-
-async fn owned_village_by_id(
-    state: &AppState,
-    user: &CurrentUser,
-    village_id: u32,
-) -> Result<Village, ApiError> {
-    if !user
-        .villages
-        .iter()
-        .any(|v| v.id == village_id && v.player_id == user.player.id)
-    {
-        return Err(ApiError::not_found(
-            "Village not available for the current player",
-        ));
-    }
-
-    let village = state
-        .game_app
-        .get_village_model(village_id)
-        .await
-        .map_err(|e| map_application_error("unable_to_load_village", e))?;
-    if village.player_id != user.player.id
-        && let Some(cached) = user.villages.iter().find(|v| v.id == village_id)
-    {
-        return Ok(cached.clone());
-    }
-    Ok(village.into())
 }

@@ -8,6 +8,7 @@ pub struct VillageArmyContext {
     pub home: Option<Army>,
     pub stationed: Vec<Army>,
     pub deployed: Vec<Army>,
+    pub moving: Vec<Army>,
 }
 
 /// Hydrates a domain `Village` from the village read model plus explicit army

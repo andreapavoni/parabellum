@@ -1,18 +1,16 @@
 import type {
   BuildingPageResponse,
+  GameContextResponse,
   MapFieldDetailResponse,
   MovementPreviewResponse,
   SendResourcesPreviewResponse,
   MapRegionResponse,
-  MeContextResponse,
   PlayerProfileResponse,
   ReportDetailResponse,
   ReportsResponse,
   SessionResponse,
   StatsResponse,
   TokenAuthResponse,
-  VillageOverviewResponse,
-  VillageResourcesResponse,
 } from "@/types/api";
 
 type RawMapTile = {
@@ -215,9 +213,7 @@ export const api = {
     );
     clearTokens();
   },
-  meContext: () => request<MeContextResponse>("/me/context"),
-  villageOverview: (villageId: number) =>
-    request<VillageOverviewResponse>(`/villages/${villageId}/overview`),
+  gameContext: () => request<GameContextResponse>("/game/context"),
   building: (slotId: number) => request<BuildingPageResponse>(`/buildings/${slotId}`),
   switchVillage: (payload: { villageId: number }) =>
     request<{ villageId: number; accessToken?: string; expiresIn?: number }>("/me/village/current", {
@@ -227,8 +223,6 @@ export const api = {
       if (res.accessToken) updateAccessToken(res.accessToken);
       return res;
     }),
-  villageResources: (villageId: number) =>
-    request<VillageResourcesResponse>(`/villages/${villageId}/resources`),
   stats: (page = 1) => request<StatsResponse>(`/stats?page=${page}`),
   player: (playerId: string) => request<PlayerProfileResponse>(`/players/${playerId}`),
   reports: (page = 1, perPage = 25) =>

@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.17",
+    "@tanstack/preact-query": "^5.100.14",
+    "lucide-preact": "^1.17.0",
     "preact": "^10.26.9",
     "tailwindcss": "^4.1.17"
   }

@@ -1,14 +1,22 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import type { VillageResourcesResponse } from "@/types/api";
-import { CapitalBadge } from "@/components/CapitalBadge";
+import { useRef } from "preact/hooks";
+import type {
+  BuildingQueueItem,
+  CurrentTroop,
+  ResourceSlot,
+  TroopMovementSummary,
+  VillageListItem,
+  VillageSummary,
+} from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { ResourceFieldsMap } from "@/components/ResourceFieldsMap";
 import { ResourceSprite, type ResourceSpriteKind } from "@/components/ResourceSprite";
 import { UnitSpriteByName } from "@/components/UnitSprite";
 import { Link } from "@/components/Link";
-import { VillageRenameInline } from "@/components/VillageRenameInline";
+import { VillageHeading, VillageSelector } from "@/components/VillageHeader";
+import { Panel, SectionHeader } from "@/components/ui";
 import { unitLabel } from "@/lib/labels";
 import { clockSkewMsFromServerTime, formatDurationHms, secondsUntilIso } from "@/lib/time";
+import { useCountdown } from "@/live/useCountdown";
 
 const CANONICAL_UNIT_ORDER: string[] = [
   "Legionnaire", "Praetorian", "Imperian", "EquitesLegati", "EquitesImperatoris", "EquitesCaesaris", "BatteringRam", "FireCatapult", "Senator", "Settler",
@@ -26,10 +34,20 @@ export function ResourcesPage({
   data,
   onQueueElapsed,
   onVillageRenamed,
+  onSwitchVillage,
 }: {
-  data: VillageResourcesResponse;
+  data: {
+    serverTime: number;
+    village: VillageSummary;
+    resourceSlots: ResourceSlot[];
+    buildingQueue: BuildingQueueItem[];
+    currentTroops: CurrentTroop[];
+    troopMovementSummary: TroopMovementSummary;
+    villages: VillageListItem[];
+  };
   onQueueElapsed?: () => void;
   onVillageRenamed?: () => Promise<void> | void;
+  onSwitchVillage: (villageId: number) => void;
 }) {
   const production = data.village.productionPerHour;
   const sortedCurrentTroops = [...data.currentTroops].sort((a, b) => {
@@ -41,28 +59,46 @@ export function ResourcesPage({
   const clockSkewMs = clockSkewMsFromServerTime(data.serverTime);
   const movementRows = [
     {
-      label: "incoming attacks/raids",
-      count: data.troopMovementSummary.incomingAttacksRaids,
-      nextAt: data.troopMovementSummary.incomingAttacksRaidsNextAt,
+      label: "incoming attacks",
+      count: data.troopMovementSummary.incomingAttacks,
+      nextAt: data.troopMovementSummary.incomingAttacksNextAt,
       href: "/app/build/39#incoming",
+      tone: "danger" as const,
+    },
+    {
+      label: "incoming raids",
+      count: data.troopMovementSummary.incomingRaids,
+      nextAt: data.troopMovementSummary.incomingRaidsNextAt,
+      href: "/app/build/39#incoming",
+      tone: "warning" as const,
     },
     {
       label: "incoming returns/reinforcements",
       count: data.troopMovementSummary.incomingReturnsReinforcements,
       nextAt: data.troopMovementSummary.incomingReturnsReinforcementsNextAt,
       href: "/app/build/39#incoming",
+      tone: "success" as const,
     },
     {
-      label: "outgoing attacks/raids",
-      count: data.troopMovementSummary.outgoingAttacksRaids,
-      nextAt: data.troopMovementSummary.outgoingAttacksRaidsNextAt,
+      label: "outgoing attacks",
+      count: data.troopMovementSummary.outgoingAttacks,
+      nextAt: data.troopMovementSummary.outgoingAttacksNextAt,
       href: "/app/build/39#outgoing",
+      tone: "danger" as const,
+    },
+    {
+      label: "outgoing raids",
+      count: data.troopMovementSummary.outgoingRaids,
+      nextAt: data.troopMovementSummary.outgoingRaidsNextAt,
+      href: "/app/build/39#outgoing",
+      tone: "warning" as const,
     },
     {
       label: "outgoing reinforcements",
       count: data.troopMovementSummary.outgoingReinforcements,
       nextAt: data.troopMovementSummary.outgoingReinforcementsNextAt,
       href: "/app/build/39#outgoing",
+      tone: "info" as const,
     },
   ].filter((row) => row.count > 0);
   const lastMovementRefreshAtRef = useRef(0);
@@ -75,83 +111,66 @@ export function ResourcesPage({
   };
 
   return (
-    <div class="mx-auto mt-4 md:mt-6 w-full max-w-4xl px-2 md:px-3 flex flex-col md:flex-row items-start gap-5 pb-12">
-      <div class="flex flex-col items-start w-full md:max-w-[440px] md:flex-none">
-        <div class="mb-4 flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-left">
-          <h1 class="text-xl font-bold">
-            {data.village.name} ({data.village.x}|{data.village.y})
-          </h1>
-          {data.village.isCapital ? <CapitalBadge /> : null}
-          <VillageRenameInline
-            villageId={data.village.id}
-            currentName={data.village.name}
-            onRenamed={onVillageRenamed}
-            label="rename"
-            className="contents"
-            linkClassName="p-0 text-xs text-green-700 underline hover:text-green-800 bg-transparent border-0"
-          />
+    <div class="mx-auto mt-3 md:mt-4 w-full max-w-5xl px-2 md:px-3 pb-10">
+      <VillageHeading village={data.village} onVillageRenamed={onVillageRenamed} />
+      <div class="mt-3 flex flex-col items-start gap-4 md:flex-row">
+        <div class="flex flex-col items-start w-full md:max-w-[440px] md:flex-none">
+          <ResourceFieldsMap slots={data.resourceSlots} />
+          <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
         </div>
-        <div class="w-full mb-3">
-          <span class="text-xs text-gray-600">Loyalty: </span>
-          <span
-            class={
-              data.village.loyalty < 100
-                ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
-                : "text-xs font-semibold text-gray-800"
-            }
-          >
-            {data.village.loyalty}%
-          </span>
-        </div>
-        <ResourceFieldsMap slots={data.resourceSlots} />
-        <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
-      </div>
-      <div class="w-full md:w-52 md:shrink-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-200 md:border-none">
-        <h3 class="font-bold mb-3 text-sm">Production</h3>
-        <div class="text-xs space-y-2">
-          <ProductionRow kind="lumber" value={production.lumber} />
-          <ProductionRow kind="clay" value={production.clay} />
-          <ProductionRow kind="iron" value={production.iron} />
-          <ProductionRow kind="crop" value={production.crop} />
-        </div>
-        <h3 class="font-bold mt-6 mb-3 text-sm">Current Troops</h3>
-        {sortedCurrentTroops.length === 0 ? (
-          <div class="text-xs text-gray-500 border-b border-gray-100 pb-2">No troops stationed.</div>
-        ) : (
-          <div class="text-xs space-y-1.5">
-            {sortedCurrentTroops.map((troop) => (
-              <Link
-                to="/app/build/39"
-                class="flex justify-between border-b border-gray-100 pb-1.5 hover:underline"
-                key={troop.unitName}
-              >
-                <span class="inline-flex items-center gap-2">
-                  <UnitSpriteByName unitName={troop.unitName} label={unitLabel(troop.unitName)} />
-                  <span>{unitLabel(troop.unitName)}</span>
-                </span>
-                <span class="font-bold text-gray-900">{troop.count}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-        {movementRows.length > 0 ? (
-          <>
-            <h3 class="font-bold mt-6 mb-3 text-sm">Troop Movements</h3>
+        <Panel class="w-full md:w-56 md:shrink-0 space-y-5">
+          <VillageSelector villages={data.villages} onSwitchVillage={onSwitchVillage} />
+          <div>
+            <SectionHeader title="Production" />
             <div class="text-xs space-y-2">
-              {movementRows.map((row) => (
-                <MovementRow
-                  key={row.label}
-                  label={row.label}
-                  count={row.count}
-                  nextAt={row.nextAt}
-                  href={row.href}
-                  onElapsed={onMovementElapsed}
-                  clockSkewMs={clockSkewMs}
-                />
-              ))}
+              <ProductionRow kind="lumber" value={production.lumber} />
+              <ProductionRow kind="clay" value={production.clay} />
+              <ProductionRow kind="iron" value={production.iron} />
+              <ProductionRow kind="crop" value={production.crop} />
             </div>
-          </>
-        ) : null}
+          </div>
+          <div>
+            <SectionHeader title="Current Troops" />
+            {sortedCurrentTroops.length === 0 ? (
+              <div class="text-xs text-stone-500 border-b border-stone-100 pb-2">No troops stationed.</div>
+            ) : (
+              <div class="text-xs space-y-1.5">
+                {sortedCurrentTroops.map((troop) => (
+                  <Link
+                    to="/app/build/39"
+                    class="flex justify-between border-b border-stone-100 pb-1.5 hover:underline"
+                    key={troop.unitName}
+                  >
+                    <span class="inline-flex items-center gap-2">
+                      <UnitSpriteByName unitName={troop.unitName} label={unitLabel(troop.unitName)} />
+                      <span>{unitLabel(troop.unitName)}</span>
+                    </span>
+                    <span class="font-bold text-gray-900">{troop.count}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+          {movementRows.length > 0 ? (
+            <div>
+              <SectionHeader title="Troop Movements" />
+              <div class="text-xs space-y-2">
+                {movementRows.map((row) => (
+                  <MovementRow
+                    key={row.label}
+                    label={row.label}
+                    count={row.count}
+                    nextAt={row.nextAt}
+                    href={row.href}
+                    tone={row.tone}
+                    onElapsed={onMovementElapsed}
+                    clockSkewMs={clockSkewMs}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Panel>
       </div>
     </div>
   );
@@ -165,11 +184,11 @@ function ProductionRow({
   value: number;
 }) {
   return (
-    <div class="flex justify-between border-b border-gray-100 pb-1.5">
+    <div class="flex justify-between border-b border-stone-100 pb-1.5">
       <span class="inline-flex items-center">
         <ResourceSprite kind={kind} size={22} />
       </span>
-      <span class="font-bold text-gray-900">{value}/hour</span>
+      <span class="font-bold text-stone-900">{value}/hour</span>
     </div>
   );
 }
@@ -179,6 +198,7 @@ function MovementRow({
   count,
   href,
   nextAt,
+  tone,
   onElapsed,
   clockSkewMs,
 }: {
@@ -186,14 +206,24 @@ function MovementRow({
   count: number;
   href: string;
   nextAt?: string;
+  tone: "danger" | "warning" | "success" | "info";
   onElapsed?: () => void;
   clockSkewMs: number;
 }) {
+  const toneClasses = {
+    danger: "border-red-200 bg-red-50 text-red-800",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    success: "border-green-200 bg-green-50 text-green-800",
+    info: "border-blue-200 bg-blue-50 text-blue-800",
+  }[tone];
   return (
-    <div class="border-b border-gray-100 pb-2">
-      <Link to={href} class="flex items-center justify-between gap-2 hover:underline">
-        <span class="text-gray-800">
-          <span class="font-semibold">{count}</span> {label}
+    <div class="border-b border-stone-100 pb-1.5">
+      <Link
+        to={href}
+        class={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 font-semibold hover:underline ${toneClasses}`}
+      >
+        <span title={label} aria-label={label}>
+          {count}
         </span>
         {count > 0 && nextAt ? (
           <MovementCountdown nextAt={nextAt} onElapsed={onElapsed} clockSkewMs={clockSkewMs} />
@@ -212,61 +242,7 @@ function MovementCountdown({
   onElapsed?: () => void;
   clockSkewMs: number;
 }) {
-  const ZERO_RETRY_MAX = 5;
-  const ZERO_RETRY_DELAY_MS = 1200;
-  const [remaining, setRemaining] = useState(secondsUntilIso(nextAt, { clockSkewMs }));
-  const startedFromPositiveRef = useRef(secondsUntilIso(nextAt, { clockSkewMs }) > 0);
-  const notifiedRef = useRef(false);
-  const zeroRetryCountRef = useRef(0);
-
-  useEffect(() => {
-    const secs = secondsUntilIso(nextAt, { clockSkewMs });
-    setRemaining(secs);
-    startedFromPositiveRef.current = secs > 0;
-    notifiedRef.current = false;
-    if (secs > 0) {
-      zeroRetryCountRef.current = 0;
-    }
-  }, [nextAt, clockSkewMs]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemaining((value) => Math.max(0, value - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (
-      !onElapsed ||
-      notifiedRef.current ||
-      remaining > 0 ||
-      !startedFromPositiveRef.current
-    ) {
-      return;
-    }
-    notifiedRef.current = true;
-    onElapsed();
-  }, [remaining, onElapsed]);
-
-  useEffect(() => {
-    if (
-      !onElapsed ||
-      remaining > 0 ||
-      startedFromPositiveRef.current ||
-      zeroRetryCountRef.current >= ZERO_RETRY_MAX
-    ) {
-      return;
-    }
-
-    const retryTimer = window.setTimeout(() => {
-      zeroRetryCountRef.current += 1;
-      onElapsed();
-    }, ZERO_RETRY_DELAY_MS);
-
-    return () => window.clearTimeout(retryTimer);
-  }, [remaining, onElapsed]);
-
+  const remaining = useCountdown(secondsUntilIso(nextAt, { clockSkewMs }), onElapsed);
   const urgencyClass = remaining <= 60 ? "text-amber-700" : "text-gray-500";
   return (
     <span class={`font-mono text-[11px] ${urgencyClass}`}>

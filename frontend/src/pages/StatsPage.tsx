@@ -1,5 +1,6 @@
 import type { StatsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
+import { DataTable } from "@/components/ui";
 import { tribeLabel } from "@/lib/labels";
 
 export function StatsPage({ data }: { data: StatsResponse }) {
@@ -12,8 +13,7 @@ export function StatsPage({ data }: { data: StatsResponse }) {
         <h1 class="text-2xl mt-3 font-semibold text-gray-800">Leaderboard</h1>
         <div class="text-sm text-gray-600">Total players: {data.pagination.totalPlayers}</div>
       </div>
-      <div class="overflow-hidden border rounded-md bg-white shadow-sm">
-        <table class="min-w-full text-sm">
+      <DataTable>
           <thead class="bg-gray-100 text-left text-gray-600 uppercase text-xs tracking-wide">
             <tr>
               <th class="px-4 py-3 w-16">#</th>
@@ -38,8 +38,7 @@ export function StatsPage({ data }: { data: StatsResponse }) {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+      </DataTable>
       <div class="flex items-center justify-between text-sm text-gray-600">
         <span>
           Page {data.pagination.page} / {data.pagination.totalPages}

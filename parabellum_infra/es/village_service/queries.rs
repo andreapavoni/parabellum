@@ -19,8 +19,8 @@ use parabellum_app::villages::models::{
     ReportModel, ScheduledActionStatus, ScheduledActionType, VillageModel,
 };
 use parabellum_app::villages::queries::{
-    GetMarketplaceOfferById, GetOpenMarketplaceOffers, GetReportForPlayer, ListReportsForPlayer,
-    ScheduledActionStatusCounts,
+    CountUnreadReportsForPlayer, GetMarketplaceOfferById, GetOpenMarketplaceOffers,
+    GetReportForPlayer, ListReportsForPlayer, ScheduledActionStatusCounts,
 };
 use parabellum_app::villages::repositories::{
     ArmyRepository, HeroRepository, MarketplaceRepository, ReportRepository,
@@ -491,6 +491,20 @@ impl VillageEsService {
                 repository: Arc::new(PostgresReportRepository::new(self.pool.clone()))
                     as Arc<dyn ReportRepository>,
                 report_id,
+                player_id,
+            })
+            .await
+    }
+
+    pub async fn count_unread_reports_for_player(
+        &self,
+        player_id: uuid::Uuid,
+    ) -> Result<i64, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        runtime
+            .query(&CountUnreadReportsForPlayer {
+                repository: Arc::new(PostgresReportRepository::new(self.pool.clone()))
+                    as Arc<dyn ReportRepository>,
                 player_id,
             })
             .await

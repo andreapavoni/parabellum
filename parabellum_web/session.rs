@@ -1,6 +1,7 @@
 use axum::response::Redirect;
 use uuid::Uuid;
 
+use parabellum_app::villages::models::VillageModel;
 use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player as PlayerType, User as UserType},
@@ -101,5 +102,20 @@ async fn list_player_villages(
     player_id: Uuid,
 ) -> Result<Vec<Village>, ApplicationError> {
     let models = state.game_app.list_villages_by_player_id(player_id).await?;
-    models.into_iter().map(|model| Ok(model.into())).collect()
+    models.into_iter().map(village_from_model).collect()
+}
+
+fn village_from_model(model: VillageModel) -> Result<Village, ApplicationError> {
+    let production = model.production.clone();
+    let population = model.population;
+    let culture_points_production = model.culture_points_production;
+    let total_merchants = model.total_merchants;
+    let busy_merchants = model.busy_merchants;
+    let mut village: Village = model.into();
+    village.production = production;
+    village.population = population;
+    village.culture_points_production = culture_points_production;
+    village.total_merchants = total_merchants;
+    village.busy_merchants = busy_merchants.min(total_merchants);
+    Ok(village)
 }

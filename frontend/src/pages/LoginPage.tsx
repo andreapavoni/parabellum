@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { Button, Panel } from "@/components/ui";
 
 export function LoginPage({
   error,
@@ -13,7 +14,7 @@ export function LoginPage({
 
   return (
     <div class="mx-auto max-w-md px-4 py-10">
-      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <Panel class="p-6">
         <h1 class="text-2xl font-semibold text-gray-800">Login</h1>
         <form
           class="mt-4 space-y-4"
@@ -47,11 +48,11 @@ export function LoginPage({
             />
           </label>
           {error ? <div class="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-          <button disabled={pending} class="w-full rounded bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-60">
+          <Button type="submit" disabled={pending} class="w-full">
             {pending ? "Signing in..." : "Sign in"}
-          </button>
+          </Button>
         </form>
-      </div>
+      </Panel>
     </div>
   );
 }

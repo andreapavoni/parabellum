@@ -544,6 +544,17 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
 
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_returning = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_returning.production.upkeep,
+            source_returning.population + 2,
+            "owner village should pay crop while recalled reinforcements return"
+        );
+        let target_after_recall = service.get_village(target_village_id).await.unwrap();
+        assert_eq!(
+            target_after_recall.production.upkeep, target_after_recall.population,
+            "stationed village should stop paying crop after recall"
+        );
         let source_movements = service
             .get_village_troop_movements(source_village_id)
             .await
@@ -558,6 +569,12 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
         assert_eq!(home_units(&pool, source_village_id, 0).await, 2);
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_home = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_home.production.upkeep,
+            source_home.population + 2,
+            "owner village should pay crop after recalled reinforcements are home"
+        );
     })
     .await;
 }
@@ -662,6 +679,17 @@ async fn village_es_service_release_reinforcements_full_return_clears_stationed_
 
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_returning = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_returning.production.upkeep,
+            source_returning.population + 2,
+            "owner village should pay crop while released reinforcements return"
+        );
+        let target_after_release = service.get_village(target_village_id).await.unwrap();
+        assert_eq!(
+            target_after_release.production.upkeep, target_after_release.population,
+            "stationed village should stop paying crop after release"
+        );
 
         service
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(30), 10)
@@ -671,6 +699,12 @@ async fn village_es_service_release_reinforcements_full_return_clears_stationed_
         assert_eq!(home_units(&pool, source_village_id, 0).await, 2);
         assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_home = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_home.production.upkeep,
+            source_home.population + 2,
+            "owner village should pay crop after released reinforcements are home"
+        );
     })
     .await;
 }

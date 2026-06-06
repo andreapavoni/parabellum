@@ -52,8 +52,7 @@ All return:
 
 ## Villages / Buildings / Actions
 
-- `GET /villages/{id}/overview`
-- `GET /villages/{id}/resources`
+- `GET /game/context`
 - `GET /buildings/{slot_id}`
 - `POST /buildings/add`
 - `POST /buildings/upgrade`

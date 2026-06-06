@@ -75,7 +75,9 @@ impl VillageProjector {
         self.armies
             .delete_in_tx(tx, *army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        self.refresh_village_derived_state_in_tx(tx, *source_village_id)
+            .await
     }
 
     pub(super) async fn project_reinforcement_applied_to_village(
@@ -138,7 +140,8 @@ impl VillageProjector {
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
         }
-        Ok(())
+        self.refresh_village_derived_state_in_tx(tx, *target_village_id)
+            .await
     }
 
     pub(super) async fn project_reinforcements_recalled(
@@ -306,6 +309,7 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }
-        Ok(())
+        self.refresh_village_derived_state_in_tx(tx, stationed_village_id)
+            .await
     }
 }

@@ -229,6 +229,7 @@ impl VillageProjector {
             self.set_stored_resources_in_tx(tx, *source_village_id, next_resources)
                 .await?;
         }
-        Ok(())
+        self.refresh_village_derived_state_in_tx(tx, *source_village_id)
+            .await
     }
 }

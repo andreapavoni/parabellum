@@ -247,6 +247,41 @@ impl PostgresArmyRepository {
         rows.into_iter().map(Self::army_from_row).collect()
     }
 
+    pub async fn list_moving_armies_by_owner_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        home_village_id: u32,
+    ) -> Result<Vec<Army>, ApplicationError> {
+        let rows = sqlx::query(&format!(
+            "{} WHERE a.village_id = $1 AND a.state = 'moving'
+            ORDER BY a.updated_at DESC",
+            army_select_sql()
+        ))
+        .bind(home_village_id as i32)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        rows.into_iter().map(Self::army_from_row).collect()
+    }
+
+    pub async fn list_moving_armies_by_owner(
+        &self,
+        home_village_id: u32,
+    ) -> Result<Vec<Army>, ApplicationError> {
+        let rows = sqlx::query(&format!(
+            "{} WHERE a.village_id = $1 AND a.state = 'moving'
+            ORDER BY a.updated_at DESC",
+            army_select_sql()
+        ))
+        .bind(home_village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        rows.into_iter().map(Self::army_from_row).collect()
+    }
+
     async fn get_moving_by_army_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
         let row = sqlx::query(&format!(
             "{} WHERE a.army_id = $1 AND a.state = 'moving'",

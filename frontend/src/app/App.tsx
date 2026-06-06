@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useQueryClient } from "@tanstack/preact-query";
 import { api } from "@/lib/api";
 import { isProtectedRoute, navigate, parseRoute } from "@/lib/router";
-import type { SessionResponse, VillageSummary } from "@/types/api";
 import { Layout } from "@/components/Layout";
 import { Loading } from "@/components/Loading";
 import { HomePage } from "@/pages/HomePage";
@@ -15,21 +15,34 @@ import { ReportDetailPage, ReportsPage } from "@/pages/ReportsPage";
 import { MapPage } from "@/pages/MapPage";
 import { MapFieldPage } from "@/pages/MapFieldPage";
 import { BuildingPage } from "@/pages/BuildingPage";
-import { usePageData } from "@/hooks/usePageData";
-import { useAppStore } from "@/state/appStore";
-
-const emptySession: SessionResponse = {
-  authenticated: false,
-};
+import { useAuthSession } from "@/auth/useAuthSession";
+import {
+  useBuildingQuery,
+  useGameContextQuery,
+  useMapFieldQuery,
+  usePlayerQuery,
+  useReportQuery,
+  useReportsQuery,
+  useStatsQuery,
+} from "@/query/hooks";
+import { queryErrorMessage } from "@/query/options";
+import { queryKeys } from "@/query/keys";
 
 export function App() {
-  const { session, setSession, meContext, setMeContext, updateCurrentVillage, clearAuthState } =
-    useAppStore();
+  const {
+    session,
+    booting,
+    authError,
+    setAuthError,
+    setTokenSession,
+    refreshSession,
+    logout,
+  } = useAuthSession();
+  const queryClient = useQueryClient();
   const [route, setRoute] = useState(() => parseRoute(window.location));
-  const [booting, setBooting] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const queueRefreshInFlightRef = useRef(false);
+  const gameContextQuery = useGameContextQuery(session.authenticated && !booting);
+  const meContext = gameContextQuery.data ?? null;
 
   useEffect(() => {
     const onPopState = () => setRoute(parseRoute(window.location));
@@ -37,76 +50,32 @@ export function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => {
-    setRoute(parseRoute(window.location));
-  }, [reloadKey]);
-
-  async function refreshSession() {
-    if (!api.hasAccessToken() && api.hasRefreshToken()) {
-      try {
-        const next = await api.tokenRefresh();
-        const refreshed: SessionResponse = {
-          authenticated: true,
-          user: next.user,
-          currentVillageId: next.currentVillageId,
-        };
-        setSession(refreshed);
-        return refreshed;
-      } catch {
-        setSession(emptySession);
-        return emptySession;
-      }
+  async function invalidateVisibleGameState() {
+    const villageId = session.currentVillageId ?? meContext?.currentVillage.id;
+    const invalidations = [queryClient.invalidateQueries({ queryKey: queryKeys.gameContext })];
+    if (route.name === "building") {
+      invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.building(route.slotId) }));
     }
-
-    try {
-      const current = await api.tokenSession();
-      setSession(current);
-      return current;
-    } catch {
-      try {
-        const next = await api.tokenRefresh();
-        const refreshed: SessionResponse = {
-          authenticated: true,
-          user: next.user,
-          currentVillageId: next.currentVillageId,
-        };
-        setSession(refreshed);
-        return refreshed;
-      } catch {
-        setSession(emptySession);
-        return emptySession;
-      }
+    if (route.name === "mapField") {
+      invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.mapField(route.fieldId) }));
     }
-  }
-
-  async function refreshMeContext() {
-    const data = await api.meContext();
-    setMeContext(data);
-    return data;
-  }
-
-  useEffect(() => {
-    let alive = true;
-    setBooting(true);
-    refreshSession()
-      .then(async (current) => {
-        if (!alive) return;
-        if (current.authenticated) {
-          await refreshMeContext();
-        } else {
-          setMeContext(null);
-        }
-      })
-      .catch((error: Error) => {
-        if (alive) setAuthError(error.message);
-      })
-      .finally(() => {
-        if (alive) setBooting(false);
+    if (route.name === "reports") {
+      invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.reports(route.page, route.perPage) }));
+    }
+    if (route.name === "report") {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.report(route.reportId) }),
+        queryClient.invalidateQueries({ queryKey: ["reports"] }),
+      );
+    }
+    await Promise.all(invalidations);
+    if (session.authenticated) {
+      await queryClient.fetchQuery({
+        queryKey: queryKeys.gameContext,
+        queryFn: () => api.gameContext(),
       });
-    return () => {
-      alive = false;
-    };
-  }, [reloadKey]);
+    }
+  }
 
   useEffect(() => {
     if (booting) return;
@@ -122,12 +91,17 @@ export function App() {
     }
   }, [booting, route, session.authenticated]);
 
+  const switchVillage = useCallback(async (villageId: number) => {
+    await api.switchVillage({ villageId });
+    await refreshSession();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.gameContext }),
+      queryClient.invalidateQueries({ queryKey: ["building"] }),
+    ]);
+  }, [queryClient, refreshSession]);
+
   const page = useMemo(() => {
     const activeVillageId = session.currentVillageId ?? meContext?.currentVillage.id;
-
-    const syncVillageFromPage = (village: VillageSummary) => {
-      updateCurrentVillage(village);
-    };
 
     const refreshFromQueueElapsed = async () => {
       if (queueRefreshInFlightRef.current) {
@@ -135,57 +109,70 @@ export function App() {
       }
       queueRefreshInFlightRef.current = true;
       try {
-        await Promise.all([refreshSession(), refreshMeContext()]);
-        setReloadKey((value) => value + 1);
+        await invalidateVisibleGameState();
       } finally {
         queueRefreshInFlightRef.current = false;
       }
     };
 
     const runMutation = async () => {
-      await Promise.all([refreshSession(), refreshMeContext()]);
-      setReloadKey((value) => value + 1);
+      await invalidateVisibleGameState();
     };
 
     switch (route.name) {
       case "village":
-        if (!activeVillageId) return <Loading label="Loading village..." />;
+        if (!activeVillageId || !meContext) return <Loading label="Loading village..." />;
         return (
-          <ProtectedVillage
-            villageId={activeVillageId}
-            reloadKey={reloadKey}
-            onVillageLoaded={syncVillageFromPage}
+          <VillagePage
+            data={{
+              serverTime: meContext.serverTime,
+              village: meContext.currentVillage,
+              buildingSlots: meContext.buildingSlots,
+              buildingQueue: meContext.buildingQueue,
+              villages: meContext.villages,
+            }}
             onQueueElapsed={refreshFromQueueElapsed}
             onVillageRenamed={runMutation}
+            onSwitchVillage={(villageId) => {
+              void switchVillage(villageId);
+            }}
           />
         );
       case "resources":
-        if (!activeVillageId) return <Loading label="Loading resources..." />;
+        if (!activeVillageId || !meContext) return <Loading label="Loading resources..." />;
         return (
-          <ProtectedResources
-            villageId={activeVillageId}
-            reloadKey={reloadKey}
-            onVillageLoaded={syncVillageFromPage}
+          <ResourcesPage
+            data={{
+              serverTime: meContext.serverTime,
+              village: meContext.currentVillage,
+              resourceSlots: meContext.resourceSlots,
+              buildingQueue: meContext.buildingQueue,
+              currentTroops: meContext.currentTroops,
+              troopMovementSummary: meContext.troopMovementSummary,
+              villages: meContext.villages,
+            }}
             onQueueElapsed={refreshFromQueueElapsed}
             onVillageRenamed={runMutation}
+            onSwitchVillage={(villageId) => {
+              void switchVillage(villageId);
+            }}
           />
         );
       case "building":
         return (
           <ProtectedBuilding
             slotId={route.slotId}
-            reloadKey={reloadKey}
             onMutate={runMutation}
           />
         );
       case "stats":
-        return <ProtectedStats page={route.page} reloadKey={reloadKey} />;
+        return <ProtectedStats page={route.page} />;
       case "player":
-        return <ProtectedPlayer playerId={route.playerId} reloadKey={reloadKey} />;
+        return <ProtectedPlayer playerId={route.playerId} />;
       case "reports":
-        return <ProtectedReports page={route.page} perPage={route.perPage} reloadKey={reloadKey} />;
+        return <ProtectedReports page={route.page} perPage={route.perPage} />;
       case "report":
-        return <ProtectedReport reportId={route.reportId} reloadKey={reloadKey} />;
+        return <ProtectedReport reportId={route.reportId} />;
       case "map":
         return (
           <ProtectedMap
@@ -195,13 +182,13 @@ export function App() {
             homeVillageId={meContext?.currentVillage.id}
             homeX={meContext?.currentVillage.x}
             homeY={meContext?.currentVillage.y}
+            currentPlayerId={session.authenticated ? session.user?.playerId : undefined}
           />
         );
       case "mapField":
         return (
           <ProtectedMapField
             fieldId={route.fieldId}
-            reloadKey={reloadKey}
             onMutate={runMutation}
             currentPlayerId={session.authenticated ? session.user?.playerId : undefined}
           />
@@ -214,12 +201,8 @@ export function App() {
               setAuthError(null);
               try {
                 const next = await api.tokenLogin(payload);
-                setSession({
-                  authenticated: true,
-                  user: next.user,
-                  currentVillageId: next.currentVillageId,
-                });
-                await refreshMeContext();
+                setTokenSession(next);
+                await queryClient.invalidateQueries({ queryKey: queryKeys.gameContext });
                 navigate("/village", true);
               } catch (error) {
                 setAuthError((error as Error).message);
@@ -236,12 +219,8 @@ export function App() {
               setAuthError(null);
               try {
                 const next = await api.tokenRegister(payload);
-                setSession({
-                  authenticated: true,
-                  user: next.user,
-                  currentVillageId: next.currentVillageId,
-                });
-                await refreshMeContext();
+                setTokenSession(next);
+                await queryClient.invalidateQueries({ queryKey: queryKeys.gameContext });
                 navigate("/village", true);
               } catch (error) {
                 setAuthError((error as Error).message);
@@ -255,7 +234,19 @@ export function App() {
       default:
         return <div class="mx-auto max-w-4xl px-4 py-10 text-sm text-gray-500">Page not found.</div>;
     }
-  }, [route, meContext?.worldSize, meContext?.currentVillage.id, session.currentVillageId, authError, reloadKey]);
+  }, [
+    route,
+    meContext?.worldSize,
+    meContext?.currentVillage.id,
+    meContext?.currentVillage.x,
+    meContext?.currentVillage.y,
+    gameContextQuery.dataUpdatedAt,
+    session.authenticated,
+    session.currentVillageId,
+    session.user?.playerId,
+    authError,
+    switchVillage,
+  ]);
 
   if (booting) {
     return <Loading label="Booting application..." />;
@@ -275,112 +266,58 @@ export function App() {
             : route.name
       }
       onLogout={async () => {
-        await api.tokenLogout();
-        clearAuthState();
-        setReloadKey((value) => value + 1);
+        await logout();
         navigate("/login", true);
       }}
-      onSwitchVillage={async (villageId) => {
-        await api.switchVillage({ villageId });
-        await Promise.all([refreshSession(), refreshMeContext()]);
-        setReloadKey((value) => value + 1);
-      }}
+      onSwitchVillage={switchVillage}
     >
       {page}
     </Layout>
   );
 }
 
-function ProtectedVillage({
-  villageId,
-  reloadKey,
-  onVillageLoaded,
-  onQueueElapsed,
-  onVillageRenamed,
-}: {
-  villageId: number;
-  reloadKey: number;
-  onVillageLoaded?: (village: VillageSummary) => void;
-  onQueueElapsed?: () => void;
-  onVillageRenamed?: () => Promise<void> | void;
-}) {
-  const { data, error, loading } = usePageData(
-    () => api.villageOverview(villageId),
-    [villageId, reloadKey],
-  );
+function ProtectedStats({ page }: { page: number }) {
+  const query = useStatsQuery(page);
+  if (query.isPending) return <Loading label="Loading leaderboard..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load leaderboard.")} />;
+  }
+  return <StatsPage data={query.data} />;
+}
+
+function ProtectedPlayer({ playerId }: { playerId: string }) {
+  const query = usePlayerQuery(playerId);
+  if (query.isPending) return <Loading label="Loading player profile..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load player profile.")} />;
+  }
+  return <PlayerPage data={query.data} />;
+}
+
+function ProtectedReports({ page, perPage }: { page: number; perPage: number }) {
+  const query = useReportsQuery(page, perPage);
+  if (query.isPending) return <Loading label="Loading reports..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load reports.")} />;
+  }
+  return <ReportsPage data={query.data} />;
+}
+
+function ProtectedReport({ reportId }: { reportId: string }) {
+  const queryClient = useQueryClient();
+  const query = useReportQuery(reportId);
   useEffect(() => {
-    if (!data || !onVillageLoaded) return;
-    onVillageLoaded(data.village);
-  }, [data, onVillageLoaded]);
-  if (loading) return <Loading label="Loading village..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load village."} />;
-  return (
-    <VillagePage
-      data={data}
-      onQueueElapsed={onQueueElapsed}
-      onVillageRenamed={onVillageRenamed}
-    />
-  );
-}
-
-function ProtectedResources({
-  villageId,
-  reloadKey,
-  onVillageLoaded,
-  onQueueElapsed,
-  onVillageRenamed,
-}: {
-  villageId: number;
-  reloadKey: number;
-  onVillageLoaded?: (village: VillageSummary) => void;
-  onQueueElapsed?: () => void;
-  onVillageRenamed?: () => Promise<void> | void;
-}) {
-  const { data, error, loading } = usePageData(
-    () => api.villageResources(villageId),
-    [villageId, reloadKey],
-  );
-  useEffect(() => {
-    if (!data || !onVillageLoaded) return;
-    onVillageLoaded(data.village);
-  }, [data, onVillageLoaded]);
-  if (loading) return <Loading label="Loading resources..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load resources."} />;
-  return (
-    <ResourcesPage
-      data={data}
-      onQueueElapsed={onQueueElapsed}
-      onVillageRenamed={onVillageRenamed}
-    />
-  );
-}
-
-function ProtectedStats({ page, reloadKey }: { page: number; reloadKey: number }) {
-  const { data, error, loading } = usePageData(() => api.stats(page), [page, reloadKey]);
-  if (loading) return <Loading label="Loading leaderboard..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load leaderboard."} />;
-  return <StatsPage data={data} />;
-}
-
-function ProtectedPlayer({ playerId, reloadKey }: { playerId: string; reloadKey: number }) {
-  const { data, error, loading } = usePageData(() => api.player(playerId), [playerId, reloadKey]);
-  if (loading) return <Loading label="Loading player profile..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load player profile."} />;
-  return <PlayerPage data={data} />;
-}
-
-function ProtectedReports({ page, perPage, reloadKey }: { page: number; perPage: number; reloadKey: number }) {
-  const { data, error, loading } = usePageData(() => api.reports(page, perPage), [page, perPage, reloadKey]);
-  if (loading) return <Loading label="Loading reports..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load reports."} />;
-  return <ReportsPage data={data} />;
-}
-
-function ProtectedReport({ reportId, reloadKey }: { reportId: string; reloadKey: number }) {
-  const { data, error, loading } = usePageData(() => api.report(reportId), [reportId, reloadKey]);
-  if (loading) return <Loading label="Loading report..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load report."} />;
-  return <ReportDetailPage data={data} />;
+    if (!query.data) return;
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.gameContext }),
+      queryClient.invalidateQueries({ queryKey: ["reports"] }),
+    ]);
+  }, [query.data, queryClient]);
+  if (query.isPending) return <Loading label="Loading report..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load report.")} />;
+  }
+  return <ReportDetailPage data={query.data} />;
 }
 
 function ProtectedMap({
@@ -390,6 +327,7 @@ function ProtectedMap({
   homeVillageId,
   homeX,
   homeY,
+  currentPlayerId,
 }: {
   worldSize: number;
   centerX?: number;
@@ -397,6 +335,7 @@ function ProtectedMap({
   homeVillageId?: number;
   homeX?: number;
   homeY?: number;
+  currentPlayerId?: string;
 }) {
   return (
     <MapPage
@@ -406,40 +345,41 @@ function ProtectedMap({
       homeVillageId={homeVillageId}
       homeX={homeX}
       homeY={homeY}
+      currentPlayerId={currentPlayerId}
     />
   );
 }
 
 function ProtectedMapField({
   fieldId,
-  reloadKey,
   onMutate,
   currentPlayerId,
 }: {
   fieldId: number;
-  reloadKey: number;
   onMutate: () => Promise<void>;
   currentPlayerId?: string;
 }) {
-  const { data, error, loading } = usePageData(() => api.mapField(fieldId), [fieldId, reloadKey]);
-  if (loading) return <Loading label="Loading field..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load field."} />;
-  return <MapFieldPage data={data} onMutate={onMutate} currentPlayerId={currentPlayerId} />;
+  const query = useMapFieldQuery(fieldId);
+  if (query.isPending) return <Loading label="Loading field..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load field.")} />;
+  }
+  return <MapFieldPage data={query.data} onMutate={onMutate} currentPlayerId={currentPlayerId} />;
 }
 
 function ProtectedBuilding({
   slotId,
-  reloadKey,
   onMutate,
 }: {
   slotId: number;
-  reloadKey: number;
   onMutate: () => Promise<void>;
 }) {
-  const { data, error, loading } = usePageData(() => api.building(slotId), [slotId, reloadKey]);
-  if (loading) return <Loading label="Loading building..." />;
-  if (error || !data) return <ErrorState message={error ?? "Unable to load building."} />;
-  return <BuildingPage data={data} onMutate={onMutate} />;
+  const query = useBuildingQuery(slotId);
+  if (query.isPending) return <Loading label="Loading building..." />;
+  if (query.error || !query.data) {
+    return <ErrorState message={queryErrorMessage(query.error, "Unable to load building.")} />;
+  }
+  return <BuildingPage data={query.data} onMutate={onMutate} />;
 }
 
 function ErrorState({ message }: { message: string }) {

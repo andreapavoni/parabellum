@@ -5,7 +5,9 @@ import { CapitalBadge } from "@/components/CapitalBadge";
 import { Link } from "@/components/Link";
 import { VillageRenameInline } from "@/components/VillageRenameInline";
 import { ResourceSprite } from "@/components/ResourceSprite";
+import { Button, Panel } from "@/components/ui";
 import { secondsUntilIso } from "@/lib/time";
+import { useFoundVillageMutation } from "@/query/mutations";
 
 export function MapFieldPage({
   data,
@@ -20,6 +22,7 @@ export function MapFieldPage({
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const foundVillage = useFoundVillageMutation(data.fieldId);
   const canFoundHere = !data.villageId && data.tileType === "valley" && data.canPreviewFounding;
   const canRenameVillage =
     data.tileType === "village" &&
@@ -30,7 +33,7 @@ export function MapFieldPage({
 
   return (
     <div class="mx-auto w-full max-w-4xl px-4 py-6">
-      <div class="rounded border bg-white p-4 shadow-sm">
+      <Panel>
         <div class="flex items-center justify-between gap-4">
           <h1 class="text-2xl font-semibold text-gray-800">
             {data.tileType === "valley"
@@ -170,9 +173,10 @@ export function MapFieldPage({
 
           {canFoundHere ? (
             <div class="pt-1 space-y-2">
-              <button
+              <Button
                 type="button"
-                class="rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                variant="secondary"
+                size="sm"
                 disabled={founding || previewing}
                 onClick={async () => {
                   setError(null);
@@ -192,9 +196,9 @@ export function MapFieldPage({
                 }}
               >
                 {previewing ? "Calculating..." : "Preview founding"}
-              </button>
+              </Button>
               {preview ? (
-                <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+                <div class="rounded-md border border-green-200 bg-green-50 p-3 space-y-2 text-sm">
                   <div>
                     Arrives at: <span class="font-semibold">{new Date(preview.arrivesAt).toLocaleString()}</span>
                   </div>
@@ -204,19 +208,18 @@ export function MapFieldPage({
                   <div>
                     Detected movement: <span class="font-semibold">Found village</span>
                   </div>
-                  <button
+                  <Button
                     type="button"
-                    class="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    size="sm"
                     disabled={founding}
                     onClick={async () => {
                       setFounding(true);
                       setError(null);
                       try {
-                        await api.foundVillage({
+                        await foundVillage.mutateAsync({
                           targetX: data.x,
                           targetY: data.y,
                         });
-                        await onMutate();
                         window.location.assign(`/app/build/39?x=${data.x}&y=${data.y}`);
                       } catch (err) {
                         setError((err as Error).message);
@@ -226,14 +229,14 @@ export function MapFieldPage({
                     }}
                   >
                     {founding ? "Founding..." : "Confirm and found village"}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               {error ? <p class="text-xs text-red-600">{error}</p> : null}
             </div>
           ) : null}
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }

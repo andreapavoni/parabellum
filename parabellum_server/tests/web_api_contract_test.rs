@@ -86,7 +86,7 @@ async fn assert_unauthorized(response: reqwest::Response) {
 }
 
 #[tokio::test]
-async fn auth_login_happy_path_returns_tokens_and_me_context() -> Result<(), ApplicationError> {
+async fn auth_login_happy_path_returns_tokens_and_game_context() -> Result<(), ApplicationError> {
     let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
     let client = reqwest::Client::new();
 
@@ -105,18 +105,19 @@ async fn auth_login_happy_path_returns_tokens_and_me_context() -> Result<(), App
     assert!(!refresh_token.is_empty());
     assert_eq!(login_body["user"]["email"], seeded.email);
 
-    let me_response = client
-        .get(format!("{base_url}/api/v1/me/context"))
+    let context_response = client
+        .get(format!("{base_url}/api/v1/game/context"))
         .bearer_auth(access_token)
         .send()
         .await
         .unwrap();
-    assert_eq!(me_response.status(), StatusCode::OK);
-    let me_body: Value = serde_json::from_str(&me_response.text().await.unwrap()).unwrap();
-    assert_eq!(me_body["player"]["username"], seeded.username);
-    let current_village = me_body
+    assert_eq!(context_response.status(), StatusCode::OK);
+    let context_body: Value =
+        serde_json::from_str(&context_response.text().await.unwrap()).unwrap();
+    assert_eq!(context_body["player"]["username"], seeded.username);
+    let current_village = context_body
         .get("current_village")
-        .or_else(|| me_body.get("currentVillage"))
+        .or_else(|| context_body.get("currentVillage"))
         .unwrap();
     assert!(current_village["id"].is_number());
     Ok(())
@@ -253,30 +254,12 @@ async fn auth_logout_validation_error_for_missing_refresh_token() -> Result<(), 
 }
 
 #[tokio::test]
-async fn protected_village_overview_requires_bearer_token() -> Result<(), ApplicationError> {
+async fn protected_game_context_rejects_invalid_bearer_token() -> Result<(), ApplicationError> {
     let (_schema, base_url) = setup_web_app().await?;
     let client = setup_http_client(None, None).await;
 
     let response = client
-        .get(format!("{base_url}/api/v1/villages/1/overview"))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let text = response.text().await.unwrap();
-    let body: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(body["code"], "unauthorized");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn protected_me_context_rejects_invalid_bearer_token() -> Result<(), ApplicationError> {
-    let (_schema, base_url) = setup_web_app().await?;
-    let client = setup_http_client(None, None).await;
-
-    let response = client
-        .get(format!("{base_url}/api/v1/me/context"))
+        .get(format!("{base_url}/api/v1/game/context"))
         .bearer_auth("invalid-token")
         .send()
         .await
@@ -359,7 +342,7 @@ async fn protected_matrix_endpoints_require_bearer_token() -> Result<(), Applica
     let checks: Vec<(&str, String, Option<Value>)> = vec![
         ("GET", "/api/v1/me/session".to_string(), None),
         ("GET", "/api/v1/stats".to_string(), None),
-        ("GET", "/api/v1/villages/1/resources".to_string(), None),
+        ("GET", "/api/v1/game/context".to_string(), None),
         ("GET", "/api/v1/buildings/1".to_string(), None),
         ("GET", "/api/v1/map/region".to_string(), None),
         ("GET", "/api/v1/map/fields/1".to_string(), None),
@@ -540,40 +523,6 @@ async fn army_preview_returns_canonical_arrives_at_timestamp() -> Result<(), App
     assert!(body["arrivesAt"].as_str().is_some());
     assert!(body.get("travelTimeSecs").is_none());
     assert!(body.get("arrivesAtUnix").is_none());
-    Ok(())
-}
-
-#[tokio::test]
-async fn village_overview_unknown_id_returns_not_found_with_valid_auth()
--> Result<(), ApplicationError> {
-    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
-    let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
-
-    let response = client
-        .get(format!("{base_url}/api/v1/villages/999999999/overview"))
-        .bearer_auth(token)
-        .send()
-        .await
-        .unwrap();
-    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
-    Ok(())
-}
-
-#[tokio::test]
-async fn village_resources_unknown_id_returns_not_found_with_valid_auth()
--> Result<(), ApplicationError> {
-    let (_schema, base_url, seeded) = setup_web_app_with_seeded_user().await?;
-    let client = reqwest::Client::new();
-    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
-
-    let response = client
-        .get(format!("{base_url}/api/v1/villages/999999999/resources"))
-        .bearer_auth(token)
-        .send()
-        .await
-        .unwrap();
-    assert_error_code(response, StatusCode::NOT_FOUND, "not_found").await;
     Ok(())
 }
 

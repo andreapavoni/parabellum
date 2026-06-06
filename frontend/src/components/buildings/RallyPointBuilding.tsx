@@ -6,6 +6,12 @@ import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
 import { LiveCountdown } from "@/components/buildings/buildingShared";
+import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
+import {
+  useRecallTroopsMutation,
+  useReleaseReinforcementsMutation,
+  useSendTroopsMutation,
+} from "@/query/mutations";
 import type { BuildingPageResponse, MovementPreviewResponse, RallyCard } from "@/types/api";
 
 export function RallyPointBuilding({
@@ -32,6 +38,9 @@ export function RallyPointBuilding({
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sendTroops = useSendTroopsMutation();
+  const recallTroops = useRecallTroopsMutation();
+  const releaseReinforcements = useReleaseReinforcementsMutation();
   useEffect(() => {
     if (!preview) return;
     const timer = window.setInterval(() => setPreviewTick((v) => v + 1), 1000);
@@ -68,10 +77,10 @@ export function RallyPointBuilding({
 
   return (
     <>
-      <div class="border rounded-md p-4 bg-white space-y-4">
+      <Panel class="space-y-4">
         <div>
-          <div class="text-sm text-gray-500 uppercase">Send troops</div>
-          <p class="text-sm text-gray-500">Select target and units.</p>
+          <SectionHeader title="Send troops" class="mb-1" />
+          <p class="text-sm text-stone-500">Select target and units.</p>
         </div>
         <div class="grid gap-2 sm:grid-cols-[96px_96px_1fr]">
           <label class="text-sm text-gray-600">
@@ -131,9 +140,9 @@ export function RallyPointBuilding({
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
-          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded"
+          variant="secondary"
           disabled={previewing || sending}
           onClick={async () => {
             setError(null);
@@ -157,9 +166,9 @@ export function RallyPointBuilding({
           }}
         >
           {previewing ? "Calculating..." : "Preview movement"}
-        </button>
+        </Button>
         {preview ? (
-          <div class="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2 text-sm">
+          <div class="rounded-md border border-green-200 bg-green-50 p-3 space-y-2 text-sm">
             {(() => {
               void previewTick;
               void previewStartedAtMs;
@@ -253,9 +262,8 @@ export function RallyPointBuilding({
                 ) : null}
               </div>
             ) : null}
-            <button
+            <Button
               type="button"
-              class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
               disabled={sending}
               onClick={async () => {
                 setError(null);
@@ -264,7 +272,7 @@ export function RallyPointBuilding({
                   if (showScoutingTargetChoice && selectedScoutUnits.length === 0) {
                     throw new Error("Scout movement requires at least one scout unit.");
                   }
-                  await api.sendTroops({
+                  await sendTroops.mutateAsync({
                     slotId: detail.slotId,
                     targetX,
                     targetY,
@@ -277,7 +285,6 @@ export function RallyPointBuilding({
                       : undefined,
                     units: toUnitsArray(),
                   });
-                  await onMutate();
                   window.location.assign(`/app/build/39?x=${targetX}&y=${targetY}`);
                 } catch (err) {
                   setError((err as Error).message);
@@ -287,11 +294,11 @@ export function RallyPointBuilding({
               }}
             >
               {sending ? "Sending..." : "Confirm and send"}
-            </button>
+            </Button>
           </div>
         ) : null}
         {error ? <div class="text-sm text-red-600">{error}</div> : null}
-      </div>
+      </Panel>
 
       <div class="space-y-4">
         {(["stationed", "deployed", "reinforcement", "outgoing", "incoming"] as const).map((category) => {
@@ -307,7 +314,7 @@ export function RallyPointBuilding({
               </h3>
               <div class="space-y-2">
                 {cards.map((card) => (
-                  <div key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="border rounded-lg p-4 bg-white shadow-sm space-y-3">
+                  <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-3">
                     <div class="flex justify-between items-start">
                       <div class="flex-1">
                         <div class="flex items-center gap-2">
@@ -321,7 +328,7 @@ export function RallyPointBuilding({
                             <h3 class="font-semibold text-gray-900">Unknown Village</h3>
                           )}
                           {card.movementKind ? (
-                            <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{card.movementKind}</span>
+                            <Badge>{card.movementKind}</Badge>
                           ) : null}
                         </div>
                         {card.position ? (
@@ -338,7 +345,7 @@ export function RallyPointBuilding({
                         {card.arrivesAt ? (
                           <div class="mt-1 space-y-1 text-sm text-gray-500">
                             <p class="font-mono">
-                              ⏱️{" "}
+                              ETA{" "}
                               <LiveCountdown
                                 seconds={secondsUntilIso(card.arrivesAt)}
                                 onElapsed={() => {
@@ -355,7 +362,7 @@ export function RallyPointBuilding({
                           </p>
                         ) : null}
                       </div>
-                      <span class="text-xs px-2 py-1 rounded font-medium whitespace-nowrap bg-gray-100 text-gray-800">{card.category}</span>
+                      <Badge>{card.category}</Badge>
                     </div>
 
                     <div class="overflow-x-auto">
@@ -382,50 +389,50 @@ export function RallyPointBuilding({
                     </div>
 
                     {card.action === "recall" && card.actionId ? (
-                      <button
+                      <Button
                         type="button"
-                        class="inline-block px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded"
+                        variant="warning"
+                        size="sm"
                         onClick={async () => {
                           setError(null);
                           try {
-                            await api.recallTroops({
+                            await recallTroops.mutateAsync({
                               villageId: detail.villageId,
                               armyId: card.actionId!,
                               units: fullUnitsFromCard(card),
                             });
-                            await onMutate();
                           } catch (err) {
                             const message = err instanceof Error ? err.message : "Unable to recall troops";
                             setError(message);
                           }
                         }}
                       >
-                        ↩️ Recall Troops
-                      </button>
+                        Recall Troops
+                      </Button>
                     ) : null}
                     {card.action === "release" && card.actionId ? (
-                      <button
+                      <Button
                         type="button"
-                        class="inline-block px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                        variant="secondary"
+                        size="sm"
                         onClick={async () => {
                           setError(null);
                           try {
-                            await api.releaseReinforcements({
+                            await releaseReinforcements.mutateAsync({
                               villageId: card.villageId,
                               armyId: card.actionId!,
                               units: fullUnitsFromCard(card),
                             });
-                            await onMutate();
                           } catch (err) {
                             const message = err instanceof Error ? err.message : "Unable to release reinforcements";
                             setError(message);
                           }
                         }}
                       >
-                        🏠 Release Reinforcements
-                      </button>
+                        Release Reinforcements
+                      </Button>
                     ) : null}
-                  </div>
+                  </Panel>
                 ))}
               </div>
             </div>

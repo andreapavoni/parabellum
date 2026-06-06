@@ -150,7 +150,8 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }
-        Ok(())
+        self.refresh_village_derived_state_in_tx(tx, army.village_id)
+            .await
     }
 
     async fn upsert_movement_pair(

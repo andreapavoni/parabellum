@@ -57,6 +57,8 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }
+        self.refresh_village_derived_state_in_tx(tx, *source_village_id)
+            .await?;
 
         let outgoing = VillageMovement {
             movement_id: *movement_id,

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { api } from "@/lib/api";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Crown, House, LocateFixed } from "lucide-preact";
 import { navigate } from "@/lib/router";
 import { ResourceSprite } from "@/components/ResourceSprite";
-import type { MapTile, MapRegionResponse } from "@/types/api";
+import { Button, IconButton } from "@/components/ui";
+import type { MapTile } from "@/types/api";
+import { useMapRegionQuery } from "@/query/hooks";
 
 type MapPageProps = {
   worldSize: number;
@@ -11,6 +13,7 @@ type MapPageProps = {
   homeVillageId?: number;
   homeX?: number;
   homeY?: number;
+  currentPlayerId?: string;
 };
 
 type HoveredTile = {
@@ -21,6 +24,11 @@ type HoveredTile = {
   bonuses?: Array<{ kind: "lumber" | "clay" | "iron" | "crop"; percent: number }>;
   left: number;
   top: number;
+};
+
+type RegionParams = {
+  x?: number;
+  y?: number;
 };
 
 function wrapCoordinate(value: number, worldSize: number) {
@@ -129,60 +137,39 @@ export function MapPage({
   homeVillageId,
   homeX,
   homeY,
+  currentPlayerId,
 }: MapPageProps) {
-  const [region, setRegion] = useState<MapRegionResponse | null>(null);
+  const initialRegionParams = () =>
+    Number.isFinite(initialCenterX) && Number.isFinite(initialCenterY)
+      ? {
+          x: wrapCoordinate(initialCenterX as number, worldSize),
+          y: wrapCoordinate(initialCenterY as number, worldSize),
+        }
+      : {};
+  const [regionParams, setRegionParams] = useState<RegionParams>(initialRegionParams);
   const [hovered, setHovered] = useState<HoveredTile | null>(null);
   const [xInput, setXInput] = useState("");
   const [yInput, setYInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [moving, setMoving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const regionQuery = useMapRegionQuery(regionParams);
+  const region = regionQuery.data ?? null;
+  const moving = regionQuery.isFetching && Boolean(region);
 
   useEffect(() => {
-    let alive = true;
-
-    async function bootstrap() {
-      setLoading(true);
-      setError(null);
-      try {
-        const initialRegion = Number.isFinite(initialCenterX) && Number.isFinite(initialCenterY)
-          ? await api.mapRegion({
-              x: wrapCoordinate(initialCenterX as number, worldSize),
-              y: wrapCoordinate(initialCenterY as number, worldSize),
-            })
-          : await api.mapRegion();
-        if (!alive) return;
-        setRegion(initialRegion);
-        setXInput(String(initialRegion.center.x));
-        setYInput(String(initialRegion.center.y));
-      } catch (err) {
-        if (alive) setError((err as Error).message);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    }
-
-    bootstrap();
-    return () => {
-      alive = false;
-    };
+    setRegionParams(initialRegionParams());
   }, [initialCenterX, initialCenterY, worldSize]);
 
-  async function loadRegion(params: { x?: number; y?: number }) {
-    setMoving(true);
-    setError(null);
+  useEffect(() => {
+    if (!region) return;
+    setXInput(String(region.center.x));
+    setYInput(String(region.center.y));
+  }, [region]);
+
+  function loadRegion(params: RegionParams) {
     setHovered(null);
-    try {
-      const next = await api.mapRegion(params);
-      setRegion(next);
-      setXInput(String(next.center.x));
-      setYInput(String(next.center.y));
-      window.history.replaceState(null, "", `/map?x=${next.center.x}&y=${next.center.y}`);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setMoving(false);
+    setRegionParams(params);
+    if (params.x !== undefined && params.y !== undefined) {
+      navigate(`/map?x=${params.x}&y=${params.y}`, true);
     }
   }
 
@@ -215,12 +202,13 @@ export function MapPage({
     return { rows, xAxis, yAxis, gridSize };
   }, [region, worldSize]);
 
-  if (loading) {
+  if (regionQuery.isPending) {
     return <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-gray-500">Loading map...</div>;
   }
 
-  if (error || !region || !data) {
-    return <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-red-700">{error ?? "Unable to load the map."}</div>;
+  if (regionQuery.error || !region || !data) {
+    const error = regionQuery.error instanceof Error ? regionQuery.error.message : "Unable to load the map.";
+    return <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-red-700">{error}</div>;
   }
 
   const mapSize = 1500;
@@ -244,30 +232,40 @@ export function MapPage({
           </div>
 
           <div class="map-center">
-            <button
-              class="nav-overlay nav-n"
-              title="North"
-              onClick={() => loadRegion({ x: region.center.x, y: wrapCoordinate(region.center.y + 1, worldSize) })}
-              disabled={moving}
-            />
-            <button
-              class="nav-overlay nav-s"
-              title="South"
-              onClick={() => loadRegion({ x: region.center.x, y: wrapCoordinate(region.center.y - 1, worldSize) })}
-              disabled={moving}
-            />
-            <button
-              class="nav-overlay nav-w"
-              title="West"
-              onClick={() => loadRegion({ x: wrapCoordinate(region.center.x - 1, worldSize), y: region.center.y })}
-              disabled={moving}
-            />
-            <button
-              class="nav-overlay nav-e"
-              title="East"
-              onClick={() => loadRegion({ x: wrapCoordinate(region.center.x + 1, worldSize), y: region.center.y })}
-              disabled={moving}
-            />
+            <div class="map-nav-controls">
+              <IconButton
+                label="North"
+                class="map-nav-btn map-nav-n"
+                onClick={() => loadRegion({ x: region.center.x, y: wrapCoordinate(region.center.y + 1, worldSize) })}
+                disabled={moving}
+              >
+                <ChevronUp size={18} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                label="West"
+                class="map-nav-btn map-nav-w"
+                onClick={() => loadRegion({ x: wrapCoordinate(region.center.x - 1, worldSize), y: region.center.y })}
+                disabled={moving}
+              >
+                <ChevronLeft size={18} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                label="East"
+                class="map-nav-btn map-nav-e"
+                onClick={() => loadRegion({ x: wrapCoordinate(region.center.x + 1, worldSize), y: region.center.y })}
+                disabled={moving}
+              >
+                <ChevronRight size={18} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                label="South"
+                class="map-nav-btn map-nav-s"
+                onClick={() => loadRegion({ x: region.center.x, y: wrapCoordinate(region.center.y - 1, worldSize) })}
+                disabled={moving}
+              >
+                <ChevronDown size={18} aria-hidden="true" />
+              </IconButton>
+            </div>
 
             <svg id="map-svg" class="map-svg" viewBox={`0 0 ${mapSize} ${mapSize}`} preserveAspectRatio="none">
               <defs>
@@ -288,6 +286,9 @@ export function MapPage({
                   const isHome =
                     (homeVillageId && tile?.villageId === homeVillageId) ||
                     (homeX === wrappedX && homeY === wrappedY && tile?.villageId != null);
+                  const isOwnedVillage =
+                    Boolean(tile?.villageId && currentPlayerId && tile.playerId === currentPlayerId);
+                  const villageBorderColor = isHome ? "#d97706" : isOwnedVillage ? "#15803d" : "#b91c1c";
                   const visual = tileVisual(tile, Boolean(isHome));
 
                   return (
@@ -318,13 +319,13 @@ export function MapPage({
                       {visual.oasisBg ? <rect width={cellSize} height={cellSize} fill={visual.oasisBg} /> : null}
                       {tile?.villageId ? (
                         <rect
-                          x={cellSize * 0.06}
-                          y={cellSize * 0.06}
-                          width={cellSize * 0.88}
-                          height={cellSize * 0.88}
+                          x={cellSize * 0.1}
+                          y={cellSize * 0.1}
+                          width={cellSize * 0.8}
+                          height={cellSize * 0.8}
                           fill="none"
-                          stroke={isHome ? "orange" : "green"}
-                          strokeWidth={6}
+                          stroke={villageBorderColor}
+                          strokeWidth={24}
                         />
                       ) : null}
                       {tile?.villageId ? (
@@ -346,7 +347,7 @@ export function MapPage({
                               lineHeight: "1",
                             }}
                           >
-                            <span>🏠</span>
+                            <House size={Math.max(14, cellSize * 0.46)} strokeWidth={2.4} aria-hidden="true" />
                           </div>
                         </foreignObject>
                       ) : null}
@@ -400,16 +401,26 @@ export function MapPage({
                         })()
                       ) : null}
                       {tile?.villageId && tile.isCapital ? (
-                        <text
-                          x={cellSize * 0.82}
-                          y={cellSize * 0.22}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fontSize={cellSize * 0.24}
+                        <foreignObject
+                          x={cellSize * 0.66}
+                          y={cellSize * 0.04}
+                          width={cellSize * 0.28}
+                          height={cellSize * 0.28}
                           pointerEvents="none"
                         >
-                          👑
-                        </text>
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#92400e",
+                            }}
+                          >
+                            <Crown size={Math.max(10, cellSize * 0.22)} strokeWidth={2.8} aria-hidden="true" />
+                          </div>
+                        </foreignObject>
                       ) : null}
                     </g>
                   );
@@ -444,8 +455,11 @@ export function MapPage({
             class="w-12 p-1.5 border border-gray-300 rounded text-center text-sm outline-none focus:border-green-500 font-semibold"
             onInput={(event) => setYInput((event.target as HTMLInputElement).value)}
           />
-          <button
-            class="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-1.5 rounded text-xs font-bold text-green-700 ml-3 cursor-pointer shadow-sm transition-colors disabled:opacity-60"
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="ml-3"
             onClick={() => {
               const parsedX = Number.parseInt(xInput, 10);
               const parsedY = Number.parseInt(yInput, 10);
@@ -457,8 +471,9 @@ export function MapPage({
             }}
             disabled={moving}
           >
+            <LocateFixed size={13} aria-hidden="true" />
             OK
-          </button>
+          </Button>
         </div>
 
         {hovered ? (

@@ -328,10 +328,16 @@ impl PostgresVillageRepository {
         model: VillageModel,
         army_context: VillageArmyContext,
     ) -> VillageModel {
+        let moving_armies = army_context.moving.clone();
         let hydrated = hydrate_village(model.clone(), army_context);
         let busy_merchants = model.busy_merchants;
         let mut refreshed = model;
         refreshed.production = hydrated.production.clone();
+        refreshed.production.upkeep = refreshed
+            .production
+            .upkeep
+            .saturating_add(Self::moving_armies_upkeep(&hydrated, &moving_armies));
+        refreshed.production.calculate_effective_production();
         refreshed.stocks = hydrated.stocks().clone();
         refreshed.population = hydrated.population;
         refreshed.culture_points_production = hydrated.culture_points_production;
@@ -366,6 +372,27 @@ impl PostgresVillageRepository {
         refreshed
     }
 
+    fn moving_armies_upkeep(
+        village: &parabellum_game::models::village::Village,
+        armies: &[parabellum_game::models::army::Army],
+    ) -> u32 {
+        armies
+            .iter()
+            .map(|army| {
+                army.tribe
+                    .units()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, unit)| {
+                        village
+                            .effective_unit_upkeep(unit)
+                            .saturating_mul(army.units().get(idx))
+                    })
+                    .sum::<u32>()
+            })
+            .sum()
+    }
+
     async fn load_army_context(
         &self,
         village_id: u32,
@@ -375,6 +402,7 @@ impl PostgresVillageRepository {
             home: armies.get_home_army(village_id).await?,
             stationed: armies.list_stationed_armies(village_id).await?,
             deployed: armies.list_deployed_armies(village_id).await?,
+            moving: armies.list_moving_armies_by_owner(village_id).await?,
         })
     }
 
@@ -388,6 +416,9 @@ impl PostgresVillageRepository {
             home: armies.get_home_army_in_tx(tx, village_id).await?,
             stationed: armies.list_stationed_armies_in_tx(tx, village_id).await?,
             deployed: armies.list_deployed_armies_in_tx(tx, village_id).await?,
+            moving: armies
+                .list_moving_armies_by_owner_in_tx(tx, village_id)
+                .await?,
         })
     }
 
@@ -515,6 +546,51 @@ impl PostgresVillageRepository {
     ) -> Result<VillageModel, ApplicationError> {
         let army = self.load_army_context_in_tx(tx, model.village_id).await?;
         Ok(Self::refresh_materialized_village_state(model, army))
+    }
+
+    pub async fn refresh_derived_state_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+    ) -> Result<(), ApplicationError> {
+        let row: DbVillageModelRow = sqlx::query_as(
+            r#"
+            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
+            FROM rm_village
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let model: VillageModel = row.try_into()?;
+        let refreshed = self.refresh_for_read_in_tx(tx, model).await?;
+
+        sqlx::query(
+            r#"
+            UPDATE rm_village
+            SET production = $2,
+                population = $3,
+                culture_points_production = $4,
+                total_merchants = $5,
+                busy_merchants = $6,
+                updated_at = NOW()
+            WHERE village_id = $1
+            "#,
+        )
+        .bind(village_id as i32)
+        .bind(Json(refreshed.production))
+        .bind(refreshed.population as i32)
+        .bind(refreshed.culture_points_production as i32)
+        .bind(refreshed.total_merchants as i16)
+        .bind(refreshed.busy_merchants as i16)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 
     pub async fn get_by_village_id_in_tx(

@@ -823,6 +823,16 @@ impl VillageQueryPort for VillageEsAdapter {
             .map_err(Self::map_query_cqrs_error)
     }
 
+    async fn count_unread_reports_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<i64, ApplicationError> {
+        self.service
+            .count_unread_reports_for_player(player_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
     async fn mark_report_as_read(
         &self,
         report_id: Uuid,

@@ -76,6 +76,10 @@ async fn hydrate_village_with_current_armies(
             .list_deployed_armies(village_id)
             .await
             .map_err(CqrsError::domain_source)?,
+        moving: army_repo
+            .list_moving_armies_by_owner(village_id)
+            .await
+            .map_err(CqrsError::domain_source)?,
     };
     Ok(hydrate_village(model, armies))
 }

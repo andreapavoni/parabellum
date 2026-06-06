@@ -2,7 +2,8 @@ import type { ReportDetailResponse, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite } from "@/components/UnitSprite";
-import { useAppStore } from "@/state/appStore";
+import { Button, Panel } from "@/components/ui";
+import { useGameContextQuery } from "@/query/hooks";
 import { useMemo, useState } from "preact/hooks";
 
 function formatTimestamp(timestamp: number) {
@@ -510,13 +511,13 @@ function MarketplaceDeliveryReportDetail({
   const resources = asRecord(payload.resources) ?? {};
   return (
     <div class="space-y-4">
-      <div class="border rounded-md p-4 bg-white">
+      <Panel>
         <p class="text-sm text-gray-700">
           {villageFieldLink(readString(payload, "sender_village", "Unknown"), payload.sender_position, worldSize)}{" "}
           delivered <ResourceSummaryInline resources={resources} /> to{" "}
           {villageFieldLink(readString(payload, "receiver_village", "Unknown"), payload.receiver_position, worldSize)}.
         </p>
-      </div>
+      </Panel>
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );
@@ -550,18 +551,19 @@ export function ReportsPage({ data }: { data: ReportsResponse }) {
       </div>
       <div class="flex items-center gap-2 text-sm">
         {(["all", "attacks", "reinforcements", "merchants"] as const).map((key) => (
-          <button
+          <Button
             key={key}
             type="button"
+            variant={filter === key ? "primary" : "secondary"}
+            size="sm"
             onClick={() => setFilter(key)}
-            class={`px-3 py-1 rounded border ${filter === key ? "bg-green-600 text-white border-green-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
           >
             {key === "all" ? "All" : key === "attacks" ? "Attacks" : key === "reinforcements" ? "Reinforcements" : "Merchants"}
-          </button>
+          </Button>
         ))}
       </div>
       {filtered.length === 0 ? (
-        <div class="rounded border bg-white p-6 text-center text-sm text-gray-500">No reports available.</div>
+        <Panel class="text-center text-sm text-gray-500">No reports available.</Panel>
       ) : null}
       {filtered.map((report) => {
         const text = reportText(report);
@@ -602,8 +604,8 @@ export function ReportsPage({ data }: { data: ReportsResponse }) {
 }
 
 export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
-  const { meContext } = useAppStore();
-  const worldSize = meContext?.worldSize ?? 100;
+  const gameContext = useGameContextQuery();
+  const worldSize = gameContext.data?.worldSize ?? 100;
   const variant = reportPayloadVariant(data.payload);
 
   return (
@@ -615,7 +617,7 @@ export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
         </Link>
       </div>
 
-      <div class="rounded border bg-white p-4 shadow-sm space-y-4">
+      <Panel class="space-y-4">
         {variant?.kind === "Battle" ? (
           <BattleReportDetail data={data} payload={variant.value} worldSize={worldSize} />
         ) : null}
@@ -634,7 +636,7 @@ export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
             </pre>
           </>
         ) : null}
-      </div>
+      </Panel>
     </div>
   );
 }

@@ -1,44 +1,37 @@
-import type { VillageOverviewResponse } from "@/types/api";
-import { CapitalBadge } from "@/components/CapitalBadge";
+import type { BuildingQueueItem, BuildingSlot, VillageListItem, VillageSummary } from "@/types/api";
 import { QueueList } from "@/components/QueueList";
 import { VillageMap } from "@/components/VillageMap";
-import { VillageRenameInline } from "@/components/VillageRenameInline";
+import { VillageHeading, VillageSelector } from "@/components/VillageHeader";
+import { Panel } from "@/components/ui";
 
 export function VillagePage({
   data,
   onQueueElapsed,
   onVillageRenamed,
+  onSwitchVillage,
 }: {
-  data: VillageOverviewResponse;
+  data: {
+    serverTime: number;
+    village: VillageSummary;
+    buildingSlots: BuildingSlot[];
+    buildingQueue: BuildingQueueItem[];
+    villages: VillageListItem[];
+  };
   onQueueElapsed?: () => void;
   onVillageRenamed?: () => Promise<void> | void;
+  onSwitchVillage: (villageId: number) => void;
 }) {
   return (
-    <div class="mx-auto mt-4 md:mt-6 w-full max-w-4xl px-2 md:px-3 flex flex-col items-center gap-4 pb-12">
-      <div class="flex flex-col items-center w-full max-w-[400px]">
-        <h1 class="text-xl font-bold mb-4 w-full text-left">
-          {data.village.name} ({data.village.x}|{data.village.y})
-          {data.village.isCapital ? <CapitalBadge /> : null}
-        </h1>
-        <VillageRenameInline
-          villageId={data.village.id}
-          currentName={data.village.name}
-          onRenamed={onVillageRenamed}
-        />
-        <div class="w-full mb-3">
-          <span class="text-xs text-gray-600">Loyalty: </span>
-          <span
-            class={
-              data.village.loyalty < 100
-                ? "inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800"
-                : "text-xs font-semibold text-gray-800"
-            }
-          >
-            {data.village.loyalty}%
-          </span>
+    <div class="mx-auto mt-3 md:mt-4 w-full max-w-5xl px-2 md:px-3 pb-10">
+      <VillageHeading village={data.village} onVillageRenamed={onVillageRenamed} />
+      <div class="mt-3 flex flex-col items-start gap-4 md:flex-row">
+        <div class="flex flex-col items-center w-full max-w-[400px] md:flex-none">
+          <VillageMap slots={data.buildingSlots} />
+          <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
         </div>
-        <VillageMap slots={data.buildingSlots} />
-        <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
+        <Panel class="w-full md:w-56 md:shrink-0">
+          <VillageSelector villages={data.villages} onSwitchVillage={onSwitchVillage} />
+        </Panel>
       </div>
     </div>
   );

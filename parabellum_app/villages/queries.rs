@@ -128,6 +128,23 @@ impl Query for GetReportForPlayer {
     }
 }
 
+/// Query that counts unread projected reports for one player from ES read models.
+pub struct CountUnreadReportsForPlayer {
+    pub repository: Arc<dyn ReportRepository>,
+    pub player_id: uuid::Uuid,
+}
+
+impl Query for CountUnreadReportsForPlayer {
+    type Output = Result<i64, CqrsError>;
+
+    async fn apply(&self) -> Self::Output {
+        self.repository
+            .count_unread_for_player(self.player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +224,17 @@ mod tests {
             let mut reads = self.reads.lock().await;
             reads.insert((report_id, player_id), Some(Utc::now()));
             Ok(())
+        }
+        async fn count_unread_for_player(
+            &self,
+            player_id: Uuid,
+        ) -> Result<i64, parabellum_types::errors::ApplicationError> {
+            let rows = self.rows.lock().await;
+            let unread = rows
+                .values()
+                .filter(|r| r.target_player_id == Some(player_id) && r.read_at.is_none())
+                .count() as i64;
+            Ok(unread)
         }
     }
 

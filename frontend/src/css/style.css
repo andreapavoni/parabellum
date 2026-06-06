@@ -1,7 +1,7 @@
  body {
-   font-family: sans-serif;
-   background-color: #fff;
-   color: #333;
+   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+   background-color: #f4f5f1;
+   color: #292524;
    overflow-x: hidden;
  }
 
@@ -20,39 +20,66 @@
  }
 
  .nav-icon {
-   width: 45px;
-   height: 45px;
-   min-width: 45px;
-   border-radius: 50%;
-   border: 3px solid #ccc;
+   width: 42px;
+   height: 40px;
+   border-radius: 6px;
+   border: 1px solid #cfcac0;
    background: #fff;
    display: flex;
    align-items: center;
    justify-content: center;
-   font-size: 20px;
+   gap: 6px;
+   color: #44403c;
    cursor: pointer;
-   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-   transition: transform 0.2s;
+   box-shadow: 0 1px 2px rgba(41, 37, 36, 0.08);
+   transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+ }
+
+ .nav-icon a {
+   display: flex;
+   width: 100%;
+   height: 100%;
+   align-items: center;
+   justify-content: center;
+   padding: 0;
  }
 
  .nav-icon:hover {
-   transform: translateY(-2px);
-   border-color: #c5e1a5;
+   border-color: #7a8f45;
+   background-color: #f8faf3;
+   color: #315314;
  }
 
  .nav-active {
-   border-color: #80ba34;
+   border-color: #5e7f22;
+   background-color: #eef5df;
+   color: #315314;
  }
 
  .nav-unread {
-   border-color: #d97706;
-   box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.18);
+   border-color: #b45309;
+   box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.14);
+ }
+
+ .nav-glyph {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   min-width: 16px;
+   font-size: 11px;
+   font-weight: 800;
+   letter-spacing: 0;
+   text-transform: uppercase;
  }
 
  .res-item {
    display: flex;
    align-items: center;
-   margin: 0 8px 8px 0;
+   margin: 0 6px 6px 0;
+   border: 1px solid #e4e1d8;
+   border-radius: 6px;
+   background: #fbfbf8;
+   padding: 4px 7px;
    font-size: 11px;
    font-weight: bold;
    white-space: nowrap;
@@ -155,54 +182,44 @@
    font-weight: 900;
  }
 
- .nav-overlay {
+ .map-nav-controls {
    position: absolute;
-   background-color: #9ACD32;
-   cursor: pointer;
-   z-index: 10;
-   transition: background-color 0.2s;
-   border: 0;
-   padding: 0;
+   inset: 0;
+   z-index: 12;
+   pointer-events: none;
  }
 
- .nav-overlay:hover {
-   background-color: #7BB642;
+ .map-nav-btn {
+   position: absolute;
+   pointer-events: auto;
+   color: #315314;
+   border-color: #b8c99a;
+   background: rgba(255, 255, 255, 0.92);
+   box-shadow: 0 2px 6px rgba(41, 37, 36, 0.12);
  }
 
- .nav-n {
-   top: -26px;
+ .map-nav-n {
+   top: 8px;
    left: 50%;
    transform: translateX(-50%);
-   width: 32px;
-   height: 26px;
-   clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
  }
 
- .nav-s {
-   bottom: -26px;
+ .map-nav-s {
+   bottom: 8px;
    left: 50%;
    transform: translateX(-50%);
-   width: 32px;
-   height: 26px;
-   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
  }
 
- .nav-w {
-   left: -26px;
+ .map-nav-w {
+   left: 8px;
    top: 50%;
    transform: translateY(-50%);
-   width: 26px;
-   height: 32px;
-   clip-path: polygon(100% 0%, 0% 50%, 100% 100%);
  }
 
- .nav-e {
-   right: -26px;
+ .map-nav-e {
+   right: 8px;
    top: 50%;
    transform: translateY(-50%);
-   width: 26px;
-   height: 32px;
-   clip-path: polygon(0% 0%, 100% 50%, 0% 100%);
  }
 
  /* SVG responsive */
@@ -706,78 +723,6 @@
    font-weight: bold;
    color: #555;
    padding-top: 10px;
- }
-
- .nav-btn {
-   background-color: #9ACD32;
-   cursor: pointer;
-   width: 100%;
-   height: 100%;
-   transition: background 0.2s;
- }
-
- .nav-btn:hover {
-   background-color: #7BB642;
- }
-
- .arrow-up {
-   grid-column: 2;
-   grid-row: 1;
-   width: 40px;
-   margin: 0 auto;
-   clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
- }
-
- .arrow-down {
-   grid-column: 2;
-   grid-row: 3;
- }
-
- .nav-overlay {
-   position: absolute;
-   background-color: #9ACD32;
-   cursor: pointer;
-   z-index: 10;
- }
-
- .nav-overlay:hover {
-   background-color: #7BB642;
- }
-
- .nav-n {
-   top: -25px;
-   left: 50%;
-   transform: translateX(-50%);
-   width: 25px;
-   height: 20px;
-   clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
- }
-
- .nav-s {
-   bottom: -25px;
-   left: 50%;
-   transform: translateX(-50%);
-   width: 25px;
-   height: 20px;
-   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
- }
-
- .nav-w {
-   left: -25px;
-   top: 50%;
-   transform: translateY(-50%);
-   width: 20px;
-   height: 25px;
-   clip-path: polygon(100% 0%, 0% 50%, 100% 100%);
- }
-
- .nav-e {
-   right: -25px;
-   top: 50%;
-   transform: translateY(-50%);
-   width: 20px;
-   height: 25px;
-   clip-path: polygon(0% 0%, 100% 50%, 0% 100%);
  }
 
  .map-relative-wrapper {

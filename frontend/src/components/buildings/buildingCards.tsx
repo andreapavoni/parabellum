@@ -1,10 +1,17 @@
 import { useState } from "preact/hooks";
-import { api } from "@/lib/api";
 import { buildingLabel, unitLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
 import { BuildingSprite } from "@/components/BuildingSprite";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSpriteByName } from "@/components/UnitSprite";
+import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
+import {
+  useAddBuildingMutation,
+  useResearchAcademyMutation,
+  useResearchSmithyMutation,
+  useTrainUnitsMutation,
+  useUpgradeBuildingMutation,
+} from "@/query/mutations";
 import type {
   AcademyResearchOption,
   BuildingPageResponse,
@@ -34,6 +41,21 @@ function ResourceCost({ cost }: { cost: ResourceAmounts }) {
   );
 }
 
+function buildingValueLabel(buildingName: string, value: number) {
+  const percentValueBuildings = new Set([
+    "Barracks",
+    "GreatBarracks",
+    "Stable",
+    "GreatStable",
+    "Workshop",
+    "GreatWorkshop",
+  ]);
+  if (percentValueBuildings.has(buildingName)) {
+    return `${Math.floor(value / 10)}%`;
+  }
+  return String(value);
+}
+
 export function UpgradeBuilding({
   data,
   onMutate,
@@ -43,11 +65,12 @@ export function UpgradeBuilding({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const upgradeBuilding = useUpgradeBuildingMutation();
   const affordable = canAfford(data.storedResources, data.cost);
   const canUpgrade = affordable && !data.queueFull && !data.atMaxLevel && !submitting;
 
   return (
-    <div class="border rounded-lg p-4 bg-white shadow-sm">
+    <Panel>
       <h3 class="text-lg font-bold text-gray-800 mb-3">
         {data.atMaxLevel ? "Max level reached" : `Upgrade to level ${data.nextLevel}`}
       </h3>
@@ -66,32 +89,26 @@ export function UpgradeBuilding({
             </span>
           </div>
 
-          {data.nextValue ? (
+          {data.nextValue != null ? (
             <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
               <span class="text-gray-600">Next value: </span>
-              <span class="font-semibold text-blue-700">{data.nextValue}</span>
+              <span class="font-semibold text-blue-700">{buildingValueLabel(data.buildingName, data.nextValue)}</span>
             </div>
           ) : null}
 
-          {data.queueFull ? <p class="text-sm text-yellow-600 mb-2">⚠️ Queue is full</p> : null}
-          {!affordable ? <p class="text-sm text-red-600 mb-2">❌ Insufficient resources</p> : null}
+          {data.queueFull ? <p class="text-sm text-yellow-600 mb-2">Queue is full</p> : null}
+          {!affordable ? <p class="text-sm text-red-600 mb-2">Insufficient resources</p> : null}
           {error ? <p class="text-sm text-red-600 mb-2">{error}</p> : null}
 
-          <button
+          <Button
             type="button"
-            class="w-full text-white font-semibold py-2 px-4 rounded"
-            style={
-              canUpgrade
-                ? "background-color: #16a34a;"
-                : "background-color: #9ca3af; cursor: not-allowed; opacity: 0.7;"
-            }
+            class="w-full"
             disabled={!canUpgrade}
             onClick={async () => {
               setSubmitting(true);
               setError(null);
               try {
-                await api.upgradeBuilding({ slotId: data.slotId });
-                await onMutate();
+                await upgradeBuilding.mutateAsync({ slotId: data.slotId });
               } catch (err) {
                 setError((err as Error).message);
               } finally {
@@ -100,12 +117,12 @@ export function UpgradeBuilding({
             }}
           >
             Upgrade
-          </button>
+          </Button>
         </>
       ) : (
         <p class="text-sm text-gray-600">{buildingLabel(data.buildingName)} is at maximum level ({data.currentLevel}).</p>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -118,6 +135,7 @@ export function EmptySlotBuilding({
 }) {
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const addBuilding = useAddBuildingMutation();
   if (!detail.emptySlot) return null;
   if (detail.emptySlot.hasQueueForSlot && detail.emptySlot.queuedBuildingName) return null;
 
@@ -126,13 +144,13 @@ export function EmptySlotBuilding({
     const canBuild = !locked && !detail.queueFull && affordable;
     const isSubmitting = submitting === option.buildingName;
     return (
-      <div key={option.buildingName} class="border rounded-md p-4 bg-white space-y-3">
+      <Panel key={option.buildingName} class="space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div class="inline-flex items-center gap-2 text-lg font-semibold text-gray-900">
             <BuildingSprite buildingName={option.buildingName} size={28} label={buildingLabel(option.buildingName)} />
             {buildingLabel(option.buildingName)}
           </div>
-          {locked ? <span class="text-xs text-amber-700 font-semibold uppercase">Locked</span> : null}
+          {locked ? <Badge variant="warning">Locked</Badge> : null}
         </div>
         <div class="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <ResourceCost cost={option.cost} />
@@ -150,23 +168,17 @@ export function EmptySlotBuilding({
         {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
         {detail.queueFull ? <div class="text-xs text-amber-700">Construction queue is full</div> : null}
         {!locked ? (
-          <button
+          <Button
             type="button"
-            class={
-              canBuild
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded"
-                : "bg-emerald-600 text-white font-semibold px-4 py-2 rounded opacity-60 cursor-not-allowed"
-            }
             disabled={!canBuild || isSubmitting}
             onClick={async () => {
               setSubmitting(option.buildingName);
               setError(null);
               try {
-                await api.addBuilding({
+                await addBuilding.mutateAsync({
                   slotId: detail.slotId,
                   buildingName: option.buildingName,
                 });
-                await onMutate();
               } catch (err) {
                 setError((err as Error).message);
               } finally {
@@ -175,9 +187,9 @@ export function EmptySlotBuilding({
             }}
           >
             Build
-          </button>
+          </Button>
         ) : null}
-      </div>
+      </Panel>
     );
   };
 
@@ -185,7 +197,7 @@ export function EmptySlotBuilding({
     <div class="space-y-4">
       {detail.emptySlot.buildableBuildings.length > 0 ? (
         <div class="space-y-3">
-          <div class="text-sm text-gray-500 uppercase">Available now</div>
+          <SectionHeader title="Available now" />
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {detail.emptySlot.buildableBuildings.map((option) => renderOption(option, false))}
           </div>
@@ -194,7 +206,7 @@ export function EmptySlotBuilding({
 
       {detail.emptySlot.lockedBuildings.length > 0 ? (
         <div class="space-y-3">
-          <div class="text-sm text-gray-500 uppercase">Locked</div>
+          <SectionHeader title="Locked" />
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {detail.emptySlot.lockedBuildings.map((option) => renderOption(option, true))}
           </div>
@@ -218,6 +230,7 @@ export function QueuedConstructionUpgrade({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const upgradeBuilding = useUpgradeBuildingMutation();
   const queuedPreview = detail.emptySlot?.queuedUpgradePreview;
   const canUpgrade = Boolean(
     detail.emptySlot?.queuedCanUpgrade && queuedPreview && !detail.queueFull && !submitting,
@@ -230,7 +243,7 @@ export function QueuedConstructionUpgrade({
   const affordable = canAfford(detail.storedResources, queuedPreview.cost);
 
   return (
-    <div class="border rounded-lg p-4 bg-white shadow-sm">
+    <Panel>
       <h3 class="text-lg font-bold text-gray-800 mb-3">
         {queuedPreview.atMaxLevel ? "Max level reached" : `Upgrade to level ${queuedPreview.nextLevel}`}
       </h3>
@@ -249,10 +262,10 @@ export function QueuedConstructionUpgrade({
             </span>
           </div>
 
-          {queuedPreview.nextValue ? (
+          {queuedPreview.nextValue != null ? (
             <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
               <span class="text-gray-600">Next value: </span>
-              <span class="font-semibold text-blue-700">{queuedPreview.nextValue}</span>
+              <span class="font-semibold text-blue-700">{buildingValueLabel(queuedPreview.buildingName, queuedPreview.nextValue)}</span>
             </div>
           ) : null}
 
@@ -260,21 +273,15 @@ export function QueuedConstructionUpgrade({
           {!affordable ? <p class="text-sm text-red-600 mb-2">Insufficient resources</p> : null}
           {error ? <p class="text-sm text-red-600 mb-2">{error}</p> : null}
 
-          <button
+          <Button
             type="button"
-            class="w-full text-white font-semibold py-2 px-4 rounded"
-            style={
-              canUpgrade && affordable
-                ? "background-color: #16a34a;"
-                : "background-color: #9ca3af; cursor: not-allowed; opacity: 0.7;"
-            }
+            class="w-full"
             disabled={!canUpgrade || !affordable}
             onClick={async () => {
               setSubmitting(true);
               setError(null);
               try {
-                await api.upgradeBuilding({ slotId: detail.slotId });
-                await onMutate();
+                await upgradeBuilding.mutateAsync({ slotId: detail.slotId });
               } catch (err) {
                 setError((err as Error).message);
               } finally {
@@ -283,14 +290,14 @@ export function QueuedConstructionUpgrade({
             }}
           >
             Upgrade
-          </button>
+          </Button>
         </>
       ) : (
         <p class="text-sm text-gray-600">
           {buildingLabel(detail.emptySlot.queuedBuildingName)} is at maximum level ({queuedPreview.currentLevel}).
         </p>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -306,8 +313,14 @@ export function TrainingUnitCard({
   const [quantity, setQuantity] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const trainUnits = useTrainUnitsMutation();
+  const maxTrainable = option.maxTrainable;
+  const clampQuantity = (value: number) => {
+    const normalized = Math.max(1, Number.isFinite(value) ? value : 1);
+    return maxTrainable == null ? normalized : Math.min(maxTrainable, normalized);
+  };
   return (
-    <div class="border rounded-md p-4 bg-white space-y-3">
+    <Panel class="space-y-3">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <div class="text-lg font-semibold text-gray-900">{unitLabel(option.name)}</div>
@@ -317,26 +330,26 @@ export function TrainingUnitCard({
             <input
               type="number"
               min="1"
+              max={maxTrainable}
               value={quantity}
-              onInput={(event) => setQuantity(Math.max(1, Number((event.target as HTMLInputElement).value || "1")))}
+              onInput={(event) => setQuantity(clampQuantity(Number((event.target as HTMLInputElement).value || "1")))}
               class="w-20 border rounded px-2 py-1.5 text-gray-700"
             />
           </label>
-          <button
+          <Button
             type="button"
-            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded"
-            disabled={submitting}
+            size="sm"
+            disabled={submitting || (maxTrainable != null && maxTrainable < 1)}
             onClick={async () => {
               setSubmitting(true);
               setError(null);
               try {
-                await api.trainUnits({
+                await trainUnits.mutateAsync({
                   slotId: detail.slotId,
                   unitIdx: option.unitIdx,
-                  quantity,
+                  quantity: clampQuantity(quantity),
                   buildingName: detail.buildingName,
                 });
-                await onMutate();
               } catch (err) {
                 setError((err as Error).message);
               } finally {
@@ -345,7 +358,7 @@ export function TrainingUnitCard({
             }}
           >
             Train
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -366,7 +379,7 @@ export function TrainingUnitCard({
         <div class="rounded border bg-gray-50 px-2 py-1"><div class="text-[11px] uppercase text-gray-500">Capacity</div><div class="font-semibold text-gray-900">{option.capacity}</div></div>
       </div>
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
-    </div>
+    </Panel>
   );
 }
 
@@ -381,12 +394,13 @@ export function AcademyOptionCard({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const researchAcademy = useResearchAcademyMutation();
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.academy?.queueFull ?? false;
   const blockedByRequirements = option.missingRequirements.length > 0;
   const canResearch = affordable && !queueFull && !submitting && !blockedByRequirements;
   return (
-    <div class="border rounded-md p-4 bg-white space-y-3">
+    <Panel class="space-y-3">
       <div class="flex items-center justify-between gap-3">
         <div class="inline-flex items-center gap-2 text-lg font-semibold text-gray-900">
           <UnitSpriteByName unitName={option.unitName} label={unitLabel(option.unitName)} />
@@ -398,19 +412,18 @@ export function AcademyOptionCard({
           <ResourceCost cost={option.cost} />
           <span class="inline-flex items-center gap-1"><ResourceSprite kind="clock" size={14} label="Research time" />{formatDurationHms(option.timeSecs)}</span>
         </div>
-        <button
+        <Button
           type="button"
-          class={canResearch ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded" : "bg-emerald-600 text-white font-semibold px-3 py-1.5 rounded opacity-60 cursor-not-allowed"}
+          size="sm"
           disabled={!canResearch}
           onClick={async () => {
             setSubmitting(true);
             setError(null);
             try {
-              await api.researchAcademy({
+              await researchAcademy.mutateAsync({
                 slotId: detail.slotId,
                 unitName: option.unitName,
               });
-              await onMutate();
             } catch (err) {
               setError((err as Error).message);
             } finally {
@@ -419,7 +432,7 @@ export function AcademyOptionCard({
           }}
         >
           Research
-        </button>
+        </Button>
       </div>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Research queue is full</div> : null}
@@ -432,7 +445,7 @@ export function AcademyOptionCard({
         </div>
       ) : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
-    </div>
+    </Panel>
   );
 }
 
@@ -447,6 +460,7 @@ export function SmithyOptionCard({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const researchSmithy = useResearchSmithyMutation();
   const affordable = canAfford(detail.storedResources, option.cost);
   const queueFull = detail.smithy?.queueFull ?? false;
   const canUpgrade = option.canUpgrade && affordable && !queueFull && !submitting;
@@ -454,7 +468,7 @@ export function SmithyOptionCard({
   const reachedMaxLevel = option.currentLevel >= option.maxLevel;
   const alreadyQueued = detail.smithy?.queue.some((job) => job.unitName === option.unitName) ?? false;
   return (
-    <div class="border rounded-md p-4 bg-white space-y-3">
+    <Panel class="space-y-3">
       <div class="flex items-center justify-between gap-3">
         <div>
           <div class="inline-flex items-center gap-2 text-lg font-semibold text-gray-900">
@@ -469,19 +483,18 @@ export function SmithyOptionCard({
           <ResourceCost cost={option.cost} />
           <span class="inline-flex items-center gap-1"><ResourceSprite kind="clock" size={14} label="Upgrade time" />{formatDurationHms(option.timeSecs)}</span>
         </div>
-        <button
+        <Button
           type="button"
-          class={canUpgrade ? "bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1.5 rounded" : "bg-blue-600 text-white font-semibold px-3 py-1.5 rounded opacity-60 cursor-not-allowed"}
+          size="sm"
           disabled={!canUpgrade}
           onClick={async () => {
             setSubmitting(true);
             setError(null);
             try {
-              await api.researchSmithy({
+              await researchSmithy.mutateAsync({
                 slotId: detail.slotId,
                 unitName: option.unitName,
               });
-              await onMutate();
             } catch (err) {
               setError((err as Error).message);
             } finally {
@@ -490,13 +503,13 @@ export function SmithyOptionCard({
           }}
         >
           Upgrade
-        </button>
+        </Button>
       </div>
       {!affordable ? <div class="text-xs text-red-600">Not enough resources</div> : null}
       {queueFull ? <div class="text-xs text-amber-700">Upgrade queue is full</div> : null}
       {!queueFull && alreadyQueued ? <div class="text-xs text-amber-700">Already in upgrade queue</div> : null}
       {reachedMaxLevel ? <div class="text-xs text-gray-500">Max level reached</div> : null}
       {error ? <div class="text-xs text-red-600">{error}</div> : null}
-    </div>
+    </Panel>
   );
 }

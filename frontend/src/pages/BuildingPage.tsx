@@ -45,19 +45,9 @@ export function BuildingPage({
       </h1>
 
       <div class="space-y-6">
-        {detail.buildingType !== "empty" || showAsUnderConstruction ? (
-          <>
-            {detail.descriptionParagraphs.length > 0 ? (
-              <div class="text-gray-700 text-sm space-y-2">
-                {detail.descriptionParagraphs.map((paragraph, idx) => (
-                  <p key={idx}>{paragraph}</p>
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : (
+        {detail.buildingType === "empty" && !showAsUnderConstruction ? (
           <div class="text-sm text-gray-600">Select a building to start construction.</div>
-        )}
+        ) : null}
 
         {detail.buildingType === "empty" ? <EmptySlotBuilding detail={detail} onMutate={onMutate} /> : null}
 

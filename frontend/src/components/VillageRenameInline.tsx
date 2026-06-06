@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
-import { api } from "@/lib/api";
+import type { ComponentChildren } from "preact";
+import { useRenameVillageMutation } from "@/query/mutations";
+import { Button } from "@/components/ui";
 
 export function VillageRenameInline({
   villageId,
@@ -14,12 +16,12 @@ export function VillageRenameInline({
   onRenamed?: () => Promise<void> | void;
   className?: string;
   linkClassName?: string;
-  label?: string;
+  label?: ComponentChildren;
 }) {
   const [editingName, setEditingName] = useState(false);
   const [villageName, setVillageName] = useState(currentName);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState(false);
+  const renameVillage = useRenameVillageMutation();
 
   return (
     <div class={className}>
@@ -41,9 +43,8 @@ export function VillageRenameInline({
           onSubmit={async (event) => {
             event.preventDefault();
             setRenameError(null);
-            setRenaming(true);
             try {
-              await api.renameVillage({
+              await renameVillage.mutateAsync({
                 villageId,
                 villageName,
               });
@@ -53,8 +54,6 @@ export function VillageRenameInline({
               }
             } catch (error) {
               setRenameError((error as Error).message);
-            } finally {
-              setRenaming(false);
             }
           }}
         >
@@ -64,16 +63,17 @@ export function VillageRenameInline({
             maxLength={32}
             onInput={(event) => setVillageName((event.target as HTMLInputElement).value)}
           />
-          <button
+          <Button
             type="submit"
-            disabled={renaming}
-            class="rounded bg-blue-600 px-2 py-1 text-xs text-white disabled:bg-blue-300"
+            disabled={renameVillage.isPending}
+            size="sm"
           >
             Save
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setEditingName(false);
               setRenameError(null);
@@ -81,7 +81,7 @@ export function VillageRenameInline({
             }}
           >
             Cancel
-          </button>
+          </Button>
         </form>
       )}
       {renameError ? <div class="mt-2 text-xs text-red-600">{renameError}</div> : null}

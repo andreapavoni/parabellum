@@ -234,6 +234,15 @@ impl GameApplication {
             .await
     }
 
+    pub async fn count_unread_reports_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<i64, ApplicationError> {
+        self.queries_port()
+            .count_unread_reports_for_player(player_id)
+            .await
+    }
+
     pub async fn mark_report_as_read(
         &self,
         report_id: Uuid,

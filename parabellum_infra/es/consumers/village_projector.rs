@@ -80,6 +80,11 @@ impl VillageProjector {
                 .list_deployed_armies_in_tx(tx, village_id)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?,
+            moving: self
+                .armies
+                .list_moving_armies_by_owner_in_tx(tx, village_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
         };
         Ok(hydrate_village(model, armies))
     }
@@ -143,6 +148,17 @@ impl VillageProjector {
     ) -> Result<(), CqrsError> {
         self.village
             .set_busy_merchants_in_tx(tx, village_id, busy_merchants)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+
+    pub(super) async fn refresh_village_derived_state_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+    ) -> Result<(), CqrsError> {
+        self.village
+            .refresh_derived_state_in_tx(tx, village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }

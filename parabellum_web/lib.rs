@@ -11,14 +11,8 @@
 pub mod api;
 pub mod auth_tokens;
 pub mod session;
-pub mod view_helpers;
 pub mod web;
 
 mod http;
 
 pub use http::*;
-
-#[macro_use]
-extern crate rust_i18n;
-
-i18n!("locales", fallback = "en");
