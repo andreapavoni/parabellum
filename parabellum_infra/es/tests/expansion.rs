@@ -42,6 +42,7 @@ async fn village_query_port_returns_expansion_culture_info() {
             service,
             Arc::new(Config {
                 world_size: 100,
+                port: 8000,
                 speed: 1,
                 access_token_ttl_secs: 900,
                 refresh_token_ttl_secs: 2_592_000,
@@ -116,6 +117,7 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_single_village
             service,
             Arc::new(Config {
                 world_size: 100,
+                port: 8000,
                 speed: 1,
                 access_token_ttl_secs: 900,
                 refresh_token_ttl_secs: 2_592_000,
@@ -208,6 +210,7 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_multi_village_
             service,
             Arc::new(Config {
                 world_size: 100,
+                port: 8000,
                 speed: 1,
                 access_token_ttl_secs: 900,
                 refresh_token_ttl_secs: 2_592_000,

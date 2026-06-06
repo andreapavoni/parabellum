@@ -51,7 +51,7 @@ export function ResourceSprite({
       style={{
         width: `${size}px`,
         height: `${size}px`,
-        backgroundImage: "url(/static/units/res.png)",
+        backgroundImage: "url(/static/misc/res.png)",
         backgroundRepeat: "no-repeat",
         backgroundPosition: `0px -${index * RES_STRIDE_Y * scale}px`,
         backgroundSize: `${RES_SPRITE_WIDTH * scale}px ${RES_SPRITE_HEIGHT * scale}px`,
