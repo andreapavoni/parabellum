@@ -1,4 +1,4 @@
-import { buildingLabel } from "@/lib/labels";
+import { buildingDescriptionParagraphs, buildingLabel } from "@/lib/labels";
 import { BuildingSprite } from "@/components/BuildingSprite";
 import { ExpansionBuilding } from "@/components/buildings/ExpansionBuilding";
 import { TrainingBuilding } from "@/components/buildings/TrainingBuilding";
@@ -25,6 +25,12 @@ export function BuildingPage({
     ? detail.emptySlot.queuedBuildingName
     : null;
   const showAsUnderConstruction = detail.buildingType === "empty" && queuedConstruction;
+  const displayedBuildingName = showAsUnderConstruction && queuedConstruction
+    ? queuedConstruction
+    : detail.buildingName;
+  const descriptionParagraphs = displayedBuildingName
+    ? buildingDescriptionParagraphs(displayedBuildingName)
+    : [];
 
   return (
     <div class="container mx-auto p-4 max-w-6xl">
@@ -34,15 +40,22 @@ export function BuildingPage({
         ) : (
           <span class="inline-flex items-center gap-3">
             <BuildingSprite
-              buildingName={showAsUnderConstruction ? queuedConstruction : detail.buildingName}
+              buildingName={displayedBuildingName}
               size={64}
-              label={buildingLabel(showAsUnderConstruction ? queuedConstruction : detail.buildingName)}
+              label={buildingLabel(displayedBuildingName)}
             />
-            {buildingLabel(showAsUnderConstruction ? queuedConstruction : detail.buildingName)}
+            {buildingLabel(displayedBuildingName)}
             {showAsUnderConstruction ? " (Under construction)" : ` (Level ${detail.currentLevel})`}
           </span>
         )}
       </h1>
+      {descriptionParagraphs.length > 0 ? (
+        <div class="mb-5 max-w-3xl space-y-2 text-sm leading-6 text-gray-600">
+          {descriptionParagraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+        </div>
+      ) : null}
 
       <div class="space-y-6">
         {detail.buildingType === "empty" && !showAsUnderConstruction ? (

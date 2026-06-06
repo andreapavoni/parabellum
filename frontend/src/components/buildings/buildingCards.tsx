@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { buildingLabel, unitLabel } from "@/lib/labels";
+import { buildingDescriptionParagraphs, buildingLabel, unitLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
 import { BuildingSprite } from "@/components/BuildingSprite";
 import { ResourceSprite } from "@/components/ResourceSprite";
@@ -143,6 +143,7 @@ export function EmptySlotBuilding({
     const affordable = canAfford(detail.storedResources, option.cost);
     const canBuild = !locked && !detail.queueFull && affordable;
     const isSubmitting = submitting === option.buildingName;
+    const descriptionParagraphs = buildingDescriptionParagraphs(option.buildingName);
     return (
       <Panel key={option.buildingName} class="space-y-3">
         <div class="flex items-start justify-between gap-2">
@@ -152,6 +153,13 @@ export function EmptySlotBuilding({
           </div>
           {locked ? <Badge variant="warning">Locked</Badge> : null}
         </div>
+        {descriptionParagraphs.length > 0 ? (
+          <div class="space-y-1 text-xs leading-5 text-gray-600">
+            {descriptionParagraphs.slice(0, 2).map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+        ) : null}
         <div class="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <ResourceCost cost={option.cost} />
           <span class="inline-flex items-center gap-1">
