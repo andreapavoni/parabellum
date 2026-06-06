@@ -1,6 +1,7 @@
 use dotenvy::dotenv;
 use std::env;
 
+#[derive(Clone)]
 pub struct Config {
     pub world_size: i16,
     pub speed: i8,
@@ -19,7 +20,7 @@ impl Config {
         };
 
         let speed = match env::var("PARABELLUM_SERVER_SPEED") {
-            Ok(val) => val.parse::<i8>().unwrap_or(1).clamp(1, 5),
+            Ok(val) => val.parse::<i8>().unwrap_or(1).clamp(1, 10),
             Err(_) => 1,
         };
 

@@ -59,5 +59,5 @@ pub fn required_cp(speed: Speed, village_count: usize) -> u32 {
         Speed::X5 => &REQUIRED_CP_X5,
         Speed::X10 => &REQUIRED_CP_X10,
     };
-    table[count] as u32
+    table[count]
 }

@@ -12,6 +12,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
@@ -19,6 +20,7 @@ use parabellum_app::ports::villages::{
     CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
+    RenameVillageRequest as RenameVillageUseCaseRequest,
     ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
     ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
     SendAttackRequest as SendAttackUseCaseRequest,
@@ -45,55 +47,67 @@ use super::error_mapping::map_application_error;
 const MAX_SLOT_ID: u8 = 40;
 const RALLY_POINT_SLOT: u8 = 39;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Generic success response for command endpoints.
 pub struct ActionResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for building creation on an empty slot.
 pub struct AddBuildingRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub building_name: BuildingName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for upgrading a building by slot.
 pub struct UpgradeBuildingRequest {
     pub slot_id: u8,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for village rename action.
+pub struct RenameVillageRequest {
+    pub village_id: u32,
+    pub village_name: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for unit training command.
 pub struct TrainUnitsRequest {
     pub slot_id: u8,
     pub unit_idx: u8,
     pub quantity: i32,
+    #[schema(value_type = String)]
     pub building_name: BuildingName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for academy research.
 pub struct ResearchAcademyRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub unit_name: UnitName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for smithy upgrade research.
 pub struct ResearchSmithyRequest {
     pub slot_id: u8,
+    #[schema(value_type = String)]
     pub unit_name: UnitName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for direct resource transfer via marketplace.
 pub struct SendResourcesRequest {
@@ -106,7 +120,7 @@ pub struct SendResourcesRequest {
     pub crop: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for marketplace offer creation.
 pub struct CreateOfferRequest {
@@ -121,14 +135,14 @@ pub struct CreateOfferRequest {
     pub seek_crop: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Common payload for marketplace offer accept/cancel actions.
 pub struct OfferActionRequest {
     pub slot_id: u8,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MovementKind {
     Attack,
@@ -136,14 +150,14 @@ pub enum MovementKind {
     Reinforcement,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ScoutingTargetKind {
     Resources,
     Defenses,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for troop movement commands.
 pub struct SendTroopsRequest {
@@ -153,10 +167,18 @@ pub struct SendTroopsRequest {
     pub movement: MovementKind,
     pub units: Vec<i32>,
     pub scouting_target: Option<ScoutingTargetKind>,
-    pub catapult_targets: Option<Vec<BuildingName>>,
+    #[schema(value_type = Option<Vec<String>>)]
+    pub catapult_targets: Option<Vec<CatapultTargetInput>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum CatapultTargetInput {
+    Building(BuildingName),
+    Text(String),
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for recalling deployed units.
 pub struct RecallTroopsRequest {
@@ -166,7 +188,7 @@ pub struct RecallTroopsRequest {
     pub hero_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for releasing reinforcements from a source village.
 pub struct ReleaseReinforcementsRequest {
@@ -176,16 +198,75 @@ pub struct ReleaseReinforcementsRequest {
     pub hero_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Payload for settler village founding movement.
 pub struct FoundVillageRequest {
     pub target_x: i32,
     pub target_y: i32,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewTroopsRequest {
+    pub target_x: i32,
+    pub target_y: i32,
+    pub movement: MovementKind,
     pub units: Vec<i32>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewSendResourcesRequest {
+    pub slot_id: u8,
+    pub target_x: i32,
+    pub target_y: i32,
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewFoundVillageRequest {
+    pub target_x: i32,
+    pub target_y: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MovementPreviewResponse {
+    #[schema(value_type = String)]
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
+    pub detected_kind: PreviewDetectedKind,
+    pub supports_scouting_target_choice: bool,
+    pub has_catapult_units: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewDetectedKind {
+    AttackOrRaid,
+    ScoutOnly,
+    Reinforcement,
+    FoundVillage,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SendResourcesPreviewResponse {
+    #[schema(value_type = String)]
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Starts a building construction job on an empty slot.
+#[utoipa::path(
+    post,
+    path = "/buildings/add",
+    request_body = AddBuildingRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn add_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -209,6 +290,12 @@ pub async fn add_building(
 }
 
 /// Queues a building upgrade for the target slot.
+#[utoipa::path(
+    post,
+    path = "/buildings/upgrade",
+    request_body = UpgradeBuildingRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn upgrade_building(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -230,7 +317,39 @@ pub async fn upgrade_building(
     Ok(Json(ActionResponse { success: true }))
 }
 
+/// Renames an owned village.
+#[utoipa::path(
+    post,
+    path = "/villages/rename",
+    request_body = RenameVillageRequest,
+    responses((status = 200, body = ActionResponse))
+)]
+pub async fn rename_village(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<RenameVillageRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    state
+        .game_app
+        .rename_village(RenameVillageUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            village_name: payload.village_name,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
 /// Queues unit training in a valid training/expansion building slot.
+#[utoipa::path(
+    post,
+    path = "/army/train",
+    request_body = TrainUnitsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn train_units(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -267,6 +386,12 @@ pub async fn train_units(
 }
 
 /// Queues academy research for a unit.
+#[utoipa::path(
+    post,
+    path = "/academy/research",
+    request_body = ResearchAcademyRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn research_academy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -290,6 +415,12 @@ pub async fn research_academy(
 }
 
 /// Queues smithy research for a unit.
+#[utoipa::path(
+    post,
+    path = "/smithy/research",
+    request_body = ResearchSmithyRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn research_smithy(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -313,6 +444,12 @@ pub async fn research_smithy(
 }
 
 /// Sends resources from current village to coordinates-derived target village.
+#[utoipa::path(
+    post,
+    path = "/marketplace/send",
+    request_body = SendResourcesRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn send_resources(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -342,7 +479,52 @@ pub async fn send_resources(
     Ok(Json(ActionResponse { success: true }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/marketplace/send/preview",
+    request_body = PreviewSendResourcesRequest,
+    responses((status = 200, body = SendResourcesPreviewResponse))
+)]
+pub async fn preview_send_resources(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewSendResourcesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    ensure_slot(payload.slot_id)?;
+    ensure_building_in_slot(&user.village, payload.slot_id, BuildingName::Marketplace)?;
+
+    let total_resources = payload.lumber + payload.clay + payload.iron + payload.crop;
+    if total_resources == 0 {
+        return Err(ApiError::unprocessable(
+            "At least one resource amount must be greater than zero",
+        ));
+    }
+
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let merchant_speed = user.village.tribe.merchant_stats().speed;
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position,
+        merchant_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    Ok(Json(SendResourcesPreviewResponse { arrives_at }))
+}
+
 /// Creates a marketplace offer from current village.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers",
+    request_body = CreateOfferRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn create_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -380,6 +562,15 @@ pub async fn create_marketplace_offer(
 }
 
 /// Accepts an existing marketplace offer.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers/{offer_id}/accept",
+    params(
+        ("offer_id" = Uuid, Path, description = "Marketplace offer id")
+    ),
+    request_body = OfferActionRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn accept_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -404,6 +595,15 @@ pub async fn accept_marketplace_offer(
 }
 
 /// Cancels one of current village marketplace offers.
+#[utoipa::path(
+    post,
+    path = "/marketplace/offers/{offer_id}/cancel",
+    params(
+        ("offer_id" = Uuid, Path, description = "Marketplace offer id")
+    ),
+    request_body = OfferActionRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn cancel_marketplace_offer(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -428,6 +628,12 @@ pub async fn cancel_marketplace_offer(
 }
 
 /// Sends troops as attack/raid/reinforcement or scouting movement.
+#[utoipa::path(
+    post,
+    path = "/army/send",
+    request_body = SendTroopsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn send_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -522,7 +728,92 @@ pub async fn send_troops(
     Ok(Json(ActionResponse { success: true }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/army/preview",
+    request_body = PreviewTroopsRequest,
+    responses((status = 200, body = MovementPreviewResponse))
+)]
+pub async fn preview_troops(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewTroopsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    let units = parse_troop_set(&payload.units)?;
+    if units.units().iter().all(|value| *value == 0) {
+        return Err(ApiError::unprocessable("At least one unit is required"));
+    }
+
+    let selected_units = user
+        .village
+        .tribe
+        .units()
+        .iter()
+        .enumerate()
+        .filter_map(
+            |(idx, unit)| {
+                if units.get(idx) > 0 { Some(unit) } else { None }
+            },
+        )
+        .collect::<Vec<_>>();
+    let min_speed = selected_units
+        .iter()
+        .map(|unit| unit.speed)
+        .min()
+        .unwrap_or(1);
+    let scout_only = !selected_units.is_empty()
+        && selected_units
+            .iter()
+            .all(|unit| matches!(unit.role, parabellum_types::army::UnitRole::Scout));
+    let has_catapult_units = selected_units
+        .iter()
+        .any(|unit| matches!(unit.role, parabellum_types::army::UnitRole::Cata));
+
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position.clone(),
+        min_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    // keep preview semantics aligned with send endpoint contract
+    if matches!(payload.movement, MovementKind::Attack | MovementKind::Raid) {
+        let _target_village_id = target_position.to_id(state.world_size);
+    }
+
+    let detected_kind = match payload.movement {
+        MovementKind::Reinforcement => PreviewDetectedKind::Reinforcement,
+        MovementKind::Attack | MovementKind::Raid => {
+            if scout_only {
+                PreviewDetectedKind::ScoutOnly
+            } else {
+                PreviewDetectedKind::AttackOrRaid
+            }
+        }
+    };
+
+    Ok(Json(MovementPreviewResponse {
+        arrives_at,
+        detected_kind,
+        supports_scouting_target_choice: scout_only,
+        has_catapult_units,
+    }))
+}
+
 /// Recalls units from a deployed army.
+#[utoipa::path(
+    post,
+    path = "/army/recall",
+    request_body = RecallTroopsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn recall_troops(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -547,6 +838,12 @@ pub async fn recall_troops(
 }
 
 /// Releases reinforcements back to their origin village.
+#[utoipa::path(
+    post,
+    path = "/army/release",
+    request_body = ReleaseReinforcementsRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn release_reinforcements(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -571,6 +868,12 @@ pub async fn release_reinforcements(
 }
 
 /// Sends settlers to found a new village.
+#[utoipa::path(
+    post,
+    path = "/map/found-village",
+    request_body = FoundVillageRequest,
+    responses((status = 200, body = ActionResponse))
+)]
 pub async fn found_village(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -593,6 +896,62 @@ pub async fn found_village(
         .map_err(|err| map_application_error("action_failed", err))?;
 
     Ok(Json(ActionResponse { success: true }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/map/found-village/preview",
+    request_body = PreviewFoundVillageRequest,
+    responses((status = 200, body = MovementPreviewResponse))
+)]
+pub async fn preview_found_village(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PreviewFoundVillageRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    let target_position = Position {
+        x: payload.target_x,
+        y: payload.target_y,
+    };
+    let target_field_id = target_position.to_id(state.world_size);
+    let target_field = state
+        .game_app
+        .get_map_field(target_field_id)
+        .await
+        .map_err(|err| map_application_error("preview_failed", err))?;
+    let target_is_empty_valley = target_field.village_id.is_none()
+        && target_field.player_id.is_none()
+        && matches!(
+            target_field.topology,
+            parabellum_game::models::map::MapFieldTopology::Valley(_)
+        );
+    if !target_is_empty_valley {
+        return Err(ApiError::unprocessable("Target field is not available"));
+    }
+
+    let settlers_speed = user
+        .village
+        .tribe
+        .units()
+        .get(9)
+        .map(|u| u.speed)
+        .unwrap_or(1);
+    let travel_time_secs = user.village.position.calculate_travel_time_secs(
+        target_position,
+        settlers_speed,
+        state.world_size,
+        state.server_speed as u8,
+    );
+    let arrives_at =
+        chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
+
+    Ok(Json(MovementPreviewResponse {
+        arrives_at,
+        detected_kind: PreviewDetectedKind::FoundVillage,
+        supports_scouting_target_choice: false,
+        has_catapult_units: false,
+    }))
 }
 
 fn ensure_slot(slot_id: u8) -> Result<(), ApiError> {
@@ -644,13 +1003,32 @@ fn parse_troop_set(values: &[i32]) -> Result<TroopSet, ApiError> {
 }
 
 fn parse_catapult_targets(
-    targets: Option<Vec<BuildingName>>,
-) -> Result<[BuildingName; 2], ApiError> {
+    targets: Option<Vec<CatapultTargetInput>>,
+) -> Result<[Option<BuildingName>; 2], ApiError> {
+    let parse_one = |input: &CatapultTargetInput| -> Result<Option<BuildingName>, ApiError> {
+        match input {
+            CatapultTargetInput::Building(name) => Ok(Some(name.clone())),
+            CatapultTargetInput::Text(value) if value.trim().eq_ignore_ascii_case("random") => {
+                Ok(None)
+            }
+            CatapultTargetInput::Text(_) => Err(ApiError::unprocessable(
+                "catapultTargets entries must be a building name or 'random'",
+            )),
+        }
+    };
+
     match targets {
-        None => Ok([BuildingName::MainBuilding, BuildingName::Warehouse]),
-        Some(values) if values.len() == 2 => Ok([values[0].clone(), values[1].clone()]),
+        None => Ok([
+            Some(BuildingName::MainBuilding),
+            Some(BuildingName::Warehouse),
+        ]),
+        Some(values) if values.len() == 1 => {
+            let first = parse_one(&values[0])?;
+            Ok([first.clone(), first])
+        }
+        Some(values) if values.len() == 2 => Ok([parse_one(&values[0])?, parse_one(&values[1])?]),
         Some(_) => Err(ApiError::unprocessable(
-            "catapultTargets must contain exactly 2 building names",
+            "catapultTargets must contain 1 or 2 entries",
         )),
     }
 }

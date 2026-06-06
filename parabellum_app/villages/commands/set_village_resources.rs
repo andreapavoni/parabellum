@@ -27,6 +27,10 @@ impl Command for SetVillageResources {
             }));
         }
 
+        if aggregate.village().village.stored_resources() == self.resources {
+            return Ok(vec![]);
+        }
+
         Ok(vec![VillageEvent::VillageResourcesSet {
             player_id: self.player_id,
             village_id: aggregate.aggregate_id(),

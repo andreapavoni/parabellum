@@ -1,30 +1,50 @@
 use super::models::VillageModel;
+use parabellum_game::models::{army::Army, village::Village};
+/// `VillageModel` intentionally carries only the village economy/read-model
+/// fields. Callers that need troop-aware domain behavior must load this context
+/// from the canonical army read model.
+#[derive(Debug, Clone, Default)]
+pub struct VillageArmyContext {
+    pub home: Option<Army>,
+    pub stationed: Vec<Army>,
+    pub deployed: Vec<Army>,
+    pub moving: Vec<Army>,
+}
+
+/// Hydrates a domain `Village` from the village read model plus explicit army
+/// context.
+pub fn hydrate_village(model: VillageModel, armies: VillageArmyContext) -> Village {
+    let busy_merchants = model.busy_merchants;
+    let mut village = Village::from_persistence(
+        model.village_id,
+        model.village_name,
+        model.player_id,
+        model.position,
+        model.tribe,
+        model.buildings,
+        vec![],
+        model.population,
+        armies.home,
+        armies.stationed,
+        armies.deployed,
+        model.loyalty,
+        model.production,
+        model.is_capital,
+        model.smithy_upgrades,
+        model.stocks,
+        model.academy_research,
+        0,
+        model.culture_points_production,
+        model.updated_at,
+        model.parent_village_id,
+    );
+    village.busy_merchants = busy_merchants.min(village.total_merchants);
+    village
+}
 
 impl From<VillageModel> for parabellum_game::models::village::Village {
     fn from(model: VillageModel) -> Self {
-        parabellum_game::models::village::Village::from_persistence(
-            model.village_id,
-            model.village_name,
-            model.player_id,
-            model.position,
-            model.tribe,
-            model.buildings,
-            vec![],
-            model.population,
-            model.army,
-            model.reinforcements,
-            model.deployed_armies,
-            model.loyalty,
-            model.production,
-            model.is_capital,
-            model.smithy_upgrades,
-            model.stocks,
-            model.academy_research,
-            0,
-            model.culture_points_production,
-            model.updated_at,
-            model.parent_village_id,
-        )
+        hydrate_village(model, VillageArmyContext::default())
     }
 }
 
@@ -60,14 +80,12 @@ mod tests {
             academy_research: academy.clone(),
             total_merchants: 0,
             busy_merchants: 0,
+            loyalty_updated_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             parent_village_id: None,
-            army: None,
-            reinforcements: vec![],
-            deployed_armies: vec![],
         };
 
-        let village = parabellum_game::models::village::Village::try_from(model).unwrap();
+        let village = parabellum_game::models::village::Village::from(model);
 
         assert_eq!(village.id, village_id);
         assert_eq!(village.culture_points, 0);
@@ -79,7 +97,5 @@ mod tests {
             .get_unit_idx_by_name(&UnitName::Legionnaire)
             .unwrap();
         assert_eq!(village.academy_research().get(idx), academy.get(idx));
-        assert!(village.reinforcements().is_empty());
-        assert!(village.deployed_armies().is_empty());
     }
 }

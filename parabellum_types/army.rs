@@ -87,6 +87,12 @@ pub enum UnitRole {
     Settler,
 }
 
+impl UnitRole {
+    pub fn is_expansion(self) -> bool {
+        matches!(self, UnitRole::Chief | UnitRole::Settler)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnitGroup {
     Infantry,

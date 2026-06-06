@@ -167,7 +167,7 @@ pub struct BuildingData {
     pub rules: BuildingRules,
 }
 
-/// Returns cumulative population and culture points for a given level.
+/// Returns cumulative population and current-level culture points for a given level.
 fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -> (u32, u16) {
     if level == 0 {
         return (0, 0); // Level 0 has 0 pop and 0 CP
@@ -175,7 +175,7 @@ fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -
 
     let building_data = get_building_data(name).unwrap();
     let mut cumulative_pop = 0;
-    let mut cumulative_cp = 0;
+    let mut level_cp = 0;
 
     // iterate from level 1 up to current level
     for i in 1..=level {
@@ -187,10 +187,12 @@ fn get_cumulative_stats(name: &BuildingName, group: &BuildingGroup, level: u8) -
 
         if let Some(data) = building_data.data.get(data_idx) {
             cumulative_pop += data.4;
-            cumulative_cp += data.5;
+            if i == level {
+                level_cp = data.5;
+            }
         }
     }
-    (cumulative_pop, cumulative_cp)
+    (cumulative_pop, level_cp)
 }
 
 pub fn get_building_data(name: &BuildingName) -> Result<&BuildingData, GameError> {

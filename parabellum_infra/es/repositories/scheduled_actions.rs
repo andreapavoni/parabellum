@@ -1,5 +1,8 @@
+use parabellum_app::ports::queries::{
+    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, VillageQueues,
+};
 use parabellum_app::villages::models::{
-    ScheduledAction, ScheduledActionStatus, ScheduledActionType,
+    ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
 use parabellum_app::villages::queries::ScheduledActionStatusCounts;
 use parabellum_app::villages::repositories::ScheduledActionRepository;
@@ -17,6 +20,47 @@ impl PostgresScheduledActionRepository {
         Self { pool }
     }
 
+    pub async fn requeue_stale_processing(
+        &self,
+        updated_before_or_equal: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64, ApplicationError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE rm_scheduled_actions
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'processing'
+              AND updated_at <= $1
+            "#,
+        )
+        .bind(updated_before_or_equal)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(result.rows_affected())
+    }
+
+    pub async fn add_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        action: &ScheduledAction,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(action.id)
+        .bind(DbScheduledActionType::from(action.action_type))
+        .bind(action.execute_at)
+        .bind(Json(&action.payload))
+        .bind(DbScheduledActionStatus::from(action.status))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
     pub async fn has_pending_hero_revival_for_player(
         &self,
         player_id: Uuid,
@@ -28,7 +72,7 @@ impl PostgresScheduledActionRepository {
                 FROM rm_scheduled_actions
                 WHERE action_type = 'HeroRevival'
                   AND status = 'pending'
-                  AND payload->>'player_id' = $1
+                  AND payload->'workflow'->>'player_id' = $1
             )
             "#,
         )
@@ -38,6 +82,81 @@ impl PostgresScheduledActionRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(exists)
+    }
+
+    pub async fn list_village_queues(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageQueues, ApplicationError> {
+        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
+            r#"
+            SELECT id, action_type, execute_at, payload, status
+            FROM rm_scheduled_actions
+            WHERE (payload->'workflow'->>'village_id')::int = $1
+              AND status IN ('pending', 'processing')
+              AND action_type IN (
+                'AddBuilding',
+                'UpgradeBuilding',
+                'DowngradeBuilding',
+                'TrainUnit',
+                'ResearchAcademy',
+                'ResearchSmithy'
+              )
+            ORDER BY execute_at ASC, created_at ASC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let mut queues = VillageQueues::default();
+        for row in rows {
+            let status = row.status.into();
+            let payload: ScheduledActionPayload = serde_json::from_value(row.payload)
+                .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+            match payload {
+                ScheduledActionPayload::Building { workflow } => {
+                    queues.building.push(BuildingQueueItem {
+                        job_id: row.id,
+                        slot_id: workflow.slot_id,
+                        building_name: workflow.building_name,
+                        target_level: workflow.level,
+                        status,
+                        finishes_at: row.execute_at,
+                    });
+                }
+                ScheduledActionPayload::Training { workflow } => {
+                    queues.training.push(TrainingQueueItem {
+                        job_id: row.id,
+                        slot_id: workflow.slot_id,
+                        unit: workflow.unit,
+                        quantity: workflow.quantity_remaining,
+                        time_per_unit: workflow.time_per_unit,
+                        status,
+                        finishes_at: row.execute_at,
+                    });
+                }
+                ScheduledActionPayload::Research { workflow } => match row.action_type.into() {
+                    ScheduledActionType::ResearchAcademy => queues.academy.push(AcademyQueueItem {
+                        job_id: row.id,
+                        unit: workflow.unit,
+                        status,
+                        finishes_at: row.execute_at,
+                    }),
+                    ScheduledActionType::ResearchSmithy => queues.smithy.push(SmithyQueueItem {
+                        job_id: row.id,
+                        unit: workflow.unit,
+                        status,
+                        finishes_at: row.execute_at,
+                    }),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        Ok(queues)
     }
 }
 
@@ -65,20 +184,15 @@ impl From<DbScheduledActionRow> for ScheduledAction {
 #[async_trait::async_trait]
 impl ScheduledActionRepository for PostgresScheduledActionRepository {
     async fn add(&self, action: &ScheduledAction) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
-            VALUES ($1, $2, $3, $4, $5)
-            "#,
-        )
-        .bind(action.id)
-        .bind(DbScheduledActionType::from(action.action_type))
-        .bind(action.execute_at)
-        .bind(Json(&action.payload))
-        .bind(DbScheduledActionStatus::from(action.status))
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.add_in_tx(&mut tx, action).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 
@@ -169,7 +283,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND (payload->'workflow'->>'village_id')::int = $2
             ORDER BY execute_at ASC, created_at ASC
             "#,
         )
@@ -192,7 +306,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'target_village_id')::int = $2
+              AND (payload->'workflow'->>'target_village_id')::int = $2
             ORDER BY execute_at ASC, created_at ASC
             "#,
         )
@@ -215,7 +329,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND (payload->'workflow'->>'village_id')::int = $2
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -239,7 +353,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SELECT id, action_type, execute_at, payload, status
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'target_village_id')::int = $2
+              AND (payload->'workflow'->>'target_village_id')::int = $2
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -269,7 +383,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
               COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::bigint AS failed_count
             FROM rm_scheduled_actions
             WHERE action_type = $1
-              AND (payload->>'village_id')::int = $2
+              AND (payload->'workflow'->>'village_id')::int = $2
               AND ($3::scheduled_action_status IS NULL OR status = $3)
             "#,
         )

@@ -8,17 +8,9 @@ use uuid::Uuid;
 use crate::es::VillageEsService;
 
 use super::fixtures::{
-    barracks, granary, main_building, rally_point, resources, setup_village, warehouse,
-    with_test_pool,
+    barracks, deployed_armies, deployed_units, granary, home_units, main_building, rally_point,
+    resources, setup_village, stationed_armies, stationed_units, warehouse, with_test_pool,
 };
-
-fn troops_sum(armies: &[parabellum_game::models::army::Army], idx: usize) -> u32 {
-    armies.iter().map(|a| a.units().get(idx)).sum()
-}
-
-fn army_units(v: &parabellum_app::villages::models::VillageModel, idx: usize) -> u32 {
-    v.army.as_ref().map(|a| a.units().get(idx)).unwrap_or(0)
-}
 
 fn hero_mansion(level: u8) -> VillageBuilding {
     let building = Building::new(BuildingName::HeroMansion, 1)
@@ -80,14 +72,12 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
             .await
             .unwrap();
 
-        let source_before_arrival = service.get_village(source_village_id).await.unwrap();
-        assert_eq!(army_units(&source_before_arrival, 0), 1);
-        assert_eq!(troops_sum(&source_before_arrival.reinforcements, 0), 0);
-        assert_eq!(troops_sum(&source_before_arrival.deployed_armies, 0), 0);
-        let target_before_arrival = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(army_units(&target_before_arrival, 0), 0);
-        assert_eq!(troops_sum(&target_before_arrival.reinforcements, 0), 0);
-        assert_eq!(troops_sum(&target_before_arrival.deployed_armies, 0), 0);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 1);
+        assert_eq!(stationed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(home_units(&pool, target_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        assert_eq!(deployed_units(&pool, target_village_id, 0).await, 0);
 
         let movement_id = Uuid::new_v4();
         let army_id = Uuid::new_v4();
@@ -126,7 +116,7 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
         let village = service.get_village(source_village_id).await.unwrap();
         assert_eq!(village.player_id, source_player_id);
         assert_eq!(village.village_name, "Source Village");
-        assert_eq!(army_units(&village, 0), 0);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 0);
         assert_eq!(village.buildings.len(), 5);
 
         let processed = service
@@ -135,14 +125,30 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
             .unwrap();
         assert_eq!(processed, 1);
 
-        let source_after_arrival = service.get_village(source_village_id).await.unwrap();
-        assert_eq!(army_units(&source_after_arrival, 0), 0);
-        assert_eq!(troops_sum(&source_after_arrival.reinforcements, 0), 0);
-        assert_eq!(troops_sum(&source_after_arrival.deployed_armies, 0), 1);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, source_village_id, 0).await, 0);
+        let source_after_recall = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            deployed_armies(&pool, source_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
+        assert_eq!(
+            source_after_recall.production.upkeep, source_after_recall.population,
+            "owner village should not pay crop for troops stationed elsewhere"
+        );
+        assert_eq!(home_units(&pool, target_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 1);
+        assert_eq!(deployed_units(&pool, target_village_id, 0).await, 0);
         let target_after_arrival = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(army_units(&target_after_arrival, 0), 0);
-        assert_eq!(troops_sum(&target_after_arrival.reinforcements, 0), 1);
-        assert_eq!(troops_sum(&target_after_arrival.deployed_armies, 0), 0);
+        assert_eq!(
+            target_after_arrival.production.upkeep,
+            target_after_arrival.population + 1,
+            "stationed village should pay crop for hosted reinforcement"
+        );
 
         let source_movements_after = service
             .get_village_troop_movements(source_village_id)
@@ -232,11 +238,8 @@ async fn village_es_service_recall_reinforcements_supports_partial_split() {
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
             .await
             .unwrap();
-        let deployed_army = service
-            .get_village(source_village_id)
+        let deployed_army = deployed_armies(&pool, source_village_id)
             .await
-            .unwrap()
-            .deployed_armies
             .first()
             .cloned()
             .unwrap();
@@ -262,10 +265,22 @@ async fn village_es_service_recall_reinforcements_supports_partial_split() {
             .await
             .unwrap();
 
-        let source_after_recall = service.get_village(source_village_id).await.unwrap();
-        let target_after_recall = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after_recall.deployed_armies, 0), 1);
-        assert_eq!(troops_sum(&target_after_recall.reinforcements, 0), 1);
+        assert_eq!(
+            deployed_armies(&pool, source_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
+        assert_eq!(
+            stationed_armies(&pool, target_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
         let source_movements_after_recall = service
             .get_village_troop_movements(source_village_id)
             .await
@@ -281,11 +296,23 @@ async fn village_es_service_recall_reinforcements_supports_partial_split() {
             .await
             .unwrap();
 
-        let source_after_return = service.get_village(source_village_id).await.unwrap();
-        let target_after_return = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(army_units(&source_after_return, 0), 1);
-        assert_eq!(troops_sum(&source_after_return.deployed_armies, 0), 1);
-        assert_eq!(troops_sum(&target_after_return.reinforcements, 0), 1);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 1);
+        assert_eq!(
+            deployed_armies(&pool, source_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
+        assert_eq!(
+            stationed_armies(&pool, target_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
     })
     .await;
 }
@@ -364,11 +391,8 @@ async fn village_es_service_release_reinforcements_supports_partial_split() {
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
             .await
             .unwrap();
-        let reinforcement_army = service
-            .get_village(target_village_id)
+        let reinforcement_army = stationed_armies(&pool, target_village_id)
             .await
-            .unwrap()
-            .reinforcements
             .first()
             .cloned()
             .unwrap();
@@ -391,10 +415,22 @@ async fn village_es_service_release_reinforcements_supports_partial_split() {
             .await
             .unwrap();
 
-        let source_after_release = service.get_village(source_village_id).await.unwrap();
-        let target_after_release = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after_release.deployed_armies, 0), 1);
-        assert_eq!(troops_sum(&target_after_release.reinforcements, 0), 1);
+        assert_eq!(
+            deployed_armies(&pool, source_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
+        assert_eq!(
+            stationed_armies(&pool, target_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
         let source_movements_after_release = service
             .get_village_troop_movements(source_village_id)
             .await
@@ -482,11 +518,8 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
             .await
             .unwrap();
-        let deployed_army = service
-            .get_village(source_village_id)
+        let deployed_army = deployed_armies(&pool, source_village_id)
             .await
-            .unwrap()
-            .deployed_armies
             .first()
             .cloned()
             .unwrap();
@@ -509,10 +542,19 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
             .await
             .unwrap();
 
-        let source_after_recall = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_returning = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_returning.production.upkeep,
+            source_returning.population + 2,
+            "owner village should pay crop while recalled reinforcements return"
+        );
         let target_after_recall = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after_recall.deployed_armies, 0), 0);
-        assert_eq!(troops_sum(&target_after_recall.reinforcements, 0), 0);
+        assert_eq!(
+            target_after_recall.production.upkeep, target_after_recall.population,
+            "stationed village should stop paying crop after recall"
+        );
         let source_movements = service
             .get_village_troop_movements(source_village_id)
             .await
@@ -524,11 +566,15 @@ async fn village_es_service_recall_reinforcements_full_return_clears_stationed_e
             .await
             .unwrap();
 
-        let source_after_return = service.get_village(source_village_id).await.unwrap();
-        let target_after_return = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(army_units(&source_after_return, 0), 2);
-        assert_eq!(troops_sum(&source_after_return.deployed_armies, 0), 0);
-        assert_eq!(troops_sum(&target_after_return.reinforcements, 0), 0);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 2);
+        assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_home = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_home.production.upkeep,
+            source_home.population + 2,
+            "owner village should pay crop after recalled reinforcements are home"
+        );
     })
     .await;
 }
@@ -607,11 +653,8 @@ async fn village_es_service_release_reinforcements_full_return_clears_stationed_
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
             .await
             .unwrap();
-        let reinforcement_army = service
-            .get_village(target_village_id)
+        let reinforcement_army = stationed_armies(&pool, target_village_id)
             .await
-            .unwrap()
-            .reinforcements
             .first()
             .cloned()
             .unwrap();
@@ -634,21 +677,34 @@ async fn village_es_service_release_reinforcements_full_return_clears_stationed_
             .await
             .unwrap();
 
-        let source_after_release = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_returning = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_returning.production.upkeep,
+            source_returning.population + 2,
+            "owner village should pay crop while released reinforcements return"
+        );
         let target_after_release = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after_release.deployed_armies, 0), 0);
-        assert_eq!(troops_sum(&target_after_release.reinforcements, 0), 0);
+        assert_eq!(
+            target_after_release.production.upkeep, target_after_release.population,
+            "stationed village should stop paying crop after release"
+        );
 
         service
             .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(30), 10)
             .await
             .unwrap();
 
-        let source_after_return = service.get_village(source_village_id).await.unwrap();
-        let target_after_return = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(army_units(&source_after_return, 0), 2);
-        assert_eq!(troops_sum(&source_after_return.deployed_armies, 0), 0);
-        assert_eq!(troops_sum(&target_after_return.reinforcements, 0), 0);
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 2);
+        assert_eq!(deployed_units(&pool, source_village_id, 0).await, 0);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 0);
+        let source_home = service.get_village(source_village_id).await.unwrap();
+        assert_eq!(
+            source_home.production.upkeep,
+            source_home.population + 2,
+            "owner village should pay crop after released reinforcements are home"
+        );
     })
     .await;
 }
@@ -742,11 +798,8 @@ async fn village_es_service_recall_partial_split_with_hero_moves_hero_with_retur
             .await
             .unwrap();
 
-        let deployed = service
-            .get_village(source_village_id)
+        let deployed = deployed_armies(&pool, source_village_id)
             .await
-            .unwrap()
-            .deployed_armies
             .into_iter()
             .find(|a| a.id == army_id)
             .unwrap();
@@ -770,14 +823,23 @@ async fn village_es_service_recall_partial_split_with_hero_moves_hero_with_retur
             .await
             .unwrap();
 
-        let source_after_recall = service.get_village(source_village_id).await.unwrap();
-        let target_after_recall = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&source_after_recall.deployed_armies, 0), 1);
-        assert_eq!(troops_sum(&target_after_recall.reinforcements, 0), 1);
+        let target_after_recall = stationed_armies(&pool, target_village_id).await;
         assert_eq!(
-            target_after_recall.reinforcements[0].hero().map(|h| h.id),
-            None
+            deployed_armies(&pool, source_village_id)
+                .await
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
         );
+        assert_eq!(
+            target_after_recall
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
+        );
+        assert_eq!(target_after_recall[0].hero().map(|h| h.id), None);
     })
     .await;
 }
@@ -871,11 +933,8 @@ async fn village_es_service_release_partial_split_without_hero_keeps_hero_statio
             .await
             .unwrap();
 
-        let stationed = service
-            .get_village(target_village_id)
+        let stationed = stationed_armies(&pool, target_village_id)
             .await
-            .unwrap()
-            .reinforcements
             .into_iter()
             .find(|a| a.id == army_id)
             .unwrap();
@@ -899,12 +958,15 @@ async fn village_es_service_release_partial_split_without_hero_keeps_hero_statio
             .await
             .unwrap();
 
-        let target_after_release = service.get_village(target_village_id).await.unwrap();
-        assert_eq!(troops_sum(&target_after_release.reinforcements, 0), 1);
+        let target_after_release = stationed_armies(&pool, target_village_id).await;
         assert_eq!(
-            target_after_release.reinforcements[0].hero().map(|h| h.id),
-            Some(hero_id)
+            target_after_release
+                .iter()
+                .map(|a| a.units().get(0))
+                .sum::<u32>(),
+            1
         );
+        assert_eq!(target_after_release[0].hero().map(|h| h.id), Some(hero_id));
     })
     .await;
 }

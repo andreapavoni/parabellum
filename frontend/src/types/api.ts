@@ -41,6 +41,8 @@ export type VillageSummary = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
+  loyalty: number;
   population: number;
   warehouseCapacity: number;
   granaryCapacity: number;
@@ -53,13 +55,15 @@ export type VillageListItem = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
   isCurrent: boolean;
 };
 
-export type MeContextResponse = {
+export type GameShellContext = {
   serverTime: number;
   worldSize: number;
   serverSpeed: number;
+  unreadReportsCount: number;
   player: {
     id: string;
     username: string;
@@ -67,6 +71,15 @@ export type MeContextResponse = {
   };
   currentVillage: VillageSummary;
   villages: VillageListItem[];
+};
+
+export type GameContextResponse = GameShellContext & {
+  currentVillageId: number;
+  buildingSlots: BuildingSlot[];
+  resourceSlots: ResourceSlot[];
+  buildingQueue: BuildingQueueItem[];
+  currentTroops: CurrentTroop[];
+  troopMovementSummary: TroopMovementSummary;
 };
 
 export type BuildingQueueItem = {
@@ -91,22 +104,24 @@ export type ResourceSlot = {
   inQueue?: boolean;
 };
 
-export type VillageOverviewResponse = {
-  serverTime: number;
-  village: VillageSummary;
-  buildingSlots: BuildingSlot[];
-  buildingQueue: BuildingQueueItem[];
+export type CurrentTroop = {
+  unitName: string;
+  count: number;
 };
 
-export type VillageResourcesResponse = {
-  serverTime: number;
-  village: VillageSummary;
-  resourceSlots: ResourceSlot[];
-  buildingQueue: BuildingQueueItem[];
-  currentTroops: {
-    unitName: string;
-    count: number;
-  }[];
+export type TroopMovementSummary = {
+  incomingAttacks: number;
+  incomingAttacksNextAt?: string;
+  incomingRaids: number;
+  incomingRaidsNextAt?: string;
+  incomingReturnsReinforcements: number;
+  incomingReturnsReinforcementsNextAt?: string;
+  outgoingAttacks: number;
+  outgoingAttacksNextAt?: string;
+  outgoingRaids: number;
+  outgoingRaidsNextAt?: string;
+  outgoingReinforcements: number;
+  outgoingReinforcementsNextAt?: string;
 };
 
 export type LeaderboardEntry = {
@@ -136,7 +151,9 @@ export type PlayerVillage = {
   name: string;
   x: number;
   y: number;
+  isCapital: boolean;
   population: number;
+  distanceFromCurrent: number;
 };
 
 export type PlayerProfileResponse = {
@@ -157,6 +174,11 @@ export type ReportListItem = {
 export type ReportsResponse = {
   serverTime: number;
   reports: ReportListItem[];
+  pagination: {
+    page: number;
+    perPage: number;
+    hasMore: boolean;
+  };
 };
 
 export type ReportDetailResponse = {
@@ -180,6 +202,7 @@ export type MapTile = {
   playerId?: string;
   villageName?: string;
   villagePopulation?: number;
+  isCapital?: boolean;
   playerName?: string;
   tribe?: string;
   tileType: "village" | "valley" | "oasis";
@@ -208,6 +231,7 @@ export type MapFieldDetailResponse = {
   villageName?: string;
   playerName?: string;
   villagePopulation?: number;
+  isCapital?: boolean;
   valley?: {
     lumber: number;
     clay: number;
@@ -215,6 +239,28 @@ export type MapFieldDetailResponse = {
     crop: number;
   };
   oasis?: string;
+  oasisBonus?: {
+    lumber: number;
+    clay: number;
+    iron: number;
+    crop: number;
+  };
+  canPreviewFounding: boolean;
+  hasMarketplace: boolean;
+  hasRallyPoint: boolean;
+  marketplaceSlotId?: number;
+  rallyPointSlotId?: number;
+};
+
+export type MovementPreviewResponse = {
+  arrivesAt: string;
+  detectedKind: "attack_or_raid" | "scout_only" | "reinforcement" | "found_village";
+  supportsScoutingTargetChoice: boolean;
+  hasCatapultUnits: boolean;
+};
+
+export type SendResourcesPreviewResponse = {
+  arrivesAt: string;
 };
 
 export type Requirement = {
@@ -232,8 +278,14 @@ export type EmptySlotBuildOption = {
 export type TrainingUnitOption = {
   unitIdx: number;
   name: string;
+  maxTrainable?: number;
   cost: ResourceAmounts;
   upkeep: number;
+  attack: number;
+  defenseInfantry: number;
+  defenseCavalry: number;
+  speed: number;
+  capacity: number;
   timeSecs: number;
 };
 
@@ -241,7 +293,7 @@ export type TrainingQueueItem = {
   quantity: number;
   unitName: string;
   timePerUnit: number;
-  timeRemainingSecs: number;
+  finishesAt: string;
 };
 
 export type AcademyResearchOption = {
@@ -253,13 +305,14 @@ export type AcademyResearchOption = {
 
 export type AcademyQueueItem = {
   unitName: string;
-  timeRemainingSecs: number;
+  finishesAt: string;
   isProcessing: boolean;
 };
 
 export type SmithyUpgradeOption = {
   unitName: string;
   currentLevel: number;
+  nextLevel: number;
   maxLevel: number;
   cost: ResourceAmounts;
   timeSecs: number;
@@ -269,7 +322,7 @@ export type SmithyUpgradeOption = {
 export type SmithyQueueItem = {
   unitName: string;
   targetLevel: number;
-  timeRemainingSecs: number;
+  finishesAt: string;
   isProcessing: boolean;
 };
 
@@ -286,7 +339,7 @@ export type BuildingDetail = {
   timeSecs: number;
   queueFull: boolean;
   atMaxLevel: boolean;
-  nextValue?: string;
+  nextValue?: number;
   cost: ResourceAmounts;
   storedResources: ResourceAmounts;
   emptySlot?: {
@@ -305,7 +358,7 @@ export type BuildingDetail = {
       nextUpkeep: number;
       timeSecs: number;
       atMaxLevel: boolean;
-      nextValue?: string;
+      nextValue?: number;
       cost: ResourceAmounts;
     };
   };
@@ -315,15 +368,13 @@ export type BuildingDetail = {
     queue: TrainingQueueItem[];
   };
   expansion?: {
+    loyalty: number;
     villageCulturePointsProduction: number;
     accountCulturePointsProduction: number;
     accountCulturePoints: number;
     nextCpRequired: number;
     maxFoundationSlots: number;
     childVillagesCount: number;
-    settlersAtHome: number;
-    settlersDeployed: number;
-    maxSettlersTrainable: number;
   };
   academy?: {
     readyUnits: AcademyResearchOption[];
@@ -340,6 +391,8 @@ export type BuildingDetail = {
   marketplace?: {
     availableMerchants: number;
     totalMerchants: number;
+    merchantCapacity: number;
+    merchantSpeed: number;
     ownOffers: MarketplaceOffer[];
     globalOffers: MarketplaceOffer[];
     merchantMovements: MerchantMovement[];
@@ -348,13 +401,10 @@ export type BuildingDetail = {
     cards: RallyCard[];
     sendableUnits: RallySendableUnit[];
   };
-  descriptionParagraphs: string[];
 };
 
 export type BuildingPageResponse = {
   serverTime: number;
-  village: VillageSummary;
-  villages: VillageListItem[];
   detail: BuildingDetail;
 };
 
@@ -387,21 +437,24 @@ export type MerchantMovement = {
   destinationPosition?: Position;
   resources: ResourceAmounts;
   merchantsUsed: number;
-  timeRemainingSecs: number;
+  arrivesAt: string;
 };
 
 export type RallyCardCategory = "stationed" | "reinforcement" | "deployed" | "incoming" | "outgoing";
-export type RallyMovementKind = "attack" | "raid" | "reinforcement" | "return" | "found_village";
+export type RallyMovementKind = "attack" | "raid" | "scout" | "reinforcement" | "return" | "found_village";
 export type RallyAction = "recall" | "release";
 
 export type RallyCard = {
   villageId: number;
   villageName?: string;
   position?: Position;
+  tribe: string;
   units: number[];
+  upkeep: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
-  arrivalTime?: number;
+  arrivesAt?: string;
+  bounty?: ResourceAmounts;
   action?: RallyAction;
   actionId?: string;
 };

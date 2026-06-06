@@ -3,6 +3,7 @@ pub mod es;
 pub mod identity;
 pub mod map;
 mod persistence;
+pub mod seed;
 
 mod connection;
 

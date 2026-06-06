@@ -1,16 +1,16 @@
 import type {
   BuildingPageResponse,
+  GameContextResponse,
   MapFieldDetailResponse,
+  MovementPreviewResponse,
+  SendResourcesPreviewResponse,
   MapRegionResponse,
-  MeContextResponse,
   PlayerProfileResponse,
   ReportDetailResponse,
   ReportsResponse,
   SessionResponse,
   StatsResponse,
   TokenAuthResponse,
-  VillageOverviewResponse,
-  VillageResourcesResponse,
 } from "@/types/api";
 
 type RawMapTile = {
@@ -21,6 +21,7 @@ type RawMapTile = {
   player_id?: string;
   village_name?: string;
   village_population?: number;
+  is_capital?: boolean;
   player_name?: string;
   tribe?: string;
   tile_type: "village" | "valley" | "oasis";
@@ -161,7 +162,7 @@ export const api = {
   hasAccessToken: () => Boolean(accessToken),
   hasRefreshToken: () => Boolean(refreshToken),
   tokenSession: () => request<SessionResponse>("/me/session", {}, false),
-  tokenLogin: (payload: { email: string; password: string }) =>
+  tokenLogin: (payload: { username: string; password: string }) =>
     request<TokenAuthResponse>("/auth/token/login", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -212,9 +213,7 @@ export const api = {
     );
     clearTokens();
   },
-  meContext: () => request<MeContextResponse>("/me/context"),
-  villageOverview: (villageId: number) =>
-    request<VillageOverviewResponse>(`/villages/${villageId}/overview`),
+  gameContext: () => request<GameContextResponse>("/game/context"),
   building: (slotId: number) => request<BuildingPageResponse>(`/buildings/${slotId}`),
   switchVillage: (payload: { villageId: number }) =>
     request<{ villageId: number; accessToken?: string; expiresIn?: number }>("/me/village/current", {
@@ -224,11 +223,10 @@ export const api = {
       if (res.accessToken) updateAccessToken(res.accessToken);
       return res;
     }),
-  villageResources: (villageId: number) =>
-    request<VillageResourcesResponse>(`/villages/${villageId}/resources`),
   stats: (page = 1) => request<StatsResponse>(`/stats?page=${page}`),
   player: (playerId: string) => request<PlayerProfileResponse>(`/players/${playerId}`),
-  reports: () => request<ReportsResponse>("/reports"),
+  reports: (page = 1, perPage = 25) =>
+    request<ReportsResponse>(`/reports?page=${page}&per_page=${perPage}`),
   report: (reportId: string) => request<ReportDetailResponse>(`/reports/${reportId}`),
   mapRegion: async (params?: { x?: number; y?: number; villageId?: number }) => {
     const search = new URLSearchParams();
@@ -250,6 +248,7 @@ export const api = {
         playerId: tile.player_id,
         villageName: tile.village_name,
         villagePopulation: tile.village_population,
+        isCapital: tile.is_capital,
         playerName: tile.player_name,
         tribe: tile.tribe,
         tileType: tile.tile_type,
@@ -266,6 +265,11 @@ export const api = {
     }),
   upgradeBuilding: (payload: { slotId: number }) =>
     request<{ success: boolean }>("/buildings/upgrade", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  renameVillage: (payload: { villageId: number; villageName: string }) =>
+    request<{ success: boolean }>("/villages/rename", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -299,6 +303,19 @@ export const api = {
     crop: number;
   }) =>
     request<{ success: boolean }>("/marketplace/send", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  previewSendResources: (payload: {
+    slotId: number;
+    targetX: number;
+    targetY: number;
+    lumber: number;
+    clay: number;
+    iron: number;
+    crop: number;
+  }) =>
+    request<SendResourcesPreviewResponse>("/marketplace/send/preview", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -340,13 +357,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  recallTroops: (payload: { armyId: string; units: number[] }) =>
+  previewTroops: (payload: {
+    targetX: number;
+    targetY: number;
+    movement: "attack" | "raid" | "reinforcement";
+    units: number[];
+  }) =>
+    request<MovementPreviewResponse>("/army/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  recallTroops: (payload: { villageId: number; armyId: string; units: number[] }) =>
     request<{ success: boolean }>("/army/recall", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   releaseReinforcements: (payload: {
-    sourceVillageId: number;
+    villageId: number;
+    armyId: string;
     units: number[];
   }) =>
     request<{ success: boolean }>("/army/release", {
@@ -356,9 +384,16 @@ export const api = {
   foundVillage: (payload: {
     targetX: number;
     targetY: number;
-    units: number[];
   }) =>
     request<{ success: boolean }>("/map/found-village", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  previewFoundVillage: (payload: {
+    targetX: number;
+    targetY: number;
+  }) =>
+    request<MovementPreviewResponse>("/map/found-village/preview", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

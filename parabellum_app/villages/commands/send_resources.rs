@@ -12,6 +12,7 @@ pub struct SendMerchantsTransfer {
     pub target_village_id: u32,
     pub resources: ResourceGroup,
     pub arrives_at: DateTime<Utc>,
+    pub speed: i8,
 }
 
 impl Command for SendMerchantsTransfer {
@@ -38,7 +39,7 @@ impl Command for SendMerchantsTransfer {
 
         let merchants_used = aggregate
             .village()
-            .schedule_send_resources(self.resources.clone())
+            .schedule_send_resources(self.resources.clone(), self.speed)
             .map_err(as_domain_error)?;
 
         let travel_duration = (self.arrives_at - Utc::now()).max(chrono::Duration::seconds(1));
@@ -146,6 +147,7 @@ mod tests {
             target_village_id: 2,
             resources: parabellum_types::common::ResourceGroup(200, 50, 120, 100),
             arrives_at: Utc::now() + Duration::minutes(10),
+            speed: 1,
         }
         .handle(&aggregate)
         .await;
@@ -161,6 +163,7 @@ mod tests {
             target_village_id: 2,
             resources: parabellum_types::common::ResourceGroup(200, 50, 120, 100),
             arrives_at: Utc::now() + Duration::minutes(10),
+            speed: 1,
         }
         .handle(&aggregate)
         .await

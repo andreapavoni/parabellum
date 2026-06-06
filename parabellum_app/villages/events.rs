@@ -9,9 +9,10 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::EventPayload;
+use parabellum_game::battle::BattleReport;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::hero::Hero;
-use parabellum_game::models::village::VillageBuilding;
+use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::army::UnitName;
 use parabellum_types::battle::{AttackType, ScoutingTarget};
 use parabellum_types::buildings::BuildingName;
@@ -31,6 +32,11 @@ pub enum VillageEvent {
         player_id: Uuid,
         parent_village_id: Option<u32>,
         buildings: Vec<VillageBuilding>,
+    },
+    VillageRenamed {
+        village_id: u32,
+        player_id: Uuid,
+        village_name: String,
     },
     VillageConquered {
         player_id: Uuid,
@@ -85,6 +91,17 @@ pub enum VillageEvent {
         source_village_id: u32,
         target_village_id: u32,
         army: Army,
+        hero_alone_transfer: bool,
+        arrives_at: DateTime<Utc>,
+    },
+    ReinforcementAppliedToVillage {
+        movement_id: Uuid,
+        army_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        army: Army,
+        hero_alone_transfer: bool,
         arrives_at: DateTime<Utc>,
     },
     ReinforcementsRecalled {
@@ -142,7 +159,21 @@ pub enum VillageEvent {
         target_village_id: u32,
         army: Army,
         attack_type: AttackType,
-        catapult_targets: [BuildingName; 2],
+        catapult_targets: [Option<BuildingName>; 2],
+        arrives_at: DateTime<Utc>,
+        returns_at: DateTime<Utc>,
+    },
+    AttackArrivalScheduled {
+        action_id: Uuid,
+        movement_id: Uuid,
+        return_action_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        army_id: Uuid,
+        army: Army,
+        attack_type: AttackType,
+        catapult_targets: [Option<BuildingName>; 2],
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
     },
@@ -156,9 +187,44 @@ pub enum VillageEvent {
         target_village_id: u32,
         army: Army,
         attack_type: AttackType,
-        catapult_targets: [BuildingName; 2],
+        catapult_targets: [Option<BuildingName>; 2],
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
+    },
+    AttackBattleResolved {
+        action_id: Uuid,
+        movement_id: Uuid,
+        return_action_id: Uuid,
+        army_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        attack_type: AttackType,
+        report: BattleReport,
+        returning_army: Option<Army>,
+        stationed_attacker_army: Option<Army>,
+        returns_at: DateTime<Utc>,
+    },
+    /// Canonical target-stream fact for battle side effects.
+    ///
+    /// This payload is the authoritative post-battle state projection input for
+    /// the target village at the time of append.
+    BattleOutcomeAppliedToVillage {
+        action_id: Uuid,
+        movement_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        target_player_id: Uuid,
+        target_tribe: parabellum_types::tribe::Tribe,
+        target_parent_village_id: Option<u32>,
+        target_loyalty: u8,
+        target_buildings: Vec<VillageBuilding>,
+        target_production: VillageProduction,
+        target_population: u32,
+        target_stocks: VillageStocks,
+        target_army: Option<Army>,
+        target_reinforcements: Vec<Army>,
+        stationed_attacker_army: Option<Army>,
     },
     ArmyReturned {
         action_id: Uuid,
@@ -199,6 +265,23 @@ pub enum VillageEvent {
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
     },
+    /// Canonical source-stream fact for scout battle resolution.
+    ///
+    /// This carries the resolved scout battle report and the optional returning
+    /// army snapshot used to project return movement/scheduling.
+    ScoutBattleResolved {
+        action_id: Uuid,
+        movement_id: Uuid,
+        return_action_id: Uuid,
+        army_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        attack_type: AttackType,
+        report: BattleReport,
+        returning_army: Option<Army>,
+        returns_at: DateTime<Utc>,
+    },
     MerchantsTripScheduled {
         arrival_action_id: Uuid,
         return_action_id: Uuid,
@@ -220,6 +303,20 @@ pub enum VillageEvent {
         merchants_used: u8,
         arrives_at: DateTime<Utc>,
     },
+    /// Canonical target-stream fact for merchant transfer arrival materialization.
+    ///
+    /// `target_stocks` is the persisted stock snapshot computed by the workflow
+    /// at append time.
+    MerchantTransferAppliedToVillage {
+        action_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        resources: ResourceGroup,
+        merchants_used: u8,
+        arrives_at: DateTime<Utc>,
+        target_stocks: VillageStocks,
+    },
     MerchantsReturned {
         action_id: Uuid,
         player_id: Uuid,
@@ -236,6 +333,15 @@ pub enum VillageEvent {
         merchants_reserved: u8,
         created_at: DateTime<Utc>,
     },
+    MarketplaceOfferReservationAppliedToVillage {
+        offer_id: Uuid,
+        owner_player_id: Uuid,
+        owner_village_id: u32,
+        merchants_reserved: u8,
+        owner_stocks: VillageStocks,
+        owner_busy_merchants: u8,
+        applied_at: DateTime<Utc>,
+    },
     MarketplaceOfferCanceled {
         offer_id: Uuid,
         owner_player_id: Uuid,
@@ -243,6 +349,15 @@ pub enum VillageEvent {
         offer_resources: ResourceQuantity,
         merchants_reserved: u8,
         canceled_at: DateTime<Utc>,
+    },
+    MarketplaceOfferReservationReleasedFromVillage {
+        offer_id: Uuid,
+        owner_player_id: Uuid,
+        owner_village_id: u32,
+        merchants_reserved: u8,
+        owner_stocks: VillageStocks,
+        owner_busy_merchants: u8,
+        released_at: DateTime<Utc>,
     },
     MarketplaceOfferAccepted {
         offer_id: Uuid,
@@ -255,6 +370,18 @@ pub enum VillageEvent {
         owner_merchants_reserved: u8,
         accepting_merchants_used: u8,
         accepted_at: DateTime<Utc>,
+    },
+    /// Canonical accepting-village fact for marketplace acceptance materialization.
+    ///
+    /// This records the accepting village stock snapshot and busy merchants after
+    /// reserving the outbound seeking-resources trip.
+    MarketplaceOfferAcceptanceAppliedToVillage {
+        offer_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        stocks: VillageStocks,
+        busy_merchants: u8,
+        applied_at: DateTime<Utc>,
     },
     BuildingConstructionScheduled {
         action_id: Uuid,
@@ -361,12 +488,18 @@ pub enum VillageEvent {
         village_id: u32,
         unit: UnitName,
     },
+    ReportMarkedAsRead {
+        report_id: Uuid,
+        player_id: Uuid,
+        read_at: DateTime<Utc>,
+    },
 }
 
 impl fmt::Display for VillageEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             VillageEvent::VillageFounded { .. } => "VillageFounded",
+            VillageEvent::VillageRenamed { .. } => "VillageRenamed",
             VillageEvent::VillageConquered { .. } => "VillageConquered",
             VillageEvent::VillageResourcesSet { .. } => "VillageResourcesSet",
             VillageEvent::VillageArmyDetached { .. } => "VillageArmyDetached",
@@ -375,21 +508,38 @@ impl fmt::Display for VillageEvent {
             VillageEvent::HeroRevived { .. } => "HeroRevived",
             VillageEvent::ReinforcementSent { .. } => "ReinforcementSent",
             VillageEvent::ReinforcementArrived { .. } => "ReinforcementArrived",
+            VillageEvent::ReinforcementAppliedToVillage { .. } => "ReinforcementAppliedToVillage",
             VillageEvent::ReinforcementsRecalled { .. } => "ReinforcementsRecalled",
             VillageEvent::ReinforcementsReleased { .. } => "ReinforcementsReleased",
             VillageEvent::SettlersSent { .. } => "SettlersSent",
             VillageEvent::SettlersArrived { .. } => "SettlersArrived",
             VillageEvent::AttackSent { .. } => "AttackSent",
+            VillageEvent::AttackArrivalScheduled { .. } => "AttackArrivalScheduled",
             VillageEvent::AttackArrived { .. } => "AttackArrived",
+            VillageEvent::AttackBattleResolved { .. } => "AttackBattleResolved",
+            VillageEvent::BattleOutcomeAppliedToVillage { .. } => "BattleOutcomeAppliedToVillage",
             VillageEvent::ArmyReturned { .. } => "ArmyReturned",
             VillageEvent::ScoutSent { .. } => "ScoutSent",
             VillageEvent::ScoutArrived { .. } => "ScoutArrived",
+            VillageEvent::ScoutBattleResolved { .. } => "ScoutBattleResolved",
             VillageEvent::MerchantsTripScheduled { .. } => "MerchantsTripScheduled",
             VillageEvent::MerchantsArrived { .. } => "MerchantsArrived",
+            VillageEvent::MerchantTransferAppliedToVillage { .. } => {
+                "MerchantTransferAppliedToVillage"
+            }
             VillageEvent::MerchantsReturned { .. } => "MerchantsReturned",
             VillageEvent::MarketplaceOfferCreated { .. } => "MarketplaceOfferCreated",
+            VillageEvent::MarketplaceOfferReservationAppliedToVillage { .. } => {
+                "MarketplaceOfferReservationAppliedToVillage"
+            }
             VillageEvent::MarketplaceOfferCanceled { .. } => "MarketplaceOfferCanceled",
+            VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {
+                "MarketplaceOfferReservationReleasedFromVillage"
+            }
             VillageEvent::MarketplaceOfferAccepted { .. } => "MarketplaceOfferAccepted",
+            VillageEvent::MarketplaceOfferAcceptanceAppliedToVillage { .. } => {
+                "MarketplaceOfferAcceptanceAppliedToVillage"
+            }
             VillageEvent::BuildingConstructionScheduled { .. } => "BuildingConstructionScheduled",
             VillageEvent::BuildingUpgradeScheduled { .. } => "BuildingUpgradeScheduled",
             VillageEvent::BuildingDowngradeScheduled { .. } => "BuildingDowngradeScheduled",
@@ -402,6 +552,7 @@ impl fmt::Display for VillageEvent {
             VillageEvent::AcademyResearchCompleted { .. } => "AcademyResearchCompleted",
             VillageEvent::SmithyResearchScheduled { .. } => "SmithyResearchScheduled",
             VillageEvent::SmithyResearchCompleted { .. } => "SmithyResearchCompleted",
+            VillageEvent::ReportMarkedAsRead { .. } => "ReportMarkedAsRead",
         };
         f.write_str(name)
     }

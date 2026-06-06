@@ -1,14 +1,14 @@
-use mini_cqrs_es::{EventConsumers, SimpleAggregateManager, SimpleCqrs};
+use mini_cqrs_es::{EventConsumers, SimpleCqrs, SnapshotAggregateManager};
 use sqlx::PgPool;
 
-use crate::es::{PostgresEventStore, ReportProjector, VillageProjector};
+use crate::es::{PostgresEventStore, PostgresSnapshotStore, ReportProjector, VillageProjector};
 
 pub type VillageCqrsRuntime =
-    SimpleCqrs<PostgresEventStore, SimpleAggregateManager<PostgresEventStore>>;
+    SimpleCqrs<PostgresEventStore, SnapshotAggregateManager<PostgresSnapshotStore>>;
 
 pub fn village_cqrs_runtime(pool: PgPool) -> VillageCqrsRuntime {
     let event_store = PostgresEventStore::new(pool.clone());
-    let aggregate_manager = SimpleAggregateManager::new(event_store.clone());
+    let aggregate_manager = SnapshotAggregateManager::new(PostgresSnapshotStore::new(pool.clone()));
     let consumers = EventConsumers::new()
         .with(ReportProjector::new(pool.clone()))
         .with(VillageProjector::new(pool));

@@ -17,10 +17,10 @@ use crate::ports::{
     villages::{
         AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
         CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
-        ReleaseReinforcementsRequest, ResearchAcademyRequest, ResearchSmithyRequest,
-        ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
-        SendScoutRequest, SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
-        VillageCommandsPort,
+        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+        ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+        SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+        UpgradeBuildingRequest, VillageCommandsPort,
     },
 };
 
@@ -74,11 +74,11 @@ impl GameApplication {
 
     pub async fn authenticate_user(
         &self,
-        email: &str,
+        username: &str,
         password: &str,
     ) -> Result<User, ApplicationError> {
         self.identity_port()
-            .authenticate_user(email, password)
+            .authenticate_user(username, password)
             .await
     }
 
@@ -170,6 +170,13 @@ impl GameApplication {
         self.villages_port().upgrade_building(request).await
     }
 
+    pub async fn rename_village(
+        &self,
+        request: RenameVillageRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().rename_village(request).await
+    }
+
     pub async fn create_marketplace_offer(
         &self,
         request: CreateMarketplaceOfferRequest,
@@ -209,10 +216,11 @@ impl GameApplication {
     pub async fn list_reports_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<crate::villages::models::ReportModel>, ApplicationError> {
         self.queries_port()
-            .list_reports_for_player(player_id, limit)
+            .list_reports_for_player(player_id, offset, limit)
             .await
     }
 
@@ -223,6 +231,15 @@ impl GameApplication {
     ) -> Result<Option<crate::villages::models::ReportModel>, ApplicationError> {
         self.queries_port()
             .get_report_for_player(report_id, player_id)
+            .await
+    }
+
+    pub async fn count_unread_reports_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<i64, ApplicationError> {
+        self.queries_port()
+            .count_unread_reports_for_player(player_id)
             .await
     }
 

@@ -1,4 +1,5 @@
 import type { BuildingSlot } from "@/types/api";
+import { BuildingSprite } from "@/components/BuildingSprite";
 import { buildingLabel } from "@/lib/labels";
 import { navigate, shouldUseClientNavigation } from "@/lib/router";
 
@@ -23,6 +24,34 @@ const buildingPositions = [
   [24, 640, 380],
   [23, 520, 710],
 ] as const;
+const VILLAGE_ICON_SIZE = 128;
+
+function LevelBadge({
+  x,
+  y,
+  level,
+}: {
+  x: number;
+  y: number;
+  level: number;
+}) {
+  return (
+    <g class="pointer-events-none">
+      <circle cx={x} cy={y} r="16" fill="#f7f2df" stroke="#4a3a23" stroke-width="2.5" />
+      <text
+        x={x}
+        y={y}
+        dy="0.35em"
+        text-anchor="middle"
+        font-weight="700"
+        font-size="16"
+        fill="#2f2315"
+      >
+        {level}
+      </text>
+    </g>
+  );
+}
 
 function title(slot?: BuildingSlot) {
   if (!slot?.buildingName) return "Empty slot";
@@ -81,21 +110,39 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               stroke="#E88C30"
               stroke-width="18"
             />
+            {wallSlot.buildingName ? <LevelBadge x={500} y={78} level={wallSlot.level} /> : null}
             <title>{title(wallSlot)}</title>
           </a>
         ) : null}
 
         {rallyPoint ? (
           <a href={buildingHref(39, rallyPoint)} onClick={(event) => onMapLinkClick(event, buildingHref(39, rallyPoint))}>
-            <path
-              class="village-radar-zone"
-              d="M 535 778 A 280 280 0 0 0 765 605 L 588 541 A 120 120 0 0 1 512 618 Z"
-              fill="rgba(74, 122, 41, 0.25)"
-              stroke="#4a7a29"
-              stroke-width="3"
-              stroke-dasharray="10, 8"
-              transform="rotate(-30, 500, 500)"
-            />
+            <g transform="rotate(-30, 500, 500)">
+              <path
+                class="village-radar-zone"
+                d="M 535 778 A 280 280 0 0 0 765 605 L 588 541 A 120 120 0 0 1 512 618 Z"
+                fill="rgba(74, 122, 41, 0.25)"
+                stroke="#4a7a29"
+                stroke-width="3"
+                stroke-dasharray="10, 8"
+              />
+              {(() => {
+                return rallyPoint.buildingName ? (
+                  <>
+                    <foreignObject x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={rallyPoint.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(rallyPoint.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={652} y={622} level={rallyPoint.level} />
+                  </>
+                ) : null;
+              })()}
+            </g>
             <title>{title(rallyPoint)}</title>
           </a>
         ) : null}
@@ -110,26 +157,44 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               onClick={(event) => onMapLinkClick(event, buildingHref(slotId, slot))}
             >
               <g class="village-node-group">
-                <circle
-                  class={slotClasses(slot, isEmpty)}
-                  cx={cx}
-                  cy={cy}
-                  r="55"
-                  stroke-width="2"
-                  stroke-dasharray="6,4"
-                  opacity={isEmpty ? "0.6" : "1.0"}
-                />
-                <text
-                  x={cx}
-                  y={cy}
-                  dy="0.35em"
-                  text-anchor="middle"
-                  font-weight="bold"
-                  font-size="28"
-                  fill={isEmpty ? "#3e2b18" : "#1a3a10"}
-                >
-                  {isEmpty ? "-" : slot?.level}
-                </text>
+                {isEmpty ? (
+                  <circle
+                    class={slotClasses(slot, true)}
+                    cx={cx}
+                    cy={cy}
+                    r="55"
+                    stroke-width="2"
+                    stroke-dasharray="6,4"
+                    opacity="0.6"
+                  />
+                ) : null}
+                {!isEmpty && slot?.buildingName ? (
+                  <>
+                    <foreignObject x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={slot.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(slot!.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={cx + 38} y={cy - 20} level={slot.level} />
+                  </>
+                ) : null}
+                {isEmpty ? (
+                  <text
+                    x={cx}
+                    y={cy}
+                    dy="0.35em"
+                    text-anchor="middle"
+                    font-weight="bold"
+                    font-size="28"
+                    fill="#3e2b18"
+                  >
+                    -
+                  </text>
+                ) : null}
                 <title>{title(slot)}</title>
               </g>
             </a>
@@ -139,20 +204,39 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
         {mainBuilding ? (
           <a href={buildingHref(19, mainBuilding)} onClick={(event) => onMapLinkClick(event, buildingHref(19, mainBuilding))}>
             <g id="village-main-node">
-              <circle cx="500" cy="520" r="90" fill="none" stroke="white" stroke-width="5" opacity="0.8" />
-              <circle cx="500" cy="520" r="85" fill="#EDF4E1" />
-              <text
-                x="500"
-                y="520"
-                dy="0.35em"
-                text-anchor="middle"
-                font-family="Arial, sans-serif"
-                font-weight="900"
-                font-size="32"
-                fill="#1a3a10"
-              >
-                Main
-              </text>
+              {!mainBuilding.buildingName ? (
+                <>
+                  <circle cx="500" cy="520" r="65" fill="none" stroke="white" stroke-width="5" opacity="0.8" />
+                  <circle cx="500" cy="520" r="55" fill="#EDF4E1" />
+                  <text
+                    x="500"
+                    y="520"
+                    dy="0.35em"
+                    text-anchor="middle"
+                    font-weight="bold"
+                    font-size="28"
+                    fill="#3e2b18"
+                  >
+                    -
+                  </text>
+                </>
+              ) : null}
+              {(() => {
+                return mainBuilding.buildingName ? (
+                  <>
+                    <foreignObject x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                      <div class="pointer-events-none">
+                        <BuildingSprite
+                          buildingName={mainBuilding.buildingName}
+                          size={VILLAGE_ICON_SIZE}
+                          label={buildingLabel(mainBuilding.buildingName!)}
+                        />
+                      </div>
+                    </foreignObject>
+                    <LevelBadge x={566} y={454} level={mainBuilding.level} />
+                  </>
+                ) : null;
+              })()}
               <title>{title(mainBuilding)}</title>
             </g>
           </a>

@@ -129,6 +129,48 @@ pub struct Village {
 }
 
 impl Village {
+    fn horse_drinking_trough_level(&self) -> u8 {
+        self.get_building_by_name(&BuildingName::HorseDrinkingTrough)
+            .map(|b| b.building.level)
+            .unwrap_or(0)
+    }
+
+    pub fn cavalry_training_time_multiplier(&self, unit: &Unit) -> f64 {
+        if self.tribe != Tribe::Roman || unit.group != UnitGroup::Cavalry {
+            return 1.0;
+        }
+        let trough_level = self.horse_drinking_trough_level() as f64;
+        (100.0 - trough_level).max(1.0) / 100.0
+    }
+
+    fn unit_upkeep_with_trough(unit: &Unit, trough_level: u8) -> u32 {
+        let discount = match unit.name {
+            UnitName::EquitesLegati if trough_level >= 10 => 1,
+            UnitName::EquitesImperatoris if trough_level >= 15 => 1,
+            UnitName::EquitesCaesaris if trough_level >= 20 => 1,
+            _ => 0,
+        };
+        unit.cost.upkeep.saturating_sub(discount)
+    }
+
+    pub fn effective_unit_upkeep(&self, unit: &Unit) -> u32 {
+        let trough_level = self.horse_drinking_trough_level();
+        Self::unit_upkeep_with_trough(unit, trough_level)
+    }
+
+    fn army_upkeep_with_trough(&self, army: &Army) -> u32 {
+        let trough_level = self.horse_drinking_trough_level();
+        let units_data = army.tribe.units();
+        let mut total = 0u32;
+        for (idx, qty) in army.units().units().iter().enumerate() {
+            let Some(unit) = units_data.get(idx) else {
+                continue;
+            };
+            total = total.saturating_add(Self::unit_upkeep_with_trough(unit, trough_level) * qty);
+        }
+        total
+    }
+
     /// Returns a new village instance.
     pub fn new(
         name: String,
@@ -273,8 +315,9 @@ impl Village {
 
         let training_time_bonus_perc = building.building.value as f64 / 1000.0; // Es: 100 -> 1.0, 90 -> 0.9
         let base_time_per_unit = cost_per_unit.time as f64 / server_speed as f64;
+        let trough_multiplier = self.cavalry_training_time_multiplier(&unit);
 
-        let time_per_unit = (base_time_per_unit * training_time_bonus_perc)
+        let time_per_unit = (base_time_per_unit * training_time_bonus_perc * trough_multiplier)
             .floor()
             .max(1.0) as u32;
 
@@ -301,6 +344,73 @@ impl Village {
         self.deduct_resources(&building.cost().resources)?;
         let mb_level = self.main_building_level();
         Ok(building.calculate_build_time_secs(&server_speed, &mb_level))
+    }
+
+    /// Prepares for upgrading a building, applies validations and withdraws resources.
+    /// Returns the upgraded building name, target level, and construction time.
+    pub fn init_building_upgrade(
+        &mut self,
+        slot_id: u8,
+        server_speed: i8,
+    ) -> Result<(BuildingName, u8, u32), GameError> {
+        let current = self
+            .get_building_by_slot_id(slot_id)
+            .ok_or(GameError::EmptySlot { slot_id })?;
+        let data = get_building_data(&current.building.name)?;
+
+        if current.building.level >= data.rules.max_level {
+            return Err(GameError::BuildingMaxLevelReached);
+        }
+
+        let next_level = current.building.level + 1;
+        let target = Building::new(current.building.name.clone(), server_speed)
+            .at_level(next_level, server_speed)?;
+
+        self.validate_building_requirements(data.rules.requirements)?;
+        self.deduct_resources(&target.cost().resources)?;
+
+        let mb_level = self.main_building_level();
+        Ok((
+            current.building.name,
+            next_level,
+            target.calculate_build_time_secs(&server_speed, &mb_level),
+        ))
+    }
+
+    /// Prepares for downgrading a building. Returns the building name, target level,
+    /// and construction time.
+    pub fn init_building_downgrade(
+        &self,
+        slot_id: u8,
+        server_speed: i8,
+    ) -> Result<(BuildingName, u8, u32), GameError> {
+        if self.main_building_level() < 10 {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::MainBuilding,
+                level: 10,
+            });
+        }
+
+        let current = self
+            .get_building_by_slot_id(slot_id)
+            .ok_or(GameError::EmptySlot { slot_id })?;
+        if current.building.level == 0 {
+            return Err(GameError::InvalidBuildingLevel(
+                0,
+                current.building.name.clone(),
+            ));
+        }
+
+        let next_level = current.building.level - 1;
+        let target = Building::new(current.building.name.clone(), server_speed)
+            .at_level(next_level, server_speed)?;
+        let mb_level = self.main_building_level();
+
+        Ok((
+            current.building.name,
+            next_level,
+            target.calculate_build_time_secs(&server_speed, &mb_level),
+        ))
     }
 
     /// Prepares for starting a research in academy, applies validations and withdraws resources. Returns research time.
@@ -406,9 +516,41 @@ impl Village {
         self.stocks.store(resources);
     }
 
+    /// Reserves resources and merchants for an outgoing merchant workflow.
+    pub fn reserve_merchant_transfer(
+        &mut self,
+        resources: &ResourceGroup,
+        merchants_used: u8,
+    ) -> Result<(), GameError> {
+        self.deduct_resources(resources)?;
+        self.busy_merchants = self.busy_merchants.saturating_add(merchants_used);
+        Ok(())
+    }
+
+    /// Releases resources and merchants from a reserved merchant workflow.
+    pub fn release_merchant_transfer(&mut self, resources: &ResourceGroup, merchants_used: u8) {
+        self.store_resources(resources);
+        self.busy_merchants = self.busy_merchants.saturating_sub(merchants_used);
+    }
+
+    /// Marks merchants as returned after an outgoing merchant workflow completes.
+    pub fn return_merchants(&mut self, merchants_used: u8) {
+        self.busy_merchants = self.busy_merchants.saturating_sub(merchants_used);
+    }
+
     /// Returns a snapshot of the currently stored resources.
     pub fn stored_resources(&self) -> ResourceGroup {
         self.stocks.stored()
+    }
+
+    /// Standard resource cost for founding a new village with settlers.
+    pub fn foundation_cost() -> ResourceGroup {
+        ResourceGroup::new(800, 800, 800, 800)
+    }
+
+    /// Withdraws the standard settler foundation resources.
+    pub fn deduct_foundation_resources(&mut self) -> Result<(), GameError> {
+        self.deduct_resources(&Self::foundation_cost())
     }
 
     /// Gets the current warehouse capacity.
@@ -613,7 +755,7 @@ impl Village {
     /// Returns the number of chiefs/senators/chieftains currently in the home army (not deployed).
     pub fn count_chiefs_at_home(&self) -> u32 {
         if let Some(army) = &self.army {
-            return army.units().get(8);
+            army.units().get(8)
         } else {
             0
         }
@@ -628,7 +770,7 @@ impl Village {
         if settlers_count == 0 {
             0
         } else {
-            (settlers_count + Self::SETTLERS_PER_SLOT - 1) / Self::SETTLERS_PER_SLOT
+            settlers_count.div_ceil(Self::SETTLERS_PER_SLOT)
         }
     }
 
@@ -718,6 +860,10 @@ impl Village {
         self.loyalty
     }
 
+    pub fn regenerate_loyalty_to(&mut self, loyalty_after: u8) {
+        self.loyalty = loyalty_after.min(100);
+    }
+
     /// Calculates the total culture points production per day from all buildings.
     pub fn calculate_culture_points_production(&self) -> u32 {
         self.buildings
@@ -744,9 +890,23 @@ impl Village {
             .army()
             .map_or(Army::new_village_army(self), |a| a.clone());
         home_army.merge(army)?;
+        if home_army.hero().is_none() {
+            home_army.set_hero(army.hero());
+        }
         self.set_army(Some(&home_army))?;
         self.update_state();
         Ok(())
+    }
+
+    /// Adds freshly trained units to the home army.
+    pub fn add_trained_units_home(
+        &mut self,
+        unit: UnitName,
+        quantity: u32,
+    ) -> Result<(), GameError> {
+        let mut trained = Army::new_village_army(self);
+        trained.add_unit(unit, quantity)?;
+        self.merge_army(&trained)
     }
 
     /// Returns reinforcements in village.
@@ -792,7 +952,11 @@ impl Village {
             && let Some(mut home_army) = self.army.take()
         {
             home_army.apply_battle_report(defender_report);
-            self.army = Some(home_army);
+            self.army = if home_army.immensity() > 0 {
+                Some(home_army)
+            } else {
+                None
+            };
         }
 
         for report in &report.reinforcements {
@@ -806,6 +970,7 @@ impl Village {
                 let _ = std::mem::replace(&mut self.reinforcements[index], army.clone());
             }
         }
+        self.reinforcements.retain(|army| army.immensity() > 0);
         self.update_state();
 
         // Building damages
@@ -822,17 +987,23 @@ impl Village {
         // Catapult damages to other buildings
         for damage_report in &report.catapult_damage {
             if damage_report.level_after < damage_report.level_before
-                && let Some(target) = self.get_building_by_name(&damage_report.name)
+                && let Some(target) = self
+                    .buildings
+                    .iter()
+                    .filter(|b| b.building.name == damage_report.name)
+                    .find(|b| b.building.level == damage_report.level_before)
+                    .or_else(|| {
+                        self.buildings
+                            .iter()
+                            .filter(|b| b.building.name == damage_report.name)
+                            .max_by_key(|b| b.building.level)
+                    })
+                    .cloned()
             {
-                self.set_building_level_at_slot(
-                    target.slot_id,
-                    damage_report.level_after,
-                    server_speed,
-                )?;
+                let next_level = damage_report.level_after.min(target.building.level);
+                self.set_building_level_at_slot(target.slot_id, next_level, server_speed)?;
 
-                if damage_report.level_after == 0
-                    && target.building.group != BuildingGroup::Resources
-                {
+                if next_level == 0 && target.building.group != BuildingGroup::Resources {
                     self.remove_building_at_slot(target.slot_id, server_speed)?;
                 }
             }
@@ -865,6 +1036,58 @@ impl Village {
     /// Returns available merchants.
     pub fn available_merchants(&self) -> u8 {
         self.total_merchants.saturating_sub(self.busy_merchants)
+    }
+
+    /// Returns merchant carrying capacity after applying server speed.
+    pub fn merchant_capacity(&self, server_speed: i8) -> u32 {
+        let speed_multiplier = server_speed.max(1) as u32;
+        self.tribe
+            .merchant_stats()
+            .capacity
+            .saturating_mul(speed_multiplier)
+    }
+
+    /// Returns merchants required to move the requested resources.
+    pub fn required_merchants(
+        &self,
+        resources: &ResourceGroup,
+        server_speed: i8,
+    ) -> Result<u8, GameError> {
+        let capacity = self.merchant_capacity(server_speed);
+        if capacity == 0 {
+            return Err(GameError::NotEnoughMerchants);
+        }
+
+        let total = resources.total();
+        let needed = ((total as f64) / (capacity as f64)).ceil() as u8;
+        let merchants_needed = if total > 0 { needed.max(1) } else { 0 };
+        if merchants_needed == 0 || merchants_needed > self.available_merchants() {
+            return Err(GameError::NotEnoughMerchants);
+        }
+
+        Ok(merchants_needed)
+    }
+
+    /// Validates and returns merchants required for a resource transfer.
+    pub fn validate_merchant_transfer(
+        &self,
+        resources: &ResourceGroup,
+        server_speed: i8,
+    ) -> Result<u8, GameError> {
+        if self
+            .get_building_by_name(&BuildingName::Marketplace)
+            .is_none_or(|slot| slot.building.level == 0)
+        {
+            return Err(GameError::BuildingRequirementsNotMet {
+                building: BuildingName::Marketplace,
+                level: 1,
+            });
+        }
+        if !self.has_enough_resources(resources) {
+            return Err(GameError::NotEnoughResources);
+        }
+
+        self.required_merchants(resources, server_speed)
     }
 
     /// Marks a unit name as researched in the academy.
@@ -1046,9 +1269,12 @@ impl Village {
         }
 
         // armies upkeep
-        self.production.upkeep += self.army.clone().map_or(0, |a| a.upkeep());
+        self.production.upkeep += self
+            .army
+            .clone()
+            .map_or(0, |a| self.army_upkeep_with_trough(&a));
         for a in self.reinforcements.iter() {
-            self.production.upkeep += a.upkeep();
+            self.production.upkeep += self.army_upkeep_with_trough(a);
         }
 
         // update internal data
@@ -1076,10 +1302,15 @@ impl Village {
     /// It should be called whenever the village is loaded from the DB.
     fn update_resources(&mut self) {
         let now = Utc::now();
+        if self.updated_at > now {
+            // Guard against local clock skew/sleep/manual time adjustments:
+            // keep state monotonic so resource growth can resume on next reads/actions.
+            self.updated_at = now;
+            return;
+        }
         let time_elapsed = (now - self.updated_at).num_seconds() as f64;
 
         if time_elapsed <= 0.0 {
-            self.updated_at = now;
             return;
         }
 
@@ -1251,7 +1482,7 @@ pub struct VillageStocks {
 
 impl VillageStocks {
     /// Returns the currently stored resources as ResourceGroup
-    pub(crate) fn stored(&self) -> ResourceGroup {
+    pub fn stored(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
     }
 
@@ -1297,7 +1528,11 @@ impl Default for VillageStocks {
 #[allow(clippy::unnecessary_cast)]
 mod tests {
     use crate::{
-        models::{buildings::Building, village::VillageStocks},
+        models::{
+            army::Army,
+            buildings::Building,
+            village::{VillageBuilding, VillageStocks},
+        },
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
             valley_factory, village_factory,
@@ -1305,7 +1540,11 @@ mod tests {
     };
     use chrono::{Duration, Utc};
     use parabellum_types::{
-        buildings::BuildingName, common::ResourceGroup, errors::GameError, map::ValleyTopology,
+        army::{TroopSet, UnitName},
+        buildings::{BuildingGroup, BuildingName},
+        common::ResourceGroup,
+        errors::GameError,
+        map::ValleyTopology,
         tribe::Tribe,
     };
 
@@ -1374,6 +1613,38 @@ mod tests {
         // Effective production
         // 12 crop - 2 upkeep = 10 effective crop
         assert_eq!(v.production.effective.crop, 10, "effective crop production");
+    }
+
+    #[test]
+    fn merchant_transfer_reserve_and_release_updates_resources_and_busy_merchants() {
+        let mut village = village_factory(Default::default());
+        village.buildings.push(VillageBuilding {
+            slot_id: 27,
+            building: Building {
+                name: BuildingName::Marketplace,
+                group: BuildingGroup::Infrastructure,
+                value: 0,
+                population: 0,
+                culture_points: 0,
+                level: 2,
+            },
+        });
+        village.update_state();
+        village
+            .deduct_resources(&ResourceGroup::new(300, 0, 0, 0))
+            .unwrap();
+
+        village
+            .reserve_merchant_transfer(&ResourceGroup::new(200, 0, 0, 0), 1)
+            .unwrap();
+
+        assert_eq!(village.busy_merchants, 1);
+        assert_eq!(village.stored_resources().lumber(), 300);
+
+        village.release_merchant_transfer(&ResourceGroup::new(200, 0, 0, 0), 1);
+
+        assert_eq!(village.busy_merchants, 0);
+        assert_eq!(village.stored_resources().lumber(), 500);
     }
 
     #[test]
@@ -1520,6 +1791,52 @@ mod tests {
     }
 
     #[test]
+    fn test_update_resources_x5_elapsed_growth_matches_effective_hourly_production() {
+        let mut v = village_factory(VillageFactoryOptions {
+            server_speed: Some(5),
+            ..Default::default()
+        });
+
+        // Start from empty stocks and simulate exactly one hour elapsed.
+        v.stocks = VillageStocks {
+            lumber: 0,
+            clay: 0,
+            iron: 0,
+            crop: 0,
+            ..v.stocks
+        };
+        v.updated_at = Utc::now() - Duration::seconds(3600);
+
+        let expected_lumber = v.production.effective.lumber;
+        let expected_clay = v.production.effective.clay;
+        let expected_iron = v.production.effective.iron;
+        let expected_crop = v.production.effective.crop;
+
+        v.update_state();
+
+        assert_eq!(v.stocks.lumber, expected_lumber);
+        assert_eq!(v.stocks.clay, expected_clay);
+        assert_eq!(v.stocks.iron, expected_iron);
+        assert_eq!(v.stocks.crop, expected_crop);
+    }
+
+    #[test]
+    fn test_update_resources_clamps_future_updated_at_and_keeps_stocks_unchanged() {
+        let mut v = village_factory(Default::default());
+        let before_updated_at = Utc::now() + Duration::hours(2);
+        v.updated_at = before_updated_at;
+        let before_stocks = v.stocks.clone();
+
+        v.update_state();
+
+        assert!(v.updated_at <= Utc::now());
+        assert_eq!(v.stocks.lumber, before_stocks.lumber);
+        assert_eq!(v.stocks.clay, before_stocks.clay);
+        assert_eq!(v.stocks.iron, before_stocks.iron);
+        assert_eq!(v.stocks.crop, before_stocks.crop);
+    }
+
+    #[test]
     fn test_cumulative_population_and_upkeep_on_upgrade() {
         let server_speed = 1;
         let mut v = village_factory(VillageFactoryOptions {
@@ -1601,5 +1918,85 @@ mod tests {
         // Should pass because elapsed production is applied before availability check.
         let cost = ResourceGroup::new(1, 1, 1, 1);
         assert!(v.deduct_resources(&cost).is_ok());
+    }
+
+    #[test]
+    fn test_horse_drinking_trough_reduces_cavalry_training_time() {
+        let mut baseline = village_factory(Default::default());
+        let stable = Building::new(BuildingName::Stable, 1)
+            .at_level(1, 1)
+            .unwrap();
+        baseline.add_building_at_slot(stable.clone(), 21).unwrap();
+        baseline.set_academy_research_for_test(&UnitName::EquitesLegati, true);
+        let unit_idx = baseline
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesLegati)
+            .unwrap() as u8;
+        let (_, _, base_time_per_unit) = baseline
+            .init_unit_training(unit_idx, &BuildingName::Stable, 1, 1)
+            .unwrap();
+
+        let mut v = village_factory(Default::default());
+        let stable = Building::new(BuildingName::Stable, 1)
+            .at_level(1, 1)
+            .unwrap();
+        v.add_building_at_slot(stable, 21).unwrap();
+        let trough = Building::new(BuildingName::HorseDrinkingTrough, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(trough, 20).unwrap();
+        v.set_academy_research_for_test(&UnitName::EquitesLegati, true);
+
+        let (_, _, time_per_unit) = v
+            .init_unit_training(unit_idx, &BuildingName::Stable, 1, 1)
+            .unwrap();
+
+        assert_eq!(
+            time_per_unit,
+            (base_time_per_unit as f64 * 0.8).floor() as u32
+        );
+    }
+
+    #[test]
+    fn test_horse_drinking_trough_reduces_roman_cavalry_upkeep_at_thresholds() {
+        let mut v = village_factory(Default::default());
+        let trough = Building::new(BuildingName::HorseDrinkingTrough, 1)
+            .at_level(20, 1)
+            .unwrap();
+        v.add_building_at_slot(trough, 20).unwrap();
+
+        let mut units = TroopSet::default();
+        let legati_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesLegati)
+            .unwrap();
+        let imperatoris_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesImperatoris)
+            .unwrap();
+        let caesaris_idx = v
+            .tribe
+            .get_unit_idx_by_name(&UnitName::EquitesCaesaris)
+            .unwrap();
+        units.set(legati_idx, 1);
+        units.set(imperatoris_idx, 1);
+        units.set(caesaris_idx, 1);
+
+        let army = Army::new(
+            None,
+            v.id,
+            Some(v.id),
+            v.player_id,
+            v.tribe.clone(),
+            &units,
+            &[0; 8],
+            None,
+        );
+        v.set_army(Some(&army)).unwrap();
+        v.update_state();
+
+        // Base upkeep for Roman cavalry trio: 2 + 3 + 4 = 9.
+        // At trough level 20 each gets -1 => 6 total.
+        assert_eq!(v.production.upkeep, v.population + 6);
     }
 }

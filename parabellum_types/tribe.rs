@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{buildings::BuildingRequirement, common::MerchantStats};
+use crate::{buildings::BuildingRequirement, common::MerchantStats, errors::GameError};
 
 use super::{
-    army::{Unit, UnitGroup, UnitName, UnitRole},
+    army::{TroopSet, Unit, UnitGroup, UnitName, UnitRole},
     buildings::BuildingName,
     common::{Cost, ResearchCost, ResourceGroup},
 };
@@ -37,6 +37,29 @@ impl Tribe {
     /// Returns the army unit for the given unit name in actual tribe.
     pub fn get_unit_by_name(&self, unit_name: &UnitName) -> Option<&Unit> {
         self.units().iter().find(|unit| unit.name == *unit_name)
+    }
+
+    /// Returns whether every non-empty slot in a troop set belongs to the given role.
+    pub fn troop_set_contains_only_role(
+        &self,
+        troops: &TroopSet,
+        role: UnitRole,
+    ) -> Result<bool, GameError> {
+        for (idx, &quantity) in troops.units().iter().enumerate() {
+            if quantity == 0 {
+                continue;
+            }
+
+            let unit = self
+                .units()
+                .get(idx)
+                .ok_or(GameError::InvalidUnitIndex(idx as u8))?;
+            if unit.role != role {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 
     /// Returns the wall defense factor for actual tribe.
@@ -331,6 +354,34 @@ static ROMAN_UNITS: TribeUnits = [
         buildings: &[BuildingName::Palace, BuildingName::Residence],
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        army::{TroopSet, UnitRole},
+        tribe::Tribe,
+    };
+
+    #[test]
+    fn troop_set_contains_only_role_checks_non_empty_slots() {
+        assert!(
+            Tribe::Roman
+                .troop_set_contains_only_role(
+                    &TroopSet::new([0, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
+                    UnitRole::Scout,
+                )
+                .unwrap()
+        );
+        assert!(
+            !Tribe::Roman
+                .troop_set_contains_only_role(
+                    &TroopSet::new([1, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
+                    UnitRole::Scout,
+                )
+                .unwrap()
+        );
+    }
+}
 
 static TEUTON_UNITS: TribeUnits = [
     Unit {

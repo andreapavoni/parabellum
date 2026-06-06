@@ -12,6 +12,8 @@
 
 use axum::{Json, extract::State, http::HeaderMap, response::IntoResponse};
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
+use utoipa::ToSchema;
 
 use parabellum_app::ports::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
@@ -26,7 +28,6 @@ use crate::{
         error_mapping::internal_error,
         errors::ApiError,
     },
-    auth_metrics::{inc_auth_failure, inc_auth_success, inc_refresh_failure, inc_refresh_success},
     auth_tokens::{AuthTokenError, IssuedTokenPair},
     http::AppState,
     session::current_user_by_ids,
@@ -34,15 +35,15 @@ use crate::{
 
 use super::bearer_token;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Login payload for token-based authentication.
 pub struct TokenLoginRequest {
-    pub email: String,
+    pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Registration payload.
 pub struct TokenRegisterRequest {
@@ -53,14 +54,14 @@ pub struct TokenRegisterRequest {
     pub quadrant: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Refresh request with current refresh token.
 pub struct TokenRefreshRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Logout request. Optionally revokes all sessions for the user.
 pub struct TokenLogoutRequest {
@@ -69,14 +70,14 @@ pub struct TokenLogoutRequest {
     pub all_sessions: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Logout response payload.
 pub struct LogoutResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Token response returned by login/register/refresh.
 pub struct TokenAuthResponse {
@@ -88,30 +89,36 @@ pub struct TokenAuthResponse {
 }
 
 /// Authenticates user credentials and returns access+refresh token pair.
+#[utoipa::path(
+    post,
+    path = "/auth/token/login",
+    request_body = TokenLoginRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Access/refresh token pair"),
+        (status = 401, description = "Invalid credentials"),
+        (status = 422, description = "Validation error")
+    )
+)]
 pub async fn token_login(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<TokenLoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    if payload.email.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Missing required login fields.")
-                .with_field_error("email", "Email is required"),
-        );
+    if payload.username.trim().is_empty() {
+        return Err(ApiError::unprocessable("Missing required login fields.")
+            .with_field_error("username", "Username is required"));
     }
     if payload.password.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Missing required login fields.")
-                .with_field_error("password", "Password is required"),
-        );
+        return Err(ApiError::unprocessable("Missing required login fields.")
+            .with_field_error("password", "Password is required"));
     }
 
     let account = state
         .game_app
-        .authenticate_user(&payload.email, &payload.password)
+        .authenticate_user(&payload.username, &payload.password)
         .await
         .map_err(|err| {
-            inc_auth_failure();
+            warn!(username = %payload.username, error = %err, "token login failed");
             map_auth_error(err)
         })?;
 
@@ -132,11 +139,21 @@ pub async fn token_login(
         .token_service
         .issue_token_pair(&current, refresh_session.id, refresh_token)
         .map_err(map_token_error)?;
-    inc_auth_success();
+    info!(user_id = %current.account.id, player_id = %current.player.id, "token login succeeded");
     Ok(Json(token_response(pair, &current)))
 }
 
 /// Registers a new user/player and immediately returns tokens.
+#[utoipa::path(
+    post,
+    path = "/auth/token/register",
+    request_body = TokenRegisterRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Registered and authenticated"),
+        (status = 409, description = "Username or email already exists"),
+        (status = 422, description = "Validation error")
+    )
+)]
 pub async fn token_register(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -160,7 +177,18 @@ pub async fn token_register(
                 .with_field_error("password", "Password is required"),
         );
     }
+    if !is_valid_registration_password(&payload.password) {
+        return Err(ApiError::unprocessable("Invalid password.")
+            .with_field_error("password", "The password does not satisfy the server rules"));
+    }
 
+    info!(
+        username = %payload.username,
+        email = %payload.email,
+        tribe = %payload.tribe,
+        quadrant = %payload.quadrant,
+        "token registration requested"
+    );
     let tribe = parse_tribe(&payload.tribe)?;
     let quadrant = parse_quadrant(&payload.quadrant)?;
     state
@@ -172,9 +200,13 @@ pub async fn token_register(
             password: payload.password.clone(),
             tribe,
             quadrant,
+            initial_village: None,
         })
         .await
-        .map_err(map_register_error)?;
+        .map_err(|err| {
+            warn!(email = %payload.email, error = %err, "token registration failed");
+            map_register_error(err)
+        })?;
 
     let account = state
         .game_app
@@ -198,20 +230,33 @@ pub async fn token_register(
         .token_service
         .issue_token_pair(&current, refresh_session.id, refresh_token)
         .map_err(map_token_error)?;
+    info!(
+        user_id = %current.account.id,
+        player_id = %current.player.id,
+        village_id = current.village.id,
+        "token registration succeeded"
+    );
     Ok(Json(token_response(pair, &current)))
 }
 
 /// Rotates refresh token and returns a fresh token pair.
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = TokenRefreshRequest,
+    responses(
+        (status = 200, body = TokenAuthResponse, description = "Rotated token pair"),
+        (status = 401, description = "Refresh token invalid/expired")
+    )
+)]
 pub async fn token_refresh(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<TokenRefreshRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     if payload.refresh_token.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Refresh token is required.")
-                .with_field_error("refresh_token", "Refresh token is required"),
-        );
+        return Err(ApiError::unprocessable("Refresh token is required.")
+            .with_field_error("refresh_token", "Refresh token is required"));
     }
 
     let (session, rotated_refresh_token) = state
@@ -224,7 +269,7 @@ pub async fn token_refresh(
         )
         .await
         .map_err(|err| {
-            inc_refresh_failure();
+            warn!(error = %err, "token refresh failed");
             map_token_error(err)
         })?;
     let current = current_user_by_ids(&state, session.user_id, Some(session.current_village_id))
@@ -234,21 +279,27 @@ pub async fn token_refresh(
         .token_service
         .issue_token_pair(&current, session.id, rotated_refresh_token)
         .map_err(map_token_error)?;
-    inc_refresh_success();
+    info!(user_id = %current.account.id, player_id = %current.player.id, "token refresh succeeded");
     Ok(Json(token_response(pair, &current)))
 }
 
 /// Revokes the provided refresh token (and optionally all user sessions).
+#[utoipa::path(
+    post,
+    path = "/auth/token/logout",
+    request_body = TokenLogoutRequest,
+    responses(
+        (status = 200, body = LogoutResponse, description = "Refresh session revoked")
+    )
+)]
 pub async fn token_logout(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<TokenLogoutRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     if payload.refresh_token.trim().is_empty() {
-        return Err(
-            ApiError::unprocessable("Refresh token is required.")
-                .with_field_error("refresh_token", "Refresh token is required"),
-        );
+        return Err(ApiError::unprocessable("Refresh token is required.")
+            .with_field_error("refresh_token", "Refresh token is required"));
     }
 
     state
@@ -277,8 +328,9 @@ pub async fn token_logout(
 fn map_auth_error(error: ApplicationError) -> ApiError {
     match error {
         ApplicationError::App(AppError::WrongAuthCredentials)
+        | ApplicationError::Db(DbError::UserByUsernameNotFound(_))
         | ApplicationError::Db(DbError::UserByEmailNotFound(_)) => {
-            ApiError::unauthorized("Invalid email or password.")
+            ApiError::unauthorized("Invalid username or password.")
         }
         _ => internal_error("auth_login_failed", error),
     }
@@ -370,4 +422,11 @@ fn client_ip(headers: &HeaderMap) -> Option<std::net::IpAddr> {
         .and_then(|v| v.split(',').next())
         .map(str::trim)?;
     raw.parse::<std::net::IpAddr>().ok()
+}
+
+fn is_valid_registration_password(password: &str) -> bool {
+    if password.len() < 4 {
+        return false;
+    }
+    true
 }

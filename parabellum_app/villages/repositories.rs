@@ -10,6 +10,19 @@ use crate::villages::models::{
 };
 use crate::villages::queries::ScheduledActionStatusCounts;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpansionCultureSnapshot {
+    pub village_culture_points_production: u32,
+    pub player_culture_points_production: u32,
+    pub player_village_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpansionOwnershipSnapshot {
+    pub source_child_villages: u8,
+    pub player_village_count: usize,
+}
+
 #[async_trait::async_trait]
 pub trait VillageRepository: Send + Sync {
     async fn upsert_from_village(
@@ -21,27 +34,11 @@ pub trait VillageRepository: Send + Sync {
         tribe: Tribe,
         parent_village_id: Option<u32>,
         buildings: &[parabellum_game::models::village::VillageBuilding],
-        army: &Option<parabellum_game::models::army::Army>,
     ) -> Result<(), ApplicationError>;
     async fn update_player_id(
         &self,
         village_id: u32,
         player_id: Uuid,
-    ) -> Result<(), ApplicationError>;
-    async fn update_army(
-        &self,
-        village_id: u32,
-        army: &Option<parabellum_game::models::army::Army>,
-    ) -> Result<(), ApplicationError>;
-    async fn update_reinforcements(
-        &self,
-        village_id: u32,
-        reinforcements: &[parabellum_game::models::army::Army],
-    ) -> Result<(), ApplicationError>;
-    async fn update_deployed_armies(
-        &self,
-        village_id: u32,
-        deployed_armies: &[parabellum_game::models::army::Army],
     ) -> Result<(), ApplicationError>;
     async fn update_building(
         &self,
@@ -70,6 +67,21 @@ pub trait VillageRepository: Send + Sync {
         &self,
         village_ids: &[u32],
     ) -> Result<Vec<VillageModel>, ApplicationError>;
+    async fn get_expansion_culture_snapshot(
+        &self,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<ExpansionCultureSnapshot, ApplicationError>;
+    async fn count_child_villages(
+        &self,
+        player_id: Uuid,
+        parent_village_id: u32,
+    ) -> Result<u8, ApplicationError>;
+    async fn get_expansion_ownership_snapshot(
+        &self,
+        player_id: Uuid,
+        source_village_id: u32,
+    ) -> Result<ExpansionOwnershipSnapshot, ApplicationError>;
     async fn set_map_occupancy(
         &self,
         field_id: u32,
@@ -169,6 +181,7 @@ pub trait MarketplaceRepository: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct ProjectedReport {
+    pub id: Uuid,
     pub report_type: String,
     pub payload: serde_json::Value,
     pub actor_player_id: Uuid,
@@ -187,6 +200,7 @@ pub trait ReportRepository: Send + Sync {
     async fn list_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError>;
 
@@ -195,6 +209,8 @@ pub trait ReportRepository: Send + Sync {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<Option<ReportModel>, ApplicationError>;
+
+    async fn count_unread_for_player(&self, player_id: Uuid) -> Result<i64, ApplicationError>;
 
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError>;
 }

@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::army::Army;
+use parabellum_game::models::village::Village;
 use parabellum_types::army::TroopSet;
 use parabellum_types::buildings::BuildingName;
-use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::GameError;
 use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
@@ -50,7 +50,7 @@ impl Command for SendSettlers {
         if settlers < 3 {
             return Err(as_domain_error(GameError::InsufficientSettlers));
         }
-        let resources = ResourceGroup::new(800, 800, 800, 800);
+        let resources = Village::foundation_cost();
         if !aggregate.village().village.has_enough_resources(&resources) {
             return Err(as_domain_error(GameError::NotEnoughResources));
         }

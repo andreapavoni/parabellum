@@ -42,10 +42,10 @@ impl Query for GetScheduledActionStatusCounts {
 
         let mut counts = ScheduledActionStatusCounts::default();
         for action in actions {
-            if let Some(status_filter) = self.status_filter {
-                if action.status != status_filter {
-                    continue;
-                }
+            if let Some(status_filter) = self.status_filter
+                && action.status != status_filter
+            {
+                continue;
             }
             match action.status {
                 ScheduledActionStatus::Pending => counts.pending += 1,
@@ -95,6 +95,7 @@ impl Query for GetMarketplaceOfferById {
 pub struct ListReportsForPlayer {
     pub repository: Arc<dyn ReportRepository>,
     pub player_id: uuid::Uuid,
+    pub offset: i64,
     pub limit: i64,
 }
 
@@ -103,7 +104,7 @@ impl Query for ListReportsForPlayer {
 
     async fn apply(&self) -> Self::Output {
         self.repository
-            .list_for_player(self.player_id, self.limit)
+            .list_for_player(self.player_id, self.offset, self.limit)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -122,6 +123,23 @@ impl Query for GetReportForPlayer {
     async fn apply(&self) -> Self::Output {
         self.repository
             .get_for_player(self.report_id, self.player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
+    }
+}
+
+/// Query that counts unread projected reports for one player from ES read models.
+pub struct CountUnreadReportsForPlayer {
+    pub repository: Arc<dyn ReportRepository>,
+    pub player_id: uuid::Uuid,
+}
+
+impl Query for CountUnreadReportsForPlayer {
+    type Output = Result<i64, CqrsError>;
+
+    async fn apply(&self) -> Self::Output {
+        self.repository
+            .count_unread_for_player(self.player_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -160,6 +178,7 @@ mod tests {
         async fn list_for_player(
             &self,
             player_id: Uuid,
+            offset: i64,
             limit: i64,
         ) -> Result<Vec<ReportModel>, parabellum_types::errors::ApplicationError> {
             let reads = self.reads.lock().await;
@@ -177,6 +196,9 @@ mod tests {
             }
             out.sort_by_key(|r| r.created_at);
             out.reverse();
+            if offset > 0 {
+                out = out.into_iter().skip(offset as usize).collect();
+            }
             out.truncate(limit as usize);
             Ok(out)
         }
@@ -202,6 +224,17 @@ mod tests {
             let mut reads = self.reads.lock().await;
             reads.insert((report_id, player_id), Some(Utc::now()));
             Ok(())
+        }
+        async fn count_unread_for_player(
+            &self,
+            player_id: Uuid,
+        ) -> Result<i64, parabellum_types::errors::ApplicationError> {
+            let rows = self.rows.lock().await;
+            let unread = rows
+                .values()
+                .filter(|r| r.target_player_id == Some(player_id) && r.read_at.is_none())
+                .count() as i64;
+            Ok(unread)
         }
     }
 
@@ -242,6 +275,7 @@ mod tests {
         let query = ListReportsForPlayer {
             repository: repo,
             player_id,
+            offset: 0,
             limit: 10,
         };
         let out = query.apply().await.unwrap();

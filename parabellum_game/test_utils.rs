@@ -161,7 +161,7 @@ pub fn army_factory(options: ArmyFactoryOptions) -> Army {
         Some(village_id),
         options.player_id.unwrap_or(Uuid::new_v4()),
         options.tribe.unwrap_or(Tribe::Roman),
-        &options.units.unwrap_or(TroopSet::default()),
+        &options.units.unwrap_or_default(),
         &options.smithy.unwrap_or_default(),
         options.hero,
     )

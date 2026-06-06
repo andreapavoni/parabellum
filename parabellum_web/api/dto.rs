@@ -6,6 +6,7 @@
 
 use chrono::Utc;
 use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use parabellum_app::villages::models::ScheduledActionStatus;
@@ -42,7 +43,7 @@ fn building_queue_to_views(
         .collect()
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Public user identity for authenticated session payloads.
 pub struct SessionUserDto {
@@ -53,7 +54,7 @@ pub struct SessionUserDto {
     pub tribe: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Canonical resource amount tuple.
 pub struct ResourceAmountsDto {
@@ -63,7 +64,7 @@ pub struct ResourceAmountsDto {
     pub crop: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Per-hour production snapshot.
 pub struct ProductionAmountsDto {
@@ -73,7 +74,7 @@ pub struct ProductionAmountsDto {
     pub crop: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Village summary used across multiple endpoints.
 pub struct VillageSummaryDto {
@@ -81,6 +82,8 @@ pub struct VillageSummaryDto {
     pub name: String,
     pub x: i32,
     pub y: i32,
+    pub is_capital: bool,
+    pub loyalty: u8,
     pub population: i32,
     pub warehouse_capacity: u32,
     pub granary_capacity: u32,
@@ -88,7 +91,7 @@ pub struct VillageSummaryDto {
     pub production_per_hour: ProductionAmountsDto,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Village list item for current player context.
 pub struct VillageListItemDto {
@@ -96,10 +99,11 @@ pub struct VillageListItemDto {
     pub name: String,
     pub x: i32,
     pub y: i32,
+    pub is_capital: bool,
     pub is_current: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Village building slot summary (village center slots).
 pub struct BuildingSlotDto {
@@ -111,7 +115,7 @@ pub struct BuildingSlotDto {
     pub in_queue: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Resource field slot summary (slots 1..=18).
 pub struct ResourceSlotDto {
@@ -122,7 +126,7 @@ pub struct ResourceSlotDto {
     pub in_queue: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Building queue entry with computed remaining time.
 pub struct BuildingQueueItemDto {
@@ -133,49 +137,35 @@ pub struct BuildingQueueItemDto {
     pub is_processing: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-/// Lightweight player summary for `/me/context`.
+/// Lightweight player summary for game context responses.
 pub struct PlayerSummaryDto {
     pub id: Uuid,
     pub username: String,
     pub tribe: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/me/context`.
-pub struct MeContextResponse {
+/// Rich hydration payload for `GET /api/v1/game/context`.
+pub struct GameContextResponse {
     pub server_time: i64,
     pub world_size: i32,
     pub server_speed: i8,
+    pub unread_reports_count: i64,
     pub player: PlayerSummaryDto,
+    pub current_village_id: u32,
     pub current_village: VillageSummaryDto,
     pub villages: Vec<VillageListItemDto>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/villages/{id}/overview`.
-pub struct VillageOverviewResponse {
-    pub server_time: i64,
-    pub village: VillageSummaryDto,
     pub building_slots: Vec<BuildingSlotDto>,
-    pub building_queue: Vec<BuildingQueueItemDto>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-/// Response payload for `GET /api/v1/villages/{id}/resources`.
-pub struct VillageResourcesResponse {
-    pub server_time: i64,
-    pub village: VillageSummaryDto,
     pub resource_slots: Vec<ResourceSlotDto>,
     pub building_queue: Vec<BuildingQueueItemDto>,
     pub current_troops: Vec<CurrentTroopDto>,
+    pub troop_movement_summary: TroopMovementSummaryDto,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Troop entry aggregated for resources page.
 pub struct CurrentTroopDto {
@@ -183,7 +173,24 @@ pub struct CurrentTroopDto {
     pub count: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TroopMovementSummaryDto {
+    pub incoming_attacks: usize,
+    pub incoming_attacks_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub incoming_raids: usize,
+    pub incoming_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub incoming_returns_reinforcements: usize,
+    pub incoming_returns_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub outgoing_attacks: usize,
+    pub outgoing_attacks_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub outgoing_raids: usize,
+    pub outgoing_raids_next_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub outgoing_reinforcements: usize,
+    pub outgoing_reinforcements_next_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Leaderboard row.
 pub struct LeaderboardEntryDto {
@@ -195,7 +202,7 @@ pub struct LeaderboardEntryDto {
     pub population: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Leaderboard pagination metadata.
 pub struct PaginationDto {
@@ -205,7 +212,7 @@ pub struct PaginationDto {
     pub total_pages: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Leaderboard response payload.
 pub struct StatsResponse {
@@ -214,7 +221,7 @@ pub struct StatsResponse {
     pub pagination: PaginationDto,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Player village summary used in player profile.
 pub struct PlayerVillageDto {
@@ -222,10 +229,12 @@ pub struct PlayerVillageDto {
     pub name: String,
     pub x: i32,
     pub y: i32,
+    pub is_capital: bool,
     pub population: i32,
+    pub distance_from_current: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Player profile response payload.
 pub struct PlayerProfileResponse {
@@ -235,23 +244,33 @@ pub struct PlayerProfileResponse {
     pub villages: Vec<PlayerVillageDto>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Report item returned by reports list endpoint.
 pub struct ReportListItemDto {
     pub id: Uuid,
     pub report_type: String,
+    #[schema(value_type = ReportPayloadDoc)]
     pub payload: ReportPayload,
     pub created_at: i64,
     pub is_read: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Reports list response payload.
 pub struct ReportsResponse {
     pub server_time: i64,
     pub reports: Vec<ReportListItemDto>,
+    pub pagination: ReportsPaginationDto,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportsPaginationDto {
+    pub page: i64,
+    pub per_page: i64,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -268,6 +287,135 @@ where
     pub payload: T,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportDetailPayloadResponse {
+    pub server_time: i64,
+    pub id: Uuid,
+    pub report_type: String,
+    pub created_at: i64,
+    #[schema(value_type = ReportPayloadDoc)]
+    pub payload: ReportPayload,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PositionDoc {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceGroupDoc {
+    pub lumber: u32,
+    pub clay: u32,
+    pub iron: u32,
+    pub crop: u32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BattlePartyPayloadDoc {
+    #[schema(value_type = String)]
+    pub tribe: parabellum_types::tribe::Tribe,
+    pub army_before: Vec<u32>,
+    pub survivors: Vec<u32>,
+    pub losses: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoutingTargetDefensesDoc {
+    pub wall: Option<u8>,
+    pub palace: Option<u8>,
+    pub residence: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ScoutingTargetReportDoc {
+    Resources(ResourceGroupDoc),
+    Defenses(ScoutingTargetDefensesDoc),
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoutingBattleReportDoc {
+    pub was_detected: bool,
+    #[schema(value_type = String)]
+    pub target: parabellum_types::battle::ScoutingTarget,
+    pub target_report: ScoutingTargetReportDoc,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildingDamageReportDoc {
+    #[schema(value_type = String)]
+    pub name: parabellum_types::buildings::BuildingName,
+    pub level_before: u8,
+    pub level_after: u8,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BattleReportPayloadDoc {
+    #[schema(value_type = String)]
+    pub attack_type: parabellum_types::battle::AttackType,
+    pub attacker_player: String,
+    pub attacker_village: String,
+    pub attacker_position: PositionDoc,
+    pub defender_player: String,
+    pub defender_village: String,
+    pub defender_position: PositionDoc,
+    pub success: bool,
+    pub bounty: ResourceGroupDoc,
+    pub attacker: Option<BattlePartyPayloadDoc>,
+    pub defender: Option<BattlePartyPayloadDoc>,
+    pub reinforcements: Vec<BattlePartyPayloadDoc>,
+    pub scouting: Option<ScoutingBattleReportDoc>,
+    pub wall_damage: Option<BuildingDamageReportDoc>,
+    pub catapult_damage: Vec<BuildingDamageReportDoc>,
+    pub loyalty_before: Option<u8>,
+    pub loyalty_after: Option<u8>,
+    pub conquered: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReinforcementReportPayloadDoc {
+    pub sender_player: String,
+    pub sender_village: String,
+    pub sender_position: PositionDoc,
+    pub receiver_player: String,
+    pub receiver_village: String,
+    pub receiver_position: PositionDoc,
+    #[schema(value_type = String)]
+    pub tribe: parabellum_types::tribe::Tribe,
+    pub units: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceDeliveryReportPayloadDoc {
+    pub sender_player: String,
+    pub sender_village: String,
+    pub sender_position: PositionDoc,
+    pub receiver_player: String,
+    pub receiver_village: String,
+    pub receiver_position: PositionDoc,
+    pub resources: ResourceGroupDoc,
+    pub merchants_used: u8,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ReportPayloadDoc {
+    Battle(BattleReportPayloadDoc),
+    Reinforcement(ReinforcementReportPayloadDoc),
+    MarketplaceDelivery(MarketplaceDeliveryReportPayloadDoc),
+}
+
 /// Maps domain village state into API summary DTO.
 pub fn village_summary(village: &Village) -> VillageSummaryDto {
     let resources = village.stored_resources();
@@ -276,6 +424,8 @@ pub fn village_summary(village: &Village) -> VillageSummaryDto {
         name: village.name.clone(),
         x: village.position.x,
         y: village.position.y,
+        is_capital: village.is_capital,
+        loyalty: village.loyalty(),
         population: village.population as i32,
         warehouse_capacity: village.warehouse_capacity(),
         granary_capacity: village.granary_capacity(),
@@ -303,6 +453,7 @@ pub fn village_list(user: &CurrentUser) -> Vec<VillageListItemDto> {
             name: village.name.clone(),
             x: village.position.x,
             y: village.position.y,
+            is_capital: village.is_capital,
             is_current: village.id == user.village.id,
         })
         .collect()
@@ -422,30 +573,82 @@ fn current_troops(
         .collect()
 }
 
-pub fn village_overview_response(
-    village: &Village,
-    queues: &parabellum_app::ports::queries::VillageQueues,
-) -> VillageOverviewResponse {
-    let queue_views = building_queue_to_views(&queues.building);
-    VillageOverviewResponse {
-        server_time: Utc::now().timestamp(),
-        village: village_summary(village),
-        building_slots: building_slots(village, &queue_views),
-        building_queue: building_queue_items(&queue_views),
-    }
-}
-
-pub fn village_resources_response(
+pub fn game_context_response(
+    server_time: i64,
+    world_size: i32,
+    server_speed: i8,
+    unread_reports_count: i64,
+    user: &CurrentUser,
     village: &Village,
     queues: &parabellum_app::ports::queries::VillageQueues,
     army_state: &parabellum_app::ports::queries::VillageArmyStateView,
-) -> VillageResourcesResponse {
+    movements: &parabellum_app::ports::queries::VillageTroopMovements,
+) -> GameContextResponse {
+    use parabellum_app::ports::queries::TroopMovementType;
     let queue_views = building_queue_to_views(&queues.building);
-    VillageResourcesResponse {
-        server_time: Utc::now().timestamp(),
-        village: village_summary(village),
+    let summarize = |items: &[parabellum_app::ports::queries::TroopMovement],
+                     predicate: fn(TroopMovementType) -> bool| {
+        let mut count = 0usize;
+        let mut next_at: Option<chrono::DateTime<chrono::Utc>> = None;
+        for movement in items {
+            if predicate(movement.movement_type) {
+                count += 1;
+                next_at = match next_at {
+                    Some(current) => Some(std::cmp::min(current, movement.arrives_at)),
+                    None => Some(movement.arrives_at),
+                };
+            }
+        }
+        (count, next_at)
+    };
+    let (incoming_attacks, incoming_attacks_next_at) = summarize(&movements.incoming, |kind| {
+        matches!(kind, TroopMovementType::Attack | TroopMovementType::Scout)
+    });
+    let (incoming_raids, incoming_raids_next_at) =
+        summarize(&movements.incoming, |kind| kind == TroopMovementType::Raid);
+    let (incoming_returns_reinforcements, incoming_returns_reinforcements_next_at) =
+        summarize(&movements.incoming, |kind| {
+            matches!(
+                kind,
+                TroopMovementType::Return | TroopMovementType::Reinforcement
+            )
+        });
+    let (outgoing_attacks, outgoing_attacks_next_at) = summarize(&movements.outgoing, |kind| {
+        matches!(kind, TroopMovementType::Attack | TroopMovementType::Scout)
+    });
+    let (outgoing_raids, outgoing_raids_next_at) =
+        summarize(&movements.outgoing, |kind| kind == TroopMovementType::Raid);
+    let (outgoing_reinforcements, outgoing_reinforcements_next_at) =
+        summarize(&movements.outgoing, |kind| {
+            kind == TroopMovementType::Reinforcement
+        });
+
+    GameContextResponse {
+        server_time,
+        world_size,
+        server_speed,
+        unread_reports_count,
+        player: player_summary(user),
+        current_village_id: village.id,
+        current_village: village_summary(village),
+        villages: village_list(user),
+        building_slots: building_slots(village, &queue_views),
         resource_slots: resource_slots(village, &queue_views),
         building_queue: building_queue_items(&queue_views),
         current_troops: current_troops(army_state),
+        troop_movement_summary: TroopMovementSummaryDto {
+            incoming_attacks,
+            incoming_attacks_next_at,
+            incoming_raids,
+            incoming_raids_next_at,
+            incoming_returns_reinforcements,
+            incoming_returns_reinforcements_next_at,
+            outgoing_attacks,
+            outgoing_attacks_next_at,
+            outgoing_raids,
+            outgoing_raids_next_at,
+            outgoing_reinforcements,
+            outgoing_reinforcements_next_at,
+        },
     }
 }

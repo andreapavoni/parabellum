@@ -65,15 +65,44 @@ Want to get the server running locally? Here’s how.
 
 5.  **(optional) Seed game data:**
     ```sh
-    # Uses seed/game.json by default
+    # Uses seed/default.json by default
     cargo run -p parabellum_server --bin parabellum-seed
     ```
-    You can also pass a custom data file and a username override:
+    You can also pass a custom data file:
     ```sh
-    cargo run -p parabellum_server --bin parabellum-seed -- --file seed/dev.json --username andrea
+    cargo run -p parabellum_server --bin parabellum-seed -- seed/game.json
     ```
-    The seeder creates (or reuses) a user/player and prepares one developed village according to the JSON file.
-    Login defaults are deterministic: email is `<username>@example.com`, password is `<username>`.
+    The seeder supports multiple players and multiple villages per player. Root JSON shape:
+    ```json
+    {
+      "players": [
+        {
+          "username": "andrea",
+          "email": "andrea@example.com",
+          "password": "andrea",
+          "tribe": "Roman",
+          "villages": [
+            {
+              "template": "developed",
+              "quadrant": "NorthEast",
+              "buildings": [
+                { "slotId": 39, "name": "RallyPoint", "level": 2 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    ```
+    Use separate template files to keep village setups reusable, for example:
+    - `seed/default.json` (players + village references)
+    - `seed/templates/developed.json` (village defaults)
+    - `seed/templates/rusher.json` (another village profile)
+
+    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`).
+    First village follows signup rules: it is always founded on a random unoccupied valley in the selected `quadrant` (explicit `position` is not allowed for the first village).
+    Additional villages can either set an explicit `position` (must be free) or use random unoccupied valley selection with `quadrant`.
+    If omitted, login defaults remain deterministic: email is `<username>@example.com`, password is `<username>`.
 
 6.  **Install frontend dependencies:**
     ```sh
@@ -162,7 +191,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] **Users and Auth**: Login/register/logout, needs password recovery
 - [x] **World Map bootsrap**: Automatic bootstrap of the game map at first run.
 - [x] **Settler Expansion**: Training settlers, tracking culture points, founding new villages.
-- [x] **i18n System**: builtin i18n support (actually only English for now).
+- [x] **Chief Expansion**: Battle calculation for loyalty and conquest
 
 ### In Progress
 **API / UI**: Getting the minimal viable views to navigate the game:
@@ -195,6 +224,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [x] Map
 
 ### ToDo (Not Started)
+- [ ] **i18n System**: builtin i18n support (refactor)
 - [ ] **Edit Player Profile**: have a bare profile to show
 - [ ] **Messages**
   - [ ] Player-Player
@@ -208,7 +238,7 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
   - [ ] Resources bonus when conquered.
   - [ ] Resource production and spawn Nature army in free oases.
 - [ ] **Alliances**: Creating and managing alliances.
-- [ ] **Chief Expansion**: Add battle calculation for loyalty and conquest. Chiefs are already researchable in Academy and trainable in Palace/Residence.
+ Chiefs are already researchable in Academy and trainable in Palace/Residence.
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **End Game**: Wonder of the World, Natars, etc.
 - [ ] **Admin UI**: a minimal dashboard to manage the game.
@@ -244,7 +274,7 @@ These packages define the whole game engine. There aren't infrastructure details
 
 - Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - API contract matrix: [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md)
-- API test roadmap: [`parabellum_server/tests/API_TESTING_PLAN.md`](parabellum_server/tests/API_TESTING_PLAN.md)
+- Testing and error conventions: [`docs/TESTING_AND_ERROR_CONVENTIONS.md`](docs/TESTING_AND_ERROR_CONVENTIONS.md)
 
 ---
 

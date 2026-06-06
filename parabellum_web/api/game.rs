@@ -2,7 +2,7 @@
 //!
 //! These handlers expose canonical API data used by the SPA:
 //! - current user context (`/me/*`)
-//! - village resource/overview snapshots (`/villages/{id}/*`)
+//! - game hydration (`/game/context`)
 //! - map, reports, stats and player profile reads
 
 use axum::{
@@ -13,20 +13,20 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use parabellum_app::read_models::MapRegionTile;
 use parabellum_game::models::map::MapFieldTopology;
-use parabellum_game::models::village::Village;
+use parabellum_types::buildings::BuildingName;
 use parabellum_types::map::ValleyTopology;
 
 use crate::{
     api::{
         dto::{
-            LeaderboardEntryDto, MeContextResponse, PaginationDto, PlayerProfileResponse,
-            PlayerVillageDto, ReportDetailResponse, ReportListItemDto, ReportsResponse,
-            StatsResponse, player_summary, session_user, village_list, village_overview_response,
-            village_resources_response, village_summary,
+            GameContextResponse, LeaderboardEntryDto, PaginationDto, PlayerProfileResponse,
+            PlayerVillageDto, ReportDetailPayloadResponse, ReportDetailResponse, ReportListItemDto,
+            ReportsResponse, StatsResponse, game_context_response, session_user,
         },
         errors::ApiError,
     },
@@ -41,20 +41,26 @@ use super::{authenticated_user, bearer_token};
 const LEADERBOARD_PAGE_SIZE: i64 = 20;
 const MAP_REGION_RADIUS: i32 = 7;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// Pagination query for leaderboard endpoint.
 pub struct StatsQuery {
     pub page: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ReportsQuery {
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Request payload to switch current village.
 pub struct SwitchVillageRequest {
     pub village_id: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Response for village switch operation.
 pub struct SwitchVillageResponse {
@@ -65,7 +71,7 @@ pub struct SwitchVillageResponse {
     pub expires_in: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Session endpoint response for authenticated clients.
 pub struct MeSessionResponse {
@@ -74,7 +80,7 @@ pub struct MeSessionResponse {
     pub current_village_id: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// Query params for map region retrieval.
 pub struct MapRegionQuery {
     pub x: Option<i32>,
@@ -82,7 +88,7 @@ pub struct MapRegionQuery {
     pub village_id: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Response for map region endpoint.
 pub struct MapRegionResponse {
     pub center: MapPoint,
@@ -90,14 +96,14 @@ pub struct MapRegionResponse {
     pub tiles: Vec<MapTileResponse>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 2D point on world map.
 pub struct MapPoint {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Tile data returned by map region endpoint.
 pub struct MapTileResponse {
     pub x: i32,
@@ -112,6 +118,8 @@ pub struct MapTileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub village_population: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_capital: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub player_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tribe: Option<String>,
@@ -122,7 +130,7 @@ pub struct MapTileResponse {
     pub oasis: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 /// Runtime tile category.
 pub enum TileType {
@@ -131,7 +139,7 @@ pub enum TileType {
     Oasis,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 /// Detailed payload for a specific map field.
 pub struct MapFieldDetailResponse {
@@ -150,12 +158,23 @@ pub struct MapFieldDetailResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub village_population: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_capital: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub valley: Option<ValleyDistribution>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oasis: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oasis_bonus: Option<ValleyDistribution>,
+    pub can_preview_founding: bool,
+    pub has_marketplace: bool,
+    pub has_rally_point: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub marketplace_slot_id: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rally_point_slot_id: Option<u8>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// Valley resource distribution for valley/oasis map payloads.
 pub struct ValleyDistribution {
     pub lumber: u8,
@@ -199,6 +218,7 @@ impl From<MapRegionTile> for MapTileResponse {
             player_id: field.player_id,
             village_name: tile.village_name,
             village_population: tile.village_population,
+            is_capital: tile.is_capital,
             player_name: tile.player_name,
             tribe: tile.tribe.map(|t| format!("{t:?}")),
             tile_type,
@@ -209,6 +229,11 @@ impl From<MapRegionTile> for MapTileResponse {
 }
 
 /// Returns current authenticated session user and active village id.
+#[utoipa::path(
+    get,
+    path = "/me/session",
+    responses((status = 200, body = MeSessionResponse))
+)]
 pub async fn me_session(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -221,46 +246,23 @@ pub async fn me_session(
     }))
 }
 
-/// Returns authenticated user context for SPA shell state.
-pub async fn me_context(
+/// Returns the canonical SPA game hydration payload.
+#[utoipa::path(
+    get,
+    path = "/game/context",
+    responses((status = 200, body = GameContextResponse))
+)]
+pub async fn game_context(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-    Ok(Json(MeContextResponse {
-        server_time: Utc::now().timestamp(),
-        world_size: state.world_size,
-        server_speed: state.server_speed,
-        player: player_summary(&user),
-        current_village: village_summary(&user.village),
-        villages: village_list(&user),
-    }))
-}
-
-/// Returns village overview (building slots + queue) for owned village.
-pub async fn village_overview(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(village_id): Path<u32>,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = authenticated_user(&state, &headers).await?;
-    let village = owned_village_by_id(&state, &user, village_id).await?;
-    let queues = state
+    let village = user.village.clone();
+    let unread_reports_count = state
         .game_app
-        .get_village_queues(village.id)
+        .count_unread_reports_for_player(user.player.id)
         .await
-        .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
-    Ok(Json(village_overview_response(&village, &queues)))
-}
-
-/// Returns village resource fields and queue for owned village.
-pub async fn village_resources(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(village_id): Path<u32>,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = authenticated_user(&state, &headers).await?;
-    let village = owned_village_by_id(&state, &user, village_id).await?;
+        .map_err(|err| map_application_error("unable_to_count_unread_reports", err))?;
     let army_state = state
         .game_app
         .get_village_army_state_view(village.id)
@@ -271,21 +273,41 @@ pub async fn village_resources(
         .get_village_queues(village.id)
         .await
         .map_err(|e| map_application_error("unable_to_load_village_queues", e))?;
-    Ok(Json(village_resources_response(&village, &queues, &army_state)))
+    let movements = state
+        .game_app
+        .get_village_troop_movements(village.id)
+        .await
+        .map_err(|e| map_application_error("unable_to_load_village_troop_movements", e))?;
+    Ok(Json(game_context_response(
+        Utc::now().timestamp(),
+        state.world_size,
+        state.server_speed,
+        unread_reports_count,
+        &user,
+        &village,
+        &queues,
+        &army_state,
+        &movements,
+    )))
 }
 
 /// Switches current village and rotates access token context when bearer is present.
+#[utoipa::path(
+    post,
+    path = "/me/village/current",
+    request_body = SwitchVillageRequest,
+    responses((status = 200, body = SwitchVillageResponse))
+)]
 pub async fn switch_village(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<SwitchVillageRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
-
     if !user
         .villages
         .iter()
-        .any(|village| village.id == payload.village_id)
+        .any(|v| v.id == payload.village_id && v.player_id == user.player.id)
     {
         return Err(ApiError::not_found(
             "Village not available for the current player",
@@ -329,6 +351,14 @@ pub async fn switch_village(
 }
 
 /// Returns paginated leaderboard data.
+#[utoipa::path(
+    get,
+    path = "/stats",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (1-based)")
+    ),
+    responses((status = 200, body = StatsResponse))
+)]
 pub async fn stats(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -384,12 +414,20 @@ pub async fn stats(
 }
 
 /// Returns profile summary for a specific player.
+#[utoipa::path(
+    get,
+    path = "/players/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Player id")
+    ),
+    responses((status = 200, body = PlayerProfileResponse))
+)]
 pub async fn player_profile(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(player_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let _user = authenticated_user(&state, &headers).await?;
+    let user = authenticated_user(&state, &headers).await?;
 
     let player = state
         .game_app
@@ -415,30 +453,63 @@ pub async fn player_profile(
                 x: village.position.x,
                 y: village.position.y,
                 population: village.population as i32,
+                is_capital: village.is_capital,
+                distance_from_current: user
+                    .village
+                    .position
+                    .distance(&village.position, state.world_size),
             })
             .collect(),
     }))
 }
 
 /// Returns recent reports for current player.
+#[utoipa::path(
+    get,
+    path = "/reports",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number (1-based)"),
+        ("per_page" = Option<i64>, Query, description = "Items per page (max 100)")
+    ),
+    responses((status = 200, body = ReportsResponse))
+)]
 pub async fn reports(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Query(params): Query<ReportsQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(50).clamp(1, 100);
+    let offset = (page - 1) * per_page;
     let reports = state
         .game_app
-        .list_reports_for_player(user.player.id, 50)
+        .list_reports_for_player(user.player.id, offset, per_page + 1)
         .await
         .map_err(|err| map_application_error("unable_to_list_reports", err))?;
+    let has_more = reports.len() as i64 > per_page;
+    let reports: Vec<_> = reports.into_iter().take(per_page as usize).collect();
 
     Ok(Json(ReportsResponse {
         server_time: Utc::now().timestamp(),
         reports: reports.into_iter().map(map_report_summary).collect(),
+        pagination: crate::api::dto::ReportsPaginationDto {
+            page,
+            per_page,
+            has_more,
+        },
     }))
 }
 
 /// Returns full report payload and marks report as read.
+#[utoipa::path(
+    get,
+    path = "/reports/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Report id")
+    ),
+    responses((status = 200, body = ReportDetailPayloadResponse))
+)]
 pub async fn report_detail(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -467,6 +538,16 @@ pub async fn report_detail(
 }
 
 /// Returns wrapped map region around requested/default center.
+#[utoipa::path(
+    get,
+    path = "/map/region",
+    params(
+        ("x" = Option<i32>, Query, description = "Center x coordinate"),
+        ("y" = Option<i32>, Query, description = "Center y coordinate"),
+        ("village_id" = Option<u32>, Query, description = "Use owned village as center")
+    ),
+    responses((status = 200, body = MapRegionResponse))
+)]
 pub async fn map_region(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -490,12 +571,20 @@ pub async fn map_region(
 }
 
 /// Returns details for one map field.
+#[utoipa::path(
+    get,
+    path = "/map/fields/{id}",
+    params(
+        ("id" = u32, Path, description = "Map field id")
+    ),
+    responses((status = 200, body = MapFieldDetailResponse))
+)]
 pub async fn map_field(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(field_id): Path<u32>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let _user = authenticated_user(&state, &headers).await?;
+    let user = authenticated_user(&state, &headers).await?;
     let field = state
         .game_app
         .get_map_field(field_id)
@@ -507,17 +596,88 @@ pub async fn map_field(
         .await
         .map_err(|err| map_application_error("unable_to_load_map_field_tile", err))?;
 
-    let (tile_type, valley, oasis) = match field.topology {
-        MapFieldTopology::Oasis(variant) => (TileType::Oasis, None, Some(format!("{variant:?}"))),
+    let (tile_type, valley, oasis, oasis_bonus) = match field.topology {
+        MapFieldTopology::Oasis(variant) => {
+            let (lumber, clay, iron, crop) = match variant {
+                parabellum_types::map::OasisTopology::Lumber => (25, 0, 0, 0),
+                parabellum_types::map::OasisTopology::LumberCrop => (25, 0, 0, 25),
+                parabellum_types::map::OasisTopology::Clay => (0, 25, 0, 0),
+                parabellum_types::map::OasisTopology::ClayCrop => (0, 25, 0, 25),
+                parabellum_types::map::OasisTopology::Iron => (0, 0, 25, 0),
+                parabellum_types::map::OasisTopology::IronCrop => (0, 0, 25, 25),
+                parabellum_types::map::OasisTopology::Crop => (0, 0, 0, 25),
+                parabellum_types::map::OasisTopology::Crop50 => (0, 0, 0, 50),
+            };
+            (
+                TileType::Oasis,
+                None,
+                Some(format!("{variant:?}")),
+                Some(ValleyDistribution {
+                    lumber,
+                    clay,
+                    iron,
+                    crop,
+                }),
+            )
+        }
         MapFieldTopology::Valley(valley) => {
             let tile_type = if field.village_id.is_some() {
                 TileType::Village
             } else {
                 TileType::Valley
             };
-            (tile_type, Some(valley.into()), None)
+            (tile_type, Some(valley.into()), None, None)
         }
     };
+
+    let marketplace_slot = user
+        .village
+        .get_building_by_name(&BuildingName::Marketplace);
+    let rally_point_slot = user.village.get_building_by_name(&BuildingName::RallyPoint);
+    let has_marketplace = marketplace_slot.is_some();
+    let has_rally_point = rally_point_slot.is_some();
+
+    let can_preview_founding =
+        if matches!(tile_type, TileType::Valley) && field.village_id.is_none() {
+            let settlers_ready = user.village.count_settlers_at_home() >= 3;
+            let has_rally = has_rally_point;
+            let has_resources =
+                user.village
+                    .has_enough_resources(&parabellum_types::common::ResourceGroup::new(
+                        800, 800, 800, 800,
+                    ));
+            let expansion_info = state
+                .game_app
+                .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
+                .await
+                .ok();
+            let cp_ok = expansion_info
+                .as_ref()
+                .map(|info| info.player_culture_points >= info.next_cp_required)
+                .unwrap_or(false);
+            let owned_villages = state
+                .game_app
+                .list_villages_by_player_id(user.player.id)
+                .await
+                .ok();
+            let child_villages_count = owned_villages
+                .as_ref()
+                .map(|villages| {
+                    villages
+                        .iter()
+                        .filter(|v| v.parent_village_id == Some(user.village.id))
+                        .count() as u8
+                })
+                .unwrap_or(0);
+            let free_slot = user
+                .village
+                .max_foundation_slots()
+                .saturating_sub(child_villages_count)
+                > 0;
+            settlers_ready && has_rally && has_resources && cp_ok && free_slot
+        } else {
+            false
+        };
 
     Ok(Json(MapFieldDetailResponse {
         id: field.id,
@@ -528,9 +688,16 @@ pub async fn map_field(
         player_id: field.player_id,
         village_name: region_tile.as_ref().and_then(|t| t.village_name.clone()),
         player_name: region_tile.as_ref().and_then(|t| t.player_name.clone()),
-        village_population: region_tile.and_then(|t| t.village_population),
+        village_population: region_tile.as_ref().and_then(|t| t.village_population),
+        is_capital: region_tile.as_ref().and_then(|t| t.is_capital),
         valley,
         oasis,
+        oasis_bonus,
+        can_preview_founding,
+        has_marketplace,
+        has_rally_point,
+        marketplace_slot_id: marketplace_slot.map(|slot| slot.slot_id),
+        rally_point_slot_id: rally_point_slot.map(|slot| slot.slot_id),
     }))
 }
 
@@ -588,22 +755,4 @@ fn map_report_summary(report: parabellum_app::villages::models::ReportModel) -> 
         created_at: report.created_at.timestamp(),
         is_read: report.read_at.is_some(),
     }
-}
-
-async fn owned_village_by_id(
-    state: &AppState,
-    user: &CurrentUser,
-    village_id: u32,
-) -> Result<Village, ApiError> {
-    let village = state
-        .game_app
-        .get_village_model(village_id)
-        .await
-        .map_err(|e| map_application_error("unable_to_load_village", e))?;
-    if village.player_id != user.player.id {
-        return Err(ApiError::not_found(
-            "Village not available for the current player",
-        ));
-    }
-    Ok(village.into())
 }

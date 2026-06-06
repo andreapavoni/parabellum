@@ -1,5 +1,10 @@
 import type { ReportDetailResponse, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
+import { ResourceSprite } from "@/components/ResourceSprite";
+import { UnitSprite } from "@/components/UnitSprite";
+import { Button, Panel } from "@/components/ui";
+import { useGameContextQuery } from "@/query/hooks";
+import { useMemo, useState } from "preact/hooks";
 
 function formatTimestamp(timestamp: number) {
   return new Date(timestamp * 1000).toLocaleString();
@@ -41,7 +46,19 @@ function parseResourceGroup(resources: unknown) {
 
 function formatResourceSummary(resources: unknown) {
   const { lumber, clay, iron, crop } = parseResourceGroup(resources);
-  return `🌲 ${lumber} 🧱 ${clay} ⛏️ ${iron} 🌾 ${crop}`;
+  return `lumber ${lumber}, clay ${clay}, iron ${iron}, crop ${crop}`;
+}
+
+function ResourceSummaryInline({ resources }: { resources: unknown }) {
+  const { lumber, clay, iron, crop } = parseResourceGroup(resources);
+  return (
+    <span class="inline-flex items-center gap-2">
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="lumber" size={12} label="Lumber" />{lumber}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="clay" size={12} label="Clay" />{clay}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="iron" size={12} label="Iron" />{iron}</span>
+      <span class="inline-flex items-center gap-1"><ResourceSprite kind="crop" size={12} label="Crop" />{crop}</span>
+    </span>
+  );
 }
 
 function normalizeScoutingTarget(target: unknown): "resources" | "defenses" | "unknown" {
@@ -71,10 +88,13 @@ function parseScoutingDefenses(targetReport: unknown): Record<string, unknown> {
 
 function sumTroops(units: unknown): number {
   if (Array.isArray(units)) {
-    return units.reduce((acc, value) => acc + Number(value || 0), 0);
+    return units.reduce<number>((acc, value) => acc + Number(value || 0), 0);
   }
   if (units && typeof units === "object") {
-    return Object.values(units as Record<string, unknown>).reduce((acc, value) => acc + Number(value || 0), 0);
+    return Object.values(units as Record<string, unknown>).reduce<number>(
+      (acc, value) => acc + Number(value || 0),
+      0,
+    );
   }
   return 0;
 }
@@ -99,11 +119,40 @@ function positionLabel(position: unknown) {
   return `(${safeX}|${safeY})`;
 }
 
+function mapFieldIdFromPosition(x: number, y: number, worldSize: number) {
+  return (worldSize - y) * (worldSize * 2 + 1) + (worldSize + x + 1);
+}
+
+function villageFieldLink(villageName: string, position: unknown, worldSize: number) {
+  const pos = asRecord(position);
+  if (!pos) {
+    return <span>{villageName} (?|?)</span>;
+  }
+  const x = Number(pos.x);
+  const y = Number(pos.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return <span>{villageName} (?|?)</span>;
+  }
+  const fieldId = mapFieldIdFromPosition(x, y, worldSize);
+  return (
+    <span>
+      <Link to={`/map/field/${fieldId}`} class="text-green-700 hover:underline">
+        {villageName}
+      </Link>{" "}
+      <Link to={`/map/field/${fieldId}`} class="text-green-700 hover:underline">
+        ({x}|{y})
+      </Link>
+    </span>
+  );
+}
+
 function reportPayloadVariant(payload: unknown): { kind: string; value: Record<string, unknown> } | null {
   if (!payload || typeof payload !== "object") return null;
   const entries = Object.entries(payload as Record<string, unknown>);
   if (entries.length !== 1) return null;
-  const [kind, value] = entries[0];
+  const entry = entries[0];
+  if (!entry) return null;
+  const [kind, value] = entry;
   if (!value || typeof value !== "object") return null;
   return { kind, value: value as Record<string, unknown> };
 }
@@ -182,14 +231,14 @@ function ArmyTable({
   title,
   before,
   losses,
+  tribe,
 }: {
   title: string;
   before: number[];
   losses?: number[];
+  tribe?: string;
 }) {
   const length = Math.max(before.length, losses?.length ?? 0);
-  const labels = Array.from({ length }, (_, idx) => `U${idx + 1}`);
-
   if (length === 0) {
     return null;
   }
@@ -201,16 +250,16 @@ function ArmyTable({
         <table class="w-full border-collapse">
           <thead>
             <tr>
-              {labels.map((label) => (
-                <th key={label} class="text-center p-1 text-xs text-gray-500 border-b">
-                  {label}
+              {Array.from({ length }, (_, idx) => (
+                <th key={`u-${idx}`} class="text-center p-1 text-xs text-gray-500 border-b">
+                  <UnitSprite tribe={tribe} unitIndex={idx} label={`U${idx + 1}`} />
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              {labels.map((_, idx) => {
+              {Array.from({ length }, (_, idx) => {
                 const value = before[idx] ?? 0;
                 return (
                   <td
@@ -226,7 +275,7 @@ function ArmyTable({
             </tr>
             {losses ? (
               <tr>
-                {labels.map((_, idx) => {
+                {Array.from({ length }, (_, idx) => {
                   const loss = losses[idx] ?? 0;
                   return (
                     <td key={`loss-${idx}`} class="text-center p-2 border-r last:border-r-0 bg-red-50">
@@ -245,7 +294,15 @@ function ArmyTable({
   );
 }
 
-function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; payload: Record<string, unknown> }) {
+function BattleReportDetail({
+  data,
+  payload,
+  worldSize,
+}: {
+  data: ReportDetailResponse;
+  payload: Record<string, unknown>;
+  worldSize: number;
+}) {
   const success = Boolean(payload.success);
   const resultClass = success ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700";
 
@@ -261,6 +318,8 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
   const attackerLosses = troopArray(attacker?.losses);
   const defenderBefore = troopArray(defender?.army_before);
   const defenderLosses = troopArray(defender?.losses);
+  const attackerTribe = readString(attacker ?? {}, "tribe");
+  const defenderTribe = readString(defender ?? {}, "tribe");
   const scoutingTargetReport = scouting?.target_report;
   const scoutingTarget = normalizeScoutingTarget(scouting?.target);
 
@@ -280,7 +339,11 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
             Attacker - {readString(payload, "attacker_player", "Unknown")}
           </p>
           <p class="text-sm text-gray-600 mb-3">
-            {readString(payload, "attacker_village", "Unknown")} {positionLabel(payload.attacker_position)}
+            {villageFieldLink(
+              readString(payload, "attacker_village", "Unknown"),
+              payload.attacker_position,
+              worldSize,
+            )}
           </p>
         </div>
         <div class="border rounded-md p-4 bg-blue-50">
@@ -288,13 +351,17 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
             Defender - {readString(payload, "defender_player", "Unknown")}
           </p>
           <p class="text-sm text-gray-600 mb-3">
-            {readString(payload, "defender_village", "Unknown")} {positionLabel(payload.defender_position)}
+            {villageFieldLink(
+              readString(payload, "defender_village", "Unknown"),
+              payload.defender_position,
+              worldSize,
+            )}
           </p>
         </div>
       </div>
 
-      <ArmyTable title="Attacker Army" before={attackerBefore} losses={attackerLosses} />
-      {defender ? <ArmyTable title="Defender Army" before={defenderBefore} losses={defenderLosses} /> : null}
+      <ArmyTable title="Attacker Army" before={attackerBefore} losses={attackerLosses} tribe={attackerTribe} />
+      {defender ? <ArmyTable title="Defender Army" before={defenderBefore} losses={defenderLosses} tribe={defenderTribe} /> : null}
 
       {reinforcements.length > 0 ? (
         <div class="border rounded-md p-4">
@@ -308,6 +375,7 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
                   title={`Reinforcement #${idx + 1}`}
                   before={troopArray(reinf.army_before)}
                   losses={troopArray(reinf.losses)}
+                  tribe={readString(reinf, "tribe")}
                 />
               );
             })}
@@ -324,7 +392,7 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
           {scoutingTarget === "resources" ? (
             <div class="rounded bg-white p-3 text-sm text-gray-700">
               <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed resources</p>
-              <p class="font-mono">{formatResourceSummary(parseScoutingResources(scoutingTargetReport))}</p>
+              <p class="font-mono"><ResourceSummaryInline resources={parseScoutingResources(scoutingTargetReport)} /></p>
             </div>
           ) : null}
           {scoutingTarget === "defenses" ? (
@@ -370,9 +438,19 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
         </div>
       ) : null}
 
+      {(payload.loyalty_before != null || payload.loyalty_after != null) ? (
+        <div class="border rounded-md p-4 bg-purple-50">
+          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">Loyalty</p>
+          <p class="text-sm text-gray-700">
+            {Number(payload.loyalty_before ?? 0)} → {Number(payload.loyalty_after ?? 0)}
+            {payload.conquered === true ? " (Conquered)" : ""}
+          </p>
+        </div>
+      ) : null}
+
       <div class="border rounded-md p-4">
         <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Bounty</p>
-        <p class="font-mono text-gray-800">{formatResourceSummary(bounty)}</p>
+        <p class="font-mono text-gray-800"><ResourceSummaryInline resources={bounty} /></p>
       </div>
 
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
@@ -380,7 +458,15 @@ function BattleReportDetail({ data, payload }: { data: ReportDetailResponse; pay
   );
 }
 
-function ReinforcementReportDetail({ data, payload }: { data: ReportDetailResponse; payload: Record<string, unknown> }) {
+function ReinforcementReportDetail({
+  data,
+  payload,
+  worldSize,
+}: {
+  data: ReportDetailResponse;
+  payload: Record<string, unknown>;
+  worldSize: number;
+}) {
   return (
     <div class="space-y-4">
       <div class="grid gap-4 md:grid-cols-2">
@@ -388,18 +474,26 @@ function ReinforcementReportDetail({ data, payload }: { data: ReportDetailRespon
           <p class="text-xs uppercase text-gray-500 font-semibold mb-2">From</p>
           <p class="text-sm text-gray-700 font-semibold">{readString(payload, "sender_player", "Unknown")}</p>
           <p class="text-sm text-gray-600">
-            {readString(payload, "sender_village", "Unknown")} {positionLabel(payload.sender_position)}
+            {villageFieldLink(
+              readString(payload, "sender_village", "Unknown"),
+              payload.sender_position,
+              worldSize,
+            )}
           </p>
         </div>
         <div class="border rounded-md p-4 bg-green-50">
           <p class="text-xs uppercase text-gray-500 font-semibold mb-2">To</p>
           <p class="text-sm text-gray-700 font-semibold">{readString(payload, "receiver_player", "Unknown")}</p>
           <p class="text-sm text-gray-600">
-            {readString(payload, "receiver_village", "Unknown")} {positionLabel(payload.receiver_position)}
+            {villageFieldLink(
+              readString(payload, "receiver_village", "Unknown"),
+              payload.receiver_position,
+              worldSize,
+            )}
           </p>
         </div>
       </div>
-      <ArmyTable title="Troops Sent" before={troopArray(payload.units)} />
+      <ArmyTable title="Troops Sent" before={troopArray(payload.units)} tribe={readString(payload, "tribe")} />
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );
@@ -408,34 +502,70 @@ function ReinforcementReportDetail({ data, payload }: { data: ReportDetailRespon
 function MarketplaceDeliveryReportDetail({
   data,
   payload,
+  worldSize,
 }: {
   data: ReportDetailResponse;
   payload: Record<string, unknown>;
+  worldSize: number;
 }) {
   const resources = asRecord(payload.resources) ?? {};
   return (
     <div class="space-y-4">
-      <div class="border rounded-md p-4 bg-white">
+      <Panel>
         <p class="text-sm text-gray-700">
-          <span class="font-semibold">{readString(payload, "sender_village", "Unknown")}</span> {positionLabel(payload.sender_position)}{" "}
-          delivered {formatResourceSummary(resources)} to{" "}
-          <span class="font-semibold">{readString(payload, "receiver_village", "Unknown")}</span>{" "}
-          {positionLabel(payload.receiver_position)}.
+          {villageFieldLink(readString(payload, "sender_village", "Unknown"), payload.sender_position, worldSize)}{" "}
+          delivered <ResourceSummaryInline resources={resources} /> to{" "}
+          {villageFieldLink(readString(payload, "receiver_village", "Unknown"), payload.receiver_position, worldSize)}.
         </p>
-      </div>
+      </Panel>
       <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );
 }
 
 export function ReportsPage({ data }: { data: ReportsResponse }) {
+  const [filter, setFilter] = useState<"all" | "attacks" | "reinforcements" | "merchants">("all");
+  const currentPage = data.pagination?.page ?? 1;
+  const perPage = data.pagination?.perPage ?? 25;
+  const hasMore = !!data.pagination?.hasMore;
+  const prevHref = `/reports?page=${Math.max(1, currentPage - 1)}&per_page=${perPage}`;
+  const nextHref = `/reports?page=${currentPage + 1}&per_page=${perPage}`;
+  const filtered = useMemo(() => {
+    switch (filter) {
+      case "attacks":
+        return data.reports.filter((report) => report.reportType === "battle");
+      case "reinforcements":
+        return data.reports.filter((report) => report.reportType === "reinforcement");
+      case "merchants":
+        return data.reports.filter((report) => report.reportType === "marketplace_delivery");
+      default:
+        return data.reports;
+    }
+  }, [data.reports, filter]);
+
   return (
     <div class="mx-auto max-w-4xl px-4 py-6 space-y-3">
-      <h1 class="text-2xl font-semibold text-gray-800">Reports</h1>
-      {data.reports.length === 0 ? (
-        <div class="rounded border bg-white p-6 text-center text-sm text-gray-500">No reports available.</div>
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-2xl font-semibold text-gray-800">Reports</h1>
+        <div class="text-xs text-gray-500">Page {currentPage}</div>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        {(["all", "attacks", "reinforcements", "merchants"] as const).map((key) => (
+          <Button
+            key={key}
+            type="button"
+            variant={filter === key ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setFilter(key)}
+          >
+            {key === "all" ? "All" : key === "attacks" ? "Attacks" : key === "reinforcements" ? "Reinforcements" : "Merchants"}
+          </Button>
+        ))}
+      </div>
+      {filtered.length === 0 ? (
+        <Panel class="text-center text-sm text-gray-500">No reports available.</Panel>
       ) : null}
-      {data.reports.map((report) => {
+      {filtered.map((report) => {
         const text = reportText(report);
         return (
           <Link
@@ -453,11 +583,29 @@ export function ReportsPage({ data }: { data: ReportsResponse }) {
           </Link>
         );
       })}
+      <div class="flex items-center justify-between pt-2">
+        {currentPage > 1 ? (
+          <Link to={prevHref} class="text-sm text-green-700 hover:underline">
+            Previous
+          </Link>
+        ) : (
+          <span class="text-sm text-gray-400">Previous</span>
+        )}
+        {hasMore ? (
+          <Link to={nextHref} class="text-sm text-green-700 hover:underline">
+            Next
+          </Link>
+        ) : (
+          <span class="text-sm text-gray-400">Next</span>
+        )}
+      </div>
     </div>
   );
 }
 
 export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
+  const gameContext = useGameContextQuery();
+  const worldSize = gameContext.data?.worldSize ?? 100;
   const variant = reportPayloadVariant(data.payload);
 
   return (
@@ -469,11 +617,15 @@ export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
         </Link>
       </div>
 
-      <div class="rounded border bg-white p-4 shadow-sm space-y-4">
-        {variant?.kind === "Battle" ? <BattleReportDetail data={data} payload={variant.value} /> : null}
-        {variant?.kind === "Reinforcement" ? <ReinforcementReportDetail data={data} payload={variant.value} /> : null}
+      <Panel class="space-y-4">
+        {variant?.kind === "Battle" ? (
+          <BattleReportDetail data={data} payload={variant.value} worldSize={worldSize} />
+        ) : null}
+        {variant?.kind === "Reinforcement" ? (
+          <ReinforcementReportDetail data={data} payload={variant.value} worldSize={worldSize} />
+        ) : null}
         {variant?.kind === "MarketplaceDelivery" ? (
-          <MarketplaceDeliveryReportDetail data={data} payload={variant.value} />
+          <MarketplaceDeliveryReportDetail data={data} payload={variant.value} worldSize={worldSize} />
         ) : null}
         {!variant || !["Battle", "Reinforcement", "MarketplaceDelivery"].includes(variant.kind) ? (
           <>
@@ -484,7 +636,7 @@ export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
             </pre>
           </>
         ) : null}
-      </div>
+      </Panel>
     </div>
   );
 }

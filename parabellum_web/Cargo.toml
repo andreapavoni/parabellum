@@ -32,11 +32,11 @@ jsonwebtoken = { workspace = true }
 base64 = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
 # HTTP stuff
 axum = { workspace = true }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
-
-rust-i18n = { version = "3.1.5" }
 
 [dev-dependencies]
 # Enable "test-utils" for parabellum_app

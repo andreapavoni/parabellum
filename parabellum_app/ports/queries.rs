@@ -68,6 +68,7 @@ pub struct VillageQueues {
 pub enum TroopMovementType {
     Attack,
     Raid,
+    Scout,
     Reinforcement,
     Return,
     FoundVillage,
@@ -96,6 +97,7 @@ pub struct TroopMovement {
     pub time_seconds: u32,
     pub units: TroopSet,
     pub tribe: parabellum_types::tribe::Tribe,
+    pub bounty: Option<ResourceGroup>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -160,6 +162,7 @@ pub trait VillageQueryPort: Send + Sync {
     async fn list_reports_for_player(
         &self,
         player_id: Uuid,
+        offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError>;
     async fn get_report_for_player(
@@ -167,6 +170,10 @@ pub trait VillageQueryPort: Send + Sync {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<Option<ReportModel>, ApplicationError>;
+    async fn count_unread_reports_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<i64, ApplicationError>;
     async fn mark_report_as_read(
         &self,
         report_id: Uuid,

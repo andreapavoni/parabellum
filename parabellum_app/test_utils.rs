@@ -128,6 +128,14 @@ pub mod tests {
             .unwrap())
         }
 
+        async fn get_foundation_target_topology(
+            &self,
+            _field_id: u32,
+            _player_id: Uuid,
+        ) -> Result<Option<ValleyTopology>, ApplicationError> {
+            Ok(Some(ValleyTopology(4, 4, 4, 6)))
+        }
+
         async fn get_field_by_id(&self, _id: i32) -> Result<MapField, ApplicationError> {
             Ok(MapField {
                 id: 100,
@@ -156,7 +164,7 @@ pub mod tests {
                         x: wrapped_x,
                         y: wrapped_y,
                     };
-                    let id = position.to_id(world_size) as u32;
+                    let id = position.to_id(world_size);
                     if let Some(field) = fields.get(&id) {
                         region.push(MapRegionTile {
                             field: field.clone(),
@@ -164,6 +172,7 @@ pub mod tests {
                             village_population: None,
                             player_name: None,
                             tribe: None,
+                            is_capital: None,
                         });
                     }
                 }
@@ -183,6 +192,7 @@ pub mod tests {
                 village_population: None,
                 player_name: None,
                 tribe: None,
+                is_capital: None,
             }))
         }
 
@@ -233,6 +243,18 @@ pub mod tests {
                 .cloned()
                 .ok_or_else(|| {
                     ApplicationError::Db(DbError::UserByEmailNotFound(email.to_string()))
+                })
+        }
+
+        async fn get_by_username(&self, username: &str) -> Result<User, ApplicationError> {
+            self.users
+                .lock()
+                .unwrap()
+                .values()
+                .find(|u| u.email == username)
+                .cloned()
+                .ok_or_else(|| {
+                    ApplicationError::Db(DbError::UserByUsernameNotFound(username.to_string()))
                 })
         }
 

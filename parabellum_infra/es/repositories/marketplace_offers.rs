@@ -4,7 +4,7 @@ use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferSt
 use parabellum_app::villages::repositories::MarketplaceRepository;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{FromRow, PgPool, types::Json};
+use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -15,6 +15,128 @@ pub struct PostgresMarketplaceRepository {
 impl PostgresMarketplaceRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    pub async fn list_open_by_owner_village_id(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
+        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
+            r#"
+            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
+                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
+                   created_at, accepted_at, canceled_at
+            FROM rm_marketplace_offers
+            WHERE status = 'open'
+              AND owner_village_id = $1
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn list_open_excluding_owner_village_id(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
+        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
+            r#"
+            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
+                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
+                   created_at, accepted_at, canceled_at
+            FROM rm_marketplace_offers
+            WHERE status = 'open'
+              AND owner_village_id <> $1
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn upsert_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        offer: &MarketplaceOfferModel,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            INSERT INTO rm_marketplace_offers (
+                offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
+                merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
+                created_at, accepted_at, canceled_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+            )
+            ON CONFLICT (offer_id)
+            DO UPDATE SET
+                owner_player_id = EXCLUDED.owner_player_id,
+                owner_village_id = EXCLUDED.owner_village_id,
+                offer_resources = EXCLUDED.offer_resources,
+                seek_resources = EXCLUDED.seek_resources,
+                merchants_reserved = EXCLUDED.merchants_reserved,
+                status = EXCLUDED.status,
+                accepted_by_player_id = EXCLUDED.accepted_by_player_id,
+                accepted_by_village_id = EXCLUDED.accepted_by_village_id,
+                created_at = EXCLUDED.created_at,
+                accepted_at = EXCLUDED.accepted_at,
+                canceled_at = EXCLUDED.canceled_at
+            "#,
+        )
+        .bind(offer.offer_id)
+        .bind(offer.owner_player_id)
+        .bind(offer.owner_village_id as i32)
+        .bind(Json(offer.offer_resources))
+        .bind(Json(offer.seek_resources))
+        .bind(offer.merchants_reserved as i16)
+        .bind(DbMarketplaceOfferStatus::from(offer.status))
+        .bind(offer.accepted_by_player_id)
+        .bind(offer.accepted_by_village_id.map(|v| v as i32))
+        .bind(offer.created_at)
+        .bind(offer.accepted_at)
+        .bind(offer.canceled_at)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn set_status_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        offer_id: Uuid,
+        status: MarketplaceOfferStatus,
+        accepted_by_player_id: Option<Uuid>,
+        accepted_by_village_id: Option<u32>,
+        at: DateTime<Utc>,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_marketplace_offers
+            SET status = $2,
+                accepted_by_player_id = $3,
+                accepted_by_village_id = $4,
+                accepted_at = CASE WHEN $2 = 'accepted' THEN $5 ELSE accepted_at END,
+                canceled_at = CASE WHEN $2 = 'canceled' THEN $5 ELSE canceled_at END
+            WHERE offer_id = $1
+            "#,
+        )
+        .bind(offer_id)
+        .bind(DbMarketplaceOfferStatus::from(status))
+        .bind(accepted_by_player_id)
+        .bind(accepted_by_village_id.map(|v| v as i32))
+        .bind(at)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 }
 
@@ -84,45 +206,15 @@ impl From<DbMarketplaceOfferRow> for MarketplaceOfferModel {
 #[async_trait::async_trait]
 impl MarketplaceRepository for PostgresMarketplaceRepository {
     async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            INSERT INTO rm_marketplace_offers (
-                offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
-                merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
-                created_at, accepted_at, canceled_at
-            ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-            )
-            ON CONFLICT (offer_id)
-            DO UPDATE SET
-                owner_player_id = EXCLUDED.owner_player_id,
-                owner_village_id = EXCLUDED.owner_village_id,
-                offer_resources = EXCLUDED.offer_resources,
-                seek_resources = EXCLUDED.seek_resources,
-                merchants_reserved = EXCLUDED.merchants_reserved,
-                status = EXCLUDED.status,
-                accepted_by_player_id = EXCLUDED.accepted_by_player_id,
-                accepted_by_village_id = EXCLUDED.accepted_by_village_id,
-                created_at = EXCLUDED.created_at,
-                accepted_at = EXCLUDED.accepted_at,
-                canceled_at = EXCLUDED.canceled_at
-            "#,
-        )
-        .bind(offer.offer_id)
-        .bind(offer.owner_player_id)
-        .bind(offer.owner_village_id as i32)
-        .bind(Json(offer.offer_resources))
-        .bind(Json(offer.seek_resources))
-        .bind(offer.merchants_reserved as i16)
-        .bind(DbMarketplaceOfferStatus::from(offer.status))
-        .bind(offer.accepted_by_player_id)
-        .bind(offer.accepted_by_village_id.map(|v| v as i32))
-        .bind(offer.created_at)
-        .bind(offer.accepted_at)
-        .bind(offer.canceled_at)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.upsert_in_tx(&mut tx, offer).await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 
@@ -154,25 +246,23 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
         accepted_by_village_id: Option<u32>,
         at: DateTime<Utc>,
     ) -> Result<(), ApplicationError> {
-        sqlx::query(
-            r#"
-            UPDATE rm_marketplace_offers
-            SET status = $2,
-                accepted_by_player_id = $3,
-                accepted_by_village_id = $4,
-                accepted_at = CASE WHEN $2 = 'accepted' THEN $5 ELSE accepted_at END,
-                canceled_at = CASE WHEN $2 = 'canceled' THEN $5 ELSE canceled_at END
-            WHERE offer_id = $1
-            "#,
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        self.set_status_in_tx(
+            &mut tx,
+            offer_id,
+            status,
+            accepted_by_player_id,
+            accepted_by_village_id,
+            at,
         )
-        .bind(offer_id)
-        .bind(DbMarketplaceOfferStatus::from(status))
-        .bind(accepted_by_player_id)
-        .bind(accepted_by_village_id.map(|v| v as i32))
-        .bind(at)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        .await?;
+        tx.commit()
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
 
@@ -262,8 +352,8 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
         #[derive(Debug, FromRow)]
         struct DbMerchantReturnRow {
             id: Uuid,
-            source_village_id: i32,
-            target_village_id: i32,
+            origin_village_id: i32,
+            destination_village_id: i32,
             merchants_used: i16,
             arrives_at: DateTime<Utc>,
         }
@@ -272,14 +362,14 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'target_village_id')::int AS target_village_id,
-                payload->'resources' AS resources,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'arrives_at')::timestamptz AS arrives_at
+                (payload->'workflow'->>'source_village_id')::int AS source_village_id,
+                (payload->'workflow'->>'target_village_id')::int AS target_village_id,
+                payload->'workflow'->'resources' AS resources,
+                (payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                (payload->'workflow'->>'arrives_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantArrival'
-              AND (payload->>'village_id')::int = $1
+              AND (payload->'workflow'->>'village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -293,13 +383,16 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'village_id')::int AS target_village_id,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'returns_at')::timestamptz AS arrives_at
+                COALESCE(
+                    (payload->'workflow'->>'target_village_id')::int,
+                    (payload->'workflow'->>'village_id')::int
+                ) AS origin_village_id,
+                (payload->'workflow'->>'source_village_id')::int AS destination_village_id,
+                (payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                (payload->'workflow'->>'returns_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantReturn'
-              AND (payload->>'village_id')::int = $1
+              AND (payload->'workflow'->>'village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -327,8 +420,8 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             out.push(MerchantMovement {
                 job_id: row.id,
                 kind: MerchantMovementKind::Return,
-                origin_village_id: row.source_village_id as u32,
-                destination_village_id: row.target_village_id as u32,
+                origin_village_id: row.origin_village_id as u32,
+                destination_village_id: row.destination_village_id as u32,
                 resources: ResourceGroup::new(0, 0, 0, 0),
                 merchants_used: row.merchants_used as u8,
                 arrives_at: row.arrives_at,
@@ -355,14 +448,14 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
             r#"
             SELECT
                 id,
-                (payload->>'source_village_id')::int AS source_village_id,
-                (payload->>'target_village_id')::int AS target_village_id,
-                payload->'resources' AS resources,
-                (payload->>'merchants_used')::smallint AS merchants_used,
-                (payload->>'arrives_at')::timestamptz AS arrives_at
+                (payload->'workflow'->>'source_village_id')::int AS source_village_id,
+                (payload->'workflow'->>'target_village_id')::int AS target_village_id,
+                payload->'workflow'->'resources' AS resources,
+                (payload->'workflow'->>'merchants_used')::smallint AS merchants_used,
+                (payload->'workflow'->>'arrives_at')::timestamptz AS arrives_at
             FROM rm_scheduled_actions
             WHERE action_type = 'MerchantArrival'
-              AND (payload->>'target_village_id')::int = $1
+              AND (payload->'workflow'->>'target_village_id')::int = $1
               AND status IN ('pending', 'processing')
             ORDER BY execute_at ASC, created_at ASC
             "#,

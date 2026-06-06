@@ -3,6 +3,7 @@ pub mod commands;
 mod events;
 mod mapping;
 pub mod models;
+mod policies;
 pub mod queries;
 pub mod repositories;
 pub mod service;
@@ -10,16 +11,18 @@ mod state;
 
 pub use aggregate::VillageAggregate;
 pub use commands::{
-    AcceptMarketplaceOffer, AddBuilding, AttackVillage, CancelMarketplaceOffer,
-    CompleteAcademyResearch, CompleteAddBuilding, CompleteArmyReturn, CompleteAttackArrival,
-    CompleteDowngradeBuilding, CompleteHeroRevival, CompleteMerchantsArrival,
-    CompleteMerchantsReturn, CompleteScoutArrival, CompleteSettlersArrival, CompleteSmithyResearch,
-    CompleteTrainUnit, CompleteUpgradeBuilding, ConquerVillage, CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, RecallReinforcements, ReinforcementArrived,
-    ReleaseReinforcements, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
+    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
+    CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy,
+    ResearchSmithy, ResolveAttackBattle, ResolveScoutBattle, ReviveHero, ScoutVillage,
     SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
     UpgradeBuilding,
 };
 pub use events::VillageEvent;
+pub use mapping::{VillageArmyContext, hydrate_village};
+pub use policies::army_dispatch::{ArmyDispatch, ArmyDispatchRequest};
+pub use policies::expansion::{ConquestAttempt, ExpansionSlotUsage, ExpansionTrainingCommitment};
+pub use policies::marketplace::{MarketplaceAcceptance, MarketplaceOfferCreation};
+pub use policies::reinforcement_control::ReinforcementControl;
 pub use service::VillageService;
 pub use state::VillageState;
