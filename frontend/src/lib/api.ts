@@ -166,7 +166,7 @@ export const api = {
     request<TokenAuthResponse>("/auth/token/login", {
       method: "POST",
       body: JSON.stringify(payload),
-    }).then((res) => {
+    }, false).then((res) => {
       setTokens(res);
       return res;
     }),
@@ -180,7 +180,7 @@ export const api = {
     request<TokenAuthResponse>("/auth/token/register", {
       method: "POST",
       body: JSON.stringify(payload),
-    }).then((res) => {
+    }, false).then((res) => {
       setTokens(res);
       return res;
     }),
