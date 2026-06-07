@@ -1,13 +1,24 @@
-import type { ReportDetailResponse, ReportsResponse } from "@/types/api";
+import type { ReportDetailResponse, ReportListItem, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite } from "@/components/UnitSprite";
 import { Button, Panel } from "@/components/ui";
 import { useGameContextQuery } from "@/query/hooks";
 import { useMemo, useState } from "preact/hooks";
+import { buildingLabel, tribeLabel } from "@/lib/labels";
+import type { ComponentChildren } from "preact";
 
 function formatTimestamp(timestamp: number) {
   return new Date(timestamp * 1000).toLocaleString();
+}
+
+function formatReportDate(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleString(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -42,11 +53,6 @@ function parseResourceGroup(resources: unknown) {
     iron: readNumber(record, "iron"),
     crop: readNumber(record, "crop"),
   };
-}
-
-function formatResourceSummary(resources: unknown) {
-  const { lumber, clay, iron, crop } = parseResourceGroup(resources);
-  return `lumber ${lumber}, clay ${clay}, iron ${iron}, crop ${crop}`;
 }
 
 function ResourceSummaryInline({ resources }: { resources: unknown }) {
@@ -109,16 +115,6 @@ function troopArray(units: unknown): number[] {
   return [];
 }
 
-function positionLabel(position: unknown) {
-  const pos = asRecord(position);
-  if (!pos) return "(?|?)";
-  const x = Number(pos.x);
-  const y = Number(pos.y);
-  const safeX = Number.isFinite(x) ? String(x) : "?";
-  const safeY = Number.isFinite(y) ? String(y) : "?";
-  return `(${safeX}|${safeY})`;
-}
-
 function mapFieldIdFromPosition(x: number, y: number, worldSize: number) {
   return (worldSize - y) * (worldSize * 2 + 1) + (worldSize + x + 1);
 }
@@ -146,6 +142,40 @@ function villageFieldLink(villageName: string, position: unknown, worldSize: num
   );
 }
 
+function playerLink(playerName: string, playerId?: string) {
+  if (!playerId) return <span class="font-semibold text-stone-900">{playerName}</span>;
+  return (
+    <Link to={`/players/${playerId}`} class="font-semibold text-green-800 hover:underline">
+      {playerName}
+    </Link>
+  );
+}
+
+type VillageNamesById = Map<number, string>;
+
+function resolvedVillageName(villageId: number | undefined, fallbackName: string, villageNamesById: VillageNamesById) {
+  if (!villageId) return fallbackName;
+  return villageNamesById.get(villageId) ?? fallbackName;
+}
+
+function villageLinkById(
+  villageName: string,
+  villageId: number | undefined,
+  position: unknown,
+  worldSize: number,
+  villageNamesById: VillageNamesById,
+) {
+  const resolvedName = resolvedVillageName(villageId, villageName, villageNamesById);
+  if (villageId) {
+    return (
+      <Link to={`/map/field/${villageId}`} class="font-semibold text-green-800 hover:underline">
+        {resolvedName}
+      </Link>
+    );
+  }
+  return villageFieldLink(resolvedName, position, worldSize);
+}
+
 function reportPayloadVariant(payload: unknown): { kind: string; value: Record<string, unknown> } | null {
   if (!payload || typeof payload !== "object") return null;
   const entries = Object.entries(payload as Record<string, unknown>);
@@ -157,74 +187,63 @@ function reportPayloadVariant(payload: unknown): { kind: string; value: Record<s
   return { kind, value: value as Record<string, unknown> };
 }
 
-function reportText(report: ReportsResponse["reports"][number]) {
+type ReportSubjectInput = Pick<ReportListItem, "reportType" | "payload" | "actorVillageId" | "targetVillageId">
+  | Pick<ReportDetailResponse, "reportType" | "payload" | "actorVillageId" | "targetVillageId">;
+
+function reportSubject(report: ReportSubjectInput, villageNamesById: VillageNamesById) {
   const variant = reportPayloadVariant(report.payload);
   if (!variant) {
-    return {
-      title: report.reportType,
-      summary: "Report payload unavailable",
-    };
+    return report.reportType;
   }
 
   if (variant.kind === "Battle") {
     const payload = variant.value;
-    const scout = payload.scouting != null;
     const attackType = String(payload.attack_type ?? "");
-    const verb = scout ? "scouted" : attackType === "Raid" ? "raided" : "attacked";
-    const attackerVillage = String(payload.attacker_village ?? "Unknown");
-    const defenderVillage = String(payload.defender_village ?? "Unknown");
-    const attackerPos = payload.attacker_position as Record<string, unknown> | undefined;
-    const defenderPos = payload.defender_position as Record<string, unknown> | undefined;
-    const success = Boolean(payload.success);
-    const bounty = parseResourceGroup(payload.bounty);
-    const bountyTotal = bounty.lumber + bounty.clay + bounty.iron + bounty.crop;
-    const attacker = payload.attacker as Record<string, unknown> | undefined;
-    const losses = attacker?.losses;
-    const totalLosses = sumTroops(losses);
-    const outcome = bountyTotal > 0
-      ? `Bounty: ${formatResourceSummary(bounty)}`
-      : totalLosses > 0
-        ? `Lost ${totalLosses} units`
-        : "No losses";
-
-    return {
-      title: `${attackerVillage} ${verb} ${defenderVillage}`,
-      summary: `${attackerVillage} (${attackerPos?.x ?? "?"}|${attackerPos?.y ?? "?"}) ${verb} ${defenderVillage} (${defenderPos?.x ?? "?"}|${defenderPos?.y ?? "?"}) - ${success ? "Victory" : "Defeat"} - ${outcome}`,
-    };
+    const verb = attackType === "Raid" ? "raided" : "attacked";
+    const attackerVillage = resolvedVillageName(
+      report.actorVillageId,
+      String(payload.attacker_village ?? "Unknown"),
+      villageNamesById,
+    );
+    const defenderVillage = resolvedVillageName(
+      report.targetVillageId,
+      String(payload.defender_village ?? "Unknown"),
+      villageNamesById,
+    );
+    return `${attackerVillage} ${verb} ${defenderVillage}`;
   }
 
   if (variant.kind === "Reinforcement") {
     const payload = variant.value;
-    const senderVillage = String(payload.sender_village ?? "Unknown");
-    const receiverVillage = String(payload.receiver_village ?? "Unknown");
-    const senderPos = payload.sender_position as Record<string, unknown> | undefined;
-    const receiverPos = payload.receiver_position as Record<string, unknown> | undefined;
-    const units = sumTroops(payload.units);
-
-    return {
-      title: `${senderVillage} reinforced ${receiverVillage}`,
-      summary: `${senderVillage} (${senderPos?.x ?? "?"}|${senderPos?.y ?? "?"}) reinforced ${receiverVillage} (${receiverPos?.x ?? "?"}|${receiverPos?.y ?? "?"}) - ${units} troops sent`,
-    };
+    const senderVillage = resolvedVillageName(
+      report.actorVillageId,
+      String(payload.sender_village ?? "Unknown"),
+      villageNamesById,
+    );
+    const receiverVillage = resolvedVillageName(
+      report.targetVillageId,
+      String(payload.receiver_village ?? "Unknown"),
+      villageNamesById,
+    );
+    return `${senderVillage} reinforced ${receiverVillage}`;
   }
 
   if (variant.kind === "MarketplaceDelivery") {
     const payload = variant.value;
-    const senderVillage = String(payload.sender_village ?? "Unknown");
-    const receiverVillage = String(payload.receiver_village ?? "Unknown");
-    const senderPos = payload.sender_position as Record<string, unknown> | undefined;
-    const receiverPos = payload.receiver_position as Record<string, unknown> | undefined;
-    const resources = (payload.resources as Record<string, unknown> | undefined) ?? {};
-
-    return {
-      title: `${senderVillage} delivered resources to ${receiverVillage}`,
-      summary: `${senderVillage} (${senderPos?.x ?? "?"}|${senderPos?.y ?? "?"}) delivered ${formatResourceSummary(resources)} to ${receiverVillage} (${receiverPos?.x ?? "?"}|${receiverPos?.y ?? "?"})`,
-    };
+    const senderVillage = resolvedVillageName(
+      report.actorVillageId,
+      String(payload.sender_village ?? "Unknown"),
+      villageNamesById,
+    );
+    const receiverVillage = resolvedVillageName(
+      report.targetVillageId,
+      String(payload.receiver_village ?? "Unknown"),
+      villageNamesById,
+    );
+    return `${senderVillage} sent resources to ${receiverVillage}`;
   }
 
-  return {
-    title: report.reportType,
-    summary: "Unknown report payload",
-  };
+  return report.reportType;
 }
 
 function ArmyTable({
@@ -244,14 +263,14 @@ function ArmyTable({
   }
 
   return (
-    <div class="border rounded-md p-4">
-      <p class="text-xs uppercase text-gray-500 font-semibold mb-3">{title}</p>
+    <div class="rounded-md border border-stone-200 bg-stone-50 p-2">
+      <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">{title}</p>
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse">
+        <table class="w-full table-fixed border-collapse overflow-hidden rounded-md border border-stone-200 bg-white text-xs">
           <thead>
             <tr>
               {Array.from({ length }, (_, idx) => (
-                <th key={`u-${idx}`} class="text-center p-1 text-xs text-gray-500 border-b">
+                <th key={`u-${idx}`} class="border-b border-stone-200 p-0.5 text-center text-stone-500">
                   <UnitSprite tribe={tribe} unitIndex={idx} label={`U${idx + 1}`} />
                 </th>
               ))}
@@ -264,9 +283,9 @@ function ArmyTable({
                 return (
                   <td
                     key={`before-${idx}`}
-                    class={`text-center p-2 border-r last:border-r-0 ${value === 0 ? "bg-gray-50 opacity-40" : "bg-gray-100"}`}
+                    class={`border-r border-stone-200 p-1 text-center last:border-r-0 ${value === 0 ? "bg-stone-50 opacity-50" : "bg-white"}`}
                   >
-                    <div class={value === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>
+                    <div class={value === 0 ? "text-stone-400" : "font-semibold text-stone-900"}>
                       {value}
                     </div>
                   </td>
@@ -278,8 +297,8 @@ function ArmyTable({
                 {Array.from({ length }, (_, idx) => {
                   const loss = losses[idx] ?? 0;
                   return (
-                    <td key={`loss-${idx}`} class="text-center p-2 border-r last:border-r-0 bg-red-50">
-                      <div class={loss > 0 ? "text-red-600 font-semibold text-sm" : "text-gray-300 text-xs"}>
+                    <td key={`loss-${idx}`} class="border-r border-stone-200 bg-stone-100 p-1 text-center last:border-r-0">
+                      <div class={loss > 0 ? "font-semibold text-stone-700" : "text-stone-300"}>
                         {loss > 0 ? `↓${loss}` : "-"}
                       </div>
                     </td>
@@ -294,18 +313,73 @@ function ArmyTable({
   );
 }
 
+function sumArrays(left: number[], right: number[]) {
+  const length = Math.max(left.length, right.length);
+  return Array.from({ length }, (_, idx) => (left[idx] ?? 0) + (right[idx] ?? 0));
+}
+
+function groupedReinforcementsByTribe(entries: unknown[]) {
+  const groups = new Map<string, { before: number[]; losses: number[] }>();
+  for (const entry of entries) {
+    const record = asRecord(entry) ?? {};
+    const tribe = readString(record, "tribe", "Unknown");
+    const current = groups.get(tribe) ?? { before: [], losses: [] };
+    current.before = sumArrays(current.before, troopArray(record.army_before));
+    current.losses = sumArrays(current.losses, troopArray(record.losses));
+    groups.set(tribe, current);
+  }
+  return Array.from(groups.entries()).map(([tribe, data]) => ({ tribe, ...data }));
+}
+
+function totalResources(resources: unknown) {
+  const parsed = parseResourceGroup(resources);
+  return parsed.lumber + parsed.clay + parsed.iron + parsed.crop;
+}
+
+function DamageLine({ damage, fallbackName }: { damage: Record<string, unknown> | null; fallbackName: string }) {
+  if (!damage) {
+    return <p class="text-sm text-stone-700">{fallbackName} hasn't been damaged.</p>;
+  }
+  const name = buildingLabel(readString(damage, "name", fallbackName));
+  const before = readNumber(damage, "level_before");
+  const after = readNumber(damage, "level_after");
+  if (before === after) {
+    return <p class="text-sm text-stone-700">{name} hasn't been damaged.</p>;
+  }
+  return (
+    <p class="text-sm text-stone-700">
+      {name} has been damaged from level {before} to level {after}.
+    </p>
+  );
+}
+
+function SectionCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: ComponentChildren;
+}) {
+  return (
+    <section class="rounded-md border border-stone-200 bg-white p-4 shadow-sm">
+      <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-600">{title}</h2>
+      <div class="space-y-3">{children}</div>
+    </section>
+  );
+}
+
 function BattleReportDetail({
   data,
   payload,
   worldSize,
+  villageNamesById,
 }: {
   data: ReportDetailResponse;
   payload: Record<string, unknown>;
   worldSize: number;
+  villageNamesById: VillageNamesById;
 }) {
-  const success = Boolean(payload.success);
-  const resultClass = success ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700";
-
+  const subject = reportSubject(data, villageNamesById);
   const bounty = parseResourceGroup(payload.bounty);
   const attacker = asRecord(payload.attacker);
   const defender = asRecord(payload.defender);
@@ -313,188 +387,192 @@ function BattleReportDetail({
   const scouting = asRecord(payload.scouting);
   const wallDamage = asRecord(payload.wall_damage);
   const catapultDamage = Array.isArray(payload.catapult_damage) ? payload.catapult_damage : [];
-
   const attackerBefore = troopArray(attacker?.army_before);
   const attackerLosses = troopArray(attacker?.losses);
   const defenderBefore = troopArray(defender?.army_before);
   const defenderLosses = troopArray(defender?.losses);
   const attackerTribe = readString(attacker ?? {}, "tribe");
   const defenderTribe = readString(defender ?? {}, "tribe");
+  const groupedReinforcements = groupedReinforcementsByTribe(reinforcements);
   const scoutingTargetReport = scouting?.target_report;
   const scoutingTarget = normalizeScoutingTarget(scouting?.target);
+  const ramsPresent = (attackerBefore[6] ?? 0) > 0;
+  const catapultsPresent = (attackerBefore[7] ?? 0) > 0;
+  const chiefsPresent = (attackerBefore[8] ?? 0) > 0;
+  const loyaltyBefore = payload.loyalty_before;
+  const loyaltyAfter = payload.loyalty_after;
 
   return (
     <div class="space-y-4">
-      <div class={`p-4 rounded-md border ${resultClass}`}>
-        <div class="text-xl font-bold">{success ? "Victory" : "Defeat"}</div>
-        <div class="text-sm mt-1">
-          {readString(payload, "attacker_village", "Unknown")} {readString(payload, "attack_type", "").toLowerCase()}{" "}
-          {readString(payload, "defender_village", "Unknown")}
-        </div>
-      </div>
+      <Panel class="space-y-1">
+        <h1 class="text-xl font-semibold text-stone-900">{subject}</h1>
+        <div class="text-sm text-stone-500">{formatTimestamp(data.createdAt)}</div>
+      </Panel>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="border rounded-md p-4 bg-red-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">
-            Attacker - {readString(payload, "attacker_player", "Unknown")}
-          </p>
-          <p class="text-sm text-gray-600 mb-3">
-            {villageFieldLink(
+      <div class="space-y-4">
+        <SectionCard title="Attacker">
+          <p class="text-sm text-stone-700">
+            {playerLink(readString(payload, "attacker_player", "Unknown"), data.actorPlayerId)} from{" "}
+            {villageLinkById(
               readString(payload, "attacker_village", "Unknown"),
+              data.actorVillageId,
               payload.attacker_position,
               worldSize,
+              villageNamesById,
             )}
           </p>
-        </div>
-        <div class="border rounded-md p-4 bg-blue-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">
-            Defender - {readString(payload, "defender_player", "Unknown")}
-          </p>
-          <p class="text-sm text-gray-600 mb-3">
-            {villageFieldLink(
+          <ArmyTable title="Sent troops" before={attackerBefore} losses={attackerLosses} tribe={attackerTribe} />
+          {totalResources(bounty) > 0 ? (
+            <div class="rounded-md border border-stone-200 bg-white p-3">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Bounty</p>
+              <p class="font-mono text-stone-800"><ResourceSummaryInline resources={bounty} /></p>
+            </div>
+          ) : null}
+          {ramsPresent ? (
+            <div class="rounded-md border border-stone-200 bg-white p-3">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Wall damage</p>
+              <DamageLine damage={wallDamage} fallbackName="Wall" />
+            </div>
+          ) : null}
+          {catapultsPresent ? (
+            <div class="rounded-md border border-stone-200 bg-white p-3">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Building damage</p>
+              {catapultDamage.length > 0 ? (
+                <div class="space-y-1">
+                  {catapultDamage.map((entry, idx) => (
+                    <DamageLine key={`catapult-${idx}`} damage={asRecord(entry)} fallbackName="Building" />
+                  ))}
+                </div>
+              ) : (
+                <p class="text-sm text-stone-700">Buildings haven't been damaged.</p>
+              )}
+            </div>
+          ) : null}
+          {chiefsPresent && (loyaltyBefore != null || loyaltyAfter != null || payload.conquered != null) ? (
+            <div class="rounded-md border border-stone-200 bg-white p-3">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Loyalty</p>
+              {payload.conquered === true ? (
+                <p class="text-sm font-semibold text-green-800">The village has been conquered.</p>
+              ) : Number(loyaltyBefore ?? 0) !== Number(loyaltyAfter ?? 0) ? (
+                <p class="text-sm text-stone-700">
+                  Loyalty lowered from {Number(loyaltyBefore ?? 0)} to {Number(loyaltyAfter ?? 0)}.
+                </p>
+              ) : (
+                <p class="text-sm text-stone-700">Loyalty hasn't been changed.</p>
+              )}
+            </div>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="Defender">
+          <p class="text-sm text-stone-700">
+            {playerLink(readString(payload, "defender_player", "Unknown"), data.targetPlayerId)} from{" "}
+            {villageLinkById(
               readString(payload, "defender_village", "Unknown"),
+              data.targetVillageId,
               payload.defender_position,
               worldSize,
+              villageNamesById,
             )}
           </p>
-        </div>
+          {defender ? (
+            <ArmyTable title="Village troops" before={defenderBefore} losses={defenderLosses} tribe={defenderTribe} />
+          ) : (
+            <p class="rounded-md border border-stone-200 bg-white p-3 text-sm text-stone-500">No village troops were present.</p>
+          )}
+          {groupedReinforcements.length > 0 ? (
+            <div class="space-y-3">
+              <p class="text-xs font-semibold uppercase text-stone-500">Reinforcements</p>
+              {groupedReinforcements.map((group) => (
+                <ArmyTable
+                  key={group.tribe}
+                  title={`${tribeLabel(group.tribe)} reinforcements`}
+                  before={group.before}
+                  losses={group.losses}
+                  tribe={group.tribe}
+
+                />
+              ))}
+            </div>
+          ) : null}
+        </SectionCard>
       </div>
 
-      <ArmyTable title="Attacker Army" before={attackerBefore} losses={attackerLosses} tribe={attackerTribe} />
-      {defender ? <ArmyTable title="Defender Army" before={defenderBefore} losses={defenderLosses} tribe={defenderTribe} /> : null}
-
-      {reinforcements.length > 0 ? (
-        <div class="border rounded-md p-4">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-3">Reinforcements</p>
-          <div class="space-y-3">
-            {reinforcements.map((entry, idx) => {
-              const reinf = asRecord(entry) ?? {};
-              return (
-                <ArmyTable
-                  key={`reinf-${idx}`}
-                  title={`Reinforcement #${idx + 1}`}
-                  before={troopArray(reinf.army_before)}
-                  losses={troopArray(reinf.losses)}
-                  tribe={readString(reinf, "tribe")}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
       {scouting ? (
-        <div class="border rounded-md p-4 bg-blue-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">Scouting</p>
-          <p class="text-sm text-gray-700 mb-2">
-            {Boolean(scouting.was_detected) ? "Scouts were detected" : "Scouts were not detected"}
+        <SectionCard title="Scouting">
+          <p class="text-sm text-stone-700">
+            {Boolean(scouting.was_detected) ? "Scouts were detected." : "Scouts were not detected."}
           </p>
           {scoutingTarget === "resources" ? (
-            <div class="rounded bg-white p-3 text-sm text-gray-700">
-              <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed resources</p>
+            <div class="rounded-md border border-stone-200 bg-white p-3 text-sm text-stone-700">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Revealed resources</p>
               <p class="font-mono"><ResourceSummaryInline resources={parseScoutingResources(scoutingTargetReport)} /></p>
             </div>
           ) : null}
           {scoutingTarget === "defenses" ? (
-            <div class="rounded bg-white p-3 text-sm text-gray-700 space-y-1">
-              <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Revealed defenses</p>
+            <div class="space-y-1 rounded-md border border-stone-200 bg-white p-3 text-sm text-stone-700">
+              <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Revealed defenses</p>
               <p>Wall: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "wall", 0)}</p>
               <p>Palace: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "palace", 0)}</p>
               <p>Residence: Level {readNumber(parseScoutingDefenses(scoutingTargetReport), "residence", 0)}</p>
             </div>
           ) : null}
           {scoutingTarget === "unknown" ? (
-            <pre class="overflow-auto rounded bg-white p-3 text-xs text-gray-700">
+            <pre class="overflow-auto rounded bg-stone-950/95 p-3 text-xs text-stone-100">
               {JSON.stringify(scouting.target_report, null, 2)}
             </pre>
           ) : null}
-        </div>
+        </SectionCard>
       ) : null}
 
-      {wallDamage ? (
-        <div class="border rounded-md p-4 bg-orange-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">Ram Damage</p>
-          <p class="text-sm text-gray-700">
-            {readString(wallDamage, "name", "Wall")}: Level {readNumber(wallDamage, "level_before")} → Level{" "}
-            {readNumber(wallDamage, "level_after")}
-          </p>
-        </div>
-      ) : null}
-
-      {catapultDamage.length > 0 ? (
-        <div class="border rounded-md p-4 bg-red-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">Catapult Damage</p>
-          <div class="space-y-1">
-            {catapultDamage.map((entry, idx) => {
-              const damage = asRecord(entry) ?? {};
-              return (
-                <p key={`catapult-${idx}`} class="text-sm text-gray-700">
-                  {readString(damage, "name", "Building")}: Level {readNumber(damage, "level_before")} → Level{" "}
-                  {readNumber(damage, "level_after")}
-                </p>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {(payload.loyalty_before != null || payload.loyalty_after != null) ? (
-        <div class="border rounded-md p-4 bg-purple-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">Loyalty</p>
-          <p class="text-sm text-gray-700">
-            {Number(payload.loyalty_before ?? 0)} → {Number(payload.loyalty_after ?? 0)}
-            {payload.conquered === true ? " (Conquered)" : ""}
-          </p>
-        </div>
-      ) : null}
-
-      <div class="border rounded-md p-4">
-        <p class="text-xs uppercase text-gray-500 font-semibold mb-1">Bounty</p>
-        <p class="font-mono text-gray-800"><ResourceSummaryInline resources={bounty} /></p>
-      </div>
-
-      <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );
 }
-
 function ReinforcementReportDetail({
   data,
   payload,
   worldSize,
+  villageNamesById,
 }: {
   data: ReportDetailResponse;
   payload: Record<string, unknown>;
   worldSize: number;
+  villageNamesById: VillageNamesById;
 }) {
+  const subject = reportSubject(data, villageNamesById);
   return (
     <div class="space-y-4">
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="border rounded-md p-4 bg-blue-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">From</p>
-          <p class="text-sm text-gray-700 font-semibold">{readString(payload, "sender_player", "Unknown")}</p>
-          <p class="text-sm text-gray-600">
-            {villageFieldLink(
+      <Panel class="space-y-1">
+        <h1 class="text-xl font-semibold text-stone-900">{subject}</h1>
+        <div class="text-sm text-stone-500">{formatTimestamp(data.createdAt)}</div>
+      </Panel>
+      <div class="space-y-4">
+        <SectionCard title="Sender">
+          <p class="text-sm text-stone-700">
+            {playerLink(readString(payload, "sender_player", "Unknown"), data.actorPlayerId)} from{" "}
+            {villageLinkById(
               readString(payload, "sender_village", "Unknown"),
+              data.actorVillageId,
               payload.sender_position,
               worldSize,
+              villageNamesById,
             )}
           </p>
-        </div>
-        <div class="border rounded-md p-4 bg-green-50">
-          <p class="text-xs uppercase text-gray-500 font-semibold mb-2">To</p>
-          <p class="text-sm text-gray-700 font-semibold">{readString(payload, "receiver_player", "Unknown")}</p>
-          <p class="text-sm text-gray-600">
-            {villageFieldLink(
+          <ArmyTable title="Sent troops" before={troopArray(payload.units)} tribe={readString(payload, "tribe")} />
+        </SectionCard>
+        <SectionCard title="Receiver">
+          <p class="text-sm text-stone-700">
+            {playerLink(readString(payload, "receiver_player", "Unknown"), data.targetPlayerId)} from{" "}
+            {villageLinkById(
               readString(payload, "receiver_village", "Unknown"),
+              data.targetVillageId,
               payload.receiver_position,
               worldSize,
+              villageNamesById,
             )}
           </p>
-        </div>
+        </SectionCard>
       </div>
-      <ArmyTable title="Troops Sent" before={troopArray(payload.units)} tribe={readString(payload, "tribe")} />
-      <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
     </div>
   );
 }
@@ -503,27 +581,55 @@ function MarketplaceDeliveryReportDetail({
   data,
   payload,
   worldSize,
+  villageNamesById,
 }: {
   data: ReportDetailResponse;
   payload: Record<string, unknown>;
   worldSize: number;
+  villageNamesById: VillageNamesById;
 }) {
   const resources = asRecord(payload.resources) ?? {};
+  const subject = reportSubject(data, villageNamesById);
   return (
     <div class="space-y-4">
-      <Panel>
-        <p class="text-sm text-gray-700">
-          {villageFieldLink(readString(payload, "sender_village", "Unknown"), payload.sender_position, worldSize)}{" "}
-          delivered <ResourceSummaryInline resources={resources} /> to{" "}
-          {villageFieldLink(readString(payload, "receiver_village", "Unknown"), payload.receiver_position, worldSize)}.
-        </p>
+      <Panel class="space-y-1">
+        <h1 class="text-xl font-semibold text-stone-900">{subject}</h1>
+        <div class="text-sm text-stone-500">{formatTimestamp(data.createdAt)}</div>
       </Panel>
-      <div class="text-xs text-gray-500">Created at {formatTimestamp(data.createdAt)} • {data.id}</div>
+      <SectionCard title="Delivery">
+        <p class="text-sm text-stone-700">
+          {playerLink(readString(payload, "sender_player", "Unknown"), data.actorPlayerId)} from{" "}
+          {villageLinkById(
+            readString(payload, "sender_village", "Unknown"),
+            data.actorVillageId,
+            payload.sender_position,
+            worldSize,
+            villageNamesById,
+          )}{" "}
+          sent resources to {playerLink(readString(payload, "receiver_player", "Unknown"), data.targetPlayerId)} from{" "}
+          {villageLinkById(
+            readString(payload, "receiver_village", "Unknown"),
+            data.targetVillageId,
+            payload.receiver_position,
+            worldSize,
+            villageNamesById,
+          )}.
+        </p>
+        <div class="rounded-md border border-stone-200 bg-white p-3">
+          <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Resources</p>
+          <p class="font-mono text-stone-800"><ResourceSummaryInline resources={resources} /></p>
+        </div>
+      </SectionCard>
     </div>
   );
 }
 
 export function ReportsPage({ data }: { data: ReportsResponse }) {
+  const gameContext = useGameContextQuery();
+  const villageNamesById = useMemo(
+    () => new Map((gameContext.data?.villages ?? []).map((village) => [village.id, village.name] as const)),
+    [gameContext.data?.villages],
+  );
   const [filter, setFilter] = useState<"all" | "attacks" | "reinforcements" | "merchants">("all");
   const currentPage = data.pagination?.page ?? 1;
   const perPage = data.pagination?.perPage ?? 25;
@@ -566,19 +672,16 @@ export function ReportsPage({ data }: { data: ReportsResponse }) {
         <Panel class="text-center text-sm text-gray-500">No reports available.</Panel>
       ) : null}
       {filtered.map((report) => {
-        const text = reportText(report);
+        const subject = reportSubject(report, villageNamesById);
         return (
           <Link
             key={report.id}
             to={`/reports/${report.id}`}
-            class={`block rounded border px-4 py-3 shadow-sm ${report.isRead ? "bg-white" : "bg-amber-50 border-amber-200"}`}
+            class={`block rounded-md border px-4 py-3 shadow-sm ${report.isRead ? "border-stone-200 bg-white" : "border-amber-200 bg-amber-50"}`}
           >
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <div class="font-semibold text-gray-800">{text.title}</div>
-                <div class="text-sm text-gray-600">{text.summary}</div>
-              </div>
-              <div class="text-xs text-gray-500">{formatTimestamp(report.createdAt)}</div>
+            <div class="flex min-w-0 items-center justify-between gap-4">
+              <div class="min-w-0 truncate font-semibold text-stone-900">{subject}</div>
+              <div class="shrink-0 text-xs text-stone-500">{formatReportDate(report.createdAt)}</div>
             </div>
           </Link>
         );
@@ -606,6 +709,10 @@ export function ReportsPage({ data }: { data: ReportsResponse }) {
 export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
   const gameContext = useGameContextQuery();
   const worldSize = gameContext.data?.worldSize ?? 100;
+  const villageNamesById = useMemo(
+    () => new Map((gameContext.data?.villages ?? []).map((village) => [village.id, village.name] as const)),
+    [gameContext.data?.villages],
+  );
   const variant = reportPayloadVariant(data.payload);
 
   return (
@@ -617,26 +724,34 @@ export function ReportDetailPage({ data }: { data: ReportDetailResponse }) {
         </Link>
       </div>
 
-      <Panel class="space-y-4">
-        {variant?.kind === "Battle" ? (
-          <BattleReportDetail data={data} payload={variant.value} worldSize={worldSize} />
-        ) : null}
-        {variant?.kind === "Reinforcement" ? (
-          <ReinforcementReportDetail data={data} payload={variant.value} worldSize={worldSize} />
-        ) : null}
-        {variant?.kind === "MarketplaceDelivery" ? (
-          <MarketplaceDeliveryReportDetail data={data} payload={variant.value} worldSize={worldSize} />
-        ) : null}
-        {!variant || !["Battle", "Reinforcement", "MarketplaceDelivery"].includes(variant.kind) ? (
-          <>
-            <div class="text-sm text-gray-500">{formatTimestamp(data.createdAt)}</div>
-            <div class="mt-2 text-sm font-semibold text-gray-700">Type: {data.reportType}</div>
-            <pre class="mt-4 overflow-auto rounded bg-stone-950/95 p-4 text-xs text-stone-100">
-              {JSON.stringify(data.payload, null, 2)}
-            </pre>
-          </>
-        ) : null}
-      </Panel>
+      {variant?.kind === "Battle" ? (
+        <BattleReportDetail data={data} payload={variant.value} worldSize={worldSize} villageNamesById={villageNamesById} />
+      ) : null}
+      {variant?.kind === "Reinforcement" ? (
+        <ReinforcementReportDetail
+          data={data}
+          payload={variant.value}
+          worldSize={worldSize}
+          villageNamesById={villageNamesById}
+        />
+      ) : null}
+      {variant?.kind === "MarketplaceDelivery" ? (
+        <MarketplaceDeliveryReportDetail
+          data={data}
+          payload={variant.value}
+          worldSize={worldSize}
+          villageNamesById={villageNamesById}
+        />
+      ) : null}
+      {!variant || !["Battle", "Reinforcement", "MarketplaceDelivery"].includes(variant.kind) ? (
+        <Panel>
+          <div class="text-sm text-gray-500">{formatTimestamp(data.createdAt)}</div>
+          <div class="mt-2 text-sm font-semibold text-gray-700">Type: {data.reportType}</div>
+          <pre class="mt-4 overflow-auto rounded bg-stone-950/95 p-4 text-xs text-stone-100">
+            {JSON.stringify(data.payload, null, 2)}
+          </pre>
+        </Panel>
+      ) : null}
     </div>
   );
 }

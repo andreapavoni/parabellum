@@ -532,6 +532,10 @@ pub async fn report_detail(
         server_time: Utc::now().timestamp(),
         id: report.id,
         report_type: report.report_type,
+        actor_player_id: report.actor_player_id,
+        actor_village_id: report.actor_village_id,
+        target_player_id: report.target_player_id,
+        target_village_id: report.target_village_id,
         created_at: report.created_at.timestamp(),
         payload: report.payload,
     }))
@@ -751,6 +755,10 @@ fn map_report_summary(report: parabellum_app::villages::models::ReportModel) -> 
     ReportListItemDto {
         id: report.id,
         report_type: report.report_type,
+        actor_player_id: report.actor_player_id,
+        actor_village_id: report.actor_village_id,
+        target_player_id: report.target_player_id,
+        target_village_id: report.target_village_id,
         payload: report.payload,
         created_at: report.created_at.timestamp(),
         is_read: report.read_at.is_some(),

@@ -167,6 +167,10 @@ export type PlayerProfileResponse = {
 export type ReportListItem = {
   id: string;
   reportType: string;
+  actorPlayerId: string;
+  actorVillageId?: number;
+  targetPlayerId?: string;
+  targetVillageId?: number;
   payload: unknown;
   createdAt: number;
   isRead: boolean;
@@ -186,6 +190,10 @@ export type ReportDetailResponse = {
   serverTime: number;
   id: string;
   reportType: string;
+  actorPlayerId: string;
+  actorVillageId?: number;
+  targetPlayerId?: string;
+  targetVillageId?: number;
   createdAt: number;
   payload: unknown;
 };

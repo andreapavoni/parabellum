@@ -261,6 +261,10 @@ pub struct PlayerProfileResponse {
 pub struct ReportListItemDto {
     pub id: Uuid,
     pub report_type: String,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
     #[schema(value_type = ReportPayloadDoc)]
     pub payload: ReportPayload,
     pub created_at: i64,
@@ -294,6 +298,10 @@ where
     pub server_time: i64,
     pub id: Uuid,
     pub report_type: String,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
     pub created_at: i64,
     pub payload: T,
 }
@@ -304,6 +312,10 @@ pub struct ReportDetailPayloadResponse {
     pub server_time: i64,
     pub id: Uuid,
     pub report_type: String,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
     pub created_at: i64,
     #[schema(value_type = ReportPayloadDoc)]
     pub payload: ReportPayload,
