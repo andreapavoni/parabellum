@@ -12,7 +12,7 @@ ENV SKIP_FRONTEND=
 
 COPY . .
 RUN bun install --frozen-lockfile
-RUN cargo build --release --locked \
+RUN cargo build --release \
     --bin parabellum \
     --bin parabellum-seed \
     --bin parabellum-replay
