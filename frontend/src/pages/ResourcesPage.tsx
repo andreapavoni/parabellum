@@ -113,7 +113,7 @@ export function ResourcesPage({
   return (
     <div class="mx-auto mt-3 md:mt-4 w-full max-w-5xl px-2 md:px-3 pb-10">
       <VillageHeading village={data.village} onVillageRenamed={onVillageRenamed} />
-      <div class="mt-3 flex flex-col items-start gap-4 md:flex-row">
+      <div class="mt-3 flex w-full flex-col items-start justify-center gap-4 md:flex-row">
         <div class="flex flex-col items-start w-full md:max-w-[440px] md:flex-none">
           <ResourceFieldsMap slots={data.resourceSlots} />
           <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />

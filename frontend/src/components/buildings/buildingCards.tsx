@@ -41,19 +41,89 @@ function ResourceCost({ cost }: { cost: ResourceAmounts }) {
   );
 }
 
-function buildingValueLabel(buildingName: string, value: number) {
-  const percentValueBuildings = new Set([
-    "Barracks",
-    "GreatBarracks",
-    "Stable",
-    "GreatStable",
-    "Workshop",
-    "GreatWorkshop",
-  ]);
-  if (percentValueBuildings.has(buildingName)) {
-    return `${Math.floor(value / 10)}%`;
+type BuildingUpgradeValue = {
+  label: string;
+  value: string;
+};
+
+const RESOURCE_PRODUCTION_BUILDINGS = new Set(["Woodcutter", "ClayPit", "IronMine", "Cropland"]);
+const RESOURCE_BONUS_BUILDINGS = new Set(["Sawmill", "Brickyard", "IronFoundry", "GrainMill", "Bakery"]);
+const STORAGE_BUILDINGS = new Set(["Warehouse", "Granary", "GreatWarehouse", "GreatGranary"]);
+const TRAINING_SPEED_BUILDINGS = new Set([
+  "Barracks",
+  "GreatBarracks",
+  "Stable",
+  "GreatStable",
+  "Workshop",
+  "GreatWorkshop",
+]);
+const WALL_BUILDINGS = new Set(["CityWall", "EarthWall", "Palisade"]);
+const RESERVED_BUILDING_SLOTS = new Set([19, 39, 40]);
+
+function decimalPercent(value: number) {
+  const percent = value / 10;
+  return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
+}
+
+function buildingUpgradeValue(buildingName: string, value?: number): BuildingUpgradeValue | null {
+  if (value == null || value === 0) return null;
+
+  if (RESOURCE_PRODUCTION_BUILDINGS.has(buildingName)) {
+    return { label: "Production", value: `${value.toLocaleString()}/hour` };
   }
-  return String(value);
+  if (RESOURCE_BONUS_BUILDINGS.has(buildingName)) {
+    return { label: "Production bonus", value: `+${value}%` };
+  }
+  if (STORAGE_BUILDINGS.has(buildingName)) {
+    return { label: "Storage capacity", value: value.toLocaleString() };
+  }
+  if (buildingName === "MainBuilding") {
+    return { label: "Construction time", value: decimalPercent(value) };
+  }
+  if (TRAINING_SPEED_BUILDINGS.has(buildingName)) {
+    return { label: "Training time", value: decimalPercent(value) };
+  }
+  if (buildingName === "Marketplace") {
+    return { label: "Merchants", value: value.toLocaleString() };
+  }
+  if (buildingName === "Cranny") {
+    return { label: "Hidden resources", value: value.toLocaleString() };
+  }
+  if (buildingName === "Smithy") {
+    return { label: "Unit upgrade cap", value: `level ${Math.max(0, value - 100)}` };
+  }
+  if (buildingName === "Embassy") {
+    return { label: "Alliance capacity", value: `${value.toLocaleString()} members` };
+  }
+  if (buildingName === "TownHall") {
+    return { label: "Culture points", value: `${value.toLocaleString()}/day` };
+  }
+  if (buildingName === "TradeOffice") {
+    return { label: "Merchant capacity bonus", value: `+${value}%` };
+  }
+  if (WALL_BUILDINGS.has(buildingName)) {
+    return { label: "Defense bonus", value: `+${value}%` };
+  }
+  if (buildingName === "StonemansionLodge") {
+    return { label: "Building stability", value: `${decimalPercent(value)} durability` };
+  }
+  if (buildingName === "TournamentSquare") {
+    return { label: "Long-distance troop speed", value: `+${value}%` };
+  }
+  if (buildingName === "Treasury") {
+    return { label: "Artifact capacity", value: value.toLocaleString() };
+  }
+  if (buildingName === "Brewery") {
+    return { label: "Attack bonus", value: `+${value}%` };
+  }
+  if (buildingName === "Trapper") {
+    return { label: "Trap capacity", value: value.toLocaleString() };
+  }
+  if (buildingName === "HorseDrinkingTrough") {
+    return { label: "Cavalry training time", value: `-${value}%` };
+  }
+
+  return null;
 }
 
 export function UpgradeBuilding({
@@ -68,6 +138,8 @@ export function UpgradeBuilding({
   const upgradeBuilding = useUpgradeBuildingMutation();
   const affordable = canAfford(data.storedResources, data.cost);
   const canUpgrade = affordable && !data.queueFull && !data.atMaxLevel && !submitting;
+  const currentUpgradeValue = buildingUpgradeValue(data.buildingName, data.currentValue);
+  const nextUpgradeValue = buildingUpgradeValue(data.buildingName, data.nextValue);
 
   return (
     <Panel>
@@ -89,10 +161,18 @@ export function UpgradeBuilding({
             </span>
           </div>
 
-          {data.nextValue != null ? (
-            <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
-              <span class="text-gray-600">Next value: </span>
-              <span class="font-semibold text-blue-700">{buildingValueLabel(data.buildingName, data.nextValue)}</span>
+          {nextUpgradeValue ? (
+            <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded space-y-1">
+              {currentUpgradeValue ? (
+                <div>
+                  <span class="text-gray-600">Current {currentUpgradeValue.label.toLowerCase()}: </span>
+                  <span class="font-semibold text-blue-700">{currentUpgradeValue.value}</span>
+                </div>
+              ) : null}
+              <div>
+                <span class="text-gray-600">Next {nextUpgradeValue.label.toLowerCase()}: </span>
+                <span class="font-semibold text-blue-700">{nextUpgradeValue.value}</span>
+              </div>
             </div>
           ) : null}
 
@@ -120,7 +200,15 @@ export function UpgradeBuilding({
           </Button>
         </>
       ) : (
-        <p class="text-sm text-gray-600">{buildingLabel(data.buildingName)} is at maximum level ({data.currentLevel}).</p>
+        <div class="space-y-3">
+          <p class="text-sm text-gray-600">{buildingLabel(data.buildingName)} is at maximum level ({data.currentLevel}).</p>
+          {currentUpgradeValue ? (
+            <div class="text-sm p-2 bg-blue-50 border border-blue-200 rounded">
+              <span class="text-gray-600">{currentUpgradeValue.label}: </span>
+              <span class="font-semibold text-blue-700">{currentUpgradeValue.value}</span>
+            </div>
+          ) : null}
+        </div>
       )}
     </Panel>
   );
@@ -138,6 +226,9 @@ export function EmptySlotBuilding({
   const addBuilding = useAddBuildingMutation();
   if (!detail.emptySlot) return null;
   if (detail.emptySlot.hasQueueForSlot && detail.emptySlot.queuedBuildingName) return null;
+  const reservedSlotOption = RESERVED_BUILDING_SLOTS.has(detail.slotId)
+    ? detail.emptySlot.buildableBuildings[0] ?? detail.emptySlot.lockedBuildings[0] ?? null
+    : null;
 
   const renderOption = (option: EmptySlotBuildOption, locked: boolean) => {
     const affordable = canAfford(detail.storedResources, option.cost);
@@ -201,6 +292,21 @@ export function EmptySlotBuilding({
     );
   };
 
+  if (reservedSlotOption) {
+    const locked = detail.emptySlot.lockedBuildings.some(
+      (option) => option.buildingName === reservedSlotOption.buildingName,
+    );
+    return (
+      <div class="space-y-3">
+        <div class="text-sm text-gray-600">
+          This slot is reserved for {buildingLabel(reservedSlotOption.buildingName)}.
+        </div>
+        {renderOption(reservedSlotOption, locked)}
+        {error ? <div class="text-sm text-red-600">{error}</div> : null}
+      </div>
+    );
+  }
+
   return (
     <div class="space-y-4">
       {detail.emptySlot.buildableBuildings.length > 0 ? (
@@ -249,6 +355,8 @@ export function QueuedConstructionUpgrade({
   }
 
   const affordable = canAfford(detail.storedResources, queuedPreview.cost);
+  const currentUpgradeValue = buildingUpgradeValue(queuedPreview.buildingName, queuedPreview.currentValue);
+  const nextUpgradeValue = buildingUpgradeValue(queuedPreview.buildingName, queuedPreview.nextValue);
 
   return (
     <Panel>
@@ -270,10 +378,18 @@ export function QueuedConstructionUpgrade({
             </span>
           </div>
 
-          {queuedPreview.nextValue != null ? (
-            <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
-              <span class="text-gray-600">Next value: </span>
-              <span class="font-semibold text-blue-700">{buildingValueLabel(queuedPreview.buildingName, queuedPreview.nextValue)}</span>
+          {nextUpgradeValue ? (
+            <div class="text-sm mb-3 p-2 bg-blue-50 border border-blue-200 rounded space-y-1">
+              {currentUpgradeValue ? (
+                <div>
+                  <span class="text-gray-600">Current {currentUpgradeValue.label.toLowerCase()}: </span>
+                  <span class="font-semibold text-blue-700">{currentUpgradeValue.value}</span>
+                </div>
+              ) : null}
+              <div>
+                <span class="text-gray-600">Next {nextUpgradeValue.label.toLowerCase()}: </span>
+                <span class="font-semibold text-blue-700">{nextUpgradeValue.value}</span>
+              </div>
             </div>
           ) : null}
 
@@ -301,9 +417,17 @@ export function QueuedConstructionUpgrade({
           </Button>
         </>
       ) : (
-        <p class="text-sm text-gray-600">
-          {buildingLabel(detail.emptySlot.queuedBuildingName)} is at maximum level ({queuedPreview.currentLevel}).
-        </p>
+        <div class="space-y-3">
+          <p class="text-sm text-gray-600">
+            {buildingLabel(detail.emptySlot.queuedBuildingName)} is at maximum level ({queuedPreview.currentLevel}).
+          </p>
+          {currentUpgradeValue ? (
+            <div class="text-sm p-2 bg-blue-50 border border-blue-200 rounded">
+              <span class="text-gray-600">{currentUpgradeValue.label}: </span>
+              <span class="font-semibold text-blue-700">{currentUpgradeValue.value}</span>
+            </div>
+          ) : null}
+        </div>
       )}
     </Panel>
   );

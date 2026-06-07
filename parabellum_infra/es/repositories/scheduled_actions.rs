@@ -119,6 +119,7 @@ impl PostgresScheduledActionRepository {
                 ScheduledActionPayload::Building { workflow } => {
                     queues.building.push(BuildingQueueItem {
                         job_id: row.id,
+                        kind: workflow.kind,
                         slot_id: workflow.slot_id,
                         building_name: workflow.building_name,
                         target_level: workflow.level,

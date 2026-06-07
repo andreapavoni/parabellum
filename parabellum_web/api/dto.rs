@@ -9,7 +9,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use parabellum_app::villages::models::ScheduledActionStatus;
+use parabellum_app::villages::models::{BuildingWorkflowKind, ScheduledActionStatus};
 use parabellum_game::models::village::Village;
 use parabellum_types::reports::ReportPayload;
 
@@ -17,6 +17,7 @@ use crate::session::CurrentUser;
 
 #[derive(Debug, Clone)]
 struct BuildingQueueItemView {
+    kind: String,
     slot_id: u8,
     building_name: String,
     target_level: u8,
@@ -33,6 +34,7 @@ fn building_queue_to_views(
         .map(|item| {
             let remaining = (item.finishes_at - now).num_seconds().max(0) as u32;
             BuildingQueueItemView {
+                kind: building_queue_kind_key(item.kind).to_string(),
                 slot_id: item.slot_id,
                 building_name: format!("{:?}", item.building_name),
                 target_level: item.target_level,
@@ -41,6 +43,14 @@ fn building_queue_to_views(
             }
         })
         .collect()
+}
+
+fn building_queue_kind_key(kind: BuildingWorkflowKind) -> &'static str {
+    match kind {
+        BuildingWorkflowKind::Add => "add",
+        BuildingWorkflowKind::Upgrade => "upgrade",
+        BuildingWorkflowKind::Downgrade => "downgrade",
+    }
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -130,6 +140,7 @@ pub struct ResourceSlotDto {
 #[serde(rename_all = "camelCase")]
 /// Building queue entry with computed remaining time.
 pub struct BuildingQueueItemDto {
+    pub kind: String,
     pub slot_id: u8,
     pub building_name: String,
     pub target_level: u8,
@@ -483,6 +494,7 @@ fn building_queue_items(queue_views: &[BuildingQueueItemView]) -> Vec<BuildingQu
     queue_views
         .iter()
         .map(|item| BuildingQueueItemDto {
+            kind: item.kind.clone(),
             slot_id: item.slot_id,
             building_name: item.building_name.clone(),
             target_level: item.target_level,

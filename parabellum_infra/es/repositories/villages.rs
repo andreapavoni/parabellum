@@ -456,7 +456,9 @@ impl PostgresVillageRepository {
         let model: VillageModel = row.try_into()?;
 
         let mut next_buildings = model.buildings.clone();
-        if let Some(entry) = next_buildings.iter_mut().find(|b| b.slot_id == slot_id) {
+        if level == 0 && !(1..=18).contains(&slot_id) {
+            next_buildings.retain(|building| building.slot_id != slot_id);
+        } else if let Some(entry) = next_buildings.iter_mut().find(|b| b.slot_id == slot_id) {
             let next_building = Building::new(building_name.clone(), speed)
                 .at_level(level, speed)
                 .map_err(ApplicationError::Game)?;
@@ -644,13 +646,20 @@ impl TryFrom<DbVillageModelRow> for VillageModel {
     type Error = ApplicationError;
 
     fn try_from(value: DbVillageModelRow) -> Result<Self, Self::Error> {
+        let buildings = value
+            .buildings
+            .0
+            .into_iter()
+            .filter(|building| (1..=18).contains(&building.slot_id) || building.building.level > 0)
+            .collect();
+
         Ok(VillageModel {
             village_id: value.village_id as u32,
             player_id: value.player_id,
             village_name: value.village_name,
             position: value.position.0,
             tribe: value.tribe.into(),
-            buildings: value.buildings.0,
+            buildings,
             production: value.production.0,
             stocks: value.stocks.0,
             population: value.population as u32,

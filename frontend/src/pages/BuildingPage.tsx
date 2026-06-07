@@ -6,8 +6,21 @@ import { AcademyBuilding } from "@/components/buildings/AcademyBuilding";
 import { SmithyBuilding } from "@/components/buildings/SmithyBuilding";
 import { MarketplaceBuilding } from "@/components/buildings/MarketplaceBuilding";
 import { RallyPointBuilding } from "@/components/buildings/RallyPointBuilding";
+import { MainBuilding } from "@/components/buildings/MainBuilding";
 import { EmptySlotBuilding, QueuedConstructionUpgrade, UpgradeBuilding } from "@/components/buildings/buildingCards";
 import type { BuildingPageResponse } from "@/types/api";
+
+const RESERVED_BUILDING_SLOTS = new Set([19, 39, 40]);
+
+function reservedSlotBuildingName(detail: BuildingPageResponse["detail"]): string | null {
+  if (detail.buildingType !== "empty" || !RESERVED_BUILDING_SLOTS.has(detail.slotId)) return null;
+  return (
+    detail.emptySlot?.queuedBuildingName ??
+    detail.emptySlot?.buildableBuildings[0]?.buildingName ??
+    detail.emptySlot?.lockedBuildings[0]?.buildingName ??
+    null
+  );
+}
 
 export function BuildingPage({
   data,
@@ -25,8 +38,12 @@ export function BuildingPage({
     ? detail.emptySlot.queuedBuildingName
     : null;
   const showAsUnderConstruction = detail.buildingType === "empty" && queuedConstruction;
+  const reservedBuildingName = reservedSlotBuildingName(detail);
+  const showReservedSlot = detail.buildingType === "empty" && !showAsUnderConstruction && reservedBuildingName;
   const displayedBuildingName = showAsUnderConstruction && queuedConstruction
     ? queuedConstruction
+    : showReservedSlot && reservedBuildingName
+      ? reservedBuildingName
     : detail.buildingName;
   const descriptionParagraphs = displayedBuildingName
     ? buildingDescriptionParagraphs(displayedBuildingName)
@@ -35,7 +52,7 @@ export function BuildingPage({
   return (
     <div class="container mx-auto p-4 max-w-6xl">
       <h1 class="text-2xl font-bold mb-4">
-        {detail.buildingType === "empty" && !showAsUnderConstruction ? (
+        {detail.buildingType === "empty" && !showAsUnderConstruction && !showReservedSlot ? (
           `Empty slot #${detail.slotId}`
         ) : (
           <span class="inline-flex items-center gap-3">
@@ -45,7 +62,7 @@ export function BuildingPage({
               label={buildingLabel(displayedBuildingName)}
             />
             {buildingLabel(displayedBuildingName)}
-            {showAsUnderConstruction ? " (Under construction)" : ` (Level ${detail.currentLevel})`}
+            {showAsUnderConstruction ? " (Under construction)" : ` (Level ${showReservedSlot ? 0 : detail.currentLevel})`}
           </span>
         )}
       </h1>
@@ -58,7 +75,7 @@ export function BuildingPage({
       ) : null}
 
       <div class="space-y-6">
-        {detail.buildingType === "empty" && !showAsUnderConstruction ? (
+        {detail.buildingType === "empty" && !showAsUnderConstruction && !showReservedSlot ? (
           <div class="text-sm text-gray-600">Select a building to start construction.</div>
         ) : null}
 
@@ -81,6 +98,7 @@ export function BuildingPage({
         {detail.buildingType === "rally_point" ? (
           <RallyPointBuilding detail={detail} onMutate={onMutate} />
         ) : null}
+        {detail.mainBuilding ? <MainBuilding detail={detail.mainBuilding} onMutate={onMutate} /> : null}
         {showAsUnderConstruction ? <QueuedConstructionUpgrade detail={detail} onMutate={onMutate} /> : null}
         {detail.buildingType !== "empty" ? <UpgradeBuilding data={detail} onMutate={onMutate} /> : null}
       </div>

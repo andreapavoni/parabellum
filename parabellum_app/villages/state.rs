@@ -19,6 +19,7 @@ use parabellum_types::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::villages::models::BuildingWorkflowKind;
 use crate::villages::{ExpansionSlotUsage, ExpansionTrainingCommitment};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,9 +34,15 @@ pub struct VillageState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PendingBuildingAction {
     action_id: Uuid,
+    #[serde(default = "default_pending_building_kind")]
+    kind: BuildingWorkflowKind,
     slot_id: u8,
     building_name: BuildingName,
     execute_at: chrono::DateTime<Utc>,
+}
+
+fn default_pending_building_kind() -> BuildingWorkflowKind {
+    BuildingWorkflowKind::Upgrade
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -285,6 +292,7 @@ impl VillageState {
         speed: i8,
     ) -> Result<(BuildingName, u8, i64, ResourceGroup), ApplicationError> {
         self.enforce_building_queue_capacity()?;
+        self.enforce_no_pending_downgrade_for_slot(slot_id)?;
         let queued_for_slot: Vec<&PendingBuildingAction> = self
             .pending_building_actions
             .iter()
@@ -359,6 +367,8 @@ impl VillageState {
         speed: i8,
     ) -> Result<(BuildingName, u8, i64), ApplicationError> {
         self.enforce_building_queue_capacity()?;
+        self.enforce_downgrade_queue_capacity()?;
+        self.enforce_no_pending_building_action_for_slot(slot_id)?;
         self.village
             .init_building_downgrade(slot_id, speed)
             .map(|(building_name, next_level, duration_secs)| {
@@ -370,12 +380,14 @@ impl VillageState {
     pub fn record_building_action_scheduled(
         &mut self,
         action_id: Uuid,
+        kind: BuildingWorkflowKind,
         slot_id: u8,
         building_name: BuildingName,
         execute_at: chrono::DateTime<Utc>,
     ) {
         self.pending_building_actions.push(PendingBuildingAction {
             action_id,
+            kind,
             slot_id,
             building_name,
             execute_at,
@@ -699,6 +711,52 @@ impl VillageState {
         };
         if self.pending_building_actions.len() >= limit {
             return Err(AppError::QueueLimitReached { queue: "building" }.into());
+        }
+        Ok(())
+    }
+
+    fn enforce_downgrade_queue_capacity(&self) -> Result<(), ApplicationError> {
+        let queued_downgrades = self
+            .pending_building_actions
+            .iter()
+            .filter(|action| matches!(action.kind, BuildingWorkflowKind::Downgrade))
+            .count();
+        if queued_downgrades >= 2 {
+            return Err(AppError::QueueLimitReached {
+                queue: "building_downgrade",
+            }
+            .into());
+        }
+        Ok(())
+    }
+
+    fn enforce_no_pending_downgrade_for_slot(&self, slot_id: u8) -> Result<(), ApplicationError> {
+        if self.pending_building_actions.iter().any(|action| {
+            action.slot_id == slot_id && matches!(action.kind, BuildingWorkflowKind::Downgrade)
+        }) {
+            return Err(AppError::QueueItemAlreadyQueued {
+                queue: "building",
+                item: slot_id.to_string(),
+            }
+            .into());
+        }
+        Ok(())
+    }
+
+    fn enforce_no_pending_building_action_for_slot(
+        &self,
+        slot_id: u8,
+    ) -> Result<(), ApplicationError> {
+        if self
+            .pending_building_actions
+            .iter()
+            .any(|action| action.slot_id == slot_id)
+        {
+            return Err(AppError::QueueItemAlreadyQueued {
+                queue: "building",
+                item: slot_id.to_string(),
+            }
+            .into());
         }
         Ok(())
     }

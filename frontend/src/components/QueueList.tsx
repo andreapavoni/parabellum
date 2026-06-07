@@ -3,10 +3,16 @@ import { Link } from "./Link";
 import { buildingLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
 import { useCountdown } from "@/live/useCountdown";
+import { ResourceSprite } from "@/components/ResourceSprite";
 
 function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
   const remaining = useCountdown(seconds, onElapsed);
-  return <span class="font-semibold text-gray-800">{formatDurationHms(remaining)}</span>;
+  return (
+    <span class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-gray-800">
+      <ResourceSprite kind="clock" size={14} label="Time remaining" />
+      {formatDurationHms(remaining)}
+    </span>
+  );
 }
 
 export function QueueList({
@@ -17,23 +23,34 @@ export function QueueList({
   onQueueElapsed?: () => void;
 }) {
   return (
-    <div class="w-full mt-4 flex flex-col text-[11px] text-gray-600 px-4 max-w-[400px] gap-1">
-      <div class="font-bold text-gray-800 border-b border-gray-300 pb-1 mb-1">Building queue</div>
+    <div class="w-full mt-4 max-w-[400px] rounded-md border border-stone-300 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-sm">
+      <div class="mb-2 flex items-center justify-between border-b border-stone-200 pb-1.5">
+        <div class="font-bold text-gray-900">Building queue</div>
+        {queue.length > 0 ? <span class="font-mono text-stone-500">{queue.length}</span> : null}
+      </div>
       {queue.length === 0 ? (
         <div class="text-xs text-gray-500">The queue is currently empty.</div>
       ) : (
-        queue.map((item) => (
-          <div class="flex justify-between w-full items-center" key={`${item.slotId}-${item.targetLevel}`}>
-            <Link
-              to={`/app/build/${item.slotId}`}
-              class="flex items-center gap-2 text-gray-800 hover:text-gray-900 hover:underline"
+        <div class="space-y-1.5">
+          {queue.map((item) => (
+            <div
+              class={`flex w-full items-center justify-between gap-3 rounded border px-2 py-1.5 ${
+                item.isProcessing
+                  ? "border-green-200 bg-green-50"
+                  : "border-amber-200 bg-amber-50"
+              }`}
+              key={`${item.slotId}-${item.targetLevel}`}
             >
-              <span class={item.isProcessing ? "text-green-600" : "text-yellow-600"}>⏳</span>
-              {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
-            </Link>
-            <QueueTimer seconds={item.timeSeconds} onElapsed={onQueueElapsed} />
-          </div>
-        ))
+              <Link
+                to={`/app/build/${item.slotId}`}
+                class="min-w-0 truncate font-semibold text-gray-800 hover:text-gray-900 hover:underline"
+              >
+                {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
+              </Link>
+              <QueueTimer seconds={item.timeSeconds} onElapsed={onQueueElapsed} />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

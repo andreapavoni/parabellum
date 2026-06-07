@@ -13,18 +13,18 @@ use parabellum_app::{
         scheduler::SchedulerPort,
         villages::{
             AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-            CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
-            ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
-            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
-            SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
-            UpgradeBuildingRequest, VillageCommandsPort,
+            CreateHeroRequest, CreateMarketplaceOfferRequest, DowngradeBuildingRequest,
+            RecallReinforcementsRequest, ReleaseReinforcementsRequest, RenameVillageRequest,
+            ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
+            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
+            TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
-        AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, ExpansionSlotUsage,
-        RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy,
-        ResearchSmithy, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-        SendSettlers, TrainUnits, UpgradeBuilding,
+        AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, DowngradeBuilding,
+        ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements, RenameVillage,
+        ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage, SendMerchantsTransfer,
+        SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
     },
 };
 use parabellum_types::{
@@ -199,6 +199,24 @@ impl VillageCommandsPort for VillageEsAdapter {
             .upgrade_building(
                 request.village_id,
                 &UpgradeBuilding {
+                    player_id: request.player_id,
+                    slot_id: request.slot_id,
+                    speed: self.config.speed,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn downgrade_building(
+        &self,
+        request: DowngradeBuildingRequest,
+    ) -> Result<(), ApplicationError> {
+        self.service
+            .downgrade_building(
+                request.village_id,
+                &DowngradeBuilding {
                     player_id: request.player_id,
                     slot_id: request.slot_id,
                     speed: self.config.speed,

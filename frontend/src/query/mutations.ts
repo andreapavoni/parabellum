@@ -82,6 +82,20 @@ export function useUpgradeBuildingMutation() {
   });
 }
 
+export function useDowngradeBuildingMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateBuildingCommand } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.downgradeBuilding,
+    onSuccess: async (_result, payload) => {
+      await Promise.all([
+        invalidateBuildingCommand(payload.slotId),
+        queryClient.invalidateQueries({ queryKey: queryKeys.building(19) }),
+      ]);
+    },
+  });
+}
+
 export function useTrainUnitsMutation() {
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({

@@ -268,6 +268,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  downgradeBuilding: (payload: { slotId: number }) =>
+    request<{ success: boolean }>("/buildings/downgrade", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   renameVillage: (payload: { villageId: number; villageName: string }) =>
     request<{ success: boolean }>("/villages/rename", {
       method: "POST",

@@ -22,7 +22,7 @@ use parabellum_app::{
         VillageArmyStateView, VillageTroopMovements,
     },
     read_models::VillageInfo,
-    villages::models::ScheduledActionStatus,
+    villages::models::{BuildingWorkflowKind, ScheduledActionStatus},
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
@@ -71,6 +71,7 @@ pub struct BuildingDetailDto {
     pub time_secs: u32,
     pub queue_full: bool,
     pub at_max_level: bool,
+    pub current_value: Option<u32>,
     pub next_value: Option<u32>,
     pub cost: ResourceAmountsDto,
     pub stored_resources: ResourceAmountsDto,
@@ -88,6 +89,8 @@ pub struct BuildingDetailDto {
     pub marketplace: Option<MarketplaceDetailDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rally_point: Option<RallyPointDetailDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_building: Option<MainBuildingDetailDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,6 +147,7 @@ pub struct QueuedUpgradePreviewDto {
     pub next_upkeep: u32,
     pub time_secs: u32,
     pub at_max_level: bool,
+    pub current_value: Option<u32>,
     pub next_value: Option<u32>,
     pub cost: ResourceAmountsDto,
 }
@@ -319,6 +323,34 @@ pub struct RallyPointDetailDto {
     pub sendable_units: Vec<RallySendableUnitDto>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MainBuildingDetailDto {
+    pub can_downgrade: bool,
+    pub queue_full: bool,
+    pub options: Vec<BuildingDowngradeOptionDto>,
+    pub queue: Vec<MainBuildingDowngradeQueueItemDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildingDowngradeOptionDto {
+    pub slot_id: u8,
+    pub building_name: String,
+    pub current_level: u8,
+    pub next_level: u8,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MainBuildingDowngradeQueueItemDto {
+    pub slot_id: u8,
+    pub building_name: String,
+    pub target_level: u8,
+    pub time_seconds: u32,
+    pub is_processing: bool,
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RallyCardCategoryDto {
@@ -459,7 +491,7 @@ pub async fn building_detail(
         } else {
             2
         };
-    let queue_full = queues.building.len() >= building_queue_capacity;
+    let building_queue_full = queues.building.len() >= building_queue_capacity;
     let slot = user.village.get_building_by_slot_id(slot_id);
 
     let detail = if let Some(slot) = slot {
@@ -483,8 +515,18 @@ pub async fn building_detail(
         let queued_upgrades = queues
             .building
             .iter()
-            .filter(|item| item.slot_id == slot_id)
+            .filter(|item| {
+                item.slot_id == slot_id
+                    && matches!(
+                        item.kind,
+                        BuildingWorkflowKind::Add | BuildingWorkflowKind::Upgrade
+                    )
+            })
             .count() as u8;
+        let has_pending_downgrade_for_slot = queues.building.iter().any(|item| {
+            item.slot_id == slot_id && matches!(item.kind, BuildingWorkflowKind::Downgrade)
+        });
+        let queue_full = building_queue_full || has_pending_downgrade_for_slot;
         let max_level = get_building_data(&slot.building.name)
             .map(|data| data.rules.max_level)
             .unwrap_or(current_level);
@@ -512,6 +554,11 @@ pub async fn building_detail(
             (current_cost.resources, 0, current_cost.upkeep)
         };
 
+        let current_value = if slot.building.value == 0 {
+            None
+        } else {
+            Some(slot.building.value)
+        };
         let next_value = upgrade_info.as_ref().map(|upgraded| upgraded.value);
         let (chiefs_moving, settlers_moving) = state
             .game_app
@@ -531,6 +578,14 @@ pub async fn building_detail(
                     })
             })
             .unwrap_or((0, 0));
+        let main_building_detail = if matches!(slot.building.name, BuildingName::MainBuilding) {
+            Some(main_building_detail_for_village(
+                &user.village,
+                &queues.building,
+            ))
+        } else {
+            None
+        };
 
         match building_type {
             BuildingTypeDto::Empty => unreachable!(),
@@ -547,6 +602,7 @@ pub async fn building_detail(
                 time_secs,
                 queue_full,
                 at_max_level,
+                current_value,
                 next_value,
                 cost: resource_group_to_dto(&cost),
                 stored_resources: resource_group_to_dto(&stored),
@@ -557,6 +613,7 @@ pub async fn building_detail(
                 smithy: None,
                 marketplace: None,
                 rally_point: None,
+                main_building: main_building_detail,
             },
             BuildingTypeDto::Training => {
                 let (expected_buildings, group) = match slot.building.name {
@@ -601,6 +658,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -615,6 +673,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    main_building: None,
                 }
             }
             BuildingTypeDto::Expansion => {
@@ -672,6 +731,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -694,6 +754,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    main_building: None,
                 }
             }
             BuildingTypeDto::Academy => {
@@ -715,6 +776,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -731,6 +793,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    main_building: None,
                 }
             }
             BuildingTypeDto::Smithy => {
@@ -757,6 +820,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -771,6 +835,7 @@ pub async fn building_detail(
                     }),
                     marketplace: None,
                     rally_point: None,
+                    main_building: None,
                 }
             }
             BuildingTypeDto::Marketplace => {
@@ -841,6 +906,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -867,6 +933,7 @@ pub async fn building_detail(
                         merchant_movements,
                     }),
                     rally_point: None,
+                    main_building: None,
                 }
             }
             BuildingTypeDto::RallyPoint => {
@@ -974,6 +1041,7 @@ pub async fn building_detail(
                     time_secs,
                     queue_full,
                     at_max_level,
+                    current_value,
                     next_value,
                     cost: resource_group_to_dto(&cost),
                     stored_resources: resource_group_to_dto(&stored),
@@ -987,6 +1055,7 @@ pub async fn building_detail(
                         cards,
                         sendable_units,
                     }),
+                    main_building: None,
                 }
             }
         }
@@ -1019,6 +1088,9 @@ pub async fn building_detail(
                 .as_ref()
                 .map(|b| b.cost().upkeep)
                 .unwrap_or(template.cost().upkeep);
+            let current_value = current_building
+                .as_ref()
+                .and_then(|building| (building.value > 0).then_some(building.value));
             let max_level = get_building_data(&building_name)
                 .map(|data| data.rules.max_level)
                 .unwrap_or(current_level);
@@ -1057,6 +1129,7 @@ pub async fn building_detail(
                 next_upkeep,
                 time_secs,
                 at_max_level,
+                current_value,
                 next_value,
                 cost,
             }
@@ -1073,8 +1146,9 @@ pub async fn building_detail(
             next_level: 1,
             next_upkeep: 0,
             time_secs: 0,
-            queue_full,
+            queue_full: building_queue_full,
             at_max_level: false,
+            current_value: None,
             next_value: None,
             cost: resource_group_to_dto(&ResourceGroup::new(0, 0, 0, 0)),
             stored_resources: resource_group_to_dto(&stored),
@@ -1094,6 +1168,7 @@ pub async fn building_detail(
             smithy: None,
             marketplace: None,
             rally_point: None,
+            main_building: None,
         }
     };
 
@@ -1250,6 +1325,56 @@ fn resource_group_to_dto(resource: &ResourceGroup) -> ResourceAmountsDto {
         clay: resource.clay(),
         iron: resource.iron(),
         crop: resource.crop(),
+    }
+}
+
+fn main_building_detail_for_village(
+    village: &parabellum_game::models::village::Village,
+    building_queue: &[BuildingQueueItem],
+) -> MainBuildingDetailDto {
+    let can_downgrade = village.main_building_level() >= 10;
+    let queued_downgrades = building_queue
+        .iter()
+        .filter(|item| matches!(item.kind, BuildingWorkflowKind::Downgrade))
+        .count();
+    let queue_full = queued_downgrades >= 2;
+    let queued_slots: HashSet<u8> = building_queue.iter().map(|item| item.slot_id).collect();
+    let mut options: Vec<BuildingDowngradeOptionDto> = if can_downgrade && !queue_full {
+        village
+            .buildings()
+            .iter()
+            .filter(|building| building.building.level > 0)
+            .filter(|building| !queued_slots.contains(&building.slot_id))
+            .map(|building| BuildingDowngradeOptionDto {
+                slot_id: building.slot_id,
+                building_name: building_key(&building.building.name),
+                current_level: building.building.level,
+                next_level: building.building.level.saturating_sub(1),
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+    options.sort_by_key(|option| option.slot_id);
+
+    let now = Utc::now();
+    let queue = building_queue
+        .iter()
+        .filter(|item| matches!(item.kind, BuildingWorkflowKind::Downgrade))
+        .map(|item| MainBuildingDowngradeQueueItemDto {
+            slot_id: item.slot_id,
+            building_name: building_key(&item.building_name),
+            target_level: item.target_level,
+            time_seconds: (item.finishes_at - now).num_seconds().max(0) as u32,
+            is_processing: matches!(item.status, ScheduledActionStatus::Processing),
+        })
+        .collect();
+
+    MainBuildingDetailDto {
+        can_downgrade,
+        queue_full,
+        options,
+        queue,
     }
 }
 

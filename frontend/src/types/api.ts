@@ -83,6 +83,7 @@ export type GameContextResponse = GameShellContext & {
 };
 
 export type BuildingQueueItem = {
+  kind: "add" | "upgrade" | "downgrade";
   slotId: number;
   buildingName: string;
   targetLevel: number;
@@ -339,6 +340,7 @@ export type BuildingDetail = {
   timeSecs: number;
   queueFull: boolean;
   atMaxLevel: boolean;
+  currentValue?: number;
   nextValue?: number;
   cost: ResourceAmounts;
   storedResources: ResourceAmounts;
@@ -358,6 +360,7 @@ export type BuildingDetail = {
       nextUpkeep: number;
       timeSecs: number;
       atMaxLevel: boolean;
+      currentValue?: number;
       nextValue?: number;
       cost: ResourceAmounts;
     };
@@ -400,6 +403,23 @@ export type BuildingDetail = {
   rallyPoint?: {
     cards: RallyCard[];
     sendableUnits: RallySendableUnit[];
+  };
+  mainBuilding?: {
+    canDowngrade: boolean;
+    queueFull: boolean;
+    options: {
+      slotId: number;
+      buildingName: string;
+      currentLevel: number;
+      nextLevel: number;
+    }[];
+    queue: {
+      slotId: number;
+      buildingName: string;
+      targetLevel: number;
+      timeSeconds: number;
+      isProcessing: boolean;
+    }[];
   };
 };
 

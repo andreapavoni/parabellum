@@ -290,6 +290,7 @@ impl Aggregate for VillageAggregate {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village.record_building_action_scheduled(
                     *action_id,
+                    crate::villages::models::BuildingWorkflowKind::Add,
                     *slot_id,
                     building_name.clone(),
                     *execute_at,
@@ -306,6 +307,7 @@ impl Aggregate for VillageAggregate {
                 let _ = self.village.village.deduct_resources(cost);
                 self.village.record_building_action_scheduled(
                     *action_id,
+                    crate::villages::models::BuildingWorkflowKind::Upgrade,
                     *slot_id,
                     building_name.clone(),
                     *execute_at,
@@ -319,6 +321,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => self.village.record_building_action_scheduled(
                 *action_id,
+                crate::villages::models::BuildingWorkflowKind::Downgrade,
                 *slot_id,
                 building_name.clone(),
                 *execute_at,

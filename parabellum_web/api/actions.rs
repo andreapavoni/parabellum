@@ -18,6 +18,7 @@ use uuid::Uuid;
 use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
     CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
+    DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
     RenameVillageRequest as RenameVillageUseCaseRequest,
@@ -67,6 +68,13 @@ pub struct AddBuildingRequest {
 #[serde(rename_all = "camelCase")]
 /// Payload for upgrading a building by slot.
 pub struct UpgradeBuildingRequest {
+    pub slot_id: u8,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for downgrading a building by slot.
+pub struct DowngradeBuildingRequest {
     pub slot_id: u8,
 }
 
@@ -307,6 +315,34 @@ pub async fn upgrade_building(
     state
         .game_app
         .upgrade_building(UpgradeBuildingUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            slot_id: payload.slot_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+/// Queues a Main Building downgrade for the target slot.
+#[utoipa::path(
+    post,
+    path = "/buildings/downgrade",
+    request_body = DowngradeBuildingRequest,
+    responses((status = 200, body = ActionResponse))
+)]
+pub async fn downgrade_building(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<DowngradeBuildingRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    ensure_slot(payload.slot_id)?;
+
+    state
+        .game_app
+        .downgrade_building(DowngradeBuildingUseCaseRequest {
             player_id: user.player.id,
             village_id: user.village.id,
             slot_id: payload.slot_id,

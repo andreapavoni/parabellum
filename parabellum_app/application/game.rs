@@ -16,11 +16,11 @@ use crate::ports::{
     scheduler::SchedulerPort,
     villages::{
         AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-        CreateHeroRequest, CreateMarketplaceOfferRequest, RecallReinforcementsRequest,
-        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
-        ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
-        SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
-        UpgradeBuildingRequest, VillageCommandsPort,
+        CreateHeroRequest, CreateMarketplaceOfferRequest, DowngradeBuildingRequest,
+        RecallReinforcementsRequest, ReleaseReinforcementsRequest, RenameVillageRequest,
+        ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
+        SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
+        TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
     },
 };
 
@@ -168,6 +168,13 @@ impl GameApplication {
         request: UpgradeBuildingRequest,
     ) -> Result<(), ApplicationError> {
         self.villages_port().upgrade_building(request).await
+    }
+
+    pub async fn downgrade_building(
+        &self,
+        request: DowngradeBuildingRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().downgrade_building(request).await
     }
 
     pub async fn rename_village(

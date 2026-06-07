@@ -16,12 +16,13 @@ use parabellum_types::{
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::villages::models::{BuildingWorkflowKind, ScheduledActionStatus, VillageModel};
 use crate::villages::models::{MarketplaceOfferModel, ReportModel};
-use crate::villages::models::{ScheduledActionStatus, VillageModel};
 
 #[derive(Debug, Clone)]
 pub struct BuildingQueueItem {
     pub job_id: Uuid,
+    pub kind: BuildingWorkflowKind,
     pub slot_id: u8,
     pub building_name: BuildingName,
     pub target_level: u8,

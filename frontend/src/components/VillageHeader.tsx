@@ -12,7 +12,7 @@ export function VillageHeading({
   onVillageRenamed?: () => Promise<void> | void;
 }) {
   return (
-    <div class="flex w-full flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+    <div class="flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm">
       <h1 class="text-xl font-bold text-stone-900">{village.name}</h1>
       <Link to={`/map?x=${village.x}&y=${village.y}`} class="inline-flex items-center gap-1 text-xs text-stone-500 hover:underline">
         <MapPin size={13} aria-hidden="true" />
