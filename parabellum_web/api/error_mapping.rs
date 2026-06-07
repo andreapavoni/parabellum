@@ -13,6 +13,7 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
             DbError::VillageNotFound(_) => ApiError::not_found("Village not found"),
             DbError::PlayerNotFound(_) => ApiError::not_found("Player not found"),
             DbError::ArmyNotFound(_) => ApiError::not_found("Army not found"),
+            DbError::JobNotFound(_) => ApiError::not_found("Troop movement not found"),
             DbError::HeroNotFound(_) => ApiError::not_found("Hero not found"),
             DbError::MarketplaceOfferNotFound(_) => {
                 ApiError::not_found("Marketplace offer not found")

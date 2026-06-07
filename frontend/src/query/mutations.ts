@@ -192,6 +192,14 @@ export function useReleaseReinforcementsMutation() {
   });
 }
 
+export function useCancelTroopMovementMutation() {
+  const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.cancelTroopMovement,
+    onSuccess: invalidateCurrentVillageBuildings,
+  });
+}
+
 export function useFoundVillageMutation(fieldId?: number) {
   const { invalidateMap } = useInvalidateGameState();
   return useMutation({

@@ -13,18 +13,18 @@ use parabellum_app::{
         scheduler::SchedulerPort,
         villages::{
             AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-            CreateHeroRequest, CreateMarketplaceOfferRequest, DowngradeBuildingRequest,
-            RecallReinforcementsRequest, ReleaseReinforcementsRequest, RenameVillageRequest,
-            ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
-            TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+            CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
+            DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+            RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
+            SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+            SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
-        AddBuilding, AttackVillage, CreateHero, CreateMarketplaceOffer, DowngradeBuilding,
-        ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements, RenameVillage,
-        ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage, SendMerchantsTransfer,
-        SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
+        AddBuilding, AttackVillage, CancelTroopMovement, CreateHero, CreateMarketplaceOffer,
+        DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements,
+        RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
+        SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
     },
 };
 use parabellum_types::{
@@ -637,6 +637,73 @@ impl VillageCommandsPort for VillageEsAdapter {
         Ok(())
     }
 
+    async fn cancel_troop_movement(
+        &self,
+        request: CancelTroopMovementRequest,
+    ) -> Result<(), ApplicationError> {
+        let context = self
+            .service
+            .find_cancel_troop_movement_context(request.movement_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+
+        if context.source_village_id != request.village_id {
+            return Err(ApplicationError::Game(GameError::VillageNotOwned {
+                village_id: request.village_id,
+                player_id: request.player_id,
+            }));
+        }
+
+        let source = self
+            .service
+            .get_village(context.source_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if source.player_id != request.player_id {
+            return Err(ApplicationError::Game(GameError::VillageNotOwned {
+                village_id: context.source_village_id,
+                player_id: request.player_id,
+            }));
+        }
+
+        let now = chrono::Utc::now();
+        if now >= context.arrives_at {
+            return Err(ApplicationError::Game(
+                GameError::TroopMovementNotCancelable,
+            ));
+        }
+
+        let cancel_deadline = context.sent_at + chrono::Duration::seconds(60);
+        if now > cancel_deadline {
+            return Err(ApplicationError::Game(
+                GameError::TroopMovementCancelWindowExpired,
+            ));
+        }
+
+        let elapsed = (now - context.sent_at).num_seconds().max(1);
+        let returns_at = now + chrono::Duration::seconds(elapsed);
+
+        self.service
+            .cancel_troop_movement(
+                context.source_village_id,
+                &CancelTroopMovement {
+                    movement_id: context.movement_id,
+                    arrival_action_id: context.arrival_action_id,
+                    return_action_id: Uuid::new_v4(),
+                    army_id: context.army_id,
+                    player_id: request.player_id,
+                    source_village_id: context.source_village_id,
+                    target_village_id: context.target_village_id,
+                    army: context.army,
+                    returns_at,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+
+        Ok(())
+    }
+
     async fn create_marketplace_offer(
         &self,
         request: CreateMarketplaceOfferRequest,
@@ -877,6 +944,16 @@ impl VillageQueryPort for VillageEsAdapter {
             .get_village_troop_movements(village_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+
+    async fn list_cancelable_outgoing_movement_ids(
+        &self,
+        village_id: u32,
+    ) -> Result<std::collections::HashSet<Uuid>, ApplicationError> {
+        self.service
+            .list_cancelable_outgoing_movement_ids(village_id, chrono::Utc::now())
+            .await
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn get_marketplace_data(

@@ -9,6 +9,7 @@ import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
 import { LiveCountdown } from "@/components/buildings/buildingShared";
 import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
 import {
+  useCancelTroopMovementMutation,
   useRecallTroopsMutation,
   useReleaseReinforcementsMutation,
   useSendTroopsMutation,
@@ -226,6 +227,7 @@ export function RallyPointBuilding({
   const sendTroops = useSendTroopsMutation();
   const recallTroops = useRecallTroopsMutation();
   const releaseReinforcements = useReleaseReinforcementsMutation();
+  const cancelTroopMovement = useCancelTroopMovementMutation();
   useEffect(() => {
     if (!preview) return;
     const timer = window.setInterval(() => setPreviewTick((v) => v + 1), 1000);
@@ -512,135 +514,156 @@ export function RallyPointBuilding({
                   const isActionEditorOpen = actionKey !== null && expandedActionKey === actionKey;
 
                   return (
-                  <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-3">
-                    <div class="flex justify-between items-start">
-                      <div class="flex-1">
-                        <div class="flex items-center gap-2">
-                          {card.villageName ? (
-                            <h3 class="font-semibold text-gray-900">
+                    <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-3">
+                      <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                          <div class="flex items-center gap-2">
+                            {card.villageName ? (
+                              <h3 class="font-semibold text-gray-900">
+                                <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                                  {card.villageName}
+                                </Link>
+                              </h3>
+                            ) : (
+                              <h3 class="font-semibold text-gray-900">Unknown Village</h3>
+                            )}
+                            {card.movementKind ? (
+                              <Badge>{card.movementKind}</Badge>
+                            ) : null}
+                          </div>
+                          {card.position ? (
+                            <p class="text-sm text-gray-600 mt-1">
                               <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
-                                {card.villageName}
+                                ({card.position.x}, {card.position.y})
                               </Link>
-                            </h3>
-                          ) : (
-                            <h3 class="font-semibold text-gray-900">Unknown Village</h3>
-                          )}
-                          {card.movementKind ? (
-                            <Badge>{card.movementKind}</Badge>
+                            </p>
+                          ) : null}
+                          <p class="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
+                            <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
+                            {card.upkeep}
+                          </p>
+                          {card.arrivesAt ? (
+                            <div class="mt-1 space-y-1 text-sm text-gray-500">
+                              <p class="font-mono">
+                                ETA{" "}
+                                <LiveCountdown
+                                  seconds={secondsUntilIso(card.arrivesAt)}
+                                  onElapsed={() => {
+                                    void onMutate();
+                                  }}
+                                />
+                              </p>
+                              <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
+                            </div>
+                          ) : null}
+                          {card.bounty ? (
+                            <p class="text-xs text-amber-700 mt-1">
+                              Loot: {card.bounty.lumber}/{card.bounty.clay}/{card.bounty.iron}/{card.bounty.crop}
+                            </p>
                           ) : null}
                         </div>
-                        {card.position ? (
-                          <p class="text-sm text-gray-600 mt-1">
-                            <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
-                              ({card.position.x}, {card.position.y})
-                            </Link>
-                          </p>
-                        ) : null}
-                        <p class="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
-                          <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
-                          {card.upkeep}
-                        </p>
-                        {card.arrivesAt ? (
-                          <div class="mt-1 space-y-1 text-sm text-gray-500">
-                            <p class="font-mono">
-                              ETA{" "}
-                              <LiveCountdown
-                                seconds={secondsUntilIso(card.arrivesAt)}
-                                onElapsed={() => {
-                                  void onMutate();
-                                }}
-                              />
-                            </p>
-                            <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
-                          </div>
-                        ) : null}
-                        {card.bounty ? (
-                          <p class="text-xs text-amber-700 mt-1">
-                            Loot: {card.bounty.lumber}/{card.bounty.clay}/{card.bounty.iron}/{card.bounty.crop}
-                          </p>
-                        ) : null}
+                        <Badge>{card.category}</Badge>
                       </div>
-                      <Badge>{card.category}</Badge>
-                    </div>
 
-                    {!isActionEditorOpen ? (
-                    <div class="overflow-x-auto">
-                      <table class="w-full border-collapse">
-                        <thead>
-                          <tr>
-                            {card.units.map((_, idx) => (
-                              <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
-                                <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            {card.units.map((count, idx) => (
-                              <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
-                                <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
-                              </td>
-                            ))}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                    ) : null}
+                      {!isActionEditorOpen ? (
+                        <div class="overflow-x-auto">
+                          <table class="w-full border-collapse">
+                            <thead>
+                              <tr>
+                                {card.units.map((_, idx) => (
+                                  <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
+                                    <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                {card.units.map((count, idx) => (
+                                  <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
+                                    <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
+                                  </td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
 
-                    {card.action === "recall" && card.actionId ? (
-                      <RallyReinforcementActionForm
-                        card={card}
-                        action="recall"
-                        label="Recall Troops"
-                        variant="warning"
-                        unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
-                        expanded={isActionEditorOpen}
-                        onExpandedChange={(expanded) => {
-                          setExpandedActionKey(expanded ? actionKey : null);
-                        }}
-                        onSubmit={async (selectedUnits) => {
-                          setError(null);
-                          try {
-                            await recallTroops.mutateAsync({
-                              villageId: detail.villageId,
-                              armyId: card.actionId!,
-                              units: selectedUnits,
-                            });
-                          } catch (err) {
-                            const message = err instanceof Error ? err.message : "Unable to recall troops";
-                            setError(message);
-                          }
-                        }}
-                      />
-                    ) : null}
-                    {card.action === "release" && card.actionId ? (
-                      <RallyReinforcementActionForm
-                        card={card}
-                        action="release"
-                        label="Release Reinforcements"
-                        variant="secondary"
-                        unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
-                        expanded={isActionEditorOpen}
-                        onExpandedChange={(expanded) => {
-                          setExpandedActionKey(expanded ? actionKey : null);
-                        }}
-                        onSubmit={async (selectedUnits) => {
-                          setError(null);
-                          try {
-                            await releaseReinforcements.mutateAsync({
-                              villageId: card.villageId,
-                              armyId: card.actionId!,
-                              units: selectedUnits,
-                            });
-                          } catch (err) {
-                            const message = err instanceof Error ? err.message : "Unable to release reinforcements";
-                            setError(message);
-                          }
-                        }}
-                      />
-                    ) : null}
-                  </Panel>
+                      {card.action === "recall" && card.actionId ? (
+                        <RallyReinforcementActionForm
+                          card={card}
+                          action="recall"
+                          label="Recall Troops"
+                          variant="warning"
+                          unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
+                          expanded={isActionEditorOpen}
+                          onExpandedChange={(expanded) => {
+                            setExpandedActionKey(expanded ? actionKey : null);
+                          }}
+                          onSubmit={async (selectedUnits) => {
+                            setError(null);
+                            try {
+                              await recallTroops.mutateAsync({
+                                villageId: detail.villageId,
+                                armyId: card.actionId!,
+                                units: selectedUnits,
+                              });
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : "Unable to recall troops";
+                              setError(message);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      {card.action === "release" && card.actionId ? (
+                        <RallyReinforcementActionForm
+                          card={card}
+                          action="release"
+                          label="Release Reinforcements"
+                          variant="secondary"
+                          unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
+                          expanded={isActionEditorOpen}
+                          onExpandedChange={(expanded) => {
+                            setExpandedActionKey(expanded ? actionKey : null);
+                          }}
+                          onSubmit={async (selectedUnits) => {
+                            setError(null);
+                            try {
+                              await releaseReinforcements.mutateAsync({
+                                villageId: card.villageId,
+                                armyId: card.actionId!,
+                                units: selectedUnits,
+                              });
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : "Unable to release reinforcements";
+                              setError(message);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      {card.action === "cancel" && card.actionId ? (
+                        <Button
+                          type="button"
+                          variant="warning"
+                          size="sm"
+                          onClick={async () => {
+                            setError(null);
+                            try {
+                              await cancelTroopMovement.mutateAsync({
+                                movementId: card.actionId!,
+                              });
+                              await onMutate();
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : "Unable to cancel troop movement";
+                              setError(message);
+                            }
+                          }}
+                        >
+                          Cancel movement
+                        </Button>
+                      ) : null}
+                    </Panel>
                   );
                 })}
               </div>

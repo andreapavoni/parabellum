@@ -471,7 +471,7 @@ export type MerchantMovement = {
 
 export type RallyCardCategory = "stationed" | "reinforcement" | "deployed" | "incoming" | "outgoing";
 export type RallyMovementKind = "attack" | "raid" | "scout" | "reinforcement" | "return" | "found_village";
-export type RallyAction = "recall" | "release";
+export type RallyAction = "recall" | "release" | "cancel";
 
 export type RallyCard = {
   villageId: number;

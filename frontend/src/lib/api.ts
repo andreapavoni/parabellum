@@ -386,6 +386,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  cancelTroopMovement: (payload: { movementId: string }) =>
+    request<{ success: boolean }>(`/army/movements/${payload.movementId}`, {
+      method: "DELETE",
+    }),
   foundVillage: (payload: {
     targetX: number;
     targetY: number;

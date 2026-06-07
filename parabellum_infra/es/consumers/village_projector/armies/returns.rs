@@ -2,7 +2,9 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
+use parabellum_app::villages::models::{
+    MovementDirection, MovementType, ScheduledActionStatus, VillageMovement,
+};
 use parabellum_game::models::army::Army;
 use parabellum_types::common::ResourceGroup;
 use sqlx::{Postgres, Transaction};
@@ -157,6 +159,90 @@ impl VillageProjector {
         );
         let action = workflows::movements::army_return_scheduled_action_from_workflow(
             projection.action_id,
+            workflow,
+        )?;
+        self.add_scheduled_action_in_tx(tx, &action).await
+    }
+
+    pub(super) async fn project_troop_movement_canceled(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        let VillageEvent::TroopMovementCanceled {
+            movement_id,
+            arrival_action_id,
+            return_action_id,
+            army_id,
+            player_id,
+            source_village_id,
+            target_village_id,
+            army,
+            returns_at,
+        } = event
+        else {
+            unreachable!(
+                "project_troop_movement_canceled called with non-TroopMovementCanceled event"
+            );
+        };
+
+        self.actions
+            .update_status_in_tx(tx, *arrival_action_id, ScheduledActionStatus::Completed)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        self.movements
+            .delete_by_movement_id_in_tx(tx, *movement_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        let outgoing = VillageMovement {
+            movement_id: *movement_id,
+            movement_type: MovementType::Return,
+            direction: MovementDirection::Outgoing,
+            origin_village_id: *target_village_id,
+            origin_village_name: None,
+            origin_player_id: *player_id,
+            origin_position: None,
+            target_village_id: *source_village_id,
+            target_village_name: None,
+            target_player_id: None,
+            target_position: None,
+            arrives_at: *returns_at,
+            time_seconds: None,
+            units: army.units().clone(),
+            tribe: Some(army.tribe.clone()),
+            bounty: None,
+        };
+        let incoming = VillageMovement {
+            direction: MovementDirection::Incoming,
+            ..outgoing.clone()
+        };
+        self.movements
+            .upsert_in_tx(tx, &outgoing)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        self.movements
+            .upsert_in_tx(tx, &incoming)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        self.upsert_moving_army(tx, army, *target_village_id, *player_id)
+            .await?;
+
+        let workflow = workflows::movements::army_return_workflow(
+            *movement_id,
+            *army_id,
+            *source_village_id,
+            *source_village_id,
+            *target_village_id,
+            *player_id,
+            army.clone(),
+            None,
+            *returns_at,
+        );
+        let action = workflows::movements::army_return_scheduled_action_from_workflow(
+            *return_action_id,
             workflow,
         )?;
         self.add_scheduled_action_in_tx(tx, &action).await

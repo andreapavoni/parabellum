@@ -3,7 +3,7 @@
 //! These methods are side-effect free with respect to aggregate mutations:
 //! they compose read models, CQRS query projections, and derived views for API use.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use mini_cqrs_es::{CqrsError, QueryRunner};
@@ -16,7 +16,7 @@ use parabellum_app::ports::queries::{
 use parabellum_app::read_models::{MapRegionTile, VillageInfo};
 use parabellum_app::villages::VillageService;
 use parabellum_app::villages::models::{
-    ReportModel, ScheduledActionStatus, ScheduledActionType, VillageModel,
+    ReportModel, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType, VillageModel,
 };
 use parabellum_app::villages::queries::{
     CountUnreadReportsForPlayer, GetMarketplaceOfferById, GetOpenMarketplaceOffers,
@@ -39,9 +39,38 @@ use crate::es::{
 use crate::identity::repositories::PostgresPlayerRepository;
 use crate::map::PostgresMapRepository;
 
-use super::{ReinforcementContext, VillageEsService};
+use super::{CancelTroopMovementContext, ReinforcementContext, VillageEsService};
 
 impl VillageEsService {
+    pub async fn list_cancelable_outgoing_movement_ids(
+        &self,
+        source_village_id: u32,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<HashSet<uuid::Uuid>, CqrsError> {
+        let rows = PostgresScheduledActionRepository::new(self.pool.clone())
+            .list_pending_troop_arrivals_by_source_village(source_village_id)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        let mut movement_ids = HashSet::new();
+        for row in rows {
+            let cancel_deadline = row.created_at + chrono::Duration::seconds(60);
+            if now > cancel_deadline || now >= row.execute_at {
+                continue;
+            }
+            let payload: ScheduledActionPayload =
+                serde_json::from_value(row.payload).map_err(CqrsError::Serialization)?;
+            let movement_id = match payload {
+                ScheduledActionPayload::AttackArrival { workflow } => workflow.movement_id,
+                ScheduledActionPayload::ScoutArrival { workflow } => workflow.movement_id,
+                ScheduledActionPayload::ReinforcementArrival { workflow } => workflow.movement_id,
+                ScheduledActionPayload::SettlersArrival { workflow } => workflow.movement_id,
+                _ => continue,
+            };
+            movement_ids.insert(movement_id);
+        }
+        Ok(movement_ids)
+    }
+
     pub async fn get_village_troop_movements(
         &self,
         village_id: u32,
@@ -249,6 +278,84 @@ impl VillageEsService {
         Err(CqrsError::EventStore(
             DbError::ArmyNotFound(army_id).to_string(),
         ))
+    }
+
+    pub async fn find_cancel_troop_movement_context(
+        &self,
+        movement_id: uuid::Uuid,
+    ) -> Result<CancelTroopMovementContext, CqrsError> {
+        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        let Some(action) = repo
+            .find_pending_troop_arrival_by_movement_id(movement_id)
+            .await
+            .map_err(CqrsError::domain_source)?
+        else {
+            return Err(CqrsError::EventStore(
+                DbError::JobNotFound(movement_id).to_string(),
+            ));
+        };
+
+        let payload: ScheduledActionPayload =
+            serde_json::from_value(action.payload).map_err(CqrsError::Serialization)?;
+        match payload {
+            ScheduledActionPayload::AttackArrival { workflow } => Ok(CancelTroopMovementContext {
+                movement_id,
+                arrival_action_id: action.id,
+                army_id: workflow.army_id,
+                player_id: workflow.player_id,
+                source_village_id: workflow.source_village_id,
+                target_village_id: workflow.target_village_id,
+                army: workflow.army,
+                sent_at: action.created_at,
+                arrives_at: workflow.arrives_at,
+            }),
+            ScheduledActionPayload::ScoutArrival { workflow } => Ok(CancelTroopMovementContext {
+                movement_id,
+                arrival_action_id: action.id,
+                army_id: workflow.army_id,
+                player_id: workflow.player_id,
+                source_village_id: workflow.source_village_id,
+                target_village_id: workflow.target_village_id,
+                army: workflow.army,
+                sent_at: action.created_at,
+                arrives_at: workflow.arrives_at,
+            }),
+            ScheduledActionPayload::ReinforcementArrival { workflow } => {
+                Ok(CancelTroopMovementContext {
+                    movement_id,
+                    arrival_action_id: action.id,
+                    army_id: workflow.army_id,
+                    player_id: workflow.player_id,
+                    source_village_id: workflow.source_village_id,
+                    target_village_id: workflow.target_village_id,
+                    army: workflow.army,
+                    sent_at: action.created_at,
+                    arrives_at: workflow.arrives_at,
+                })
+            }
+            ScheduledActionPayload::SettlersArrival { workflow } => {
+                let army_repo: Arc<dyn ArmyRepository> =
+                    Arc::new(PostgresArmyRepository::new(self.pool.clone()));
+                let army = army_repo
+                    .get_moving_army(workflow.army_id)
+                    .await
+                    .map_err(CqrsError::domain_source)?;
+                Ok(CancelTroopMovementContext {
+                    movement_id,
+                    arrival_action_id: action.id,
+                    army_id: workflow.army_id,
+                    player_id: workflow.player_id,
+                    source_village_id: workflow.source_village_id,
+                    target_village_id: workflow.target_village_id,
+                    army,
+                    sent_at: action.created_at,
+                    arrives_at: workflow.arrives_at,
+                })
+            }
+            _ => Err(CqrsError::EventStore(
+                "Scheduled action is not a troop arrival workflow".to_string(),
+            )),
+        }
     }
 
     pub async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, CqrsError> {

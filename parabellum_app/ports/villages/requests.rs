@@ -116,6 +116,13 @@ pub struct ReleaseReinforcementsRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct CancelTroopMovementRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub movement_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct SendResourcesRequest {
     pub player_id: Uuid,
     pub source_village_id: u32,

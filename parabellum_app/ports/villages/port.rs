@@ -3,11 +3,11 @@ use parabellum_types::errors::ApplicationError;
 
 use super::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-    CreateHeroRequest, CreateMarketplaceOfferRequest, DowngradeBuildingRequest,
-    RecallReinforcementsRequest, ReleaseReinforcementsRequest, RenameVillageRequest,
-    ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-    SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
-    TrainUnitsRequest, UpgradeBuildingRequest,
+    CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
+    DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+    RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
+    SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+    SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
 };
 
 #[async_trait]
@@ -43,6 +43,10 @@ pub trait VillageCommandsPort: Send + Sync {
     async fn release_reinforcements(
         &self,
         request: ReleaseReinforcementsRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn cancel_troop_movement(
+        &self,
+        request: CancelTroopMovementRequest,
     ) -> Result<(), ApplicationError>;
     async fn send_resources(&self, request: SendResourcesRequest) -> Result<(), ApplicationError>;
     async fn create_marketplace_offer(

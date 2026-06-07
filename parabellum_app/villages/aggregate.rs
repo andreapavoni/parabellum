@@ -198,6 +198,7 @@ impl Aggregate for VillageAggregate {
                 }
             }
             VillageEvent::ScoutSent { .. } => {}
+            VillageEvent::TroopMovementCanceled { .. } => {}
             VillageEvent::ScoutArrived { .. } => {}
             VillageEvent::ScoutBattleResolved { .. } => {}
             VillageEvent::MerchantsTripScheduled {

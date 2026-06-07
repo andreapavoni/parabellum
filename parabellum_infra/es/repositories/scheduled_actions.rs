@@ -61,6 +61,73 @@ impl PostgresScheduledActionRepository {
         Ok(())
     }
 
+    pub async fn update_status_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+        status: ScheduledActionStatus,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_scheduled_actions
+            SET status = $2, updated_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(DbScheduledActionStatus::from(status))
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
+    }
+
+    pub async fn find_pending_troop_arrival_by_movement_id(
+        &self,
+        movement_id: Uuid,
+    ) -> Result<Option<PendingTroopArrivalActionRow>, ApplicationError> {
+        let row = sqlx::query_as(
+            r#"
+            SELECT id, execute_at, created_at, payload
+            FROM rm_scheduled_actions
+            WHERE status = 'pending'
+              AND action_type IN ('ReinforcementArrival', 'SettlersArrival', 'AttackArrival', 'ScoutArrival')
+              AND payload->'workflow'->>'movement_id' = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(movement_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(row)
+    }
+
+    pub async fn list_pending_troop_arrivals_by_source_village(
+        &self,
+        village_id: u32,
+    ) -> Result<Vec<PendingTroopArrivalActionRow>, ApplicationError> {
+        let rows = sqlx::query_as(
+            r#"
+            SELECT id, execute_at, created_at, payload
+            FROM rm_scheduled_actions
+            WHERE status = 'pending'
+              AND action_type IN ('ReinforcementArrival', 'SettlersArrival', 'AttackArrival', 'ScoutArrival')
+              AND (
+                (payload->'workflow'->>'source_village_id')::int = $1
+                OR (payload->'workflow'->>'village_id')::int = $1
+              )
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(village_id as i32)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows)
+    }
+
     pub async fn has_pending_hero_revival_for_player(
         &self,
         player_id: Uuid,
@@ -168,6 +235,14 @@ struct DbScheduledActionRow {
     execute_at: chrono::DateTime<chrono::Utc>,
     payload: serde_json::Value,
     status: DbScheduledActionStatus,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct PendingTroopArrivalActionRow {
+    pub id: Uuid,
+    pub execute_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub payload: serde_json::Value,
 }
 
 impl From<DbScheduledActionRow> for ScheduledAction {

@@ -16,11 +16,11 @@ use crate::ports::{
     scheduler::SchedulerPort,
     villages::{
         AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-        CreateHeroRequest, CreateMarketplaceOfferRequest, DowngradeBuildingRequest,
-        RecallReinforcementsRequest, ReleaseReinforcementsRequest, RenameVillageRequest,
-        ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-        SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
-        TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+        CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
+        DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+        RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
+        SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+        SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
     },
 };
 
@@ -159,6 +159,13 @@ impl GameApplication {
         self.villages_port().release_reinforcements(request).await
     }
 
+    pub async fn cancel_troop_movement(
+        &self,
+        request: CancelTroopMovementRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().cancel_troop_movement(request).await
+    }
+
     pub async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {
         self.villages_port().add_building(request).await
     }
@@ -273,6 +280,15 @@ impl GameApplication {
     ) -> Result<crate::ports::queries::VillageTroopMovements, ApplicationError> {
         self.queries_port()
             .get_village_troop_movements(village_id)
+            .await
+    }
+
+    pub async fn list_cancelable_outgoing_movement_ids(
+        &self,
+        village_id: u32,
+    ) -> Result<std::collections::HashSet<Uuid>, ApplicationError> {
+        self.queries_port()
+            .list_cancelable_outgoing_movement_ids(village_id)
             .await
     }
 

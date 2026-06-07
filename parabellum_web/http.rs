@@ -10,7 +10,7 @@
 use axum::{
     Router,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
@@ -22,10 +22,10 @@ use crate::{
     api::{
         actions::{
             accept_marketplace_offer, add_building, cancel_marketplace_offer,
-            create_marketplace_offer, downgrade_building, found_village, preview_found_village,
-            preview_send_resources, preview_troops, recall_troops, release_reinforcements,
-            rename_village, research_academy, research_smithy, send_resources, send_troops,
-            train_units, upgrade_building,
+            cancel_troop_movement, create_marketplace_offer, downgrade_building, found_village,
+            preview_found_village, preview_send_resources, preview_troops, recall_troops,
+            release_reinforcements, rename_village, research_academy, research_smithy,
+            send_resources, send_troops, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
@@ -95,6 +95,10 @@ impl WebRouter {
             .route("/army/preview", post(preview_troops))
             .route("/army/recall", post(recall_troops))
             .route("/army/release", post(release_reinforcements))
+            .route(
+                "/army/movements/{movement_id}",
+                delete(cancel_troop_movement),
+            )
             .route("/marketplace/send", post(send_resources))
             .route("/marketplace/send/preview", post(preview_send_resources))
             .route("/marketplace/offers", post(create_marketplace_offer))

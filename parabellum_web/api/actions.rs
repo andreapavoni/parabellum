@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
-    CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
-    DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
+    CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
+    CreateMarketplaceOfferRequest, DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
     RenameVillageRequest as RenameVillageUseCaseRequest,
@@ -902,6 +902,35 @@ pub async fn release_reinforcements(
             army_id: payload.army_id,
             units,
             hero_id: payload.hero_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+/// Cancels a pending troop movement within the 60-second cancel window.
+#[utoipa::path(
+    delete,
+    path = "/army/movements/{movement_id}",
+    params(
+        ("movement_id" = Uuid, Path, description = "Troop movement id")
+    ),
+    responses((status = 200, body = ActionResponse))
+)]
+pub async fn cancel_troop_movement(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(movement_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .cancel_troop_movement(CancelTroopMovementUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            movement_id,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;

@@ -13,7 +13,7 @@ use parabellum_types::{
     common::ResourceGroup,
     map::Position,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::villages::models::{BuildingWorkflowKind, ScheduledActionStatus, VillageModel};
@@ -185,6 +185,10 @@ pub trait VillageQueryPort: Send + Sync {
         &self,
         village_id: u32,
     ) -> Result<VillageTroopMovements, ApplicationError>;
+    async fn list_cancelable_outgoing_movement_ids(
+        &self,
+        village_id: u32,
+    ) -> Result<HashSet<Uuid>, ApplicationError>;
     async fn get_marketplace_data(
         &self,
         village_id: u32,

@@ -58,6 +58,7 @@ use crate::api::{
         crate::api::actions::preview_troops,
         crate::api::actions::recall_troops,
         crate::api::actions::release_reinforcements,
+        crate::api::actions::cancel_troop_movement,
         crate::api::actions::research_academy,
         crate::api::actions::research_smithy,
         crate::api::actions::found_village,

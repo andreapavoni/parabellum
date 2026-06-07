@@ -59,6 +59,9 @@ impl VillageProjector {
             VillageEvent::AttackArrivalScheduled { .. } => {
                 Some(self.project_attack_arrival_scheduled(tx, event).await)
             }
+            VillageEvent::TroopMovementCanceled { .. } => {
+                Some(self.project_troop_movement_canceled(tx, event).await)
+            }
             VillageEvent::ScoutSent { .. } => Some(self.project_scout_sent(tx, event).await),
             VillageEvent::AttackArrived { .. } | VillageEvent::ScoutArrived { .. } => {
                 Some(self.project_army_arrived(tx, event).await)

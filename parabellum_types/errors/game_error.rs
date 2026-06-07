@@ -165,4 +165,10 @@ pub enum GameError {
 
     #[error("Offer is no longer valid (offerer's marketplace was destroyed)")]
     MarketplaceOfferNoLongerValid,
+
+    #[error("Troop movement can no longer be canceled")]
+    TroopMovementNotCancelable,
+
+    #[error("Troop movement cancel window has expired")]
+    TroopMovementCancelWindowExpired,
 }

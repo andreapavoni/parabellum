@@ -31,6 +31,7 @@ use parabellum_app::villages::{
     SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
 };
 use parabellum_types::errors::GameError;
+use uuid::Uuid;
 
 use crate::es::advisory_lock::AdvisoryLock;
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
@@ -61,6 +62,18 @@ pub struct ReinforcementContext {
     pub home_village_id: u32,
     /// Full army state for recall/release command construction.
     pub army: Army,
+}
+
+pub struct CancelTroopMovementContext {
+    pub movement_id: Uuid,
+    pub arrival_action_id: Uuid,
+    pub army_id: Uuid,
+    pub player_id: Uuid,
+    pub source_village_id: u32,
+    pub target_village_id: u32,
+    pub army: Army,
+    pub sent_at: chrono::DateTime<chrono::Utc>,
+    pub arrives_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl VillageEsService {
@@ -224,6 +237,16 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.release_reinforcements(village_id, command).await
+    }
+
+    pub async fn cancel_troop_movement(
+        &self,
+        village_id: u32,
+        command: &parabellum_app::villages::CancelTroopMovement,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.cancel_troop_movement(village_id, command).await
     }
 
     pub async fn send_scout(

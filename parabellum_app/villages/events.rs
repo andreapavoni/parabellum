@@ -251,6 +251,17 @@ pub enum VillageEvent {
         arrives_at: DateTime<Utc>,
         returns_at: DateTime<Utc>,
     },
+    TroopMovementCanceled {
+        movement_id: Uuid,
+        arrival_action_id: Uuid,
+        return_action_id: Uuid,
+        army_id: Uuid,
+        player_id: Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        army: Army,
+        returns_at: DateTime<Utc>,
+    },
     ScoutArrived {
         movement_id: Uuid,
         army_id: Uuid,
@@ -553,6 +564,7 @@ impl fmt::Display for VillageEvent {
             VillageEvent::SmithyResearchScheduled { .. } => "SmithyResearchScheduled",
             VillageEvent::SmithyResearchCompleted { .. } => "SmithyResearchCompleted",
             VillageEvent::ReportMarkedAsRead { .. } => "ReportMarkedAsRead",
+            VillageEvent::TroopMovementCanceled { .. } => "TroopMovementCanceled",
         };
         f.write_str(name)
     }

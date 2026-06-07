@@ -377,6 +377,7 @@ pub enum RallyMovementKindDto {
 pub enum RallyActionDto {
     Recall,
     Release,
+    Cancel,
 }
 
 #[derive(Debug, Serialize)]
@@ -435,6 +436,7 @@ enum ArmyCategory {
 enum ArmyAction {
     Recall { army_id: String },
     Release { army_id: String },
+    Cancel { movement_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -956,6 +958,13 @@ pub async fn building_detail(
                     .map_err(|err| {
                         map_application_error("unable_to_load_rally_village_info", err)
                     })?;
+                let cancelable_movement_ids = state
+                    .game_app
+                    .list_cancelable_outgoing_movement_ids(user.village.id)
+                    .await
+                    .map_err(|err| {
+                        map_application_error("unable_to_load_cancelable_movements", err)
+                    })?;
                 let cards = prepare_rally_point_cards(
                     user.village.id,
                     &user.village.name,
@@ -964,6 +973,7 @@ pub async fn building_detail(
                     &army_state,
                     &movements,
                     &village_info,
+                    &cancelable_movement_ids,
                 )
                 .into_iter()
                 .map(|card| {
@@ -974,6 +984,9 @@ pub async fn building_detail(
                         }
                         Some(ArmyAction::Release { army_id }) => {
                             (Some(RallyActionDto::Release), Some(army_id))
+                        }
+                        Some(ArmyAction::Cancel { movement_id }) => {
+                            (Some(RallyActionDto::Cancel), Some(movement_id))
                         }
                         None => (None, None),
                     };
@@ -1211,6 +1224,7 @@ fn prepare_rally_point_cards(
     armies: &VillageArmyStateView,
     movements: &VillageTroopMovements,
     village_info: &HashMap<u32, VillageInfo>,
+    cancelable_movement_ids: &std::collections::HashSet<uuid::Uuid>,
 ) -> Vec<ArmyCardData> {
     let mut cards = Vec::new();
 
@@ -1276,6 +1290,14 @@ fn prepare_rally_point_cards(
     }
 
     for movement in &movements.outgoing {
+        let action_button = if cancelable_movement_ids.contains(&movement.job_id) {
+            Some(ArmyAction::Cancel {
+                movement_id: movement.job_id.to_string(),
+            })
+        } else {
+            None
+        };
+
         cards.push(ArmyCardData {
             village_id: movement.target_village_id,
             village_name: movement.target_village_name.clone(),
@@ -1286,7 +1308,7 @@ fn prepare_rally_point_cards(
             movement_kind: Some(movement_kind_to_card_kind(movement.movement_type)),
             arrives_at: Some(movement.arrives_at),
             bounty: movement.bounty.clone(),
-            action_button: None,
+            action_button,
         });
     }
 
