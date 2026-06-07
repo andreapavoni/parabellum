@@ -247,6 +247,7 @@ pub struct PreviewFoundVillageRequest {
 pub struct MovementPreviewResponse {
     #[schema(value_type = String)]
     pub arrives_at: chrono::DateTime<chrono::Utc>,
+    pub distance: u32,
     pub detected_kind: PreviewDetectedKind,
     pub supports_scouting_target_choice: bool,
     pub has_catapult_units: bool,
@@ -816,6 +817,10 @@ pub async fn preview_troops(
         state.world_size,
         state.server_speed as u8,
     );
+    let distance = user
+        .village
+        .position
+        .distance(&target_position, state.world_size);
     let arrives_at =
         chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
 
@@ -837,6 +842,7 @@ pub async fn preview_troops(
 
     Ok(Json(MovementPreviewResponse {
         arrives_at,
+        distance,
         detected_kind,
         supports_scouting_target_choice: scout_only,
         has_catapult_units,
@@ -974,16 +980,21 @@ pub async fn preview_found_village(
         .map(|u| u.speed)
         .unwrap_or(1);
     let travel_time_secs = user.village.position.calculate_travel_time_secs(
-        target_position,
+        target_position.clone(),
         settlers_speed,
         state.world_size,
         state.server_speed as u8,
     );
+    let distance = user
+        .village
+        .position
+        .distance(&target_position, state.world_size);
     let arrives_at =
         chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_time_secs) as i64);
 
     Ok(Json(MovementPreviewResponse {
         arrives_at,
+        distance,
         detected_kind: PreviewDetectedKind::FoundVillage,
         supports_scouting_target_choice: false,
         has_catapult_units: false,

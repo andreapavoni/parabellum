@@ -368,7 +368,6 @@ impl VillageState {
     ) -> Result<(BuildingName, u8, i64), ApplicationError> {
         self.enforce_building_queue_capacity()?;
         self.enforce_downgrade_queue_capacity()?;
-        self.enforce_no_pending_building_action_for_slot(slot_id)?;
         self.village
             .init_building_downgrade(slot_id, speed)
             .map(|(building_name, next_level, duration_secs)| {
@@ -734,24 +733,6 @@ impl VillageState {
         if self.pending_building_actions.iter().any(|action| {
             action.slot_id == slot_id && matches!(action.kind, BuildingWorkflowKind::Downgrade)
         }) {
-            return Err(AppError::QueueItemAlreadyQueued {
-                queue: "building",
-                item: slot_id.to_string(),
-            }
-            .into());
-        }
-        Ok(())
-    }
-
-    fn enforce_no_pending_building_action_for_slot(
-        &self,
-        slot_id: u8,
-    ) -> Result<(), ApplicationError> {
-        if self
-            .pending_building_actions
-            .iter()
-            .any(|action| action.slot_id == slot_id)
-        {
             return Err(AppError::QueueItemAlreadyQueued {
                 queue: "building",
                 item: slot_id.to_string(),

@@ -255,6 +255,7 @@ export type MapFieldDetailResponse = {
 
 export type MovementPreviewResponse = {
   arrivesAt: string;
+  distance?: number;
   detectedKind: "attack_or_raid" | "scout_only" | "reinforcement" | "found_village";
   supportsScoutingTargetChoice: boolean;
   hasCatapultUnits: boolean;
