@@ -12,6 +12,8 @@ This project is for those who love the deep strategy and community of the origin
 
 The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
+[DEMO](https://parabellum.funky.studio)
+
 **HEADS UP!** Parabellum is under heavy development and is **mostly playable**. Many core mechanics have been built, others are coming. It's possible to signup and have a _decent_ game until founding a new village, but it's not complete or full-featured yet, we're getting there. Check the roadmap and status below.
 
 ---
