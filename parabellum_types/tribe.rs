@@ -138,7 +138,7 @@ static ROMAN_UNITS: TribeUnits = [
             time: 0,
         },
         requirements: &[BuildingRequirement(BuildingName::Barracks, 1)],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Praetorian,
@@ -162,7 +162,7 @@ static ROMAN_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 1),
             BuildingRequirement(BuildingName::Smithy, 1),
         ],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Imperian,
@@ -186,7 +186,7 @@ static ROMAN_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 5),
             BuildingRequirement(BuildingName::Smithy, 1),
         ],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::EquitesLegati,
@@ -403,7 +403,7 @@ static TEUTON_UNITS: TribeUnits = [
             time: 0,
         },
         requirements: &[BuildingRequirement(BuildingName::Barracks, 1)],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Spearman,
@@ -427,7 +427,7 @@ static TEUTON_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 1),
             BuildingRequirement(BuildingName::Barracks, 3),
         ],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Axeman,
@@ -451,7 +451,7 @@ static TEUTON_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 3),
             BuildingRequirement(BuildingName::Smithy, 1),
         ],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Scout,
@@ -475,7 +475,7 @@ static TEUTON_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 1),
             BuildingRequirement(BuildingName::MainBuilding, 5),
         ],
-        buildings: &[BuildingName::Barracks, BuildingName::Barracks],
+        buildings: &[BuildingName::Barracks, BuildingName::GreatBarracks],
     },
     Unit {
         name: UnitName::Paladin,
@@ -499,7 +499,7 @@ static TEUTON_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 5),
             BuildingRequirement(BuildingName::Stable, 3),
         ],
-        buildings: &[BuildingName::Stable, BuildingName::Stable],
+        buildings: &[BuildingName::Stable, BuildingName::GreatStable],
     },
     Unit {
         name: UnitName::TeutonicKnight,
@@ -523,7 +523,7 @@ static TEUTON_UNITS: TribeUnits = [
             BuildingRequirement(BuildingName::Academy, 15),
             BuildingRequirement(BuildingName::Stable, 10),
         ],
-        buildings: &[BuildingName::Stable, BuildingName::Stable],
+        buildings: &[BuildingName::Stable, BuildingName::GreatStable],
     },
     Unit {
         name: UnitName::Ram,

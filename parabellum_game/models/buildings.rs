@@ -1128,7 +1128,7 @@ static GREAT_BARRACKS: BuildingData = BuildingData {
     data: &[
         BuildingValueData(630, 420, 780, 360, 4, 1, 1000, 2000),
         BuildingValueData(805, 540, 1000, 460, 2, 1, 900, 2620),
-        BuildingValueData(1035, 690, 1275, 585, 2, 2, 81, 3340),
+        BuildingValueData(1035, 690, 1275, 585, 2, 2, 810, 3340),
         BuildingValueData(1320, 885, 1635, 750, 2, 2, 729, 4170),
         BuildingValueData(1695, 1125, 2100, 960, 2, 2, 656, 5140),
         BuildingValueData(2160, 1440, 2685, 1230, 3, 3, 590, 6260),
@@ -1387,7 +1387,7 @@ static TRAPPER: BuildingData = BuildingData {
         conflicts: &[],
         tribes: &[Tribe::Gaul],
         max_level: 20,
-        constraints: &[BuildingConstraint::OnlyCapital],
+        constraints: &[],
         allow_multiple: true,
     },
 };
