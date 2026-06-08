@@ -166,7 +166,7 @@ export function App() {
           />
         );
       case "stats":
-        return <ProtectedStats page={route.page} />;
+        return <ProtectedStats page={route.page} currentPlayerId={session.user?.playerId} />;
       case "player":
         return <ProtectedPlayer playerId={route.playerId} />;
       case "reports":
@@ -261,9 +261,9 @@ export function App() {
           ? "reports"
           : route.name === "mapField"
             ? "map"
-          : route.name === "player"
-            ? "stats"
-            : route.name
+            : route.name === "player"
+              ? "stats"
+              : route.name
       }
       onLogout={async () => {
         await logout();
@@ -276,13 +276,13 @@ export function App() {
   );
 }
 
-function ProtectedStats({ page }: { page: number }) {
+function ProtectedStats({ page, currentPlayerId }: { page: number; currentPlayerId?: string }) {
   const query = useStatsQuery(page);
   if (query.isPending) return <Loading label="Loading leaderboard..." />;
   if (query.error || !query.data) {
     return <ErrorState message={queryErrorMessage(query.error, "Unable to load leaderboard.")} />;
   }
-  return <StatsPage data={query.data} />;
+  return <StatsPage data={query.data} currentPlayerId={currentPlayerId} />;
 }
 
 function ProtectedPlayer({ playerId }: { playerId: string }) {

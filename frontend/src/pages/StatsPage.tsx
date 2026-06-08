@@ -3,7 +3,13 @@ import { Link } from "@/components/Link";
 import { DataTable } from "@/components/ui";
 import { tribeLabel } from "@/lib/labels";
 
-export function StatsPage({ data }: { data: StatsResponse }) {
+export function StatsPage({
+  data,
+  currentPlayerId,
+}: {
+  data: StatsResponse;
+  currentPlayerId?: string;
+}) {
   const hasPrev = data.pagination.page > 1;
   const hasNext = data.pagination.page < data.pagination.totalPages;
 
@@ -14,30 +20,36 @@ export function StatsPage({ data }: { data: StatsResponse }) {
         <div class="text-sm text-gray-600">Total players: {data.pagination.totalPlayers}</div>
       </div>
       <DataTable>
-          <thead class="bg-gray-100 text-left text-gray-600 uppercase text-xs tracking-wide">
-            <tr>
-              <th class="px-4 py-3 w-16">#</th>
-              <th class="px-4 py-3">Player</th>
-              <th class="px-4 py-3">Tribe</th>
-              <th class="px-4 py-3 text-right">Villages</th>
-              <th class="px-4 py-3 text-right">Population</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            {data.entries.map((entry) => (
-              <tr class="hover:bg-gray-50" key={entry.playerId}>
-                <td class="px-4 py-3 font-mono text-gray-600">{entry.rank}</td>
-                <td class="px-4 py-3 font-semibold text-gray-800">
+        <thead class="bg-gray-100 text-left text-gray-600 uppercase text-xs tracking-wide">
+          <tr>
+            <th class="px-4 py-3 w-16">#</th>
+            <th class="px-4 py-3">Player</th>
+            <th class="px-4 py-3">Tribe</th>
+            <th class="px-4 py-3 text-right">Villages</th>
+            <th class="px-4 py-3 text-right">Population</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {data.entries.map((entry) => {
+            const isCurrentPlayer = currentPlayerId === entry.playerId;
+            return (
+              <tr
+                class={isCurrentPlayer ? "bg-green-50 hover:bg-green-100" : "hover:bg-gray-50"}
+                key={entry.playerId}
+              >
+                <td class={isCurrentPlayer ? "px-4 py-3 font-mono text-green-800" : "px-4 py-3 font-mono text-gray-600"}>{entry.rank}</td>
+                <td class={isCurrentPlayer ? "px-4 py-3 font-semibold text-green-900" : "px-4 py-3 font-semibold text-gray-800"}>
                   <Link to={`/players/${entry.playerId}`} class="text-green-700 hover:underline">
                     {entry.username}
                   </Link>
                 </td>
-                <td class="px-4 py-3 text-gray-700">{tribeLabel(entry.tribe)}</td>
-                <td class="px-4 py-3 text-right text-gray-700">{entry.villageCount}</td>
-                <td class="px-4 py-3 text-right text-gray-900 font-semibold">{entry.population}</td>
+                <td class={isCurrentPlayer ? "px-4 py-3 text-green-800" : "px-4 py-3 text-gray-700"}>{tribeLabel(entry.tribe)}</td>
+                <td class={isCurrentPlayer ? "px-4 py-3 text-right text-green-800" : "px-4 py-3 text-right text-gray-700"}>{entry.villageCount}</td>
+                <td class={isCurrentPlayer ? "px-4 py-3 text-right text-green-900 font-semibold" : "px-4 py-3 text-right text-gray-900 font-semibold"}>{entry.population}</td>
               </tr>
-            ))}
-          </tbody>
+            );
+          })}
+        </tbody>
       </DataTable>
       <div class="flex items-center justify-between text-sm text-gray-600">
         <span>
