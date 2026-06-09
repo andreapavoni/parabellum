@@ -33,7 +33,7 @@ USER parabellum
 COPY --from=builder /app/target/release/parabellum /app/parabellum
 COPY --from=builder /app/target/release/parabellum-seed /app/parabellum-seed
 COPY --from=builder /app/target/release/parabellum-replay /app/parabellum-replay
-COPY --from=builder /app/seeds /app/
+COPY --from=builder /app/seed /app/
 COPY --from=builder /app/frontend/assets /app/frontend/assets
 COPY --from=builder /app/frontend/static /app/frontend/static
 
