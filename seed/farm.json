@@ -1,0 +1,564 @@
+{
+  "players": [
+    {
+      "username": "farm-1",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-2",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-3",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-4",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-5",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-6",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-7",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-8",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-9",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-10",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-11",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-12",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-13",
+      "tribe": "Teuton",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-14",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "NorthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-17",
+      "tribe": "Roman",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthEast",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    },
+    {
+      "username": "farm-18",
+      "tribe": "Gaul",
+      "villages": [
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Second Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Third Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fourth Farm",
+          "buildings": []
+        },
+        {
+          "template": "farm",
+          "quadrant": "SouthWest",
+          "name": "Fifth Farm",
+          "buildings": []
+        }
+      ]
+    }
+  ]
+}

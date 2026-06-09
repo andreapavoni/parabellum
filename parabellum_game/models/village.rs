@@ -99,8 +99,6 @@ const COMMON_BUILDINGS: [BuildingName; 32] = [
     BuildingName::GreatWorkshop,
 ];
 
-// TODO: add standalone rally point? Not yet
-// TODO: add standalone wall? Not yet
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Village {
     pub id: u32,
