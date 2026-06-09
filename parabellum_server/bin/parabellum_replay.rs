@@ -11,6 +11,21 @@ async fn main() -> Result<(), ApplicationError> {
     setup_logging();
 
     let args = ReplayCliArgs::from_env_args(env::args().collect())?;
+    if args.rebuild_snapshots {
+        let pool = establish_connection_pool().await?;
+        sqlx::migrate!("../migrations")
+            .run(&pool)
+            .await
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
+        let replay = ReplayService::new(pool);
+        let count = replay
+            .rebuild_all_snapshots()
+            .await
+            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
+        tracing::info!(count, "snapshots rebuild completed");
+        return Ok(());
+    }
+
     tracing::info!(
         target = ?args.target,
         mode = ?args.mode,
@@ -52,6 +67,7 @@ async fn main() -> Result<(), ApplicationError> {
 
 #[derive(Debug, Clone)]
 struct ReplayCliArgs {
+    rebuild_snapshots: bool,
     target: ReplayTarget,
     mode: ReplayMode,
     from_global_seq: i64,
@@ -61,6 +77,7 @@ struct ReplayCliArgs {
 
 impl ReplayCliArgs {
     fn from_env_args(args: Vec<String>) -> Result<Self, ApplicationError> {
+        let mut rebuild_snapshots = false;
         let mut target = ReplayTarget::All;
         let mut mode = ReplayMode::DryRun;
         let mut from_global_seq = 1_i64;
@@ -70,6 +87,9 @@ impl ReplayCliArgs {
         let mut i = 1usize;
         while i < args.len() {
             match args[i].as_str() {
+                "--rebuild-snapshots" => {
+                    rebuild_snapshots = true;
+                }
                 "--target" => {
                     i += 1;
                     let value = args.get(i).ok_or_else(|| {
@@ -123,6 +143,7 @@ impl ReplayCliArgs {
         }
 
         Ok(Self {
+            rebuild_snapshots,
             target,
             mode,
             from_global_seq,
@@ -156,5 +177,5 @@ fn parse_mode(value: &str) -> Result<ReplayMode, ApplicationError> {
 }
 
 fn help_text() -> String {
-    "Usage: parabellum-replay [--target village|reports|all] [--mode dry-run|full] [--from N] [--to N] [--aggregate-id ID]".to_string()
+    "Usage: parabellum-replay [--target village|reports|all] [--mode dry-run|full] [--from N] [--to N] [--aggregate-id ID] [--rebuild-snapshots]".to_string()
 }
