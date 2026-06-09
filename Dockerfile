@@ -30,7 +30,7 @@ RUN mkdir -p /app/logs /app/mnt
 COPY --from=builder /app/target/release/parabellum /app/bin/parabellum
 COPY --from=builder /app/target/release/parabellum-seed /app/bin/parabellum-seed
 COPY --from=builder /app/target/release/parabellum-replay /app/bin/parabellum-replay
-COPY --from=builder /app/seed /app/
+COPY --from=builder /app/seed /app/seed/
 COPY --from=builder /app/frontend /app/frontend/
 
 RUN chown -R parabellum:parabellum /app
