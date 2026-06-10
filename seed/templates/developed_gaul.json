@@ -92,29 +92,5 @@
     400000,
     400000,
     400000
-  ],
-  "academyResearches": [
-    "Swordsman",
-    "Pathfinder",
-    "TheutatesThunder",
-    "Druidrider",
-    "Haeduan",
-    "Ram",
-    "Trebuchet",
-    "Chieftain"
-  ],
-  "startingArmy": [
-    {
-      "unit": "Swordsman",
-      "quantity": 200
-    },
-    {
-      "unit": "Phalanx",
-      "quantity": 100
-    },
-    {
-      "unit": "TheutatesThunder",
-      "quantity": 50
-    }
   ]
 }
