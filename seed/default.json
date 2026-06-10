@@ -5,7 +5,7 @@
       "tribe": "Roman",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "buildings": [
             {

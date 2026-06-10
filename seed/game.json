@@ -5,12 +5,12 @@
       "tribe": "Gaul",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -22,7 +22,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -34,7 +34,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -46,7 +46,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -64,12 +64,12 @@
       "tribe": "Gaul",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -81,7 +81,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -93,7 +93,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -105,7 +105,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -123,12 +123,12 @@
       "tribe": "Gaul",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -140,7 +140,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -152,7 +152,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -164,7 +164,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_gaul",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -182,12 +182,12 @@
       "tribe": "Roman",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -199,7 +199,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -211,7 +211,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -223,7 +223,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -241,12 +241,12 @@
       "tribe": "Teuton",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -258,7 +258,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -270,7 +270,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -282,7 +282,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -300,12 +300,12 @@
       "tribe": "Roman",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -317,7 +317,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -329,7 +329,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -341,7 +341,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_roman",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -359,12 +359,12 @@
       "tribe": "Teuton",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -376,7 +376,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -388,7 +388,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -400,7 +400,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
@@ -418,12 +418,12 @@
       "tribe": "Teuton",
       "villages": [
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "buildings": []
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Second Settlement",
           "buildings": [
@@ -435,7 +435,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Third Settlement",
           "buildings": [
@@ -447,7 +447,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fourth Settlement",
           "buildings": [
@@ -459,7 +459,7 @@
           ]
         },
         {
-          "template": "developed",
+          "template": "developed_teuton",
           "quadrant": "NorthEast",
           "name": "Fifth Settlement",
           "buildings": [
