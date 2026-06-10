@@ -129,7 +129,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               {(() => {
                 return rallyPoint.buildingName ? (
                   <>
-                    <foreignObject x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                    <foreignObject pointer-events="none" x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
                       <div class="pointer-events-none">
                         <BuildingSprite
                           buildingName={rallyPoint.buildingName}
@@ -170,7 +170,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
                 ) : null}
                 {!isEmpty && slot?.buildingName ? (
                   <>
-                    <foreignObject x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                    <foreignObject pointer-events="none" x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
                       <div class="pointer-events-none">
                         <BuildingSprite
                           buildingName={slot.buildingName}
@@ -224,7 +224,7 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
               {(() => {
                 return mainBuilding.buildingName ? (
                   <>
-                    <foreignObject x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
+                    <foreignObject pointer-events="none" x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
                       <div class="pointer-events-none">
                         <BuildingSprite
                           buildingName={mainBuilding.buildingName}
