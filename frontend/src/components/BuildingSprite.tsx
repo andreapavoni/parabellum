@@ -1,6 +1,6 @@
 const BUILDING_ICON_SIZE = 64;
 
-const BUILDING_ICON_BY_NAME: Record<string, string> = {
+export const BUILDING_ICON_BY_NAME: Record<string, string> = {
   Academy: "academy.png",
   Bakery: "bakery.png",
   Barracks: "barracks.png",

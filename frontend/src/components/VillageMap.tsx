@@ -1,5 +1,5 @@
 import type { BuildingSlot } from "@/types/api";
-import { BuildingSprite } from "@/components/BuildingSprite";
+import { BUILDING_ICON_BY_NAME } from "@/components/BuildingSprite";
 import { buildingLabel } from "@/lib/labels";
 import { navigate, shouldUseClientNavigation } from "@/lib/router";
 
@@ -127,17 +127,16 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
                 stroke-dasharray="10, 8"
               />
               {(() => {
-                return rallyPoint.buildingName ? (
+                const iconUrl = rallyPoint.buildingName && BUILDING_ICON_BY_NAME[rallyPoint.buildingName];
+                return iconUrl ? (
                   <>
-                    <foreignObject pointer-events="none" x="552" y="595" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                      <div class="pointer-events-none">
-                        <BuildingSprite
-                          buildingName={rallyPoint.buildingName}
-                          size={VILLAGE_ICON_SIZE}
-                          label={buildingLabel(rallyPoint.buildingName!)}
-                        />
-                      </div>
-                    </foreignObject>
+                    <image
+                      href={`/static/misc/buildings/${iconUrl}`}
+                      x="552" y="595"
+                      width={VILLAGE_ICON_SIZE}
+                      height={VILLAGE_ICON_SIZE}
+                      style={{ imageRendering: "pixelated" }}
+                    />
                     <LevelBadge x={652} y={622} level={rallyPoint.level} />
                   </>
                 ) : null;
@@ -170,15 +169,19 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
                 ) : null}
                 {!isEmpty && slot?.buildingName ? (
                   <>
-                    <foreignObject pointer-events="none" x={cx - 64} y={cy - 84} width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                      <div class="pointer-events-none">
-                        <BuildingSprite
-                          buildingName={slot.buildingName}
-                          size={VILLAGE_ICON_SIZE}
-                          label={buildingLabel(slot!.buildingName!)}
+                    {(() => {
+                      const iconUrl = slot.buildingName && BUILDING_ICON_BY_NAME[slot.buildingName];
+                      return iconUrl ? (
+                        <image
+                          href={`/static/misc/buildings/${iconUrl}`}
+                          x={cx - 64}
+                          y={cy - 84}
+                          width={VILLAGE_ICON_SIZE}
+                          height={VILLAGE_ICON_SIZE}
+                          style={{ imageRendering: "pixelated" }}
                         />
-                      </div>
-                    </foreignObject>
+                      ) : null;
+                    })()}
                     <LevelBadge x={cx + 38} y={cy - 20} level={slot.level} />
                   </>
                 ) : null}
@@ -222,17 +225,16 @@ export function VillageMap({ slots }: { slots: BuildingSlot[] }) {
                 </>
               ) : null}
               {(() => {
-                return mainBuilding.buildingName ? (
+                const iconUrl = mainBuilding.buildingName && BUILDING_ICON_BY_NAME[mainBuilding.buildingName];
+                return iconUrl ? (
                   <>
-                    <foreignObject pointer-events="none" x="436" y="420" width={VILLAGE_ICON_SIZE} height={VILLAGE_ICON_SIZE}>
-                      <div class="pointer-events-none">
-                        <BuildingSprite
-                          buildingName={mainBuilding.buildingName}
-                          size={VILLAGE_ICON_SIZE}
-                          label={buildingLabel(mainBuilding.buildingName!)}
-                        />
-                      </div>
-                    </foreignObject>
+                    <image
+                      href={`/static/misc/buildings/${iconUrl}`}
+                      x="436" y="420"
+                      width={VILLAGE_ICON_SIZE}
+                      height={VILLAGE_ICON_SIZE}
+                      style={{ imageRendering: "pixelated" }}
+                    />
                     <LevelBadge x={566} y={454} level={mainBuilding.level} />
                   </>
                 ) : null;
