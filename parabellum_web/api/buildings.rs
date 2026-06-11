@@ -347,6 +347,7 @@ pub struct MainBuildingDowngradeQueueItemDto {
     pub slot_id: u8,
     pub building_name: String,
     pub target_level: u8,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub time_seconds: u32,
     pub is_processing: bool,
 }
@@ -1387,6 +1388,7 @@ fn main_building_detail_for_village(
             slot_id: item.slot_id,
             building_name: building_key(&item.building_name),
             target_level: item.target_level,
+            finishes_at: item.finishes_at,
             time_seconds: (item.finishes_at - now).num_seconds().max(0) as u32,
             is_processing: matches!(item.status, ScheduledActionStatus::Processing),
         })

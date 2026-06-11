@@ -12,6 +12,7 @@ export function VillagePage({
 }: {
   data: {
     serverTime: number;
+    serverTimeObservedAtMs: number;
     village: VillageSummary;
     buildingSlots: BuildingSlot[];
     buildingQueue: BuildingQueueItem[];
@@ -27,7 +28,12 @@ export function VillagePage({
       <div class="mt-3 flex w-full flex-col items-start justify-center gap-4 md:flex-row">
         <div class="flex flex-col items-center w-full max-w-[400px] md:flex-none">
           <VillageMap slots={data.buildingSlots} />
-          <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
+          <QueueList
+            queue={data.buildingQueue}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={data.serverTimeObservedAtMs}
+            onQueueElapsed={onQueueElapsed}
+          />
         </div>
         <Panel class="w-full md:w-56 md:shrink-0">
           <VillageSelector villages={data.villages} onSwitchVillage={onSwitchVillage} />

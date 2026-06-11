@@ -24,9 +24,11 @@ function reservedSlotBuildingName(detail: BuildingPageResponse["detail"]): strin
 
 export function BuildingPage({
   data,
+  serverTimeObservedAtMs,
   onMutate,
 }: {
   data: BuildingPageResponse;
+  serverTimeObservedAtMs: number;
   onMutate: () => Promise<void>;
 }) {
   const detail = data.detail;
@@ -98,7 +100,14 @@ export function BuildingPage({
         {detail.buildingType === "rally_point" ? (
           <RallyPointBuilding detail={detail} onMutate={onMutate} />
         ) : null}
-        {detail.mainBuilding ? <MainBuilding detail={detail.mainBuilding} onMutate={onMutate} /> : null}
+        {detail.mainBuilding ? (
+          <MainBuilding
+            detail={detail.mainBuilding}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={serverTimeObservedAtMs}
+            onMutate={onMutate}
+          />
+        ) : null}
         {showAsUnderConstruction ? <QueuedConstructionUpgrade detail={detail} onMutate={onMutate} /> : null}
         {detail.buildingType !== "empty" ? <UpgradeBuilding data={detail} onMutate={onMutate} /> : null}
       </div>

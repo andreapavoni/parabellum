@@ -4,6 +4,7 @@ import type { GameContextResponse } from "@/types/api";
 
 export function useGlobalTimer(
   gameContext: GameContextResponse | null,
+  serverTimeObservedAtMs: number,
   onElapsed: () => void,
 ) {
   const onElapsedRef = useRef(onElapsed);
@@ -13,11 +14,12 @@ export function useGlobalTimer(
   useEffect(() => {
     if (!gameContext) return;
 
-    const skewMs = clockSkewMsFromServerTime(gameContext.serverTime);
+    const skewMs = clockSkewMsFromServerTime(gameContext.serverTime, serverTimeObservedAtMs);
     const timers: number[] = [];
 
     for (const item of gameContext.buildingQueue) {
-      if (item.timeSeconds > 0) timers.push(item.timeSeconds);
+      const secs = secondsUntilIso(item.finishesAt, { clockSkewMs: skewMs });
+      if (secs > 0) timers.push(secs);
     }
 
     const s = gameContext.troopMovementSummary;
@@ -48,7 +50,7 @@ export function useGlobalTimer(
     return () => {
       if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
     };
-  }, [gameContext]);
+  }, [gameContext, serverTimeObservedAtMs]);
 
   useEffect(() => {
     const onVisibilityChange = () => {

@@ -22,6 +22,7 @@ struct BuildingQueueItemView {
     building_name: String,
     target_level: u8,
     is_processing: bool,
+    finishes_at: chrono::DateTime<chrono::Utc>,
     time_seconds: u32,
 }
 
@@ -39,6 +40,7 @@ fn building_queue_to_views(
                 building_name: format!("{:?}", item.building_name),
                 target_level: item.target_level,
                 is_processing: matches!(item.status, ScheduledActionStatus::Processing),
+                finishes_at: item.finishes_at,
                 time_seconds: remaining,
             }
         })
@@ -138,12 +140,13 @@ pub struct ResourceSlotDto {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-/// Building queue entry with computed remaining time.
+/// Building queue entry with an absolute completion deadline.
 pub struct BuildingQueueItemDto {
     pub kind: String,
     pub slot_id: u8,
     pub building_name: String,
     pub target_level: u8,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
     pub time_seconds: u32,
     pub is_processing: bool,
 }
@@ -510,6 +513,7 @@ fn building_queue_items(queue_views: &[BuildingQueueItemView]) -> Vec<BuildingQu
             slot_id: item.slot_id,
             building_name: item.building_name.clone(),
             target_level: item.target_level,
+            finishes_at: item.finishes_at,
             time_seconds: item.time_seconds,
             is_processing: item.is_processing,
         })

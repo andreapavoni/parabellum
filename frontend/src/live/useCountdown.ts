@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { clockSkewMsFromServerTime, secondsUntilIso } from "@/lib/time";
 
 const ZERO_RETRY_MAX = 5;
 const ZERO_RETRY_DELAY_MS = 1200;
@@ -45,4 +46,30 @@ export function useCountdown(seconds: number, onElapsed?: () => void) {
   }, [remaining, onElapsed]);
 
   return remaining;
+}
+
+export function useDeadlineCountdown(
+  deadlineIso: string,
+  options?: {
+    clockSkewMs?: number;
+    onElapsed?: () => void;
+  },
+) {
+  return useCountdown(
+    secondsUntilIso(deadlineIso, { clockSkewMs: options?.clockSkewMs }),
+    options?.onElapsed,
+  );
+}
+
+export function useServerDeadlineCountdown(
+  deadlineIso: string,
+  serverTime: number,
+  serverTimeObservedAtMs: number,
+  onElapsed?: () => void,
+) {
+  const clockSkewMs = useMemo(
+    () => clockSkewMsFromServerTime(serverTime, serverTimeObservedAtMs),
+    [serverTime, serverTimeObservedAtMs],
+  );
+  return useDeadlineCountdown(deadlineIso, { clockSkewMs, onElapsed });
 }

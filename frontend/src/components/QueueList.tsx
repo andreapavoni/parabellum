@@ -2,11 +2,21 @@ import type { BuildingQueueItem } from "@/types/api";
 import { Link } from "./Link";
 import { buildingLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
-import { useCountdown } from "@/live/useCountdown";
+import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import { ResourceSprite } from "@/components/ResourceSprite";
 
-function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () => void }) {
-  const remaining = useCountdown(seconds, onElapsed);
+function QueueTimer({
+  finishesAt,
+  serverTime,
+  serverTimeObservedAtMs,
+  onElapsed,
+}: {
+  finishesAt: string;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
+  onElapsed?: () => void;
+}) {
+  const remaining = useServerDeadlineCountdown(finishesAt, serverTime, serverTimeObservedAtMs, onElapsed);
   return (
     <span class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-gray-800">
       <ResourceSprite kind="clock" size={14} label="Time remaining" />
@@ -17,9 +27,13 @@ function QueueTimer({ seconds, onElapsed }: { seconds: number; onElapsed?: () =>
 
 export function QueueList({
   queue,
+  serverTime,
+  serverTimeObservedAtMs,
   onQueueElapsed,
 }: {
   queue: BuildingQueueItem[];
+  serverTime: number;
+  serverTimeObservedAtMs: number;
   onQueueElapsed?: () => void;
 }) {
   return (
@@ -47,7 +61,12 @@ export function QueueList({
               >
                 {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
               </Link>
-              <QueueTimer seconds={item.timeSeconds} onElapsed={onQueueElapsed} />
+              <QueueTimer
+                finishesAt={item.finishesAt}
+                serverTime={serverTime}
+                serverTimeObservedAtMs={serverTimeObservedAtMs}
+                onElapsed={onQueueElapsed}
+              />
             </div>
           ))}
         </div>

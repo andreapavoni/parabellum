@@ -87,6 +87,7 @@ export type BuildingQueueItem = {
   slotId: number;
   buildingName: string;
   targetLevel: number;
+  finishesAt: string;
   timeSeconds: number;
   isProcessing: boolean;
 };
@@ -426,6 +427,7 @@ export type BuildingDetail = {
       slotId: number;
       buildingName: string;
       targetLevel: number;
+      finishesAt: string;
       timeSeconds: number;
       isProcessing: boolean;
     }[];

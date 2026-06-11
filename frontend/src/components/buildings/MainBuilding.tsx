@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { ArrowDownToLine } from "lucide-preact";
 import { buildingLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
-import { useCountdown } from "@/live/useCountdown";
+import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import { useDowngradeBuildingMutation } from "@/query/mutations";
 import { Button, Field, Panel, SectionHeader } from "@/components/ui";
 import { ResourceSprite } from "@/components/ResourceSprite";
@@ -11,13 +11,17 @@ import type { BuildingPageResponse } from "@/types/api";
 type MainBuildingDetail = NonNullable<BuildingPageResponse["detail"]["mainBuilding"]>;
 
 function DowngradeTimer({
-  seconds,
+  finishesAt,
+  serverTime,
+  serverTimeObservedAtMs,
   onElapsed,
 }: {
-  seconds: number;
+  finishesAt: string;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
   onElapsed: () => void;
 }) {
-  const remaining = useCountdown(seconds, onElapsed);
+  const remaining = useServerDeadlineCountdown(finishesAt, serverTime, serverTimeObservedAtMs, onElapsed);
   return (
     <span class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-stone-800">
       <ResourceSprite kind="clock" size={14} label="Time remaining" />
@@ -28,9 +32,13 @@ function DowngradeTimer({
 
 export function MainBuilding({
   detail,
+  serverTime,
+  serverTimeObservedAtMs,
   onMutate,
 }: {
   detail: MainBuildingDetail;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
   onMutate: () => Promise<void>;
 }) {
   const [selectedSlotId, setSelectedSlotId] = useState(detail.options[0]?.slotId ?? 0);
@@ -139,7 +147,12 @@ export function MainBuilding({
                   <span class="min-w-0 truncate font-semibold text-stone-800">
                     {buildingLabel(item.buildingName)} to level {item.targetLevel}
                   </span>
-                  <DowngradeTimer seconds={item.timeSeconds} onElapsed={onMutate} />
+                  <DowngradeTimer
+                    finishesAt={item.finishesAt}
+                    serverTime={serverTime}
+                    serverTimeObservedAtMs={serverTimeObservedAtMs}
+                    onElapsed={onMutate}
+                  />
                 </div>
               ))}
             </div>

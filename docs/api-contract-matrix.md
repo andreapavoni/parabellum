@@ -64,6 +64,14 @@ All return:
 - `POST /army/release`
 - `POST /map/found-village`
 
+Timer contract conventions:
+- Active scheduled state uses absolute timestamps as canonical deadlines:
+  `finishesAt` for jobs/queues, `arrivesAt` for movements, and `nextAt` for
+  aggregate summaries.
+- Relative duration fields are for static estimates or compatibility snapshots.
+  New active timer fields should not rely on cached relative seconds as their
+  only countdown source.
+
 Common behavior:
 - `200` action ack or detail payload
 - `401` missing/invalid bearer token

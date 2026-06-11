@@ -55,7 +55,7 @@ export function App() {
 
   const gameContextQuery = useGameContextQuery(session.authenticated && !booting);
   const meContext = gameContextQuery.data ?? null;
-  useGlobalTimer(meContext, refreshFromQueueElapsed);
+  useGlobalTimer(meContext, gameContextQuery.dataUpdatedAt, refreshFromQueueElapsed);
 
   useEffect(() => {
     const onPopState = () => setRoute(parseRoute(window.location));
@@ -127,6 +127,7 @@ export function App() {
           <VillagePage
             data={{
               serverTime: meContext.serverTime,
+              serverTimeObservedAtMs: gameContextQuery.dataUpdatedAt,
               village: meContext.currentVillage,
               buildingSlots: meContext.buildingSlots,
               buildingQueue: meContext.buildingQueue,
@@ -145,6 +146,7 @@ export function App() {
           <ResourcesPage
             data={{
               serverTime: meContext.serverTime,
+              serverTimeObservedAtMs: gameContextQuery.dataUpdatedAt,
               village: meContext.currentVillage,
               resourceSlots: meContext.resourceSlots,
               buildingQueue: meContext.buildingQueue,
@@ -381,7 +383,7 @@ function ProtectedBuilding({
   if (query.error || !query.data) {
     return <ErrorState message={queryErrorMessage(query.error, "Unable to load building.")} />;
   }
-  return <BuildingPage data={query.data} onMutate={onMutate} />;
+  return <BuildingPage data={query.data} serverTimeObservedAtMs={query.dataUpdatedAt} onMutate={onMutate} />;
 }
 
 function ErrorState({ message }: { message: string }) {

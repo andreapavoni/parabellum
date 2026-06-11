@@ -17,6 +17,10 @@ export function secondsUntilIso(
   return Math.max(0, Math.floor((targetMs - skewedNowMs) / 1000));
 }
 
-export function clockSkewMsFromServerTime(serverTimeSeconds: number): number {
-  return serverTimeSeconds * 1000 - Date.now();
+export function clockSkewMsFromServerTime(
+  serverTimeSeconds: number,
+  observedAtMs = Date.now(),
+): number {
+  const anchorMs = observedAtMs > 0 ? observedAtMs : Date.now();
+  return serverTimeSeconds * 1000 - anchorMs;
 }

@@ -79,9 +79,45 @@ Live derived hooks live under `frontend/src/live/`:
 - `useServerClock` derives the visible server clock from the last server time.
 - `useLiveResources` derives visible resources from stored amounts and
   production per hour.
+- `useServerDeadlineCountdown` derives a visible countdown from an absolute
+  backend deadline, a server time snapshot, and the client time when that
+  snapshot was observed.
+
+Backend-owned scheduled state should expose absolute timestamps as the
+canonical timer input. Components should not initialize active countdowns from
+cached relative seconds because route changes can remount components while
+TanStack Query is still serving the same cached payload.
+
+Timer and deadline field naming:
+
+- `durationSeconds`: static estimate before an action starts, such as an option
+  or preview duration.
+- `finishesAt`: absolute completion deadline for jobs and queues.
+- `arrivesAt`: absolute movement arrival deadline for troops and merchants.
+- `nextAt`: aggregate deadline for the next event in a category.
+- `remainingSeconds`: server snapshot of remaining time. This is acceptable for
+  diagnostics or transitional compatibility, but it is not the canonical input
+  for active UI countdowns.
+- `serverTime`: backend clock snapshot used with the query update time to
+  calculate client clock skew.
+
+Current legacy fields such as `timeSecs` and `timeSeconds` should be treated by
+meaning: option/preparation durations are static estimates, while active queued
+state should prefer `finishesAt`, `arrivesAt`, or `nextAt`.
+
+Countdown components should pass both `serverTime` and the query `dataUpdatedAt`
+timestamp into `useServerDeadlineCountdown`. Do not calculate clock skew from
+`serverTime` and the current render time: `serverTime` is fixed for a cached
+payload, while `Date.now()` advances, so recomputing skew after remounts can
+cancel elapsed wall time and reset or freeze the displayed value.
 
 When a server-owned timer elapses, components should invalidate the relevant
 query keys and let the backend return the authoritative state.
+
+The global timer should collect all known active deadlines, choose the nearest
+positive one, and trigger a state refresh when it elapses. Page components can
+render their own visible countdowns, but they should use the same deadline
+fields so navigation, remounts, and query caching do not reset timers.
 
 ## Realtime Roadmap
 

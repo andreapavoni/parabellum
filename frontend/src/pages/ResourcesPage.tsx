@@ -15,8 +15,8 @@ import { Link } from "@/components/Link";
 import { VillageHeading, VillageSelector } from "@/components/VillageHeader";
 import { Panel, SectionHeader } from "@/components/ui";
 import { unitLabel } from "@/lib/labels";
-import { clockSkewMsFromServerTime, formatDurationHms, secondsUntilIso } from "@/lib/time";
-import { useCountdown } from "@/live/useCountdown";
+import { formatDurationHms } from "@/lib/time";
+import { useServerDeadlineCountdown } from "@/live/useCountdown";
 
 const CANONICAL_UNIT_ORDER: string[] = [
   "Legionnaire", "Praetorian", "Imperian", "EquitesLegati", "EquitesImperatoris", "EquitesCaesaris", "BatteringRam", "FireCatapult", "Senator", "Settler",
@@ -38,6 +38,7 @@ export function ResourcesPage({
 }: {
   data: {
     serverTime: number;
+    serverTimeObservedAtMs: number;
     village: VillageSummary;
     resourceSlots: ResourceSlot[];
     buildingQueue: BuildingQueueItem[];
@@ -56,7 +57,6 @@ export function ResourcesPage({
     if (ai !== bi) return ai - bi;
     return a.unitName.localeCompare(b.unitName);
   });
-  const clockSkewMs = clockSkewMsFromServerTime(data.serverTime);
   const movementRows = [
     {
       label: "incoming attacks",
@@ -116,7 +116,12 @@ export function ResourcesPage({
       <div class="mt-3 flex w-full flex-col items-start justify-center gap-4 md:flex-row">
         <div class="flex flex-col items-start w-full md:max-w-[440px] md:flex-none">
           <ResourceFieldsMap slots={data.resourceSlots} />
-          <QueueList queue={data.buildingQueue} onQueueElapsed={onQueueElapsed} />
+          <QueueList
+            queue={data.buildingQueue}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={data.serverTimeObservedAtMs}
+            onQueueElapsed={onQueueElapsed}
+          />
         </div>
         <Panel class="w-full md:w-56 md:shrink-0 space-y-5">
           <VillageSelector villages={data.villages} onSwitchVillage={onSwitchVillage} />
@@ -164,7 +169,8 @@ export function ResourcesPage({
                     href={row.href}
                     tone={row.tone}
                     onElapsed={onMovementElapsed}
-                    clockSkewMs={clockSkewMs}
+                    serverTime={data.serverTime}
+                    serverTimeObservedAtMs={data.serverTimeObservedAtMs}
                   />
                 ))}
               </div>
@@ -200,7 +206,8 @@ function MovementRow({
   nextAt,
   tone,
   onElapsed,
-  clockSkewMs,
+  serverTime,
+  serverTimeObservedAtMs,
 }: {
   label: string;
   count: number;
@@ -208,7 +215,8 @@ function MovementRow({
   nextAt?: string;
   tone: "danger" | "warning" | "success" | "info" | "violet";
   onElapsed?: () => void;
-  clockSkewMs: number;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
 }) {
   const toneClasses = {
     danger: "border-red-200 bg-red-50 text-red-800",
@@ -227,7 +235,12 @@ function MovementRow({
           {count}
         </span>
         {count > 0 && nextAt ? (
-          <MovementCountdown nextAt={nextAt} onElapsed={onElapsed} clockSkewMs={clockSkewMs} />
+          <MovementCountdown
+            nextAt={nextAt}
+            onElapsed={onElapsed}
+            serverTime={serverTime}
+            serverTimeObservedAtMs={serverTimeObservedAtMs}
+          />
         ) : null}
       </Link>
     </div>
@@ -237,13 +250,15 @@ function MovementRow({
 function MovementCountdown({
   nextAt,
   onElapsed,
-  clockSkewMs,
+  serverTime,
+  serverTimeObservedAtMs,
 }: {
   nextAt: string;
   onElapsed?: () => void;
-  clockSkewMs: number;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
 }) {
-  const remaining = useCountdown(secondsUntilIso(nextAt, { clockSkewMs }), onElapsed);
+  const remaining = useServerDeadlineCountdown(nextAt, serverTime, serverTimeObservedAtMs, onElapsed);
   const urgencyClass = remaining <= 60 ? "text-amber-700" : "text-gray-500";
   return (
     <span class={`font-mono text-[11px] ${urgencyClass}`}>
