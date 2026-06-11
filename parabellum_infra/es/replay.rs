@@ -1,4 +1,6 @@
-use mini_cqrs_es::{Aggregate, AggregateSnapshot, CqrsError, EventConsumer, EventStore, SnapshotStore, StoredEvent};
+use mini_cqrs_es::{
+    Aggregate, AggregateSnapshot, CqrsError, EventConsumer, EventStore, SnapshotStore, StoredEvent,
+};
 use parabellum_app::villages::{VillageAggregate, VillageEvent};
 use sqlx::PgPool;
 use tracing::{info, warn};
@@ -276,11 +278,9 @@ impl ReplayService {
                 .await?;
 
             let mut aggregate = VillageAggregate::default();
-            aggregate.set_aggregate_id(
-                aggregate_id
-                    .parse::<u32>()
-                    .map_err(|_| CqrsError::EventStore(format!("invalid aggregate id: {aggregate_id}")))?,
-            );
+            aggregate.set_aggregate_id(aggregate_id.parse::<u32>().map_err(|_| {
+                CqrsError::EventStore(format!("invalid aggregate id: {aggregate_id}"))
+            })?);
             aggregate.apply_events(&events).await?;
             aggregate.set_version(version);
 

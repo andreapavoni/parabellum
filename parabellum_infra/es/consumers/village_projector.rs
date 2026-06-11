@@ -4,7 +4,7 @@
 //! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::villages::models::{ScheduledAction, VillageModel};
-use parabellum_app::villages::{VillageArmyContext, VillageEvent, hydrate_village};
+use parabellum_app::villages::{VillageEvent, hydrate_village};
 use parabellum_game::models::village::Village;
 use parabellum_types::common::ResourceGroup;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -64,28 +64,11 @@ impl VillageProjector {
         model: VillageModel,
     ) -> Result<Village, CqrsError> {
         let village_id = model.village_id;
-        let armies = VillageArmyContext {
-            home: self
-                .armies
-                .get_home_army_in_tx(tx, village_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-            stationed: self
-                .armies
-                .list_stationed_armies_in_tx(tx, village_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-            deployed: self
-                .armies
-                .list_deployed_armies_in_tx(tx, village_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-            moving: self
-                .armies
-                .list_moving_armies_by_owner_in_tx(tx, village_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?,
-        };
+        let armies = self
+            .armies
+            .army_context_for_village_in_tx(tx, village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         Ok(hydrate_village(model, armies))
     }
 

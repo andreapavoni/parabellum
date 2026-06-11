@@ -471,23 +471,14 @@ impl VillageEsService {
         // - rm_armies is canonical for army state queries
         // - rm_village troop fields are not used as query authority
         let repo = PostgresArmyRepository::new(self.pool.clone());
-        let home_army = repo
-            .get_home_army(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?;
-
-        let reinforcements = repo
-            .list_stationed_armies(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?;
-        let deployed_armies = repo
-            .list_deployed_armies(village_id)
+        let armies = repo
+            .army_context_for_village(village_id)
             .await
             .map_err(CqrsError::domain_source)?;
         Ok(VillageArmyStateView {
-            home_army,
-            reinforcements,
-            deployed_armies,
+            home_army: armies.home,
+            reinforcements: armies.stationed,
+            deployed_armies: armies.deployed,
         })
     }
 

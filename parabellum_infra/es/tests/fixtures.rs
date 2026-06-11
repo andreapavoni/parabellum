@@ -19,7 +19,7 @@ use crate::es::VillageEsService;
 use crate::es::repositories::PostgresArmyRepository;
 use crate::establish_test_connection_pool;
 use parabellum_app::villages::models::ScheduledActionStatus;
-use parabellum_app::villages::repositories::ArmyRepository;
+use parabellum_app::villages::repositories::{ArmyListFilter, ArmyRepository, ArmyState};
 use parabellum_app::villages::{ResearchAcademy, SetVillageResources, TrainUnits};
 use parabellum_types::army::UnitName;
 
@@ -333,9 +333,16 @@ pub async fn train_and_complete(
 
 pub async fn home_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
     PostgresArmyRepository::new(pool.clone())
-        .get_home_army(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .home_village(village_id)
+                .current_village(village_id)
+                .state(ArmyState::Home)
+                .limit(1),
+        )
         .await
         .unwrap()
+        .pop()
         .map(|army| army.units().get(unit_idx))
         .unwrap_or(0)
 }
@@ -345,9 +352,16 @@ pub async fn home_army(
     village_id: u32,
 ) -> Option<parabellum_game::models::army::Army> {
     PostgresArmyRepository::new(pool.clone())
-        .get_home_army(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .home_village(village_id)
+                .current_village(village_id)
+                .state(ArmyState::Home)
+                .limit(1),
+        )
         .await
         .unwrap()
+        .pop()
 }
 
 pub async fn stationed_armies(
@@ -355,7 +369,11 @@ pub async fn stationed_armies(
     village_id: u32,
 ) -> Vec<parabellum_game::models::army::Army> {
     PostgresArmyRepository::new(pool.clone())
-        .list_stationed_armies(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .current_village(village_id)
+                .state(ArmyState::Stationed),
+        )
         .await
         .unwrap()
 }
@@ -365,14 +383,23 @@ pub async fn deployed_armies(
     village_id: u32,
 ) -> Vec<parabellum_game::models::army::Army> {
     PostgresArmyRepository::new(pool.clone())
-        .list_deployed_armies(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .home_village(village_id)
+                .state(ArmyState::Stationed)
+                .deployed(true),
+        )
         .await
         .unwrap()
 }
 
 pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
     PostgresArmyRepository::new(pool.clone())
-        .list_stationed_armies(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .current_village(village_id)
+                .state(ArmyState::Stationed),
+        )
         .await
         .unwrap()
         .iter()
@@ -382,7 +409,12 @@ pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usi
 
 pub async fn deployed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
     PostgresArmyRepository::new(pool.clone())
-        .list_deployed_armies(village_id)
+        .list_armies(
+            ArmyListFilter::new()
+                .home_village(village_id)
+                .state(ArmyState::Stationed)
+                .deployed(true),
+        )
         .await
         .unwrap()
         .iter()

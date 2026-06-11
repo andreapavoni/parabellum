@@ -7,6 +7,7 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
+use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use parabellum_types::army::TroopSet;
 use sqlx::{Postgres, Transaction};
@@ -97,11 +98,19 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let current_home_army = self
+        let mut current_home_armies = self
             .armies
-            .get_home_army_in_tx(tx, village_id)
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .home_village(village_id)
+                    .current_village(village_id)
+                    .state(ArmyState::Home)
+                    .limit(1),
+            )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let current_home_army = current_home_armies.pop();
         let previous_home_army_id = current_home_army.as_ref().map(|a| a.id);
 
         let next_army = if let Some(mut home_army) = current_home_army {

@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use parabellum_app::ports::queries::{MerchantMovement, MerchantMovementKind};
 use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferStatus};
-use parabellum_app::villages::repositories::MarketplaceRepository;
+use parabellum_app::villages::repositories::{MarketplaceOfferListFilter, MarketplaceRepository};
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -21,44 +21,24 @@ impl PostgresMarketplaceRepository {
         &self,
         village_id: u32,
     ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
-        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
-            r#"
-            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
-                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
-                   created_at, accepted_at, canceled_at
-            FROM rm_marketplace_offers
-            WHERE status = 'open'
-              AND owner_village_id = $1
-            ORDER BY created_at DESC
-            "#,
+        self.list_offers_by_filter(
+            MarketplaceOfferListFilter::new()
+                .owner_village(village_id)
+                .open(),
         )
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     pub async fn list_open_excluding_owner_village_id(
         &self,
         village_id: u32,
     ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
-        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
-            r#"
-            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
-                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
-                   created_at, accepted_at, canceled_at
-            FROM rm_marketplace_offers
-            WHERE status = 'open'
-              AND owner_village_id <> $1
-            ORDER BY created_at DESC
-            "#,
+        self.list_offers_by_filter(
+            MarketplaceOfferListFilter::new()
+                .excluding_owner_village(village_id)
+                .open(),
         )
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     pub async fn upsert_in_tx(
@@ -137,6 +117,62 @@ impl PostgresMarketplaceRepository {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
+    }
+
+    fn offer_query(filter: MarketplaceOfferListFilter) -> QueryBuilder<'static, Postgres> {
+        let mut query = QueryBuilder::new(marketplace_offer_select_sql());
+        let mut has_where = false;
+
+        if let Some(owner_village_id) = filter.owner_village_id {
+            push_filter(&mut query, &mut has_where);
+            query.push("owner_village_id = ");
+            query.push_bind(owner_village_id as i32);
+        }
+
+        if let Some(exclude_owner_village_id) = filter.exclude_owner_village_id {
+            push_filter(&mut query, &mut has_where);
+            query.push("owner_village_id <> ");
+            query.push_bind(exclude_owner_village_id as i32);
+        }
+
+        if let Some(status) = filter.status {
+            push_filter(&mut query, &mut has_where);
+            query.push("status = ");
+            query.push_bind(DbMarketplaceOfferStatus::from(status));
+        }
+
+        query.push(" ORDER BY created_at DESC");
+        query
+    }
+
+    async fn list_offers_by_filter(
+        &self,
+        filter: MarketplaceOfferListFilter,
+    ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
+        let rows: Vec<DbMarketplaceOfferRow> = Self::offer_query(filter)
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+}
+
+fn marketplace_offer_select_sql() -> &'static str {
+    r#"
+    SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
+           merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
+           created_at, accepted_at, canceled_at
+    FROM rm_marketplace_offers
+    "#
+}
+
+fn push_filter(query: &mut QueryBuilder<'static, Postgres>, has_where: &mut bool) {
+    if *has_where {
+        query.push(" AND ");
+    } else {
+        query.push(" WHERE ");
+        *has_where = true;
     }
 }
 
@@ -266,42 +302,11 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
         Ok(())
     }
 
-    async fn list_by_owner_village_id(
+    async fn list_offers(
         &self,
-        village_id: u32,
+        filter: MarketplaceOfferListFilter,
     ) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
-        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
-            r#"
-            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
-                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
-                   created_at, accepted_at, canceled_at
-            FROM rm_marketplace_offers
-            WHERE owner_village_id = $1
-            ORDER BY created_at DESC
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(rows.into_iter().map(Into::into).collect())
-    }
-
-    async fn list_open(&self) -> Result<Vec<MarketplaceOfferModel>, ApplicationError> {
-        let rows: Vec<DbMarketplaceOfferRow> = sqlx::query_as(
-            r#"
-            SELECT offer_id, owner_player_id, owner_village_id, offer_resources, seek_resources,
-                   merchants_reserved, status, accepted_by_player_id, accepted_by_village_id,
-                   created_at, accepted_at, canceled_at
-            FROM rm_marketplace_offers
-            WHERE status = 'open'
-            ORDER BY created_at DESC
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(rows.into_iter().map(Into::into).collect())
+        self.list_offers_by_filter(filter).await
     }
 
     async fn claim_open_for_accept(

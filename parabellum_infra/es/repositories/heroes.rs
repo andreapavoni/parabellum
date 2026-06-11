@@ -1,7 +1,7 @@
 use parabellum_app::villages::repositories::HeroRepository;
-use parabellum_game::models::hero::{Hero, HeroResourceFocus};
+use parabellum_game::models::hero::Hero;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -78,6 +78,54 @@ impl PostgresHeroRepository {
     }
 }
 
+#[derive(Debug, Clone, FromRow)]
+struct DbHeroRow {
+    hero_id: Uuid,
+    player_id: Uuid,
+    home_village_id: i32,
+    tribe: crate::persistence::models::Tribe,
+    level: i16,
+    health: i16,
+    experience: i32,
+    resource_focus: Json<parabellum_game::models::hero::HeroResourceFocus>,
+    strength_points: i16,
+    off_bonus_points: i16,
+    def_bonus_points: i16,
+    regeneration_points: i16,
+    resources_points: i16,
+    unassigned_points: i16,
+}
+
+impl From<DbHeroRow> for Hero {
+    fn from(row: DbHeroRow) -> Self {
+        Self {
+            id: row.hero_id,
+            player_id: row.player_id,
+            village_id: row.home_village_id as u32,
+            tribe: row.tribe.into(),
+            level: row.level as u16,
+            resource_focus: row.resource_focus.0,
+            health: row.health as u16,
+            experience: row.experience as u32,
+            strength_points: row.strength_points as u16,
+            off_bonus_points: row.off_bonus_points as u16,
+            def_bonus_points: row.def_bonus_points as u16,
+            regeneration_points: row.regeneration_points as u16,
+            resources_points: row.resources_points as u16,
+            unassigned_points: row.unassigned_points as u16,
+        }
+    }
+}
+
+fn hero_select_sql() -> &'static str {
+    r#"
+    SELECT hero_id, player_id, home_village_id, tribe,
+           level, health, experience, resource_focus, strength_points, off_bonus_points,
+           def_bonus_points, regeneration_points, resources_points, unassigned_points
+    FROM rm_heroes
+    "#
+}
+
 #[async_trait::async_trait]
 impl HeroRepository for PostgresHeroRepository {
     async fn upsert(
@@ -101,85 +149,24 @@ impl HeroRepository for PostgresHeroRepository {
     }
 
     async fn get_by_id(&self, hero_id: Uuid) -> Result<Hero, ApplicationError> {
-        let row = sqlx::query(
-            r#"
-            SELECT hero_id, player_id, home_village_id, tribe,
-                   level, health, experience, resource_focus, strength_points, off_bonus_points,
-                   def_bonus_points, regeneration_points, resources_points, unassigned_points
-            FROM rm_heroes
-            WHERE hero_id = $1
-            "#,
-        )
-        .bind(hero_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|_| ApplicationError::Db(DbError::HeroNotFound(hero_id)))?;
+        let row: DbHeroRow = sqlx::query_as(&format!("{} WHERE hero_id = $1", hero_select_sql()))
+            .bind(hero_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::HeroNotFound(hero_id)))?;
 
-        let resource_focus: HeroResourceFocus = serde_json::from_value(row.get("resource_focus"))
-            .map_err(|e| {
-            ApplicationError::Db(DbError::Database(sqlx::Error::Decode(Box::new(e))))
-        })?;
-        let tribe: crate::persistence::models::Tribe = row.get("tribe");
-
-        Ok(Hero {
-            id: row.get("hero_id"),
-            player_id: row.get("player_id"),
-            village_id: row.get::<i32, _>("home_village_id") as u32,
-            tribe: tribe.into(),
-            level: row.get::<i16, _>("level") as u16,
-            resource_focus,
-            health: row.get::<i16, _>("health") as u16,
-            experience: row.get::<i32, _>("experience") as u32,
-            strength_points: row.get::<i16, _>("strength_points") as u16,
-            off_bonus_points: row.get::<i16, _>("off_bonus_points") as u16,
-            def_bonus_points: row.get::<i16, _>("def_bonus_points") as u16,
-            regeneration_points: row.get::<i16, _>("regeneration_points") as u16,
-            resources_points: row.get::<i16, _>("resources_points") as u16,
-            unassigned_points: row.get::<i16, _>("unassigned_points") as u16,
-        })
+        Ok(row.into())
     }
 
     async fn get_by_player(&self, player_id: Uuid) -> Result<Option<Hero>, ApplicationError> {
-        let row = sqlx::query(
-            r#"
-            SELECT hero_id, player_id, home_village_id, tribe,
-                   level, health, experience, resource_focus, strength_points, off_bonus_points,
-                   def_bonus_points, regeneration_points, resources_points, unassigned_points
-            FROM rm_heroes
-            WHERE player_id = $1
-            "#,
-        )
-        .bind(player_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row: Option<DbHeroRow> =
+            sqlx::query_as(&format!("{} WHERE player_id = $1", hero_select_sql()))
+                .bind(player_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let Some(row) = row else {
-            return Ok(None);
-        };
-
-        let resource_focus: HeroResourceFocus = serde_json::from_value(row.get("resource_focus"))
-            .map_err(|e| {
-            ApplicationError::Db(DbError::Database(sqlx::Error::Decode(Box::new(e))))
-        })?;
-        let tribe: crate::persistence::models::Tribe = row.get("tribe");
-
-        Ok(Some(Hero {
-            id: row.get("hero_id"),
-            player_id: row.get("player_id"),
-            village_id: row.get::<i32, _>("home_village_id") as u32,
-            tribe: tribe.into(),
-            level: row.get::<i16, _>("level") as u16,
-            resource_focus,
-            health: row.get::<i16, _>("health") as u16,
-            experience: row.get::<i32, _>("experience") as u32,
-            strength_points: row.get::<i16, _>("strength_points") as u16,
-            off_bonus_points: row.get::<i16, _>("off_bonus_points") as u16,
-            def_bonus_points: row.get::<i16, _>("def_bonus_points") as u16,
-            regeneration_points: row.get::<i16, _>("regeneration_points") as u16,
-            resources_points: row.get::<i16, _>("resources_points") as u16,
-            unassigned_points: row.get::<i16, _>("unassigned_points") as u16,
-        }))
+        Ok(row.map(Into::into))
     }
 
     async fn has_alive_for_player(&self, player_id: Uuid) -> Result<bool, ApplicationError> {

@@ -2,6 +2,7 @@ use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::ports::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
+use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use sqlx::{PgPool, Postgres, Transaction};
 use tracing::warn;
@@ -89,14 +90,27 @@ impl ReportProjector {
         let Some(target) = self.try_village_in_tx(tx, target_village_id).await? else {
             return Ok(None);
         };
-        let target_home_army = self
+        let mut target_home_armies = self
             .armies
-            .get_home_army_in_tx(tx, target_village_id)
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .home_village(target_village_id)
+                    .current_village(target_village_id)
+                    .state(ArmyState::Home)
+                    .limit(1),
+            )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let target_home_army = target_home_armies.pop();
         let target_reinforcements = self
             .armies
-            .list_stationed_armies_in_tx(tx, target_village_id)
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .current_village(target_village_id)
+                    .state(ArmyState::Stationed),
+            )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let source_player = self.player_username(source.player_id).await?;

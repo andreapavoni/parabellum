@@ -3,6 +3,7 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
+use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use sqlx::{Postgres, Transaction};
 
@@ -103,11 +104,20 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if *hero_alone_transfer {
-            let mut target_army = self
+            let mut target_home_armies = self
                 .armies
-                .get_home_army_in_tx(tx, *target_village_id)
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .home_village(*target_village_id)
+                        .current_village(*target_village_id)
+                        .state(ArmyState::Home)
+                        .limit(1),
+                )
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            let mut target_army = target_home_armies
+                .pop()
                 .unwrap_or_else(|| Army::new_village_army(&Self::village_from_model(&target)));
             target_army.set_hero(army.hero());
             let next_target_army = if target_army.immensity() == 0 {
@@ -271,11 +281,18 @@ impl VillageProjector {
     ) -> Result<(), CqrsError> {
         let Some(existing) = self
             .armies
-            .list_stationed_armies_in_tx(tx, stationed_village_id)
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .army_id(army_id)
+                    .current_village(stationed_village_id)
+                    .state(ArmyState::Stationed)
+                    .limit(1),
+            )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?
             .into_iter()
-            .find(|army| army.id == army_id)
+            .next()
         else {
             return Ok(());
         };

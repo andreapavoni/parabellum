@@ -352,6 +352,35 @@ Projector rules:
 - Existing map rows are claimable for foundation only when they are unoccupied
   valley fields owned by nobody or by the founding player.
 
+## Repository Design Rules
+
+- Repositories own SQL, read-model persistence details, and database-specific
+  row shapes. Application, domain, query services, and workflows should ask
+  repositories for set/count/existence/snapshot answers instead of composing
+  SQL directly.
+- When several repository methods differ only by predicates over the same
+  result shape, expose one typed, builder-style filter object such as
+  `ArmyListFilter::new().state(...).home_village(...)` instead of growing
+  `list_*_by_*` variants. Named helpers are acceptable as thin compatibility
+  or readability wrappers, but the SQL should live behind one list/query
+  implementation.
+- Multi-value read-model answers should use named snapshot structs when the
+  values belong together. This keeps call sites from assembling the same
+  repository reads repeatedly and documents the consistency boundary.
+- For row mapping, prefer database DTOs such as `DbVillageModelRow` with
+  `sqlx::FromRow`, then convert with `From`/`TryFrom` into app or domain
+  structs. Do not map SQL rows directly into domain structs unless the domain
+  type is intentionally persistence-shaped.
+- Manual `Row::get`/`Row::try_get` mapping is reserved for custom or dynamic
+  query shapes, especially joins that assemble nested objects. Once a manual
+  mapping is repeated, extract a `Db*Row` DTO or a single mapper function.
+- Repeated column lists should be centralized with `*_select_sql()` helpers or
+  typed query helpers. This keeps schema changes local and reduces accidental
+  drift between read paths.
+- Use SQL/read-model predicates for broad filtering. Rust filtering is reserved
+  for domain behavior after a narrow read or for cases where the database
+  cannot reasonably express the domain transformation.
+
 ## Key Design Rules
 
 - `parabellum_app` and domain crates do not depend on SQLx.

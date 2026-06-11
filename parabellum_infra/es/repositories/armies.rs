@@ -1,4 +1,7 @@
-use parabellum_app::villages::repositories::ArmyRepository;
+use parabellum_app::villages::{
+    VillageArmyContext,
+    repositories::{ArmyListFilter, ArmyRepository, ArmyState},
+};
 use parabellum_game::models::{
     army::Army,
     hero::{Hero, HeroResourceFocus},
@@ -8,7 +11,7 @@ use parabellum_types::{
     army::TroopSet,
     errors::{ApplicationError, DbError},
 };
-use sqlx::{PgPool, Postgres, Row, Transaction, postgres::PgRow};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, postgres::PgRow};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -178,11 +181,13 @@ impl PostgresArmyRepository {
         &self,
         army_id: Uuid,
     ) -> Result<Option<(u32, Army)>, ApplicationError> {
-        let row = sqlx::query(&format!(
-            "{} WHERE a.army_id = $1 AND a.state = 'stationed'",
-            army_select_sql()
-        ))
-        .bind(army_id)
+        let row = Self::army_query(
+            ArmyListFilter::new()
+                .army_id(army_id)
+                .state(ArmyState::Stationed)
+                .limit(1),
+        )?
+        .build()
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -194,107 +199,153 @@ impl PostgresArmyRepository {
         .transpose()
     }
 
-    pub async fn get_home_army_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-    ) -> Result<Option<Army>, ApplicationError> {
-        let row = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.current_village_id = $1 AND a.state = 'home'
-            ORDER BY a.updated_at DESC LIMIT 1",
-            army_select_sql()
-        ))
-        .bind(village_id as i32)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        row.map(Self::army_from_row).transpose()
+    fn army_query(
+        filter: ArmyListFilter,
+    ) -> Result<QueryBuilder<'static, Postgres>, ApplicationError> {
+        let mut query = QueryBuilder::<Postgres>::new(army_select_sql());
+        let mut has_where = false;
+
+        if let Some(army_id) = filter.army_id {
+            Self::push_filter(&mut query, &mut has_where);
+            query.push("a.army_id = ");
+            query.push_bind(army_id);
+        }
+
+        if let Some(home_village_id) = filter.home_village_id {
+            Self::push_filter(&mut query, &mut has_where);
+            query.push("a.village_id = ");
+            query.push_bind(home_village_id as i32);
+        }
+
+        if let Some(current_village_id) = filter.current_village_id {
+            Self::push_filter(&mut query, &mut has_where);
+            query.push("a.current_village_id = ");
+            query.push_bind(current_village_id as i32);
+        }
+
+        if let Some(state) = filter.state {
+            Self::push_filter(&mut query, &mut has_where);
+            query.push("a.state = ");
+            query.push_bind(Self::state_name(state));
+        }
+
+        if let Some(deployed) = filter.deployed {
+            let Some(home_village_id) = filter.home_village_id else {
+                return Err(ApplicationError::Db(DbError::Database(
+                    sqlx::Error::Protocol("army deployed filter requires home_village_id".into()),
+                )));
+            };
+            Self::push_filter(&mut query, &mut has_where);
+            if deployed {
+                query.push("a.current_village_id <> ");
+            } else {
+                query.push("a.current_village_id = ");
+            }
+            query.push_bind(home_village_id as i32);
+        }
+
+        query.push(" ORDER BY a.updated_at DESC");
+
+        if let Some(limit) = filter.limit {
+            query.push(" LIMIT ");
+            query.push_bind(limit);
+        }
+
+        Ok(query)
     }
 
-    pub async fn list_stationed_armies_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-    ) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.current_village_id = $1 AND a.state = 'stationed'
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(village_id as i32)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+    fn push_filter(query: &mut QueryBuilder<'static, Postgres>, has_where: &mut bool) {
+        if *has_where {
+            query.push(" AND ");
+        } else {
+            query.push(" WHERE ");
+            *has_where = true;
+        }
+    }
 
+    fn state_name(state: ArmyState) -> &'static str {
+        match state {
+            ArmyState::Home => "home",
+            ArmyState::Stationed => "stationed",
+            ArmyState::Moving => "moving",
+        }
+    }
+
+    fn list_armies_from_rows(rows: Vec<PgRow>) -> Result<Vec<Army>, ApplicationError> {
         rows.into_iter().map(Self::army_from_row).collect()
     }
 
-    pub async fn list_deployed_armies_in_tx(
+    pub async fn list_armies_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        home_village_id: u32,
+        filter: ArmyListFilter,
     ) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.state = 'stationed' AND a.current_village_id <> $1
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(home_village_id as i32)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let rows = Self::army_query(filter)?
+            .build()
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        rows.into_iter().map(Self::army_from_row).collect()
-    }
-
-    pub async fn list_moving_armies_by_owner_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        home_village_id: u32,
-    ) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.state = 'moving'
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(home_village_id as i32)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        rows.into_iter().map(Self::army_from_row).collect()
-    }
-
-    pub async fn list_moving_armies_by_owner(
-        &self,
-        home_village_id: u32,
-    ) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.state = 'moving'
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(home_village_id as i32)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        rows.into_iter().map(Self::army_from_row).collect()
+        Self::list_armies_from_rows(rows)
     }
 
     async fn get_moving_by_army_id(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
-        let row = sqlx::query(&format!(
-            "{} WHERE a.army_id = $1 AND a.state = 'moving'",
-            army_select_sql()
-        ))
-        .bind(army_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        row.map(Self::army_from_row)
-            .transpose()?
+        let mut armies = self
+            .list_armies(
+                ArmyListFilter::new()
+                    .army_id(army_id)
+                    .state(ArmyState::Moving)
+                    .limit(1),
+            )
+            .await?;
+        armies
+            .pop()
             .ok_or(ApplicationError::Db(DbError::ArmyNotFound(army_id)))
+    }
+
+    pub async fn army_context_for_village_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+    ) -> Result<VillageArmyContext, ApplicationError> {
+        let mut home_armies = self
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .home_village(village_id)
+                    .current_village(village_id)
+                    .state(ArmyState::Home)
+                    .limit(1),
+            )
+            .await?;
+        Ok(VillageArmyContext {
+            home: home_armies.pop(),
+            stationed: self
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .current_village(village_id)
+                        .state(ArmyState::Stationed),
+                )
+                .await?,
+            deployed: self
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Stationed)
+                        .deployed(true),
+                )
+                .await?,
+            moving: self
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Moving),
+                )
+                .await?,
+        })
     }
 
     fn troop_set(values: Vec<i32>) -> TroopSet {
@@ -467,48 +518,14 @@ impl ArmyRepository for PostgresArmyRepository {
         self.delete_row(army_id).await
     }
 
-    async fn get_home_army(&self, village_id: u32) -> Result<Option<Army>, ApplicationError> {
-        let row = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.current_village_id = $1 AND a.state = 'home'
-            ORDER BY a.updated_at DESC LIMIT 1",
-            army_select_sql()
-        ))
-        .bind(village_id as i32)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        row.map(Self::army_from_row).transpose()
-    }
+    async fn list_armies(&self, filter: ArmyListFilter) -> Result<Vec<Army>, ApplicationError> {
+        let rows = Self::army_query(filter)?
+            .build()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-    async fn list_stationed_armies(&self, village_id: u32) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.current_village_id = $1 AND a.state = 'stationed'
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        rows.into_iter().map(Self::army_from_row).collect()
-    }
-
-    async fn list_deployed_armies(
-        &self,
-        home_village_id: u32,
-    ) -> Result<Vec<Army>, ApplicationError> {
-        let rows = sqlx::query(&format!(
-            "{} WHERE a.village_id = $1 AND a.state = 'stationed' AND a.current_village_id <> $1
-            ORDER BY a.updated_at DESC",
-            army_select_sql()
-        ))
-        .bind(home_village_id as i32)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        rows.into_iter().map(Self::army_from_row).collect()
+        Self::list_armies_from_rows(rows)
     }
 
     async fn get_moving_army(&self, army_id: Uuid) -> Result<Army, ApplicationError> {
@@ -520,6 +537,46 @@ impl ArmyRepository for PostgresArmyRepository {
         army_id: Uuid,
     ) -> Result<Option<(u32, Army)>, ApplicationError> {
         self.find_stationed_context(army_id).await
+    }
+
+    async fn army_context_for_village(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageArmyContext, ApplicationError> {
+        let mut home_armies = self
+            .list_armies(
+                ArmyListFilter::new()
+                    .home_village(village_id)
+                    .current_village(village_id)
+                    .state(ArmyState::Home)
+                    .limit(1),
+            )
+            .await?;
+        Ok(VillageArmyContext {
+            home: home_armies.pop(),
+            stationed: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .current_village(village_id)
+                        .state(ArmyState::Stationed),
+                )
+                .await?,
+            deployed: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Stationed)
+                        .deployed(true),
+                )
+                .await?,
+            moving: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Moving),
+                )
+                .await?,
+        })
     }
 
     async fn delete_by_home_village(&self, village_id: u32) -> Result<(), ApplicationError> {

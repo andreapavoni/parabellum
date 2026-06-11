@@ -11,7 +11,7 @@ use parabellum_app::villages::models::{AttackArrivalWorkflow, ScoutArrivalWorkfl
 use parabellum_app::villages::repositories::{ArmyRepository, VillageRepository};
 use parabellum_app::villages::{
     ApplyBattleOutcomeToVillage, ConquestAttempt, ResolveAttackBattle, ResolveScoutBattle,
-    VillageArmyContext, hydrate_village,
+    hydrate_village,
 };
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -63,24 +63,10 @@ async fn hydrate_village_with_current_armies(
 ) -> Result<Village, CqrsError> {
     let army_repo = PostgresArmyRepository::new(svc.pool().clone());
     let village_id = model.village_id;
-    let armies = VillageArmyContext {
-        home: army_repo
-            .get_home_army(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?,
-        stationed: army_repo
-            .list_stationed_armies(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?,
-        deployed: army_repo
-            .list_deployed_armies(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?,
-        moving: army_repo
-            .list_moving_armies_by_owner(village_id)
-            .await
-            .map_err(CqrsError::domain_source)?,
-    };
+    let armies = army_repo
+        .army_context_for_village(village_id)
+        .await
+        .map_err(CqrsError::domain_source)?;
     Ok(hydrate_village(model, armies))
 }
 

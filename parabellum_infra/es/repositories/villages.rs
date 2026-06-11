@@ -398,12 +398,7 @@ impl PostgresVillageRepository {
         village_id: u32,
     ) -> Result<VillageArmyContext, ApplicationError> {
         let armies = PostgresArmyRepository::new(self.pool.clone());
-        Ok(VillageArmyContext {
-            home: armies.get_home_army(village_id).await?,
-            stationed: armies.list_stationed_armies(village_id).await?,
-            deployed: armies.list_deployed_armies(village_id).await?,
-            moving: armies.list_moving_armies_by_owner(village_id).await?,
-        })
+        armies.army_context_for_village(village_id).await
     }
 
     async fn load_army_context_in_tx(
@@ -412,14 +407,7 @@ impl PostgresVillageRepository {
         village_id: u32,
     ) -> Result<VillageArmyContext, ApplicationError> {
         let armies = PostgresArmyRepository::new(self.pool.clone());
-        Ok(VillageArmyContext {
-            home: armies.get_home_army_in_tx(tx, village_id).await?,
-            stationed: armies.list_stationed_armies_in_tx(tx, village_id).await?,
-            deployed: armies.list_deployed_armies_in_tx(tx, village_id).await?,
-            moving: armies
-                .list_moving_armies_by_owner_in_tx(tx, village_id)
-                .await?,
-        })
+        armies.army_context_for_village_in_tx(tx, village_id).await
     }
 
     async fn refresh_for_read(
@@ -428,6 +416,31 @@ impl PostgresVillageRepository {
     ) -> Result<VillageModel, ApplicationError> {
         let army = self.load_army_context(model.village_id).await?;
         Ok(Self::refresh_materialized_village_state(model, army))
+    }
+
+    async fn fetch_village_model(&self, village_id: u32) -> Result<VillageModel, ApplicationError> {
+        let row: Option<DbVillageModelRow> =
+            sqlx::query_as(&format!("{} WHERE village_id = $1", village_select_sql()))
+                .bind(village_id as i32)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row = row.ok_or(ApplicationError::Db(DbError::VillageNotFound(village_id)))?;
+        row.try_into()
+    }
+
+    async fn fetch_village_model_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+    ) -> Result<VillageModel, ApplicationError> {
+        let row: DbVillageModelRow =
+            sqlx::query_as(&format!("{} WHERE village_id = $1", village_select_sql()))
+                .bind(village_id as i32)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        row.try_into()
     }
 
     pub async fn update_building_in_tx(
@@ -439,21 +452,7 @@ impl PostgresVillageRepository {
         level: u8,
         speed: i8,
     ) -> Result<(), ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
-            r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        let model: VillageModel = row.try_into()?;
+        let model = self.fetch_village_model_in_tx(tx, village_id).await?;
 
         let mut next_buildings = model.buildings.clone();
         if level == 0 && !(1..=18).contains(&slot_id) {
@@ -555,20 +554,7 @@ impl PostgresVillageRepository {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         village_id: u32,
     ) -> Result<(), ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
-            r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        let model: VillageModel = row.try_into()?;
+        let model = self.fetch_village_model_in_tx(tx, village_id).await?;
         let refreshed = self.refresh_for_read_in_tx(tx, model).await?;
 
         sqlx::query(
@@ -600,23 +586,18 @@ impl PostgresVillageRepository {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         village_id: u32,
     ) -> Result<VillageModel, ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
-            r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        let model: VillageModel = row.try_into()?;
+        let model = self.fetch_village_model_in_tx(tx, village_id).await?;
         self.refresh_for_read_in_tx(tx, model).await
     }
+}
+
+fn village_select_sql() -> &'static str {
+    r#"
+    SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
+           population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
+           total_merchants, busy_merchants, loyalty_updated_at, updated_at
+    FROM rm_village
+    "#
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -717,16 +698,14 @@ impl VillageRepository for PostgresVillageRepository {
         &self,
         player_id: Uuid,
     ) -> Result<Vec<VillageModel>, ApplicationError> {
-        let rows: Vec<DbVillageModelRow> = sqlx::query_as(
+        let rows: Vec<DbVillageModelRow> = sqlx::query_as(&format!(
             r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
+            {}
             WHERE player_id = $1
             ORDER BY village_id ASC
             "#,
-        )
+            village_select_sql()
+        ))
         .bind(player_id)
         .fetch_all(&self.pool)
         .await
@@ -749,16 +728,14 @@ impl VillageRepository for PostgresVillageRepository {
         }
 
         let ids: Vec<i32> = village_ids.iter().map(|id| *id as i32).collect();
-        let rows: Vec<DbVillageModelRow> = sqlx::query_as(
+        let rows: Vec<DbVillageModelRow> = sqlx::query_as(&format!(
             r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
+            {}
             WHERE village_id = ANY($1)
             ORDER BY village_id ASC
             "#,
-        )
+            village_select_sql()
+        ))
         .bind(ids)
         .fetch_all(&self.pool)
         .await
@@ -906,21 +883,7 @@ impl VillageRepository for PostgresVillageRepository {
         level: u8,
         speed: i8,
     ) -> Result<(), ApplicationError> {
-        let row: DbVillageModelRow = sqlx::query_as(
-            r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        let model: VillageModel = row.try_into()?;
+        let model = self.fetch_village_model(village_id).await?;
 
         let mut next_buildings = model.buildings.clone();
         if let Some(entry) = next_buildings.iter_mut().find(|b| b.slot_id == slot_id) {
@@ -1058,22 +1021,7 @@ impl VillageRepository for PostgresVillageRepository {
     }
 
     async fn get_by_village_id(&self, village_id: u32) -> Result<VillageModel, ApplicationError> {
-        let row: Option<DbVillageModelRow> = sqlx::query_as(
-            r#"
-            SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
-                   population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at, updated_at
-            FROM rm_village
-            WHERE village_id = $1
-            "#,
-        )
-        .bind(village_id as i32)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        let row = row.ok_or(DbError::VillageNotFound(village_id))?;
-
-        let model: VillageModel = row.try_into()?;
+        let model = self.fetch_village_model(village_id).await?;
         self.refresh_for_read(model).await
     }
 

@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
+use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::get_building_data;
 use parabellum_game::models::village::Village;
@@ -142,17 +143,29 @@ impl VillageProjector {
         target_village_id: u32,
     ) -> Result<HashSet<Uuid>, CqrsError> {
         let mut ids = HashSet::new();
-        if let Some(home) = self
+        let mut home_armies = self
             .armies
-            .get_home_army_in_tx(tx, target_village_id)
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .home_village(target_village_id)
+                    .current_village(target_village_id)
+                    .state(ArmyState::Home)
+                    .limit(1),
+            )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?
-        {
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        if let Some(home) = home_armies.pop() {
             ids.insert(home.id);
         }
         ids.extend(
             self.armies
-                .list_stationed_armies_in_tx(tx, target_village_id)
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .current_village(target_village_id)
+                        .state(ArmyState::Stationed),
+                )
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?
                 .into_iter()

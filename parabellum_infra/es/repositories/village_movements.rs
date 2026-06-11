@@ -1,7 +1,7 @@
 use parabellum_app::villages::models::{MovementDirection, VillageMovement};
 use parabellum_app::villages::repositories::VillageMovementRepository;
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{PgPool, Postgres, Row, Transaction, types::Json};
+use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -91,7 +91,7 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
         &self,
         village_id: u32,
     ) -> Result<Vec<VillageMovement>, ApplicationError> {
-        let rows = sqlx::query(
+        let rows: Vec<DbVillageMovementPayloadRow> = sqlx::query_as(
             r#"
             SELECT payload
             FROM rm_village_movements
@@ -104,14 +104,7 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        rows.into_iter()
-            .map(|row| {
-                let payload: serde_json::Value = row
-                    .try_get("payload")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-                serde_json::from_value(payload).map_err(ApplicationError::from)
-            })
-            .collect()
+        rows.into_iter().map(|row| Ok(row.payload.0)).collect()
     }
 
     async fn delete_by_movement_id(&self, movement_id: Uuid) -> Result<(), ApplicationError> {
@@ -127,6 +120,11 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, FromRow)]
+struct DbVillageMovementPayloadRow {
+    payload: Json<VillageMovement>,
 }
 
 #[derive(Debug, Clone, Copy, sqlx::Type)]

@@ -355,34 +355,6 @@ static ROMAN_UNITS: TribeUnits = [
     },
 ];
 
-#[cfg(test)]
-mod tests {
-    use crate::{
-        army::{TroopSet, UnitRole},
-        tribe::Tribe,
-    };
-
-    #[test]
-    fn troop_set_contains_only_role_checks_non_empty_slots() {
-        assert!(
-            Tribe::Roman
-                .troop_set_contains_only_role(
-                    &TroopSet::new([0, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
-                    UnitRole::Scout,
-                )
-                .unwrap()
-        );
-        assert!(
-            !Tribe::Roman
-                .troop_set_contains_only_role(
-                    &TroopSet::new([1, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
-                    UnitRole::Scout,
-                )
-                .unwrap()
-        );
-    }
-}
-
 static TEUTON_UNITS: TribeUnits = [
     Unit {
         name: UnitName::Maceman,
@@ -1285,3 +1257,31 @@ static NATAR_UNITS: TribeUnits = [
         buildings: &[],
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        army::{TroopSet, UnitRole},
+        tribe::Tribe,
+    };
+
+    #[test]
+    fn troop_set_contains_only_role_checks_non_empty_slots() {
+        assert!(
+            Tribe::Roman
+                .troop_set_contains_only_role(
+                    &TroopSet::new([0, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
+                    UnitRole::Scout,
+                )
+                .unwrap()
+        );
+        assert!(
+            !Tribe::Roman
+                .troop_set_contains_only_role(
+                    &TroopSet::new([1, 0, 0, 4, 0, 0, 0, 0, 0, 0]),
+                    UnitRole::Scout,
+                )
+                .unwrap()
+        );
+    }
+}

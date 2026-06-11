@@ -2,7 +2,7 @@ use parabellum_app::villages::models::ReportModel;
 use parabellum_app::villages::repositories::{ProjectedReport, ReportRepository};
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::postgres::PgQueryResult;
-use sqlx::{PgPool, Row, types::Json};
+use sqlx::{FromRow, PgPool, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -113,6 +113,54 @@ impl PostgresReportRepository {
     }
 }
 
+#[derive(Debug, Clone, FromRow)]
+struct DbReportRow {
+    id: Uuid,
+    report_type: String,
+    payload: Json<serde_json::Value>,
+    actor_player_id: Uuid,
+    actor_village_id: Option<i32>,
+    target_player_id: Option<Uuid>,
+    target_village_id: Option<i32>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    read_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl TryFrom<DbReportRow> for ReportModel {
+    type Error = ApplicationError;
+
+    fn try_from(row: DbReportRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: row.id,
+            report_type: row.report_type,
+            payload: serde_json::from_value(row.payload.0)?,
+            actor_player_id: row.actor_player_id,
+            actor_village_id: row.actor_village_id.map(|v| v as u32),
+            target_player_id: row.target_player_id,
+            target_village_id: row.target_village_id.map(|v| v as u32),
+            created_at: row.created_at,
+            read_at: row.read_at,
+        })
+    }
+}
+
+fn report_select_sql() -> &'static str {
+    r#"
+    SELECT
+      r.id,
+      r.report_type,
+      r.payload,
+      r.actor_player_id,
+      r.actor_village_id,
+      r.target_player_id,
+      r.target_village_id,
+      r.created_at,
+      rr.read_at
+    FROM rm_reports r
+    JOIN rm_report_reads rr ON rr.report_id = r.id
+    "#
+}
+
 #[async_trait::async_trait]
 impl ReportRepository for PostgresReportRepository {
     async fn add_projected(
@@ -140,26 +188,16 @@ impl ReportRepository for PostgresReportRepository {
         offset: i64,
         limit: i64,
     ) -> Result<Vec<ReportModel>, ApplicationError> {
-        let rows = sqlx::query(
+        let rows: Vec<DbReportRow> = sqlx::query_as(&format!(
             r#"
-            SELECT
-              r.id,
-              r.report_type,
-              r.payload,
-              r.actor_player_id,
-              r.actor_village_id,
-              r.target_player_id,
-              r.target_village_id,
-              r.created_at,
-              rr.read_at
-            FROM rm_reports r
-            JOIN rm_report_reads rr ON rr.report_id = r.id
+            {}
             WHERE rr.player_id = $1
             ORDER BY r.created_at DESC
             OFFSET $2
             LIMIT $3
             "#,
-        )
+            report_select_sql()
+        ))
         .bind(player_id)
         .bind(offset)
         .bind(limit)
@@ -167,42 +205,7 @@ impl ReportRepository for PostgresReportRepository {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let mut records = Vec::with_capacity(rows.len());
-        for row in rows {
-            let payload: serde_json::Value = row
-                .try_get("payload")
-                .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-            records.push(ReportModel {
-                id: row
-                    .try_get("id")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-                report_type: row
-                    .try_get("report_type")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-                payload: serde_json::from_value(payload)?,
-                actor_player_id: row
-                    .try_get("actor_player_id")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-                actor_village_id: row
-                    .try_get::<Option<i32>, _>("actor_village_id")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
-                    .map(|v| v as u32),
-                target_player_id: row
-                    .try_get("target_player_id")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-                target_village_id: row
-                    .try_get::<Option<i32>, _>("target_village_id")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
-                    .map(|v| v as u32),
-                created_at: row
-                    .try_get("created_at")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-                read_at: row
-                    .try_get("read_at")
-                    .map_err(|e| ApplicationError::Db(DbError::Database(e)))?,
-            });
-        }
-        Ok(records)
+        rows.into_iter().map(TryInto::try_into).collect()
     }
 
     async fn get_for_player(
@@ -210,48 +213,24 @@ impl ReportRepository for PostgresReportRepository {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<Option<ReportModel>, ApplicationError> {
-        let row = sqlx::query!(
+        let row: Option<DbReportRow> = sqlx::query_as(&format!(
             r#"
-            SELECT
-              r.id,
-              r.report_type,
-              r.payload as "payload!: Json<serde_json::Value>",
-              r.actor_player_id,
-              r.actor_village_id,
-              r.target_player_id,
-              r.target_village_id,
-              r.created_at,
-              rr.read_at
-            FROM rm_reports r
-            JOIN rm_report_reads rr ON rr.report_id = r.id
+            {}
             WHERE r.id = $1 AND rr.player_id = $2
             "#,
-            report_id,
-            player_id
-        )
+            report_select_sql()
+        ))
+        .bind(report_id)
+        .bind(player_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        Ok(row
-            .map(|row| -> Result<ReportModel, ApplicationError> {
-                Ok(ReportModel {
-                    id: row.id,
-                    report_type: row.report_type,
-                    payload: serde_json::from_value(row.payload.0)?,
-                    actor_player_id: row.actor_player_id,
-                    actor_village_id: row.actor_village_id.map(|v| v as u32),
-                    target_player_id: row.target_player_id,
-                    target_village_id: row.target_village_id.map(|v| v as u32),
-                    created_at: row.created_at,
-                    read_at: row.read_at,
-                })
-            })
-            .transpose()?)
+        row.map(TryInto::try_into).transpose()
     }
 
     async fn count_unread_for_player(&self, player_id: Uuid) -> Result<i64, ApplicationError> {
-        let row = sqlx::query(
+        sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
             FROM rm_report_reads
@@ -261,10 +240,7 @@ impl ReportRepository for PostgresReportRepository {
         .bind(player_id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        row.try_get("count")
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))
     }
 
     async fn mark_as_read(&self, report_id: Uuid, player_id: Uuid) -> Result<(), ApplicationError> {

@@ -27,6 +27,7 @@ import {
 } from "@/query/hooks";
 import { queryErrorMessage } from "@/query/options";
 import { queryKeys } from "@/query/keys";
+import { useGlobalTimer } from "@/live/useGlobalTimer";
 
 export function App() {
   const {
@@ -41,8 +42,20 @@ export function App() {
   const queryClient = useQueryClient();
   const [route, setRoute] = useState(() => parseRoute(window.location));
   const queueRefreshInFlightRef = useRef(false);
+
+  const refreshFromQueueElapsed = useCallback(async () => {
+    if (queueRefreshInFlightRef.current) return;
+    queueRefreshInFlightRef.current = true;
+    try {
+      await invalidateVisibleGameState();
+    } finally {
+      queueRefreshInFlightRef.current = false;
+    }
+  }, [invalidateVisibleGameState]);
+
   const gameContextQuery = useGameContextQuery(session.authenticated && !booting);
   const meContext = gameContextQuery.data ?? null;
+  useGlobalTimer(meContext, refreshFromQueueElapsed);
 
   useEffect(() => {
     const onPopState = () => setRoute(parseRoute(window.location));
@@ -102,18 +115,6 @@ export function App() {
 
   const page = useMemo(() => {
     const activeVillageId = session.currentVillageId ?? meContext?.currentVillage.id;
-
-    const refreshFromQueueElapsed = async () => {
-      if (queueRefreshInFlightRef.current) {
-        return;
-      }
-      queueRefreshInFlightRef.current = true;
-      try {
-        await invalidateVisibleGameState();
-      } finally {
-        queueRefreshInFlightRef.current = false;
-      }
-    };
 
     const runMutation = async () => {
       await invalidateVisibleGameState();
@@ -246,6 +247,7 @@ export function App() {
     session.user?.playerId,
     authError,
     switchVillage,
+    refreshFromQueueElapsed,
   ]);
 
   if (booting) {

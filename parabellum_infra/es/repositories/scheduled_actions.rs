@@ -5,9 +5,11 @@ use parabellum_app::villages::models::{
     ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
 use parabellum_app::villages::queries::ScheduledActionStatusCounts;
-use parabellum_app::villages::repositories::ScheduledActionRepository;
+use parabellum_app::villages::repositories::{
+    ScheduledActionListFilter, ScheduledActionRepository, ScheduledActionVillageFilter,
+};
 use parabellum_types::errors::{ApplicationError, DbError};
-use sqlx::{FromRow, PgPool, types::Json};
+use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -226,6 +228,79 @@ impl PostgresScheduledActionRepository {
 
         Ok(queues)
     }
+
+    fn scheduled_action_query(
+        filter: ScheduledActionListFilter,
+    ) -> QueryBuilder<'static, sqlx::Postgres> {
+        let mut query = QueryBuilder::new(scheduled_action_select_sql());
+        let mut has_where = false;
+
+        if let Some(action_type) = filter.action_type {
+            push_filter(&mut query, &mut has_where);
+            query.push("action_type = ");
+            query.push_bind(DbScheduledActionType::from(action_type));
+        }
+
+        if let Some(village) = filter.village {
+            push_filter(&mut query, &mut has_where);
+            match village {
+                ScheduledActionVillageFilter::Source(village_id) => {
+                    query.push("(payload->'workflow'->>'village_id')::int = ");
+                    query.push_bind(village_id as i32);
+                }
+                ScheduledActionVillageFilter::Target(target_village_id) => {
+                    query.push("(payload->'workflow'->>'target_village_id')::int = ");
+                    query.push_bind(target_village_id as i32);
+                }
+            }
+        }
+
+        if let Some(statuses) = filter.statuses {
+            push_filter(&mut query, &mut has_where);
+            if statuses.is_empty() {
+                query.push("FALSE");
+            } else {
+                query.push("status IN (");
+                let mut separated = query.separated(", ");
+                for status in statuses {
+                    separated.push_bind(DbScheduledActionStatus::from(status));
+                }
+                separated.push_unseparated(")");
+            }
+        }
+
+        query.push(" ORDER BY execute_at ASC, created_at ASC");
+        query
+    }
+
+    async fn list_actions_by_filter(
+        &self,
+        filter: ScheduledActionListFilter,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError> {
+        let rows: Vec<DbScheduledActionRow> = Self::scheduled_action_query(filter)
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+}
+
+fn scheduled_action_select_sql() -> &'static str {
+    r#"
+    SELECT id, action_type, execute_at, payload, status
+    FROM rm_scheduled_actions
+    "#
+}
+
+fn push_filter(query: &mut QueryBuilder<'static, sqlx::Postgres>, has_where: &mut bool) {
+    if *has_where {
+        query.push(" AND ");
+    } else {
+        query.push(" WHERE ");
+        *has_where = true;
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -349,27 +424,24 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         Ok(())
     }
 
+    async fn list_actions(
+        &self,
+        filter: ScheduledActionListFilter,
+    ) -> Result<Vec<ScheduledAction>, ApplicationError> {
+        self.list_actions_by_filter(filter).await
+    }
+
     async fn list_by_village_and_type(
         &self,
         village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError> {
-        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
-            r#"
-            SELECT id, action_type, execute_at, payload, status
-            FROM rm_scheduled_actions
-            WHERE action_type = $1
-              AND (payload->'workflow'->>'village_id')::int = $2
-            ORDER BY execute_at ASC, created_at ASC
-            "#,
+        self.list_actions_by_filter(
+            ScheduledActionListFilter::new()
+                .source_village(village_id)
+                .action_type(action_type),
         )
-        .bind(DbScheduledActionType::from(action_type))
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn list_by_target_village_and_type(
@@ -377,22 +449,12 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         target_village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError> {
-        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
-            r#"
-            SELECT id, action_type, execute_at, payload, status
-            FROM rm_scheduled_actions
-            WHERE action_type = $1
-              AND (payload->'workflow'->>'target_village_id')::int = $2
-            ORDER BY execute_at ASC, created_at ASC
-            "#,
+        self.list_actions_by_filter(
+            ScheduledActionListFilter::new()
+                .target_village(target_village_id)
+                .action_type(action_type),
         )
-        .bind(DbScheduledActionType::from(action_type))
-        .bind(target_village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn list_active_by_village_and_type(
@@ -400,23 +462,13 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError> {
-        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
-            r#"
-            SELECT id, action_type, execute_at, payload, status
-            FROM rm_scheduled_actions
-            WHERE action_type = $1
-              AND (payload->'workflow'->>'village_id')::int = $2
-              AND status IN ('pending', 'processing')
-            ORDER BY execute_at ASC, created_at ASC
-            "#,
+        self.list_actions_by_filter(
+            ScheduledActionListFilter::new()
+                .source_village(village_id)
+                .action_type(action_type)
+                .active(),
         )
-        .bind(DbScheduledActionType::from(action_type))
-        .bind(village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn list_active_by_target_village_and_type(
@@ -424,23 +476,13 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         target_village_id: u32,
         action_type: ScheduledActionType,
     ) -> Result<Vec<ScheduledAction>, ApplicationError> {
-        let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
-            r#"
-            SELECT id, action_type, execute_at, payload, status
-            FROM rm_scheduled_actions
-            WHERE action_type = $1
-              AND (payload->'workflow'->>'target_village_id')::int = $2
-              AND status IN ('pending', 'processing')
-            ORDER BY execute_at ASC, created_at ASC
-            "#,
+        self.list_actions_by_filter(
+            ScheduledActionListFilter::new()
+                .target_village(target_village_id)
+                .action_type(action_type)
+                .active(),
         )
-        .bind(DbScheduledActionType::from(action_type))
-        .bind(target_village_id as i32)
-        .fetch_all(&self.pool)
         .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn count_by_village_and_type(
