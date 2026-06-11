@@ -6,6 +6,8 @@ _*.md
 tarpaulin-report.html
 frontend/*.html
 frontend/assets/
+frontend/dist/
+bun.lock
 .env
 
 # Bun .gitignore

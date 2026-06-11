@@ -36,7 +36,8 @@ utoipa = { workspace = true }
 utoipa-axum = { workspace = true }
 # HTTP stuff
 axum = { workspace = true }
-tower-http = { version = "0.6", features = ["fs", "trace"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["compression-br", "compression-gzip", "fs", "set-header", "trace"] }
 
 [dev-dependencies]
 # Enable "test-utils" for parabellum_app

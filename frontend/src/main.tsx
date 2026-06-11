@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/preact-query";
 import { App } from "./app/App";
 import { AppStoreProvider } from "./state/appStore";
 import { queryClient } from "./query/client";
+import "./css/tailwind.css";
 import "./css/style.css";
 
 render(

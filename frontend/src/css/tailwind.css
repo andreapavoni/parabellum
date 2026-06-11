@@ -1,5 +1,5 @@
-@source "../../../parabellum_web/**/*.{rs,html,css}";
 @import "tailwindcss" source("..");
+@source "../../../parabellum_web/**/*.{rs,html,css}";
 @source "../../../parabellum_web/templates/";
 
 @theme {

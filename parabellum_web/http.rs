@@ -9,6 +9,7 @@
 
 use axum::{
     Router,
+    http::{HeaderValue, header::CACHE_CONTROL},
     response::IntoResponse,
     routing::{delete, get, post},
 };
@@ -16,7 +17,11 @@ use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
 use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower::ServiceBuilder;
+use tower_http::{
+    compression::CompressionLayer, services::ServeDir, set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+};
 
 use crate::{
     api::{
@@ -36,7 +41,10 @@ use crate::{
         openapi::openapi_spec,
     },
     auth_tokens::AuthTokenService,
-    web::{health::health, spa::spa_shell},
+    web::{
+        health::health,
+        spa::{spa_fallback, spa_shell},
+    },
 };
 
 #[derive(Clone)]
@@ -122,14 +130,27 @@ impl WebRouter {
             .route("/openapi.json", get(openapi_spec))
             .fallback(api_not_found);
 
+        let assets_service = ServiceBuilder::new()
+            .layer(SetResponseHeaderLayer::overriding(
+                CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=31536000, immutable"),
+            ))
+            .service(ServeDir::new("frontend/dist/assets"));
+        let static_service = ServiceBuilder::new()
+            .layer(SetResponseHeaderLayer::overriding(
+                CACHE_CONTROL,
+                HeaderValue::from_static("public, max-age=86400"),
+            ))
+            .service(ServeDir::new("frontend/static"));
         let router = Router::new()
-            .nest_service("/assets", ServeDir::new("frontend/assets"))
-            .nest_service("/static", ServeDir::new("frontend/static"))
+            .nest_service("/assets", assets_service)
+            .nest_service("/static", static_service)
             .nest("/api/v1", api_routes)
             .route("/health", get(health))
             .route("/", get(spa_shell))
-            .fallback(get(spa_shell))
+            .fallback(get(spa_fallback))
             .with_state(state)
+            .layer(CompressionLayer::new())
             .layer(TraceLayer::new_for_http());
 
         let addr = SocketAddr::from(([0, 0, 0, 0], port));

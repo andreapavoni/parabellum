@@ -11,7 +11,7 @@ ENV SQLX_OFFLINE=true
 
 COPY . .
 RUN bun install --frozen-lockfile
-RUN bun build:release
+RUN bun run build:release
 RUN cargo build --release \
     --bin parabellum \
     --bin parabellum-seed \

@@ -4,15 +4,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build:css": "bunx @tailwindcss/cli -i frontend/src/css/tailwind.css -o frontend/assets/tailwind.css",
     "dev": "vite",
     "build:js": "vite build",
-    "build:dev": "bun run build:css && vite build --mode development",
-    "build:release": "bun run build:css --minify && vite build",
+    "build:dev": "vite build --mode development",
+    "build:release": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.2",
+    "@tailwindcss/vite": "4.1.17",
     "@types/bun": "latest",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
