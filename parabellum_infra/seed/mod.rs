@@ -3,7 +3,9 @@ use std::path::Path;
 
 use parabellum_app::config::Config;
 use parabellum_app::ports::identity::{IdentityPort, InitialVillageSetup, RegisterPlayerRequest};
-use parabellum_app::villages::{FoundVillage, SetVillageResources};
+use parabellum_app::villages::{
+    FoundVillage, SetVillageResources, VillageArmyContext, hydrate_village,
+};
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::army::UnitName;
@@ -435,7 +437,7 @@ async fn apply_village_seed_state(
         .get_village(village_id)
         .await
         .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
-    let mut village = parabellum_game::models::village::Village::from(model);
+    let mut village = hydrate_village(model, VillageArmyContext::default());
 
     for unit in &seed.academy_researches {
         village

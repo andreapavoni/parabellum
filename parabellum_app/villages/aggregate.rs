@@ -4,7 +4,7 @@
 //! `VillageEvent` transitions.
 use mini_cqrs_es::Aggregate;
 use parabellum_game::models::army::Army;
-use parabellum_game::models::village::VillageBuilding;
+use parabellum_game::models::village::{VillageBuilding, VillageSnapshot};
 use parabellum_types::army::TroopSet;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -154,8 +154,8 @@ impl Aggregate for VillageAggregate {
                 target_parent_village_id,
                 target_loyalty,
                 target_buildings,
-                target_production,
-                target_population,
+                target_production: _,
+                target_population: _,
                 target_stocks,
                 target_army,
                 target_reinforcements,
@@ -167,29 +167,27 @@ impl Aggregate for VillageAggregate {
                 if let Some(stationed_attacker) = stationed_attacker_army.clone() {
                     reinforcements.push(stationed_attacker);
                 }
-                self.village.village = parabellum_game::models::village::Village::from_persistence(
-                    current.id,
-                    current.name.clone(),
-                    *target_player_id,
-                    current.position.clone(),
-                    target_tribe.clone(),
-                    target_buildings.clone(),
-                    current.oases.clone(),
-                    *target_population,
-                    target_army.clone(),
-                    reinforcements,
-                    current.deployed_armies().clone(),
-                    *target_loyalty,
-                    target_production.clone(),
-                    current.is_capital,
-                    *current.smithy(),
-                    target_stocks.clone(),
-                    current.academy_research().clone(),
-                    current.culture_points,
-                    current.culture_points_production,
-                    chrono::Utc::now(),
-                    *target_parent_village_id,
-                );
+                self.village.village =
+                    parabellum_game::models::village::Village::rehydrate(VillageSnapshot {
+                        id: current.id,
+                        name: current.name.clone(),
+                        player_id: *target_player_id,
+                        position: current.position.clone(),
+                        tribe: target_tribe.clone(),
+                        buildings: target_buildings.clone(),
+                        oases: current.oases.clone(),
+                        army: target_army.clone(),
+                        reinforcements,
+                        deployed_armies: current.deployed_armies().clone(),
+                        loyalty: *target_loyalty,
+                        is_capital: current.is_capital,
+                        smithy: *current.smithy(),
+                        stocks: target_stocks.clone(),
+                        academy_research: current.academy_research().clone(),
+                        culture_points: current.culture_points,
+                        updated_at: chrono::Utc::now(),
+                        parent_village_id: *target_parent_village_id,
+                    });
             }
             VillageEvent::ArmyReturned { army, bounty, .. } => {
                 let _ = self.village.merge_units_home(army.units());

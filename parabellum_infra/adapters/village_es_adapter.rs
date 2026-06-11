@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use async_trait::async_trait;
 
+use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_app::{
     config::Config,
     ports::{
@@ -295,7 +296,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .ok_or(GameError::InvalidUnitIndex(request.unit_idx))
             .map_err(ApplicationError::from)?;
         if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
-            let source_village: parabellum_game::models::village::Village = source.clone().into();
+            let source_village = hydrate_village(source.clone(), VillageArmyContext::default());
             let child_villages = self
                 .service
                 .count_child_villages(request.player_id, request.village_id)

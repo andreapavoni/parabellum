@@ -13,7 +13,6 @@ use mini_cqrs_es::{
     SnapshotStore,
 };
 use parabellum_game::models::army::Army;
-use parabellum_game::models::village::Village;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
@@ -28,7 +27,8 @@ use parabellum_app::villages::{
     CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
     RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy,
     ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding, VillageService,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding, VillageArmyContext,
+    VillageService, hydrate_village,
 };
 use parabellum_types::errors::GameError;
 use uuid::Uuid;
@@ -504,8 +504,7 @@ impl VillageEsService {
                 player_id: accepting_player_id,
             }));
         }
-        let accepting_village =
-            Village::try_from(accepting_model).map_err(CqrsError::domain_source)?;
+        let accepting_village = hydrate_village(accepting_model, VillageArmyContext::default());
         let seek_group: parabellum_types::common::ResourceGroup = offer.seek_resources.into();
         let accepting_merchants_used = accepting_village
             .validate_merchant_transfer(

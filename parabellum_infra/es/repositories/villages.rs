@@ -5,7 +5,9 @@ use parabellum_app::villages::repositories::{
 use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
-use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
+use parabellum_game::models::village::{
+    AcademyResearch, VillageBuilding, VillageSnapshot, VillageStocks,
+};
 use parabellum_types::errors::{ApplicationError, DbError};
 use parabellum_types::{
     buildings::BuildingName, common::ResourceGroup, map::Position, tribe::Tribe,
@@ -237,29 +239,26 @@ impl PostgresVillageRepository {
             iron: 800.min(warehouse_capacity),
             crop: (800_i64).min(granary_capacity as i64),
         };
-        let projected = parabellum_game::models::village::Village::from_persistence(
-            village_id,
-            village_name.to_string(),
+        let projected = parabellum_game::models::village::Village::rehydrate(VillageSnapshot {
+            id: village_id,
+            name: village_name.to_string(),
             player_id,
-            position.clone(),
-            tribe.clone(),
-            buildings.to_vec(),
-            vec![],
-            2,
-            None,
-            vec![],
-            vec![],
-            100,
-            VillageProduction::default(),
-            parent_village_id.is_none(),
-            [0_u8; 8],
-            stocks.clone(),
-            parabellum_game::models::village::AcademyResearch::default(),
-            0,
-            0,
-            chrono::Utc::now(),
+            position: position.clone(),
+            tribe: tribe.clone(),
+            buildings: buildings.to_vec(),
+            oases: vec![],
+            army: None,
+            reinforcements: vec![],
+            deployed_armies: vec![],
+            loyalty: 100,
+            is_capital: parent_village_id.is_none(),
+            smithy: [0_u8; 8],
+            stocks: stocks.clone(),
+            academy_research: AcademyResearch::default(),
+            culture_points: 0,
+            updated_at: chrono::Utc::now(),
             parent_village_id,
-        );
+        });
 
         let q = sqlx::query(
             r#"

@@ -1,5 +1,8 @@
 use super::models::VillageModel;
-use parabellum_game::models::{army::Army, village::Village};
+use parabellum_game::models::{
+    army::Army,
+    village::{Village, VillageSnapshot},
+};
 /// `VillageModel` intentionally carries only the village economy/read-model
 /// fields. Callers that need troop-aware domain behavior must load this context
 /// from the canonical army read model.
@@ -15,37 +18,28 @@ pub struct VillageArmyContext {
 /// context.
 pub fn hydrate_village(model: VillageModel, armies: VillageArmyContext) -> Village {
     let busy_merchants = model.busy_merchants;
-    let mut village = Village::from_persistence(
-        model.village_id,
-        model.village_name,
-        model.player_id,
-        model.position,
-        model.tribe,
-        model.buildings,
-        vec![],
-        model.population,
-        armies.home,
-        armies.stationed,
-        armies.deployed,
-        model.loyalty,
-        model.production,
-        model.is_capital,
-        model.smithy_upgrades,
-        model.stocks,
-        model.academy_research,
-        0,
-        model.culture_points_production,
-        model.updated_at,
-        model.parent_village_id,
-    );
+    let mut village = Village::rehydrate(VillageSnapshot {
+        id: model.village_id,
+        name: model.village_name,
+        player_id: model.player_id,
+        position: model.position,
+        tribe: model.tribe,
+        buildings: model.buildings,
+        oases: vec![],
+        army: armies.home,
+        reinforcements: armies.stationed,
+        deployed_armies: armies.deployed,
+        loyalty: model.loyalty,
+        is_capital: model.is_capital,
+        smithy: model.smithy_upgrades,
+        stocks: model.stocks,
+        academy_research: model.academy_research,
+        culture_points: 0,
+        updated_at: model.updated_at,
+        parent_village_id: model.parent_village_id,
+    });
     village.busy_merchants = busy_merchants.min(village.total_merchants);
     village
-}
-
-impl From<VillageModel> for parabellum_game::models::village::Village {
-    fn from(model: VillageModel) -> Self {
-        hydrate_village(model, VillageArmyContext::default())
-    }
 }
 
 #[cfg(test)]
@@ -55,6 +49,7 @@ mod tests {
     use parabellum_types::{map::Position, tribe::Tribe};
     use uuid::Uuid;
 
+    use crate::villages::VillageArmyContext;
     use crate::villages::models::VillageModel;
 
     #[test]
@@ -85,7 +80,7 @@ mod tests {
             parent_village_id: None,
         };
 
-        let village = parabellum_game::models::village::Village::from(model);
+        let village = crate::villages::hydrate_village(model, VillageArmyContext::default());
 
         assert_eq!(village.id, village_id);
         assert_eq!(village.culture_points, 0);

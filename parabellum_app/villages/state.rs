@@ -6,7 +6,7 @@ use chrono::Utc;
 use parabellum_game::models::{
     army::Army,
     buildings::{Building, get_building_data},
-    village::{AcademyResearch, Village, VillageBuilding, VillageProduction, VillageStocks},
+    village::{AcademyResearch, Village, VillageBuilding, VillageSnapshot, VillageStocks},
 };
 use parabellum_types::{
     army::{TroopSet, UnitName},
@@ -76,29 +76,26 @@ struct PendingSmithyAction {
 
 impl Default for VillageState {
     fn default() -> Self {
-        let village = Village::from_persistence(
-            0,
-            "village-0".to_string(),
-            Uuid::nil(),
-            Position { x: 0, y: 0 },
-            Tribe::Roman,
-            vec![],
-            vec![],
-            2,
-            None,
-            vec![],
-            vec![],
-            100,
-            VillageProduction::default(),
-            false,
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            VillageStocks::default(),
-            AcademyResearch::default(),
-            0,
-            0,
-            Utc::now(),
-            None,
-        );
+        let village = Village::rehydrate(VillageSnapshot {
+            id: 0,
+            name: "village-0".to_string(),
+            player_id: Uuid::nil(),
+            position: Position { x: 0, y: 0 },
+            tribe: Tribe::Roman,
+            buildings: vec![],
+            oases: vec![],
+            army: None,
+            reinforcements: vec![],
+            deployed_armies: vec![],
+            loyalty: 100,
+            is_capital: false,
+            smithy: [0, 0, 0, 0, 0, 0, 0, 0],
+            stocks: VillageStocks::default(),
+            academy_research: AcademyResearch::default(),
+            culture_points: 0,
+            updated_at: Utc::now(),
+            parent_village_id: None,
+        });
         Self {
             village,
             pending_building_actions: vec![],
@@ -128,29 +125,26 @@ impl VillageState {
         parent_village_id: Option<u32>,
         buildings: Vec<VillageBuilding>,
     ) -> Self {
-        let mut village = Village::from_persistence(
+        let mut village = Village::rehydrate(VillageSnapshot {
             id,
             name,
             player_id,
             position,
             tribe,
             buildings,
-            vec![],
-            2,
-            None,
-            vec![],
-            vec![],
-            100,
-            VillageProduction::default(),
-            false,
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            VillageStocks::default(),
-            AcademyResearch::default(),
-            0,
-            0,
-            Utc::now(),
+            oases: vec![],
+            army: None,
+            reinforcements: vec![],
+            deployed_armies: vec![],
+            loyalty: 100,
+            is_capital: false,
+            smithy: [0, 0, 0, 0, 0, 0, 0, 0],
+            stocks: VillageStocks::default(),
+            academy_research: AcademyResearch::default(),
+            culture_points: 0,
+            updated_at: Utc::now(),
             parent_village_id,
-        );
+        });
         let _ = village.set_army(None);
         Self {
             village,

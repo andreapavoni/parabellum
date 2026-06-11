@@ -367,6 +367,12 @@ Projector rules:
 - Multi-value read-model answers should use named snapshot structs when the
   values belong together. This keeps call sites from assembling the same
   repository reads repeatedly and documents the consistency boundary.
+- Domain rehydration should use domain-owned snapshot/input structs, not
+  database rows or app read-model structs directly. Translate read models into
+  domain snapshots at application/infrastructure boundaries, and use explicit
+  hydration helpers when required context may be partial. Avoid broad
+  `From<ReadModel> for DomainModel` conversions because they hide missing
+  context and make economy-only or partial hydration look authoritative.
 - For row mapping, prefer database DTOs such as `DbVillageModelRow` with
   `sqlx::FromRow`, then convert with `From`/`TryFrom` into app or domain
   structs. Do not map SQL rows directly into domain structs unless the domain

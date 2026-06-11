@@ -11,7 +11,7 @@ use parabellum_app::villages::models::{AttackArrivalWorkflow, ScoutArrivalWorkfl
 use parabellum_app::villages::repositories::{ArmyRepository, VillageRepository};
 use parabellum_app::villages::{
     ApplyBattleOutcomeToVillage, ConquestAttempt, ResolveAttackBattle, ResolveScoutBattle,
-    hydrate_village,
+    VillageArmyContext, hydrate_village,
 };
 use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
@@ -85,7 +85,7 @@ async fn build_attack_outcome(
     let can_attempt_conquer = workflow.attack_type == parabellum_types::battle::AttackType::Normal
         && can_attempt_conquer(svc, &source, &target, &workflow.army).await?;
 
-    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let attacker_village = hydrate_village(source.clone(), VillageArmyContext::default());
     let mut defender_village = hydrate_village_with_current_armies(svc, target.clone()).await?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
@@ -220,7 +220,7 @@ async fn build_scout_outcome(
 ) -> Result<ResolveScoutBattle, CqrsError> {
     let source = svc.get_village(workflow.source_village_id).await?;
     let target_village_model = svc.get_village(workflow.target_village_id).await?;
-    let attacker_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let attacker_village = hydrate_village(source.clone(), VillageArmyContext::default());
     let defender_village = hydrate_village_with_current_armies(svc, target_village_model).await?;
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
@@ -291,7 +291,7 @@ async fn load_conquest_attempt(
     target: &VillageModel,
     attacking_army: &Army,
 ) -> Result<ConquestAttempt, CqrsError> {
-    let source_village = Village::try_from(source.clone()).map_err(CqrsError::domain_source)?;
+    let source_village = hydrate_village(source.clone(), VillageArmyContext::default());
     let village_repo = PostgresVillageRepository::new(svc.pool().clone());
     let ownership = village_repo
         .get_expansion_ownership_snapshot(source.player_id, source.village_id)

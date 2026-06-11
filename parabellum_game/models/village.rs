@@ -126,6 +126,28 @@ pub struct Village {
     pub parent_village_id: Option<u32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VillageSnapshot {
+    pub id: u32,
+    pub name: String,
+    pub player_id: Uuid,
+    pub position: Position,
+    pub tribe: Tribe,
+    pub buildings: Vec<VillageBuilding>,
+    pub oases: Vec<Oasis>,
+    pub army: Option<Army>,
+    pub reinforcements: Vec<Army>,
+    pub deployed_armies: Vec<Army>,
+    pub loyalty: u8,
+    pub is_capital: bool,
+    pub smithy: SmithyUpgrades,
+    pub stocks: VillageStocks,
+    pub academy_research: AcademyResearch,
+    pub culture_points: u32,
+    pub updated_at: DateTime<Utc>,
+    pub parent_village_id: Option<u32>,
+}
+
 impl Village {
     fn horse_drinking_trough_level(&self) -> u8 {
         self.get_building_by_name(&BuildingName::HorseDrinkingTrough)
@@ -219,55 +241,32 @@ impl Village {
         village
     }
 
-    /// Constructor for re-hydrating a Village from persistence (database).
-    #[allow(clippy::too_many_arguments)]
-    pub fn from_persistence(
-        id: u32,
-        name: String,
-        player_id: Uuid,
-        position: Position,
-        tribe: Tribe,
-        buildings: Vec<VillageBuilding>,
-        oases: Vec<Oasis>,
-        population: u32,
-        army: Option<Army>,
-        reinforcements: Vec<Army>,
-        deployed_armies: Vec<Army>,
-        loyalty: u8,
-        production: VillageProduction,
-        is_capital: bool,
-        smithy: SmithyUpgrades,
-        stocks: VillageStocks,
-        academy_research: AcademyResearch,
-        culture_points: u32,
-        culture_points_production: u32,
-        updated_at: DateTime<Utc>,
-        parent_village_id: Option<u32>,
-    ) -> Self {
+    /// Rehydrates a Village domain model from a domain snapshot.
+    pub fn rehydrate(snapshot: VillageSnapshot) -> Self {
         let mut village = Self {
-            id,
-            name,
-            player_id,
-            position,
-            tribe,
-            buildings,
-            oases,
-            population,
-            army,
-            reinforcements,
-            deployed_armies,
-            loyalty,
-            production,
-            is_capital,
-            smithy,
-            stocks,
-            academy_research,
+            id: snapshot.id,
+            name: snapshot.name,
+            player_id: snapshot.player_id,
+            position: snapshot.position,
+            tribe: snapshot.tribe,
+            buildings: snapshot.buildings,
+            oases: snapshot.oases,
+            population: 0,
+            army: snapshot.army,
+            reinforcements: snapshot.reinforcements,
+            deployed_armies: snapshot.deployed_armies,
+            loyalty: snapshot.loyalty,
+            production: VillageProduction::default(),
+            is_capital: snapshot.is_capital,
+            smithy: snapshot.smithy,
+            stocks: snapshot.stocks,
+            academy_research: snapshot.academy_research,
             total_merchants: 0,
             busy_merchants: 0,
-            culture_points,
-            culture_points_production,
-            updated_at,
-            parent_village_id,
+            culture_points: snapshot.culture_points,
+            culture_points_production: 0,
+            updated_at: snapshot.updated_at,
+            parent_village_id: snapshot.parent_village_id,
         };
 
         village.update_state();

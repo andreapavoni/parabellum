@@ -5,7 +5,7 @@ use parabellum_app::villages::models::{
 use parabellum_app::villages::repositories::ScheduledActionRepository;
 use parabellum_app::villages::{
     AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
-    SendReinforcement, TrainUnits, UpgradeBuilding,
+    SendReinforcement, TrainUnits, UpgradeBuilding, VillageArmyContext, hydrate_village,
 };
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::{
@@ -401,7 +401,7 @@ async fn village_es_service_schedules_and_completes_smithy_research() {
         assert_eq!(completed_smithy, 1);
 
         let model = service.get_village(village_id).await.unwrap();
-        let hydrated = parabellum_game::models::village::Village::from(model);
+        let hydrated = hydrate_village(model, VillageArmyContext::default());
         let idx = hydrated
             .tribe
             .get_unit_idx_by_name(&parabellum_types::army::UnitName::Maceman)
@@ -499,7 +499,7 @@ async fn village_es_service_schedules_and_completes_academy_research() {
         assert_eq!(academy_pending, 0);
 
         let model = service.get_village(village_id).await.unwrap();
-        let hydrated = parabellum_game::models::village::Village::from(model);
+        let hydrated = hydrate_village(model, VillageArmyContext::default());
         let idx = hydrated
             .tribe
             .get_unit_idx_by_name(&parabellum_types::army::UnitName::Spearman)

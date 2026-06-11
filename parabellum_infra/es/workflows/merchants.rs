@@ -1,9 +1,9 @@
 use mini_cqrs_es::CqrsError;
-use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{
     MarketplaceOfferModel, MerchantArrivalWorkflow, MerchantReturnWorkflow, ScheduledAction,
     ScheduledActionPayload, VillageModel,
 };
+use parabellum_app::villages::{VillageArmyContext, VillageEvent, hydrate_village};
 use parabellum_game::models::village::VillageStocks;
 use parabellum_types::common::ResourceGroup;
 use uuid::Uuid;
@@ -152,7 +152,7 @@ fn arrival_events_from_target(
     workflow: MerchantArrivalWorkflow,
     target: &VillageModel,
 ) -> super::WorkflowEvents {
-    let mut target_village = parabellum_game::models::village::Village::from(target.clone());
+    let mut target_village = hydrate_village(target.clone(), VillageArmyContext::default());
     target_village.store_resources(&workflow.resources);
     let target_stocks = target_village.stocks().clone();
 

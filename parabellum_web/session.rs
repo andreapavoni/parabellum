@@ -2,6 +2,7 @@ use axum::response::Redirect;
 use uuid::Uuid;
 
 use parabellum_app::villages::models::VillageModel;
+use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_game::models::village::Village;
 use parabellum_types::{
     common::{Player as PlayerType, User as UserType},
@@ -111,7 +112,7 @@ fn village_from_model(model: VillageModel) -> Result<Village, ApplicationError> 
     let culture_points_production = model.culture_points_production;
     let total_merchants = model.total_merchants;
     let busy_merchants = model.busy_merchants;
-    let mut village: Village = model.into();
+    let mut village = hydrate_village(model, VillageArmyContext::default());
     village.production = production;
     village.population = population;
     village.culture_points_production = culture_points_production;

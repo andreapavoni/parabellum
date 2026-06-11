@@ -4,7 +4,7 @@
 //! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::villages::models::{ScheduledAction, VillageModel};
-use parabellum_app::villages::{VillageEvent, hydrate_village};
+use parabellum_app::villages::{VillageArmyContext, VillageEvent, hydrate_village};
 use parabellum_game::models::village::Village;
 use parabellum_types::common::ResourceGroup;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -55,7 +55,7 @@ impl VillageProjector {
     }
 
     pub(super) fn village_from_model(model: &VillageModel) -> Village {
-        Village::from(model.clone())
+        hydrate_village(model.clone(), VillageArmyContext::default())
     }
 
     pub(super) async fn village_from_model_with_armies_in_tx(
