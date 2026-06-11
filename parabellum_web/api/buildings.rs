@@ -157,6 +157,8 @@ pub struct QueuedUpgradePreviewDto {
 pub struct BuildOptionDto {
     pub building_name: String,
     pub cost: ResourceAmountsDto,
+    pub next_upkeep: u32,
+    pub upkeep: u32,
     pub time_secs: u32,
     pub missing_requirements: Vec<RequirementDto>,
 }
@@ -278,6 +280,8 @@ pub struct MarketplaceOfferDto {
     pub village_id: u32,
     pub village_name: String,
     pub position: PositionDto,
+    pub distance: u32,
+    pub travel_time_seconds: u32,
     pub offer_resources: ResourceAmountsDto,
     pub seek_resources: ResourceAmountsDto,
     pub merchants_required: u8,
@@ -850,16 +854,38 @@ pub async fn building_detail(
                     map_application_error("unable_to_load_marketplace_data", err)
                 })?;
 
+                let base_merchant_speed = user.village.tribe.merchant_stats().speed;
+                let effective_merchant_speed =
+                    base_merchant_speed.saturating_mul(state.server_speed.max(1) as u8);
+
                 let own_offers = marketplace_data
                     .own_offers
                     .iter()
-                    .map(|offer| marketplace_offer_to_dto(&marketplace_data, offer))
+                    .map(|offer| {
+                        marketplace_offer_to_dto(
+                            &marketplace_data,
+                            offer,
+                            &user.village.position,
+                            base_merchant_speed.max(1),
+                            state.world_size,
+                            state.server_speed as u8,
+                        )
+                    })
                     .collect();
 
                 let global_offers = marketplace_data
                     .global_offers
                     .iter()
-                    .map(|offer| marketplace_offer_to_dto(&marketplace_data, offer))
+                    .map(|offer| {
+                        marketplace_offer_to_dto(
+                            &marketplace_data,
+                            offer,
+                            &user.village.position,
+                            base_merchant_speed.max(1),
+                            state.world_size,
+                            state.server_speed as u8,
+                        )
+                    })
                     .collect();
 
                 let pending_outgoing_goings: Vec<&MerchantMovement> = marketplace_data
@@ -927,8 +953,7 @@ pub async fn building_detail(
                             .merchant_stats()
                             .capacity
                             .saturating_mul(state.server_speed.max(1) as u32),
-                        merchant_speed: (user.village.tribe.merchant_stats().speed as u32)
-                            .saturating_mul(state.server_speed.max(1) as u32),
+                        merchant_speed: effective_merchant_speed as u32,
                         available_merchants: user.village.available_merchants(),
                         total_merchants: user.village.total_merchants,
                         own_offers,
@@ -1405,16 +1430,29 @@ fn main_building_detail_for_village(
 fn marketplace_offer_to_dto(
     data: &MarketplaceData,
     offer: &MarketplaceOffer,
+    current_position: &Position,
+    merchant_speed: u8,
+    world_size: i32,
+    server_speed: u8,
 ) -> MarketplaceOfferDto {
     let village_info = data
         .village_info
         .get(&offer.village_id)
         .expect("Village info should exist for marketplace offer");
+    let distance = current_position.distance(&village_info.position, world_size);
+    let travel_time_seconds = current_position.calculate_travel_time_secs(
+        village_info.position.clone(),
+        merchant_speed,
+        world_size,
+        server_speed.max(1),
+    );
     MarketplaceOfferDto {
         offer_id: offer.id.to_string(),
         village_id: offer.village_id,
         village_name: village_info.name.clone(),
         position: position_to_dto(&village_info.position),
+        distance,
+        travel_time_seconds,
         offer_resources: resource_group_to_dto(&offer.offer_resources.into()),
         seek_resources: resource_group_to_dto(&offer.seek_resources.into()),
         merchants_required: offer.merchants_required,
@@ -1525,6 +1563,8 @@ fn build_options_for_slot(
         let option = BuildOptionDto {
             building_name: building_key(&name),
             cost: resource_group_to_dto(&cost.resources),
+            next_upkeep: cost.upkeep,
+            upkeep: cost.upkeep,
             time_secs,
             missing_requirements,
         };

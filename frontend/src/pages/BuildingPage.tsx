@@ -84,7 +84,12 @@ export function BuildingPage({
         {detail.buildingType === "empty" ? <EmptySlotBuilding detail={detail} onMutate={onMutate} /> : null}
 
         {detail.buildingType === "expansion" && expansion ? <ExpansionBuilding expansion={expansion} /> : null}
-        <TrainingBuilding detail={detail} onMutate={onMutate} />
+        <TrainingBuilding
+          detail={detail}
+          serverTime={data.serverTime}
+          serverTimeObservedAtMs={serverTimeObservedAtMs}
+          onMutate={onMutate}
+        />
         <AcademyBuilding detail={detail} onMutate={onMutate} />
         <SmithyBuilding detail={detail} onMutate={onMutate} />
 
@@ -98,7 +103,12 @@ export function BuildingPage({
         ) : null}
 
         {detail.buildingType === "rally_point" ? (
-          <RallyPointBuilding detail={detail} onMutate={onMutate} />
+          <RallyPointBuilding
+            detail={detail}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={serverTimeObservedAtMs}
+            onMutate={onMutate}
+          />
         ) : null}
         {detail.mainBuilding ? (
           <MainBuilding

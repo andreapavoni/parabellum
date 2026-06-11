@@ -235,6 +235,7 @@ export function EmptySlotBuilding({
     const canBuild = !locked && !detail.queueFull && affordable;
     const isSubmitting = submitting === option.buildingName;
     const descriptionParagraphs = buildingDescriptionParagraphs(option.buildingName);
+    const nextUpkeep = option.nextUpkeep ?? option.upkeep;
     return (
       <Panel key={option.buildingName} class="space-y-3">
         <div class="flex items-start justify-between gap-2">
@@ -253,6 +254,10 @@ export function EmptySlotBuilding({
         ) : null}
         <div class="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <ResourceCost cost={option.cost} />
+          <span class="inline-flex items-center gap-1">
+            <ResourceSprite kind="upkeep" size={14} label="Upkeep" />
+            {nextUpkeep ?? "?"}
+          </span>
           <span class="inline-flex items-center gap-1">
             <ResourceSprite kind="clock" size={14} label="Build time" />
             {formatDurationHms(option.timeSecs)}

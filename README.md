@@ -12,9 +12,9 @@ This project is for those who love the deep strategy and community of the origin
 
 The project is still in its early stages, but the foundations are solidifying every day. It's now at a point where contributions are very welcome to help shape the game.
 
-[DEMO](https://parabellum.funky.studio)
+[PLAYABLE DEMO](https://parabellum.funky.studio)
 
-**HEADS UP!** Parabellum is under heavy development and is **mostly playable**. Many core mechanics have been built, others are coming. It's possible to signup and have a _decent_ game until founding a new village, but it's not complete or full-featured yet, we're getting there. Check the roadmap and status below.
+**HEADS UP!** Parabellum is under heavy development and is **mostly playable**. Many core mechanics have been built, others are coming. It's possible to signup and have a _decent_ game until founding a new village or conquering a new one, but **it's not complete or full-featured yet, we're getting there**. Check the roadmap and status below.
 
 ---
 
@@ -89,14 +89,6 @@ Want to get the server running locally? Here’s how.
               "quadrant": "NorthEast",
               "buildings": [
                 { "slotId": 39, "name": "RallyPoint", "level": 2 }
-              ],
-              "academyResearches": [
-                "Praetorian",
-                "EquitesLegati"
-              ],
-              "startingArmy": [
-                { "unit": "Legionnaire", "quantity": 100 },
-                { "unit": "EquitesLegati", "quantity": 10 }
               ]
             }
           ]
@@ -109,7 +101,7 @@ Want to get the server running locally? Here’s how.
     - `seed/templates/developed.json` (village defaults)
     - `seed/templates/rusher.json` (another village profile)
 
-    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`, unit-based upsert for `startingArmy`, append missing entries for `academyResearches`).
+    Template files are loaded from `seed/templates/<template>.json` and merged with village overrides (`slotId`-based upsert for `buildings`.
     First village follows signup rules: it is always founded on a random unoccupied valley in the selected `quadrant` (explicit `position` is not allowed for the first village).
     Additional villages can either set an explicit `position` (must be free) or use random unoccupied valley selection with `quadrant`.
     If omitted, login defaults remain deterministic: email is `<username>@example.com`, password is `<username>`.
@@ -171,6 +163,14 @@ The replay entrypoint is provided by the server runtime and is intended for main
 <img src="frontend/static/screenshots_map.png" alt="World map view" width="600">
 
 ---
+
+## Run your own server (experimental)
+
+There's a DockerHub image, just use: `andreapavoni/parabellum:latest`. You can use [docker-compose-prod.yml](docker-compose-prod.yml) a a starting point. Then run it:
+
+```sh
+docker-compose -f docker-compose-prod.yml up -d
+```
 
 ## Feature Roadmap
 
@@ -282,7 +282,8 @@ These packages define the whole game engine. There aren't infrastructure details
 
 ## Developer Documentation
 
-- Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Backend architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Frontend architecture overview: [`docs/FRONTEND_ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - API contract matrix: [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md)
 - Testing and error conventions: [`docs/TESTING_AND_ERROR_CONVENTIONS.md`](docs/TESTING_AND_ERROR_CONVENTIONS.md)
 

@@ -1,0 +1,40 @@
+services:
+  app:
+    image: andreapavoni/parabellum:latest
+    container_name: parabellum
+    restart: always
+    environment:
+      - RUST_LOG=info,parabellum=info,parabellum_infra=info,parabellum_web=info,tower_http=warn,sqlx=warn
+      - PORT=3000
+      - DATABASE_URL=postgres://deployer:some-password@parabellum_db:5432/parabellum_prod
+      - PARABELLUM_WORLD_SIZE=100
+      - PARABELLUM_SERVER_SPEED=5
+      - PARABELLUM_ACCESS_TOKEN_TTL_SECS=900
+      - PARABELLUM_REFRESH_TOKEN_TTL_SECS=2592000
+      - PARABELLUM_TOKEN_SIGNING_KEY="some-very-long-random-string"
+    ports:
+      - "3000:3000"
+    networks:
+      - main
+    volumes:
+      - ./logs:/app/logs
+      - ./:/app/mnt
+    depends_on:
+      - caddy
+      - parabellum_db
+
+  db:
+    image: postgres:16-alpine
+    container_name: parabellum_db
+    restart: always
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=deployer
+      - POSTGRES_PASSWORD=some-password
+      - POSTGRES_DB=parabellum_prod
+    networks:
+      - main
+
+networks:
+  main:

@@ -6,8 +6,8 @@ import { unitLabel } from "@/lib/labels";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
-import { LiveCountdown } from "@/components/buildings/buildingShared";
 import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
+import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import {
   useCancelTroopMovementMutation,
   useRecallTroopsMutation,
@@ -32,6 +32,105 @@ function previewMovementLabel(preview: MovementPreviewResponse, selectedMovement
   if (preview.detectedKind === "reinforcement") return "Reinforcement";
   if (preview.detectedKind === "found_village") return "Found village";
   return selectedMovement === "raid" ? "Raid" : "Attack";
+}
+
+const RALLY_SECTION_TITLES: Record<RallyCard["category"], string> = {
+  stationed: "Stationed troops",
+  deployed: "Deployed troops",
+  reinforcement: "Reinforcements",
+  outgoing: "Outgoing movements",
+  incoming: "Incoming movements",
+};
+
+type RallyTab = "armies" | "send";
+
+function movementKindLabel(kind: RallyCard["movementKind"]) {
+  if (!kind) return null;
+  return kind.replace("_", " ");
+}
+
+function RallyTabs({
+  active,
+  onChange,
+}: {
+  active: RallyTab;
+  onChange: (tab: RallyTab) => void;
+}) {
+  const tabs: { key: RallyTab; label: string }[] = [
+    { key: "armies", label: "Armies" },
+    { key: "send", label: "Send troops" },
+  ];
+
+  return (
+    <div class="border-b border-stone-200">
+      <div class="flex gap-4 text-sm font-semibold">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            class={active === tab.key
+              ? "border-b-2 border-green-700 px-1 pb-2 text-green-800"
+              : "px-1 pb-2 text-stone-500 hover:text-stone-800"}
+            onClick={() => onChange(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BountyResources({ bounty }: { bounty: NonNullable<RallyCard["bounty"]> }) {
+  return (
+    <div class="flex flex-wrap items-center gap-3 text-xs">
+      <span class="inline-flex items-center gap-1">
+        <ResourceSprite kind="lumber" size={12} label="Lumber" />
+        {bounty.lumber}
+      </span>
+      <span class="inline-flex items-center gap-1">
+        <ResourceSprite kind="clay" size={12} label="Clay" />
+        {bounty.clay}
+      </span>
+      <span class="inline-flex items-center gap-1">
+        <ResourceSprite kind="iron" size={12} label="Iron" />
+        {bounty.iron}
+      </span>
+      <span class="inline-flex items-center gap-1">
+        <ResourceSprite kind="crop" size={12} label="Crop" />
+        {bounty.crop}
+      </span>
+    </div>
+  );
+}
+
+function initialRallyTab(search: URLSearchParams, hash: string): RallyTab {
+  if (hash === "#incoming" || hash === "#outgoing") return "armies";
+  return search.has("x") && search.has("y") ? "send" : "armies";
+}
+
+function MovementTiming({
+  arrivesAt,
+  serverTime,
+  serverTimeObservedAtMs,
+  onElapsed,
+}: {
+  arrivesAt: string;
+  serverTime: number;
+  serverTimeObservedAtMs: number;
+  onElapsed: () => void;
+}) {
+  const etaSeconds = useServerDeadlineCountdown(arrivesAt, serverTime, serverTimeObservedAtMs, onElapsed);
+  return (
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+      <span>
+        ETA <span class="font-mono font-semibold text-gray-800">{formatDurationHms(etaSeconds)}</span>
+      </span>
+      <span>
+        Arrives at: <span class="font-mono text-gray-800">{new Date(arrivesAt).toLocaleString()}</span>
+      </span>
+    </div>
+  );
 }
 
 function UnitAmountGrid({
@@ -201,9 +300,13 @@ function RallyReinforcementActionForm({
 
 export function RallyPointBuilding({
   detail,
+  serverTime,
+  serverTimeObservedAtMs,
   onMutate,
 }: {
   detail: BuildingPageResponse["detail"];
+  serverTime: number;
+  serverTimeObservedAtMs: number;
   onMutate: () => Promise<void>;
 }) {
   const query = new URLSearchParams(window.location.search);
@@ -224,6 +327,7 @@ export function RallyPointBuilding({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedActionKey, setExpandedActionKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<RallyTab>(() => initialRallyTab(query, window.location.hash));
   const sendTroops = useSendTroopsMutation();
   const recallTroops = useRecallTroopsMutation();
   const releaseReinforcements = useReleaseReinforcementsMutation();
@@ -233,6 +337,16 @@ export function RallyPointBuilding({
     const timer = window.setInterval(() => setPreviewTick((v) => v + 1), 1000);
     return () => window.clearInterval(timer);
   }, [preview]);
+  useEffect(() => {
+    const syncTabFromHash = () => {
+      if (window.location.hash === "#incoming" || window.location.hash === "#outgoing") {
+        setActiveTab("armies");
+      }
+    };
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
 
   if (!detail.rallyPoint) return null;
 
@@ -266,177 +380,158 @@ export function RallyPointBuilding({
   const catapultTargetSelectionCount = selectedCatapultUnits <= 1 ? 1 : 2;
 
   return (
-    <>
-      <Panel class="space-y-4">
-        <div>
-          <SectionHeader title="Send troops" class="mb-1" />
-          <p class="text-sm text-stone-500">Select target and units.</p>
-        </div>
-        <div class="grid gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[96px_96px_1fr]">
-          <label class="text-sm text-gray-600">
-            Target X
-            <input type="number" value={targetX} onInput={(e) => setTargetX(Number((e.target as HTMLInputElement).value || "0"))} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700" />
-          </label>
-          <label class="text-sm text-gray-600">
-            Target Y
-            <input type="number" value={targetY} onInput={(e) => setTargetY(Number((e.target as HTMLInputElement).value || "0"))} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700" />
-          </label>
-          <label class="text-sm text-gray-600">
-            Movement type
-            <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "reinforcement")} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700">
-              <option value="attack">Attack</option>
-              <option value="raid">Raid</option>
-              <option value="reinforcement">Reinforcement</option>
-            </select>
-          </label>
-        </div>
-        <div class="space-y-2">
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-sm font-semibold uppercase text-stone-500">Select units</div>
-            <button
-              type="button"
-              class="text-xs font-semibold text-stone-500 hover:text-stone-700 hover:underline"
-              onClick={() => setUnits({})}
-            >
-              Clear
-            </button>
-          </div>
-          <div class="rounded-md border border-stone-200 bg-stone-50 p-3">
-            <UnitAmountGrid
-              available={sendableUnitAvailable}
-              amounts={sendableUnitAmounts}
-              unitLabels={sendableUnitLabels}
-              disabled={sending}
-              renderIcon={(idx) => {
-                const unit = detail.rallyPoint!.sendableUnits[idx];
-                return (
-                  <UnitSpriteByName
-                    unitName={unit.name}
-                    label={unitLabel(unit.name)}
-                  />
-                );
-              }}
-              onSetAll={(idx) => {
-                const unit = detail.rallyPoint!.sendableUnits[idx];
-                setUnits((current) => ({
-                  ...current,
-                  [unit.unitIdx]: unit.available,
-                }));
-              }}
-              onChange={(idx, value) => {
-                const unit = detail.rallyPoint!.sendableUnits[idx];
-                setUnits((current) => ({
-                  ...current,
-                  [unit.unitIdx]: value,
-                }));
-              }}
-            />
-          </div>
-        </div>
+    <div class="space-y-4">
+      <RallyTabs active={activeTab} onChange={setActiveTab} />
 
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={previewing || sending}
-          onClick={async () => {
-            setError(null);
-            setPreview(null);
-            try {
-              setPreviewing(true);
-              const result = await api.previewTroops({
-                targetX,
-                targetY,
-                movement,
-                units: toUnitsArray(),
-              });
-              setPreview(result);
-              setPreviewStartedAtMs(Date.now());
-              setPreviewTravelSeconds(secondsUntilIso(result.arrivesAt));
-            } catch (err) {
-              setError((err as Error).message);
-            } finally {
-              setPreviewing(false);
-            }
-          }}
-        >
-          {previewing ? "Calculating..." : "Preview movement"}
-        </Button>
-        {preview ? (
-          <div class="space-y-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
-            {(() => {
-              void previewTick;
-              void previewStartedAtMs;
-              const dynamicArrivesAt = new Date(Date.now() + previewTravelSeconds * 1000);
-              return (
-                <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                  <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
-                    <div class="text-[11px] font-semibold uppercase text-stone-500">Movement</div>
-                    <div class="font-semibold text-stone-900">{previewMovementLabel(preview, movement)}</div>
+      {activeTab === "send" ? (
+        <Panel class="space-y-4">
+          <div>
+            <SectionHeader title="Send troops" class="mb-1" />
+            <p class="text-sm text-stone-500">Select target and units.</p>
+          </div>
+          <div class="grid gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[96px_96px_1fr]">
+            <label class="text-sm text-gray-600">
+              Target X
+              <input type="number" value={targetX} onInput={(e) => setTargetX(Number((e.target as HTMLInputElement).value || "0"))} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700" />
+            </label>
+            <label class="text-sm text-gray-600">
+              Target Y
+              <input type="number" value={targetY} onInput={(e) => setTargetY(Number((e.target as HTMLInputElement).value || "0"))} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700" />
+            </label>
+            <label class="text-sm text-gray-600">
+              Movement type
+              <select value={movement} onChange={(e) => setMovement((e.target as HTMLSelectElement).value as "attack" | "raid" | "reinforcement")} class="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-gray-700">
+                <option value="attack">Attack</option>
+                <option value="raid">Raid</option>
+                <option value="reinforcement">Reinforcement</option>
+              </select>
+            </label>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-sm font-semibold uppercase text-stone-500">Select units</div>
+              <button
+                type="button"
+                class="text-xs font-semibold text-stone-500 hover:text-stone-700 hover:underline"
+                onClick={() => setUnits({})}
+              >
+                Clear
+              </button>
+            </div>
+            <div class="rounded-md border border-stone-200 bg-stone-50 p-3">
+              <UnitAmountGrid
+                available={sendableUnitAvailable}
+                amounts={sendableUnitAmounts}
+                unitLabels={sendableUnitLabels}
+                disabled={sending}
+                renderIcon={(idx) => {
+                  const unit = detail.rallyPoint!.sendableUnits[idx];
+                  return (
+                    <UnitSpriteByName
+                      unitName={unit.name}
+                      label={unitLabel(unit.name)}
+                    />
+                  );
+                }}
+                onSetAll={(idx) => {
+                  const unit = detail.rallyPoint!.sendableUnits[idx];
+                  setUnits((current) => ({
+                    ...current,
+                    [unit.unitIdx]: unit.available,
+                  }));
+                }}
+                onChange={(idx, value) => {
+                  const unit = detail.rallyPoint!.sendableUnits[idx];
+                  setUnits((current) => ({
+                    ...current,
+                    [unit.unitIdx]: value,
+                  }));
+                }}
+              />
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={previewing || sending}
+            onClick={async () => {
+              setError(null);
+              setPreview(null);
+              try {
+                setPreviewing(true);
+                const result = await api.previewTroops({
+                  targetX,
+                  targetY,
+                  movement,
+                  units: toUnitsArray(),
+                });
+                setPreview(result);
+                setPreviewStartedAtMs(Date.now());
+                setPreviewTravelSeconds(secondsUntilIso(result.arrivesAt));
+              } catch (err) {
+                setError((err as Error).message);
+              } finally {
+                setPreviewing(false);
+              }
+            }}
+          >
+            {previewing ? "Calculating..." : "Preview movement"}
+          </Button>
+          {preview ? (
+            <div class="space-y-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
+              {(() => {
+                void previewTick;
+                void previewStartedAtMs;
+                const dynamicArrivesAt = new Date(Date.now() + previewTravelSeconds * 1000);
+                return (
+                  <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
+                      <div class="text-[11px] font-semibold uppercase text-stone-500">Movement</div>
+                      <div class="font-semibold text-stone-900">{previewMovementLabel(preview, movement)}</div>
+                    </div>
+                    <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
+                      <div class="text-[11px] font-semibold uppercase text-stone-500">Distance</div>
+                      <div class="font-semibold text-stone-900">{preview.distance ?? "-"}</div>
+                    </div>
+                    <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
+                      <div class="text-[11px] font-semibold uppercase text-stone-500">Travel time</div>
+                      <div class="font-semibold text-stone-900">{formatDurationHms(previewTravelSeconds)}</div>
+                    </div>
+                    <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
+                      <div class="text-[11px] font-semibold uppercase text-stone-500">Arrival</div>
+                      <div class="font-semibold text-stone-900">{dynamicArrivesAt.toLocaleString()}</div>
+                    </div>
                   </div>
-                  <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
-                    <div class="text-[11px] font-semibold uppercase text-stone-500">Distance</div>
-                    <div class="font-semibold text-stone-900">{preview.distance ?? "-"}</div>
-                  </div>
-                  <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
-                    <div class="text-[11px] font-semibold uppercase text-stone-500">Travel time</div>
-                    <div class="font-semibold text-stone-900">{formatDurationHms(previewTravelSeconds)}</div>
-                  </div>
-                  <div class="rounded-md border border-stone-200 bg-white px-3 py-2">
-                    <div class="text-[11px] font-semibold uppercase text-stone-500">Arrival</div>
-                    <div class="font-semibold text-stone-900">{dynamicArrivesAt.toLocaleString()}</div>
-                  </div>
-                </div>
-              );
-            })()}
-            {showScoutingTargetChoice ? (
-              <div class="grid gap-2">
-                <label class="text-sm text-gray-700">
-                  Scouting target
-                  <select
-                    value={scoutingTarget}
-                    onChange={(e) =>
-                      setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
-                    }
-                    class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-gray-700"
-                  >
-                    <option value="resources">Resources + troops</option>
-                    <option value="defenses">Residence/Palace + Walls + troops</option>
-                  </select>
-                </label>
-              </div>
-            ) : null}
-            {showCatapultTargets ? (
-              <div class="grid gap-2">
-                <div class="text-xs text-gray-700">
-                  Catapults detected: select {catapultTargetSelectionCount === 1 ? "one target building" : "up to two target buildings"}.
-                </div>
-                <label class="text-sm text-gray-700">
-                  Catapult target #1
-                  <select
-                    value={catapultTarget1}
-                    onChange={(e) => setCatapultTarget1((e.target as HTMLSelectElement).value)}
-                    class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-gray-700"
-                  >
-                    <option value="random">Random</option>
-                    <option value="MainBuilding">Main Building</option>
-                    <option value="Warehouse">Warehouse</option>
-                    <option value="Granary">Granary</option>
-                    <option value="RallyPoint">Rally Point</option>
-                    <option value="Barracks">Barracks</option>
-                    <option value="Stable">Stable</option>
-                    <option value="Workshop">Workshop</option>
-                    <option value="Academy">Academy</option>
-                    <option value="Residence">Residence</option>
-                    <option value="Palace">Palace</option>
-                    <option value="Smithy">Smithy</option>
-                  </select>
-                </label>
-                {catapultTargetSelectionCount > 1 ? (
+                );
+              })()}
+              {showScoutingTargetChoice ? (
+                <div class="grid gap-2">
                   <label class="text-sm text-gray-700">
-                    Catapult target #2
+                    Scouting target
                     <select
-                      value={catapultTarget2}
-                      onChange={(e) => setCatapultTarget2((e.target as HTMLSelectElement).value)}
+                      value={scoutingTarget}
+                      onChange={(e) =>
+                        setScoutingTarget((e.target as HTMLSelectElement).value as "resources" | "defenses")
+                      }
+                      class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-gray-700"
+                    >
+                      <option value="resources">Resources + troops</option>
+                      <option value="defenses">Residence/Palace + Walls + troops</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+              {showCatapultTargets ? (
+                <div class="grid gap-2">
+                  <div class="text-xs text-gray-700">
+                    Catapults detected: select {catapultTargetSelectionCount === 1 ? "one target building" : "up to two target buildings"}.
+                  </div>
+                  <label class="text-sm text-gray-700">
+                    Catapult target #1
+                    <select
+                      value={catapultTarget1}
+                      onChange={(e) => setCatapultTarget1((e.target as HTMLSelectElement).value)}
                       class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-gray-700"
                     >
                       <option value="random">Random</option>
@@ -453,224 +548,241 @@ export function RallyPointBuilding({
                       <option value="Smithy">Smithy</option>
                     </select>
                   </label>
-                ) : null}
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              disabled={sending}
-              onClick={async () => {
-                setError(null);
-                try {
-                  setSending(true);
-                  if (showScoutingTargetChoice && selectedScoutUnits.length === 0) {
-                    throw new Error("Scout movement requires at least one scout unit.");
+                  {catapultTargetSelectionCount > 1 ? (
+                    <label class="text-sm text-gray-700">
+                      Catapult target #2
+                      <select
+                        value={catapultTarget2}
+                        onChange={(e) => setCatapultTarget2((e.target as HTMLSelectElement).value)}
+                        class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-gray-700"
+                      >
+                        <option value="random">Random</option>
+                        <option value="MainBuilding">Main Building</option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="Granary">Granary</option>
+                        <option value="RallyPoint">Rally Point</option>
+                        <option value="Barracks">Barracks</option>
+                        <option value="Stable">Stable</option>
+                        <option value="Workshop">Workshop</option>
+                        <option value="Academy">Academy</option>
+                        <option value="Residence">Residence</option>
+                        <option value="Palace">Palace</option>
+                        <option value="Smithy">Smithy</option>
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+              <Button
+                type="button"
+                disabled={sending}
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    setSending(true);
+                    if (showScoutingTargetChoice && selectedScoutUnits.length === 0) {
+                      throw new Error("Scout movement requires at least one scout unit.");
+                    }
+                    await sendTroops.mutateAsync({
+                      slotId: detail.slotId,
+                      targetX,
+                      targetY,
+                      movement,
+                      scoutingTarget: showScoutingTargetChoice ? scoutingTarget : undefined,
+                      catapultTargets: showCatapultTargets
+                        ? (catapultTargetSelectionCount === 1
+                          ? [catapultTarget1]
+                          : [catapultTarget1, catapultTarget2])
+                        : undefined,
+                      units: toUnitsArray(),
+                    });
+                    window.location.assign("/app/build/39#outgoing");
+                  } catch (err) {
+                    setError((err as Error).message);
+                  } finally {
+                    setSending(false);
                   }
-                  await sendTroops.mutateAsync({
-                    slotId: detail.slotId,
-                    targetX,
-                    targetY,
-                    movement,
-                    scoutingTarget: showScoutingTargetChoice ? scoutingTarget : undefined,
-                    catapultTargets: showCatapultTargets
-                      ? (catapultTargetSelectionCount === 1
-                        ? [catapultTarget1]
-                        : [catapultTarget1, catapultTarget2])
-                      : undefined,
-                    units: toUnitsArray(),
-                  });
-                  window.location.assign(`/app/build/39?x=${targetX}&y=${targetY}`);
-                } catch (err) {
-                  setError((err as Error).message);
-                } finally {
-                  setSending(false);
-                }
-              }}
-            >
-              {sending ? "Sending..." : "Confirm and send"}
-            </Button>
-          </div>
-        ) : null}
-        {error ? <div class="text-sm text-red-600">{error}</div> : null}
-      </Panel>
-
-      <div class="space-y-4">
-        {(["stationed", "deployed", "reinforcement", "outgoing", "incoming"] as const).map((category) => {
-          const cards = detail.rallyPoint!.cards.filter((card) => card.category === category);
-          if (cards.length === 0) return null;
-          return (
-            <div class="space-y-2" key={category}>
-              <h3
-                id={category === "incoming" ? "incoming" : category === "outgoing" ? "outgoing" : undefined}
-                class="text-sm font-semibold text-gray-700"
+                }}
               >
-                {category}
-              </h3>
-              <div class="space-y-2">
-                {cards.map((card) => {
-                  const actionKey = card.action && card.actionId
-                    ? `${card.action}-${card.actionId}`
-                    : null;
-                  const isActionEditorOpen = actionKey !== null && expandedActionKey === actionKey;
+                {sending ? "Sending..." : "Confirm and send"}
+              </Button>
+            </div>
+          ) : null}
+          {error ? <div class="text-sm text-red-600">{error}</div> : null}
+        </Panel>
+      ) : null}
 
-                  return (
-                    <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-3">
-                      <div class="flex justify-between items-start">
-                        <div class="flex-1">
-                          <div class="flex items-center gap-2">
-                            {card.villageName ? (
-                              <h3 class="font-semibold text-gray-900">
-                                <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
-                                  {card.villageName}
+      {activeTab === "armies" ? (
+        <div class="space-y-4">
+          {(["stationed", "deployed", "reinforcement", "outgoing", "incoming"] as const).map((category) => {
+            const cards = detail.rallyPoint!.cards.filter((card) => card.category === category);
+            if (cards.length === 0) return null;
+            return (
+              <div class="space-y-2" key={category}>
+                <h3
+                  id={category === "incoming" ? "incoming" : category === "outgoing" ? "outgoing" : undefined}
+                  class="border-b border-stone-200 pb-1 text-xs font-semibold uppercase tracking-wide text-stone-500"
+                >
+                  {RALLY_SECTION_TITLES[category]}
+                </h3>
+                <div class="space-y-2">
+                  {cards.map((card) => {
+                    const actionKey = card.action && card.actionId
+                      ? `${card.action}-${card.actionId}`
+                      : null;
+                    const isActionEditorOpen = actionKey !== null && expandedActionKey === actionKey;
+                    const movementLabel = movementKindLabel(card.movementKind);
+
+                    return (
+                      <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-2">
+                        <div class="flex flex-wrap items-start justify-between gap-2 border-b border-stone-100 pb-2">
+                          <div class="min-w-0 space-y-1">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span class="font-semibold text-gray-900">
+                                {card.villageName ? (
+                                  <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
+                                    {card.villageName}
+                                  </Link>
+                                ) : (
+                                  "Unknown Village"
+                                )}
+                              </span>
+                              {card.position ? (
+                                <Link to={`/map/field/${card.villageId}`} class="text-sm text-gray-600 hover:underline">
+                                  ({card.position.x}|{card.position.y})
                                 </Link>
-                              </h3>
-                            ) : (
-                              <h3 class="font-semibold text-gray-900">Unknown Village</h3>
-                            )}
-                            {card.movementKind ? (
-                              <Badge>{card.movementKind}</Badge>
+                              ) : null}
+                            </div>
+                            {card.arrivesAt ? (
+                              <MovementTiming
+                                arrivesAt={card.arrivesAt}
+                                serverTime={serverTime}
+                                serverTimeObservedAtMs={serverTimeObservedAtMs}
+                                onElapsed={() => {
+                                  void onMutate();
+                                }}
+                              />
+                            ) : null}
+                            {card.bounty ? (
+                              <BountyResources bounty={card.bounty} />
                             ) : null}
                           </div>
-                          {card.position ? (
-                            <p class="text-sm text-gray-600 mt-1">
-                              <Link to={`/map/field/${card.villageId}`} class="text-green-700 hover:underline">
-                                ({card.position.x}, {card.position.y})
-                              </Link>
-                            </p>
-                          ) : null}
-                          <p class="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
-                            <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
-                            {card.upkeep}
-                          </p>
-                          {card.arrivesAt ? (
-                            <div class="mt-1 space-y-1 text-sm text-gray-500">
-                              <p class="font-mono">
-                                ETA{" "}
-                                <LiveCountdown
-                                  seconds={secondsUntilIso(card.arrivesAt)}
-                                  onElapsed={() => {
-                                    void onMutate();
-                                  }}
-                                />
-                              </p>
-                              <p>Arrives at: <span class="font-mono">{new Date(card.arrivesAt).toLocaleString()}</span></p>
+                          {movementLabel ? <Badge>{movementLabel}</Badge> : null}
+                        </div>
+
+                        {!isActionEditorOpen ? (
+                          <div class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                              <thead>
+                                <tr>
+                                  {card.units.map((_, idx) => (
+                                    <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
+                                      <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  {card.units.map((count, idx) => (
+                                    <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
+                                      <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
+                                    </td>
+                                  ))}
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div class="mt-2 flex justify-end">
+                              <span class="inline-flex items-center gap-1 text-xs text-gray-500">
+                                <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
+                                {card.upkeep}
+                              </span>
                             </div>
-                          ) : null}
-                          {card.bounty ? (
-                            <p class="text-xs text-amber-700 mt-1">
-                              Loot: {card.bounty.lumber}/{card.bounty.clay}/{card.bounty.iron}/{card.bounty.crop}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Badge>{card.category}</Badge>
-                      </div>
+                          </div>
+                        ) : null}
 
-                      {!isActionEditorOpen ? (
-                        <div class="overflow-x-auto">
-                          <table class="w-full border-collapse">
-                            <thead>
-                              <tr>
-                                {card.units.map((_, idx) => (
-                                  <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
-                                    <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                {card.units.map((count, idx) => (
-                                  <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
-                                    <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
-                                  </td>
-                                ))}
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
-
-                      {card.action === "recall" && card.actionId ? (
-                        <RallyReinforcementActionForm
-                          card={card}
-                          action="recall"
-                          label="Recall Troops"
-                          variant="warning"
-                          unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
-                          expanded={isActionEditorOpen}
-                          onExpandedChange={(expanded) => {
-                            setExpandedActionKey(expanded ? actionKey : null);
-                          }}
-                          onSubmit={async (selectedUnits) => {
-                            setError(null);
-                            try {
-                              await recallTroops.mutateAsync({
-                                villageId: detail.villageId,
-                                armyId: card.actionId!,
-                                units: selectedUnits,
-                              });
-                            } catch (err) {
-                              const message = err instanceof Error ? err.message : "Unable to recall troops";
-                              setError(message);
-                            }
-                          }}
-                        />
-                      ) : null}
-                      {card.action === "release" && card.actionId ? (
-                        <RallyReinforcementActionForm
-                          card={card}
-                          action="release"
-                          label="Release Reinforcements"
-                          variant="secondary"
-                          unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
-                          expanded={isActionEditorOpen}
-                          onExpandedChange={(expanded) => {
-                            setExpandedActionKey(expanded ? actionKey : null);
-                          }}
-                          onSubmit={async (selectedUnits) => {
-                            setError(null);
-                            try {
-                              await releaseReinforcements.mutateAsync({
-                                villageId: card.villageId,
-                                armyId: card.actionId!,
-                                units: selectedUnits,
-                              });
-                            } catch (err) {
-                              const message = err instanceof Error ? err.message : "Unable to release reinforcements";
-                              setError(message);
-                            }
-                          }}
-                        />
-                      ) : null}
-                      {card.action === "cancel" && card.actionId ? (
-                        <Button
-                          type="button"
-                          variant="warning"
-                          size="sm"
-                          onClick={async () => {
-                            setError(null);
-                            try {
-                              await cancelTroopMovement.mutateAsync({
-                                movementId: card.actionId!,
-                              });
-                              await onMutate();
-                            } catch (err) {
-                              const message = err instanceof Error ? err.message : "Unable to cancel troop movement";
-                              setError(message);
-                            }
-                          }}
-                        >
-                          Cancel movement
-                        </Button>
-                      ) : null}
-                    </Panel>
-                  );
-                })}
+                        {card.action === "recall" && card.actionId ? (
+                          <RallyReinforcementActionForm
+                            card={card}
+                            action="recall"
+                            label="Recall Troops"
+                            variant="warning"
+                            unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
+                            expanded={isActionEditorOpen}
+                            onExpandedChange={(expanded) => {
+                              setExpandedActionKey(expanded ? actionKey : null);
+                            }}
+                            onSubmit={async (selectedUnits) => {
+                              setError(null);
+                              try {
+                                await recallTroops.mutateAsync({
+                                  villageId: detail.villageId,
+                                  armyId: card.actionId!,
+                                  units: selectedUnits,
+                                });
+                              } catch (err) {
+                                const message = err instanceof Error ? err.message : "Unable to recall troops";
+                                setError(message);
+                              }
+                            }}
+                          />
+                        ) : null}
+                        {card.action === "release" && card.actionId ? (
+                          <RallyReinforcementActionForm
+                            card={card}
+                            action="release"
+                            label="Release Reinforcements"
+                            variant="secondary"
+                            unitNames={detail.rallyPoint!.sendableUnits.map((unit) => unit.name)}
+                            expanded={isActionEditorOpen}
+                            onExpandedChange={(expanded) => {
+                              setExpandedActionKey(expanded ? actionKey : null);
+                            }}
+                            onSubmit={async (selectedUnits) => {
+                              setError(null);
+                              try {
+                                await releaseReinforcements.mutateAsync({
+                                  villageId: card.villageId,
+                                  armyId: card.actionId!,
+                                  units: selectedUnits,
+                                });
+                              } catch (err) {
+                                const message = err instanceof Error ? err.message : "Unable to release reinforcements";
+                                setError(message);
+                              }
+                            }}
+                          />
+                        ) : null}
+                        {card.action === "cancel" && card.actionId ? (
+                          <Button
+                            type="button"
+                            variant="warning"
+                            size="sm"
+                            onClick={async () => {
+                              setError(null);
+                              try {
+                                await cancelTroopMovement.mutateAsync({
+                                  movementId: card.actionId!,
+                                });
+                                await onMutate();
+                              } catch (err) {
+                                const message = err instanceof Error ? err.message : "Unable to cancel troop movement";
+                                setError(message);
+                              }
+                            }}
+                          >
+                            Cancel movement
+                          </Button>
+                        ) : null}
+                      </Panel>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }

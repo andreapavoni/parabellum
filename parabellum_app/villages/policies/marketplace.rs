@@ -12,9 +12,7 @@ pub struct MarketplaceAcceptance<'a> {
 
 impl MarketplaceAcceptance<'_> {
     pub fn validate(&self) -> Result<(), GameError> {
-        if self.accepting_village_id == self.offer.owner_village_id
-            || self.accepting_player_id == self.offer.owner_player_id
-        {
+        if self.accepting_village_id == self.offer.owner_village_id {
             return Err(GameError::InvalidMarketplaceOffer);
         }
         Ok(())
@@ -124,14 +122,30 @@ mod tests {
     }
 
     #[test]
-    fn rejects_owner_or_owner_village_acceptance() {
+    fn allows_same_player_cross_village_acceptance() {
+        let owner_player_id = Uuid::new_v4();
+        let offer = offer(owner_player_id, 1);
+
+        assert!(
+            MarketplaceAcceptance {
+                accepting_player_id: owner_player_id,
+                accepting_village_id: 2,
+                offer: &offer,
+            }
+            .validate()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_owner_village_acceptance() {
         let owner_player_id = Uuid::new_v4();
         let offer = offer(owner_player_id, 1);
 
         assert_eq!(
             MarketplaceAcceptance {
-                accepting_player_id: owner_player_id,
-                accepting_village_id: 2,
+                accepting_player_id: Uuid::new_v4(),
+                accepting_village_id: 1,
                 offer: &offer,
             }
             .validate(),
@@ -139,7 +153,7 @@ mod tests {
         );
         assert_eq!(
             MarketplaceAcceptance {
-                accepting_player_id: Uuid::new_v4(),
+                accepting_player_id: owner_player_id,
                 accepting_village_id: 1,
                 offer: &offer,
             }

@@ -777,7 +777,7 @@ static BARRACKS: BuildingData = BuildingData {
     data: &[
         BuildingValueData(210, 140, 260, 120, 4, 1, 1000, 2000),
         BuildingValueData(270, 180, 335, 155, 2, 1, 900, 2620),
-        BuildingValueData(345, 230, 425, 195, 2, 2, 81, 3340),
+        BuildingValueData(345, 230, 425, 195, 2, 2, 810, 3340),
         BuildingValueData(440, 295, 545, 250, 2, 2, 729, 4170),
         BuildingValueData(565, 375, 700, 320, 2, 2, 656, 5140),
         BuildingValueData(720, 480, 895, 410, 3, 3, 590, 6260),

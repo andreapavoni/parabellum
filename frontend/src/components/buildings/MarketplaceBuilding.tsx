@@ -72,12 +72,14 @@ function OffersTable({
   title,
   offers,
   actionLabel,
+  currentVillageId,
   enforceTradeRules,
   onAction,
 }: {
   title: string;
   offers: MarketplaceOffer[];
   actionLabel: string;
+  currentVillageId: number;
   enforceTradeRules?: boolean;
   onAction: (offer: MarketplaceOffer) => Promise<void>;
 }) {
@@ -94,6 +96,8 @@ function OffersTable({
                 <th class="py-2 pr-4">Offering</th>
                 <th class="py-2 pr-4">Seeking</th>
                 <th class="py-2 pr-4">Merchants</th>
+                <th class="py-2 pr-4">Distance</th>
+                <th class="py-2 pr-4">Travel time</th>
                 <th class="py-2 pr-4">Created</th>
                 <th class="py-2">Actions</th>
               </tr>
@@ -109,6 +113,17 @@ function OffersTable({
                   <td class="py-2 pr-4"><ResourceAmountsInline resources={offer.offerResources} /></td>
                   <td class="py-2 pr-4"><ResourceAmountsInline resources={offer.seekResources} /></td>
                   <td class="py-2 pr-4">{offer.merchantsRequired}</td>
+                  {offer.villageId === currentVillageId ? (
+                    <>
+                      <td class="py-2 pr-4 text-gray-500">-</td>
+                      <td class="py-2 pr-4 text-gray-500">-</td>
+                    </>
+                  ) : (
+                    <>
+                      <td class="py-2 pr-4">{offer.distance}</td>
+                      <td class="py-2 pr-4 font-mono text-gray-600">{formatDurationHms(offer.travelTimeSeconds)}</td>
+                    </>
+                  )}
                   <td class="py-2 pr-4 text-gray-600">{formatRelativeTime(offer.createdAt)}</td>
                   <td class="py-2">
                     {(() => {
@@ -398,10 +413,10 @@ export function MarketplaceBuilding({
         </div>
       </Panel>
 
-      <OffersTable title="Your offers" offers={detail.marketplace.ownOffers} actionLabel="Cancel" onAction={async (offer) => {
+      <OffersTable title="Your offers" offers={detail.marketplace.ownOffers} actionLabel="Cancel" currentVillageId={detail.villageId} onAction={async (offer) => {
         await cancelOffer.mutateAsync({ offerId: offer.offerId, slotId: detail.slotId });
       }} />
-      <OffersTable title="Global marketplace" offers={detail.marketplace.globalOffers} actionLabel="Accept" enforceTradeRules onAction={async (offer) => {
+      <OffersTable title="Global marketplace" offers={detail.marketplace.globalOffers} actionLabel="Accept" currentVillageId={detail.villageId} enforceTradeRules onAction={async (offer) => {
         await acceptOffer.mutateAsync({ offerId: offer.offerId, slotId: detail.slotId });
       }} />
 

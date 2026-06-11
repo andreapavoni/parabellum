@@ -282,6 +282,8 @@ export type Requirement = {
 export type EmptySlotBuildOption = {
   buildingName: string;
   cost: ResourceAmounts;
+  nextUpkeep: number;
+  upkeep?: number;
   timeSecs: number;
   missingRequirements: Requirement[];
 };
@@ -449,6 +451,8 @@ export type MarketplaceOffer = {
   villageId: number;
   villageName: string;
   position: Position;
+  distance: number;
+  travelTimeSeconds: number;
   offerResources: ResourceAmounts;
   seekResources: ResourceAmounts;
   merchantsRequired: number;
