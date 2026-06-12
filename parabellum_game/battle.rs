@@ -1,5 +1,4 @@
 /// Battle
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f64;
 
@@ -372,7 +371,7 @@ impl Battle {
         // TownHall celebrations are not implemented yet; keep neutral defaults for now.
         let attacker_great_celebration_active = false;
         let defender_great_celebration_active = false;
-        let loyalty_roll = rand::thread_rng().gen_range(0.0..1.0);
+        let loyalty_roll = rand::random_range(0.0..1.0);
         let loyalty_reduction_per_chief = loyalty_reduction_per_chief(
             &self.attacker.tribe,
             loyalty_roll,

@@ -1,5 +1,5 @@
 use parabellum_types::map::{OasisTopology, Position, ValleyTopology};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -162,8 +162,8 @@ pub fn generate_new_map(world_size: i32) -> Vec<MapField> {
 
     for x in -world_size..world_size {
         for y in -world_size..world_size {
-            let mut rng = rand::thread_rng();
-            let n = rng.gen_range(0..1001);
+            let mut rng = rand::rng();
+            let n = rng.random_range(0..1001);
             let position = Position { x, y };
             let id = position.to_id(world_size);
 
