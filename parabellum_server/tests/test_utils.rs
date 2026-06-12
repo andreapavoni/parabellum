@@ -328,9 +328,7 @@ pub mod tests {
     #[allow(dead_code)]
     pub async fn setup_http_client(cookie: Option<HeaderValue>, redirects: Option<u8>) -> Client {
         let redirect_policy = redirects.map_or(Policy::none(), |n| Policy::limited(n as usize));
-        let client = Client::builder()
-            .redirect(redirect_policy)
-            .cookie_store(true);
+        let client = Client::builder().redirect(redirect_policy);
 
         if cookie.is_none() {
             return client.build().unwrap();

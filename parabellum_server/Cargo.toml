@@ -41,11 +41,12 @@ axum = { workspace = true }
 std_prelude = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+time = "0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["cookies"] }
+reqwest = { version = "0.13" }
 parabellum_app = { path = "../parabellum_app", features = ["test-utils"] }
 parabellum_game = { path = "../parabellum_game", features = ["test-utils"] }

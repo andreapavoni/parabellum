@@ -50,7 +50,7 @@ keywords = ["travian", "rust", "mmorpg", "game", "strategy", "browser-game", "cq
 rust-version = "1.95"
 
 [workspace.dependencies]
-mini_cqrs_es = "0.11.0"
+mini_cqrs_es = "0.11"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
