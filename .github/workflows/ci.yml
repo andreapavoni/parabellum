@@ -57,4 +57,4 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo test --release -q
+          cargo test -q
