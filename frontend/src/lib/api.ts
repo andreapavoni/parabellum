@@ -391,6 +391,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  releaseTrappedTroops: (payload: {
+    villageId: number;
+    armyId: string;
+  }) =>
+    request<{ success: boolean }>("/army/trapped/release", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  disbandTrappedTroops: (payload: {
+    villageId: number;
+    armyId: string;
+  }) =>
+    request<{ success: boolean }>("/army/trapped/disband", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  buildTraps: (payload: { villageId: number; quantity: number }) =>
+    request<{ success: boolean }>("/army/traps/build", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   cancelTroopMovement: (payload: { movementId: string }) =>
     request<{ success: boolean }>(`/army/movements/${payload.movementId}`, {
       method: "DELETE",

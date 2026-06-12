@@ -44,7 +44,7 @@ use crate::map::PostgresMapRepository;
 
 use super::{
     CancelBuildingConstructionContext, CancelTroopMovementContext, ReinforcementContext,
-    VillageEsService,
+    TrappedArmyContext, VillageEsService,
 };
 
 #[derive(Clone)]
@@ -456,6 +456,29 @@ impl VillageEsService {
         ))
     }
 
+    pub async fn find_trapped_army_context(
+        &self,
+        army_id: uuid::Uuid,
+    ) -> Result<TrappedArmyContext, CqrsError> {
+        let army_repo: Arc<dyn ArmyRepository> =
+            Arc::new(PostgresArmyRepository::new(self.pool.clone()));
+        if let Some((trapped_village_id, army)) = army_repo
+            .find_trapped_context_by_army_id(army_id)
+            .await
+            .map_err(CqrsError::domain_source)?
+        {
+            return Ok(TrappedArmyContext {
+                trapped_village_id,
+                home_village_id: army.village_id,
+                army,
+            });
+        }
+
+        Err(CqrsError::EventStore(
+            DbError::ArmyNotFound(army_id).to_string(),
+        ))
+    }
+
     pub async fn find_cancel_troop_movement_context(
         &self,
         movement_id: uuid::Uuid,
@@ -655,6 +678,8 @@ impl VillageEsService {
             home_army: armies.home,
             reinforcements: armies.stationed,
             deployed_armies: armies.deployed,
+            trapped_here: armies.trapped_here,
+            trapped_away: armies.trapped_away,
         })
     }
 

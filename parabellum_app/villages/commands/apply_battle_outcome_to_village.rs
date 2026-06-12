@@ -1,5 +1,6 @@
 use mini_cqrs_es::{Aggregate, Command, CqrsError};
 use parabellum_game::models::army::Army;
+use parabellum_game::models::trapper::TrapperState;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::errors::AppError;
 use parabellum_types::tribe::Tribe;
@@ -21,6 +22,7 @@ pub struct ApplyBattleOutcomeToVillage {
     pub target_production: VillageProduction,
     pub target_population: u32,
     pub target_stocks: VillageStocks,
+    pub target_trapper: TrapperState,
     pub target_army: Option<Army>,
     pub target_reinforcements: Vec<Army>,
     pub stationed_attacker_army: Option<Army>,
@@ -41,6 +43,7 @@ impl ApplyBattleOutcomeToVillage {
             target_production: self.target_production,
             target_population: self.target_population,
             target_stocks: self.target_stocks,
+            target_trapper: self.target_trapper,
             target_army: self.target_army,
             target_reinforcements: self.target_reinforcements,
             stationed_attacker_army: self.stationed_attacker_army,

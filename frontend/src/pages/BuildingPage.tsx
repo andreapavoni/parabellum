@@ -7,6 +7,7 @@ import { SmithyBuilding } from "@/components/buildings/SmithyBuilding";
 import { MarketplaceBuilding } from "@/components/buildings/MarketplaceBuilding";
 import { RallyPointBuilding } from "@/components/buildings/RallyPointBuilding";
 import { MainBuilding } from "@/components/buildings/MainBuilding";
+import { TrapperBuilding } from "@/components/buildings/TrapperBuilding";
 import { EmptySlotBuilding, QueuedConstructionUpgrade, UpgradeBuilding } from "@/components/buildings/buildingCards";
 import type { BuildingPageResponse } from "@/types/api";
 
@@ -104,6 +105,14 @@ export function BuildingPage({
 
         {detail.buildingType === "rally_point" ? (
           <RallyPointBuilding
+            detail={detail}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={serverTimeObservedAtMs}
+            onMutate={onMutate}
+          />
+        ) : null}
+        {detail.trapper ? (
+          <TrapperBuilding
             detail={detail}
             serverTime={data.serverTime}
             serverTimeObservedAtMs={serverTimeObservedAtMs}

@@ -23,9 +23,10 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::{MarketplaceRepository, ScheduledActionRepository};
 use parabellum_app::villages::{
-    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelBuildingConstruction,
-    CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
-    MarketplaceAcceptance, RecallReinforcements, ReleaseReinforcements, RenameVillage,
+    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, BuildTraps,
+    CancelBuildingConstruction, CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer,
+    DisbandTrappedTroops, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
+    RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops, RenameVillage,
     ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage,
     SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
     UpgradeBuilding, VillageArmyContext, VillageService, hydrate_village,
@@ -62,6 +63,13 @@ pub struct ReinforcementContext {
     /// Home/origin village of the reinforcement army.
     pub home_village_id: u32,
     /// Full army state for recall/release command construction.
+    pub army: Army,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrappedArmyContext {
+    pub trapped_village_id: u32,
+    pub home_village_id: u32,
     pub army: Army,
 }
 
@@ -248,6 +256,26 @@ impl VillageEsService {
         service.release_reinforcements(village_id, command).await
     }
 
+    pub async fn release_trapped_troops(
+        &self,
+        village_id: u32,
+        command: &ReleaseTrappedTroops,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.release_trapped_troops(village_id, command).await
+    }
+
+    pub async fn disband_trapped_troops(
+        &self,
+        village_id: u32,
+        command: &DisbandTrappedTroops,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.disband_trapped_troops(village_id, command).await
+    }
+
     pub async fn cancel_troop_movement(
         &self,
         village_id: u32,
@@ -392,6 +420,18 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.train_units(village_id, command).await
+    }
+
+    pub async fn build_traps(
+        &self,
+        village_id: u32,
+        command: &BuildTraps,
+    ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.build_traps(village_id, command).await
     }
 
     pub async fn research_academy(

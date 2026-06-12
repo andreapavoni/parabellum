@@ -416,7 +416,9 @@ export type BuildingDetail = {
   rallyPoint?: {
     cards: RallyCard[];
     sendableUnits: RallySendableUnit[];
+    trapper?: TrapperDetail;
   };
+  trapper?: TrapperDetail;
   mainBuilding?: {
     canDowngrade: boolean;
     queueFull: boolean;
@@ -436,6 +438,25 @@ export type BuildingDetail = {
       isProcessing: boolean;
     }[];
   };
+};
+
+export type TrapperDetail = {
+  capacity: number;
+  active: number;
+  occupied: number;
+  broken: number;
+  queued: number;
+  buildable: number;
+  queue: TrapQueueItem[];
+  costPerTrap: ResourceAmounts;
+  timePerTrapSeconds: number;
+};
+
+export type TrapQueueItem = {
+  quantity: number;
+  timePerTrap: number;
+  finishesAt: string;
+  isProcessing: boolean;
 };
 
 export type BuildingPageResponse = {
@@ -477,9 +498,9 @@ export type MerchantMovement = {
   arrivesAt: string;
 };
 
-export type RallyCardCategory = "stationed" | "reinforcement" | "deployed" | "incoming" | "outgoing";
+export type RallyCardCategory = "stationed" | "reinforcement" | "deployed" | "trapped" | "incoming" | "outgoing";
 export type RallyMovementKind = "attack" | "raid" | "scout" | "reinforcement" | "return" | "found_village";
-export type RallyAction = "recall" | "release" | "cancel";
+export type RallyAction = "recall" | "release" | "cancel" | "release_trapped" | "disband_trapped";
 
 export type RallyCard = {
   villageId: number;

@@ -57,12 +57,22 @@ pub struct SmithyQueueItem {
     pub finishes_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TrapQueueItem {
+    pub job_id: Uuid,
+    pub quantity: i32,
+    pub time_per_trap: i32,
+    pub status: ScheduledActionStatus,
+    pub finishes_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct VillageQueues {
     pub building: Vec<BuildingQueueItem>,
     pub training: Vec<TrainingQueueItem>,
     pub academy: Vec<AcademyQueueItem>,
     pub smithy: Vec<SmithyQueueItem>,
+    pub traps: Vec<TrapQueueItem>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +148,8 @@ pub struct VillageArmyStateView {
     pub home_army: Option<Army>,
     pub reinforcements: Vec<Army>,
     pub deployed_armies: Vec<Army>,
+    pub trapped_here: Vec<Army>,
+    pub trapped_away: Vec<Army>,
 }
 
 #[derive(Debug, Clone)]

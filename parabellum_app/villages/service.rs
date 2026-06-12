@@ -1,12 +1,13 @@
 use mini_cqrs_es::{Cqrs, CqrsError};
 
 use crate::villages::{
-    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
-    CancelBuildingConstruction, CancelMarketplaceOffer, CancelTroopMovement, CreateHero,
-    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, MarkReportRead, RecallReinforcements,
-    ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle,
-    ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
-    SetVillageResources, TrainUnits, UpgradeBuilding,
+    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, BuildTraps,
+    CancelBuildingConstruction, CancelMarketplaceOffer, CancelTroopMovement, CompleteTrapBuild,
+    CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops, DowngradeBuilding, FoundVillage,
+    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops,
+    RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage,
+    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
+    UpgradeBuilding,
 };
 
 pub struct VillageService<'a, C: Cqrs> {
@@ -109,6 +110,26 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
     ) -> Result<u32, CqrsError> {
         self.cqrs
             .execute::<ReleaseReinforcements>(&village_id, command)
+            .await
+    }
+
+    pub async fn release_trapped_troops(
+        &self,
+        village_id: u32,
+        command: &ReleaseTrappedTroops,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<ReleaseTrappedTroops>(&village_id, command)
+            .await
+    }
+
+    pub async fn disband_trapped_troops(
+        &self,
+        village_id: u32,
+        command: &DisbandTrappedTroops,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<DisbandTrappedTroops>(&village_id, command)
             .await
     }
 
@@ -226,6 +247,24 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         command: &TrainUnits,
     ) -> Result<u32, CqrsError> {
         self.cqrs.execute::<TrainUnits>(&village_id, command).await
+    }
+
+    pub async fn build_traps(
+        &self,
+        village_id: u32,
+        command: &BuildTraps,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs.execute::<BuildTraps>(&village_id, command).await
+    }
+
+    pub async fn complete_trap_build(
+        &self,
+        village_id: u32,
+        command: &CompleteTrapBuild,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<CompleteTrapBuild>(&village_id, command)
+            .await
     }
 
     pub async fn research_academy(

@@ -18,6 +18,10 @@ impl VillageProjector {
                 Some(self.project_unit_training_scheduled(tx, event).await)
             }
             VillageEvent::UnitTrained { .. } => Some(self.project_unit_trained(tx, event).await),
+            VillageEvent::TrapBuildScheduled { .. } => {
+                Some(self.project_trap_build_scheduled(tx, event).await)
+            }
+            VillageEvent::TrapBuilt { .. } => Some(self.project_trapper_state(tx, event).await),
             VillageEvent::AcademyResearchScheduled { .. }
             | VillageEvent::SmithyResearchScheduled { .. } => {
                 Some(self.project_research_scheduled(tx, event).await)
@@ -30,6 +34,69 @@ impl VillageProjector {
             }
             _ => None,
         }
+    }
+
+    async fn project_trap_build_scheduled(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        let action = workflows::traps::scheduled_action_from_event(event)?;
+        self.add_scheduled_action_in_tx(tx, &action).await?;
+        let VillageEvent::TrapBuildScheduled {
+            village_id,
+            cost,
+            trapper,
+            ..
+        } = event
+        else {
+            unreachable!("project_trap_build_scheduled called with non-TrapBuildScheduled event");
+        };
+        self.update_trapper_state_in_tx(tx, *village_id, *trapper)
+            .await?;
+        self.deduct_village_resources_in_tx(tx, *village_id, cost)
+            .await
+    }
+
+    async fn project_trapper_state(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        match event {
+            VillageEvent::TrapBuilt {
+                village_id, trapper, ..
+            }
+            | VillageEvent::TrappedTroopsReleased {
+                trapped_village_id: village_id,
+                trapper,
+                ..
+            }
+            | VillageEvent::TrappedTroopsDisbanded {
+                trapped_village_id: village_id,
+                trapper,
+                ..
+            } => self.update_trapper_state_in_tx(tx, *village_id, *trapper).await,
+            _ => unreachable!("project_trapper_state called with non-trapper state event"),
+        }
+    }
+
+    async fn update_trapper_state_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+        trapper: parabellum_game::models::trapper::TrapperState,
+    ) -> Result<(), CqrsError> {
+        let mut current = self
+            .village
+            .get_by_village_id_in_tx(tx, village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        current.trapper = trapper;
+        self.village
+            .replace_village_state_in_tx(tx, &current)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     async fn project_unit_training_scheduled(

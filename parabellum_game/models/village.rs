@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use parabellum_types::army::{Unit, UnitGroup, UnitRole};
+use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -680,10 +681,7 @@ impl Village {
     }
 
     pub fn get_random_buildings(&self, count: usize) -> Vec<Building> {
-        use rand::seq::SliceRandom;
-        use rand::thread_rng;
-
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let buildings: Vec<Building> = self
             .buildings
             .iter()
@@ -691,7 +689,7 @@ impl Village {
             .collect();
 
         buildings
-            .choose_multiple(&mut rng, count)
+            .sample(&mut rng, count)
             .cloned()
             .collect::<Vec<Building>>()
     }

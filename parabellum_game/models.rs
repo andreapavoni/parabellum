@@ -5,4 +5,5 @@ pub mod hero;
 pub mod map;
 pub mod marketplace;
 pub mod smithy;
+pub mod trapper;
 pub mod village;

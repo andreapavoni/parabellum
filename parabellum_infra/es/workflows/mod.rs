@@ -22,6 +22,7 @@ pub(crate) mod merchants;
 pub(crate) mod movements;
 pub(crate) mod research;
 pub(crate) mod training;
+pub(crate) mod traps;
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;

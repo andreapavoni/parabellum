@@ -195,6 +195,8 @@ fn scout_battle_payload(
         loyalty_before: None,
         loyalty_after: None,
         conquered: None,
+        trapped: None,
+        freed: None,
     })
 }
 
@@ -246,6 +248,22 @@ fn attack_battle_payload(
         loyalty_before: Some(report.loyalty_before),
         loyalty_after: Some(report.loyalty_after),
         conquered: Some(success && report.loyalty_after == 0),
+        trapped: report
+            .trapped
+            .as_ref()
+            .map(|trapped| parabellum_types::reports::TrapCapturePayload {
+                trapped_units: trapped.trapped_units.clone(),
+                traps_used: trapped.traps_used,
+            }),
+        freed: report
+            .freed
+            .as_ref()
+            .map(|freed| parabellum_types::reports::TrapFreePayload {
+                units_before: freed.units_before.clone(),
+                deaths: freed.deaths.clone(),
+                survivors: freed.survivors.clone(),
+                traps_destroyed: freed.traps_destroyed,
+            }),
     })
 }
 

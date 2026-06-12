@@ -12,6 +12,8 @@ pub struct VillageArmyContext {
     pub stationed: Vec<Army>,
     pub deployed: Vec<Army>,
     pub moving: Vec<Army>,
+    pub trapped_here: Vec<Army>,
+    pub trapped_away: Vec<Army>,
 }
 
 /// Hydrates a domain `Village` from the village read model plus explicit army
@@ -75,6 +77,7 @@ mod tests {
             academy_research: academy.clone(),
             total_merchants: 0,
             busy_merchants: 0,
+            trapper: Default::default(),
             loyalty_updated_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             parent_village_id: None,

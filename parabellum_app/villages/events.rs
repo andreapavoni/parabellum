@@ -12,6 +12,7 @@ use mini_cqrs_es::EventPayload;
 use parabellum_game::battle::BattleReport;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::hero::Hero;
+use parabellum_game::models::trapper::TrapperState;
 use parabellum_game::models::village::{VillageBuilding, VillageProduction, VillageStocks};
 use parabellum_types::army::UnitName;
 use parabellum_types::battle::{AttackType, ScoutingTarget};
@@ -21,6 +22,8 @@ use parabellum_types::map::Position;
 use parabellum_types::tribe::Tribe;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::villages::models::TrappedTroopReturn;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VillageEvent {
@@ -202,6 +205,13 @@ pub enum VillageEvent {
         attack_type: AttackType,
         report: BattleReport,
         returning_army: Option<Army>,
+        #[serde(default)]
+        trapped_attacker_army: Option<Army>,
+        #[serde(default)]
+        freed_trapped_army_ids: Vec<Uuid>,
+        #[serde(default)]
+        freed_trapped_returns: Vec<TrappedTroopReturn>,
+        #[serde(default)]
         stationed_attacker_army: Option<Army>,
         returns_at: DateTime<Utc>,
     },
@@ -222,8 +232,11 @@ pub enum VillageEvent {
         target_production: VillageProduction,
         target_population: u32,
         target_stocks: VillageStocks,
+        #[serde(default)]
+        target_trapper: TrapperState,
         target_army: Option<Army>,
         target_reinforcements: Vec<Army>,
+        #[serde(default)]
         stationed_attacker_army: Option<Army>,
     },
     ArmyReturned {
@@ -236,6 +249,24 @@ pub enum VillageEvent {
         army: Army,
         bounty: Option<ResourceGroup>,
         returns_at: DateTime<Utc>,
+    },
+    TrappedTroopsReleased {
+        action_id: Uuid,
+        movement_id: Uuid,
+        army_id: Uuid,
+        player_id: Uuid,
+        home_village_id: u32,
+        trapped_village_id: u32,
+        army: Army,
+        trapper: TrapperState,
+        returns_at: DateTime<Utc>,
+    },
+    TrappedTroopsDisbanded {
+        army_id: Uuid,
+        player_id: Uuid,
+        home_village_id: u32,
+        trapped_village_id: u32,
+        trapper: TrapperState,
     },
     ScoutSent {
         movement_id: Uuid,
@@ -478,6 +509,23 @@ pub enum VillageEvent {
         unit: UnitName,
         quantity_trained: u32,
     },
+    TrapBuildScheduled {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        quantity_remaining: i32,
+        time_per_trap: i32,
+        cost: ResourceGroup,
+        trapper: TrapperState,
+        execute_at: DateTime<Utc>,
+    },
+    TrapBuilt {
+        action_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        quantity_built: u32,
+        trapper: TrapperState,
+    },
     AcademyResearchScheduled {
         action_id: Uuid,
         player_id: Uuid,
@@ -537,6 +585,8 @@ impl fmt::Display for VillageEvent {
             VillageEvent::AttackBattleResolved { .. } => "AttackBattleResolved",
             VillageEvent::BattleOutcomeAppliedToVillage { .. } => "BattleOutcomeAppliedToVillage",
             VillageEvent::ArmyReturned { .. } => "ArmyReturned",
+            VillageEvent::TrappedTroopsReleased { .. } => "TrappedTroopsReleased",
+            VillageEvent::TrappedTroopsDisbanded { .. } => "TrappedTroopsDisbanded",
             VillageEvent::ScoutSent { .. } => "ScoutSent",
             VillageEvent::ScoutArrived { .. } => "ScoutArrived",
             VillageEvent::ScoutBattleResolved { .. } => "ScoutBattleResolved",
@@ -567,6 +617,8 @@ impl fmt::Display for VillageEvent {
             VillageEvent::BuildingDowngraded { .. } => "BuildingDowngraded",
             VillageEvent::UnitTrainingScheduled { .. } => "UnitTrainingScheduled",
             VillageEvent::UnitTrained { .. } => "UnitTrained",
+            VillageEvent::TrapBuildScheduled { .. } => "TrapBuildScheduled",
+            VillageEvent::TrapBuilt { .. } => "TrapBuilt",
             VillageEvent::AcademyResearchScheduled { .. } => "AcademyResearchScheduled",
             VillageEvent::AcademyResearchCompleted { .. } => "AcademyResearchCompleted",
             VillageEvent::SmithyResearchScheduled { .. } => "SmithyResearchScheduled",
@@ -579,3 +631,100 @@ impl fmt::Display for VillageEvent {
 }
 
 impl EventPayload for VillageEvent {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parabellum_game::battle::BattlePartyReport;
+    use parabellum_game::models::army::Army;
+    use parabellum_types::army::TroopSet;
+    use parabellum_types::common::ResourceGroup;
+
+    fn test_army(id: Uuid, village_id: u32, player_id: Uuid) -> Army {
+        let units = TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let smithy = [0; 8];
+        Army::new(
+            Some(id),
+            village_id,
+            Some(village_id),
+            player_id,
+            Tribe::Roman,
+            &units,
+            &smithy,
+            None,
+        )
+    }
+
+    fn test_battle_report(army: Army) -> BattleReport {
+        BattleReport {
+            attack_type: AttackType::Normal,
+            attacker: BattlePartyReport {
+                army_before: army,
+                survivors: TroopSet::default(),
+                losses: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                hero_exp_gained: 0,
+                loss_percentage: 100.0,
+            },
+            defender: None,
+            reinforcements: vec![],
+            scouting: None,
+            bounty: Some(ResourceGroup::new(0, 0, 0, 0)),
+            wall_damage: None,
+            catapult_damage: vec![],
+            loyalty_before: 100,
+            loyalty_after: 100,
+            trapped: None,
+            freed: None,
+        }
+    }
+
+    #[test]
+    fn attack_battle_resolved_deserializes_without_trapper_fields() {
+        let player_id = Uuid::new_v4();
+        let army_id = Uuid::new_v4();
+        let event = VillageEvent::AttackBattleResolved {
+            action_id: Uuid::new_v4(),
+            movement_id: Uuid::new_v4(),
+            return_action_id: Uuid::new_v4(),
+            army_id,
+            player_id,
+            source_village_id: 1,
+            target_village_id: 2,
+            attack_type: AttackType::Normal,
+            report: test_battle_report(test_army(army_id, 1, player_id)),
+            returning_army: None,
+            trapped_attacker_army: None,
+            freed_trapped_army_ids: vec![],
+            freed_trapped_returns: vec![],
+            stationed_attacker_army: None,
+            returns_at: Utc::now(),
+        };
+        let mut value = serde_json::to_value(event).expect("serialize event");
+        let payload = value
+            .get_mut("AttackBattleResolved")
+            .and_then(|payload| payload.as_object_mut())
+            .expect("externally tagged event payload");
+        payload.remove("trapped_attacker_army");
+        payload.remove("freed_trapped_army_ids");
+        payload.remove("freed_trapped_returns");
+        payload.remove("stationed_attacker_army");
+
+        let decoded: VillageEvent = serde_json::from_value(value).expect("deserialize legacy event");
+
+        match decoded {
+            VillageEvent::AttackBattleResolved {
+                trapped_attacker_army,
+                freed_trapped_army_ids,
+                freed_trapped_returns,
+                stationed_attacker_army,
+                ..
+            } => {
+                assert!(trapped_attacker_army.is_none());
+                assert!(freed_trapped_army_ids.is_empty());
+                assert!(freed_trapped_returns.is_empty());
+                assert!(stationed_attacker_army.is_none());
+            }
+            _ => panic!("expected AttackBattleResolved"),
+        }
+    }
+}

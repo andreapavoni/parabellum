@@ -19,9 +19,12 @@ use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
     CancelBuildingConstructionRequest as CancelBuildingConstructionUseCaseRequest,
     CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
-    CreateMarketplaceOfferRequest, DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
+    BuildTrapsRequest as BuildTrapsUseCaseRequest, CreateMarketplaceOfferRequest,
+    DisbandTrappedTroopsRequest as DisbandTrappedTroopsUseCaseRequest,
+    DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
+    ReleaseTrappedTroopsRequest as ReleaseTrappedTroopsUseCaseRequest,
     RenameVillageRequest as RenameVillageUseCaseRequest,
     ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
     ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
@@ -212,6 +215,27 @@ pub struct ReleaseReinforcementsRequest {
     pub army_id: Uuid,
     pub units: Vec<i32>,
     pub hero_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseTrappedTroopsRequest {
+    pub village_id: u32,
+    pub army_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DisbandTrappedTroopsRequest {
+    pub village_id: u32,
+    pub army_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildTrapsRequest {
+    pub village_id: u32,
+    pub quantity: u32,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -937,6 +961,66 @@ pub async fn release_reinforcements(
             army_id: payload.army_id,
             units,
             hero_id: payload.hero_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn release_trapped_troops(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ReleaseTrappedTroopsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .release_trapped_troops(ReleaseTrappedTroopsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            army_id: payload.army_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn disband_trapped_troops(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<DisbandTrappedTroopsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .disband_trapped_troops(DisbandTrappedTroopsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            army_id: payload.army_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn build_traps(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<BuildTrapsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .build_traps(BuildTrapsUseCaseRequest {
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            quantity: payload.quantity,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;

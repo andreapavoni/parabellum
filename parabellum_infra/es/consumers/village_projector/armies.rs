@@ -74,6 +74,12 @@ impl VillageProjector {
                 Some(self.project_scout_battle_resolved(tx, event).await)
             }
             VillageEvent::ArmyReturned { .. } => Some(self.project_army_returned(tx, event).await),
+            VillageEvent::TrappedTroopsReleased { .. } => {
+                Some(self.project_trapped_troops_released(tx, event).await)
+            }
+            VillageEvent::TrappedTroopsDisbanded { .. } => {
+                Some(self.project_trapped_troops_disbanded(tx, event).await)
+            }
             _ => None,
         }
     }

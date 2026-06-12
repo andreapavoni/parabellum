@@ -15,10 +15,11 @@ use crate::ports::{
     queries::VillageQueryPort,
     scheduler::SchedulerPort,
     villages::{
-        AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
-        CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
-        CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
-        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+        AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
+        CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest, CancelTroopMovementRequest,
+        CreateHeroRequest, CreateMarketplaceOfferRequest, DisbandTrappedTroopsRequest,
+        DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+        ReleaseTrappedTroopsRequest, RenameVillageRequest, ResearchAcademyRequest,
         ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
         SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
         UpgradeBuildingRequest, VillageCommandsPort,
@@ -158,6 +159,24 @@ impl GameApplication {
         request: ReleaseReinforcementsRequest,
     ) -> Result<(), ApplicationError> {
         self.villages_port().release_reinforcements(request).await
+    }
+
+    pub async fn release_trapped_troops(
+        &self,
+        request: ReleaseTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().release_trapped_troops(request).await
+    }
+
+    pub async fn disband_trapped_troops(
+        &self,
+        request: DisbandTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().disband_trapped_troops(request).await
+    }
+
+    pub async fn build_traps(&self, request: BuildTrapsRequest) -> Result<(), ApplicationError> {
+        self.villages_port().build_traps(request).await
     }
 
     pub async fn cancel_troop_movement(

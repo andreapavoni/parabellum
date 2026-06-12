@@ -5,6 +5,7 @@ use parabellum_app::villages::repositories::{
 use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
+use parabellum_game::models::trapper::TrapperState;
 use parabellum_game::models::village::{
     AcademyResearch, VillageBuilding, VillageSnapshot, VillageStocks,
 };
@@ -67,6 +68,9 @@ impl PostgresVillageRepository {
                 parent_village_id = $15,
                 total_merchants = $16,
                 busy_merchants = $17,
+                trapper_active_traps = $18,
+                trapper_broken_traps = $19,
+                trapper_queued_traps = $20,
                 loyalty_updated_at = CASE
                     WHEN loyalty <> $10 THEN NOW()
                     ELSE loyalty_updated_at
@@ -92,6 +96,9 @@ impl PostgresVillageRepository {
         .bind(model.parent_village_id.map(|id| id as i32))
         .bind(model.total_merchants as i16)
         .bind(model.busy_merchants as i16)
+        .bind(model.trapper.active_traps as i32)
+        .bind(model.trapper.broken_traps as i32)
+        .bind(model.trapper.queued_traps as i32)
         .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -265,12 +272,12 @@ impl PostgresVillageRepository {
             INSERT INTO rm_village (
                 village_id, player_id, village_name, position, tribe, buildings, production, stocks,
                 population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-                   total_merchants, busy_merchants, loyalty_updated_at
+                   total_merchants, busy_merchants, trapper_active_traps, trapper_broken_traps, trapper_queued_traps, loyalty_updated_at
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8,
                 $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, NOW()
+                $16, $17, $18, $19, $20, NOW()
             )
             ON CONFLICT (village_id)
             DO UPDATE SET
@@ -290,6 +297,9 @@ impl PostgresVillageRepository {
                 parent_village_id = EXCLUDED.parent_village_id,
                 total_merchants = EXCLUDED.total_merchants,
                 busy_merchants = EXCLUDED.busy_merchants,
+                trapper_active_traps = EXCLUDED.trapper_active_traps,
+                trapper_broken_traps = EXCLUDED.trapper_broken_traps,
+                trapper_queued_traps = EXCLUDED.trapper_queued_traps,
                 loyalty_updated_at = EXCLUDED.loyalty_updated_at,
                 updated_at = NOW()
             "#,
@@ -310,7 +320,10 @@ impl PostgresVillageRepository {
         .bind(Json(parabellum_game::models::village::AcademyResearch::default()))
         .bind(parent_village_id.map(|id| id as i32))
         .bind(total_merchants as i16)
-        .bind(0_i16);
+        .bind(0_i16)
+        .bind(0_i32)
+        .bind(0_i32)
+        .bind(0_i32);
         if let Some(tx) = tx {
             q.execute(&mut **tx)
                 .await
@@ -594,7 +607,7 @@ fn village_select_sql() -> &'static str {
     r#"
     SELECT village_id, player_id, village_name, position, tribe, buildings, production, stocks,
            population, loyalty, is_capital, culture_points_production, smithy_upgrades, academy_research, parent_village_id,
-           total_merchants, busy_merchants, loyalty_updated_at, updated_at
+           total_merchants, busy_merchants, trapper_active_traps, trapper_broken_traps, trapper_queued_traps, loyalty_updated_at, updated_at
     FROM rm_village
     "#
 }
@@ -618,6 +631,9 @@ struct DbVillageModelRow {
     parent_village_id: Option<i32>,
     total_merchants: i16,
     busy_merchants: i16,
+    trapper_active_traps: i32,
+    trapper_broken_traps: i32,
+    trapper_queued_traps: i32,
     loyalty_updated_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -650,6 +666,11 @@ impl TryFrom<DbVillageModelRow> for VillageModel {
             academy_research: value.academy_research.0,
             total_merchants: value.total_merchants as u8,
             busy_merchants: value.busy_merchants as u8,
+            trapper: TrapperState {
+                active_traps: value.trapper_active_traps.max(0) as u32,
+                broken_traps: value.trapper_broken_traps.max(0) as u32,
+                queued_traps: value.trapper_queued_traps.max(0) as u32,
+            },
             loyalty_updated_at: value.loyalty_updated_at,
             updated_at: value.updated_at,
             parent_village_id: value.parent_village_id.map(|v| v as u32),

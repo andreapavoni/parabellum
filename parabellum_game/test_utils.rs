@@ -1,5 +1,5 @@
 use parabellum_types::army::TroopSet;
-use rand::Rng;
+use rand::RngExt;
 use uuid::Uuid;
 
 use parabellum_types::errors::Result;
@@ -96,7 +96,7 @@ pub fn map_field_factory(options: MapFieldFactoryOptions) -> MapField {
 }
 
 pub fn user_factory(options: UserFactoryOptions) -> User {
-    let default_email: String = format!("user_{}@example.com", rand::thread_rng().r#gen::<u32>());
+    let default_email: String = format!("user_{}@example.com", rand::rng().random::<u32>());
     User::new(
         options.id.unwrap_or_else(Uuid::new_v4),
         options.email.map_or(default_email, |s| s.to_string()),
@@ -105,7 +105,7 @@ pub fn user_factory(options: UserFactoryOptions) -> User {
 }
 
 pub fn player_factory(options: PlayerFactoryOptions) -> Player {
-    let default_username: String = format!("user_{}", rand::thread_rng().r#gen::<u32>());
+    let default_username: String = format!("user_{}", rand::rng().random::<u32>());
     Player {
         id: options.id.unwrap_or_else(Uuid::new_v4),
         username: options.username.map_or(default_username, |s| s.to_string()),
@@ -174,9 +174,9 @@ pub fn setup_player_party(
     with_hero: bool,
 ) -> Result<(Player, Village, Army, Option<Hero>)> {
     let position = position.unwrap_or_else(|| {
-        let mut rng = rand::thread_rng();
-        let x = rng.gen_range(1..99);
-        let y = rng.gen_range(1..99);
+        let mut rng = rand::rng();
+        let x = rng.random_range(1..99);
+        let y = rng.random_range(1..99);
         Position { x, y }
     });
 

@@ -156,6 +156,17 @@ impl PostgresArmyRepository {
             .await
     }
 
+    pub async fn upsert_trapped_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        army: &Army,
+        trapped_village_id: u32,
+        player_id: Uuid,
+    ) -> Result<(), ApplicationError> {
+        self.upsert_in_tx_inner(Some(tx), army, trapped_village_id, player_id, "trapped")
+            .await
+    }
+
     pub async fn delete_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -195,6 +206,28 @@ impl PostgresArmyRepository {
         row.map(|row| {
             let stationed_village_id = row.get::<i32, _>("current_village_id") as u32;
             Self::army_from_row(row).map(|army| (stationed_village_id, army))
+        })
+            .transpose()
+    }
+
+    async fn find_trapped_context(
+        &self,
+        army_id: Uuid,
+    ) -> Result<Option<(u32, Army)>, ApplicationError> {
+        let row = Self::army_query(
+            ArmyListFilter::new()
+                .army_id(army_id)
+                .state(ArmyState::Trapped)
+                .limit(1),
+        )?
+        .build()
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        row.map(|row| {
+            let trapped_village_id = row.get::<i32, _>("current_village_id") as u32;
+            Self::army_from_row(row).map(|army| (trapped_village_id, army))
         })
         .transpose()
     }
@@ -268,6 +301,7 @@ impl PostgresArmyRepository {
             ArmyState::Home => "home",
             ArmyState::Stationed => "stationed",
             ArmyState::Moving => "moving",
+            ArmyState::Trapped => "trapped",
         }
     }
 
@@ -343,6 +377,23 @@ impl PostgresArmyRepository {
                     ArmyListFilter::new()
                         .home_village(village_id)
                         .state(ArmyState::Moving),
+                )
+                .await?,
+            trapped_here: self
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .current_village(village_id)
+                        .state(ArmyState::Trapped),
+                )
+                .await?,
+            trapped_away: self
+                .list_armies_in_tx(
+                    tx,
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Trapped)
+                        .deployed(true),
                 )
                 .await?,
         })
@@ -539,6 +590,13 @@ impl ArmyRepository for PostgresArmyRepository {
         self.find_stationed_context(army_id).await
     }
 
+    async fn find_trapped_context_by_army_id(
+        &self,
+        army_id: Uuid,
+    ) -> Result<Option<(u32, Army)>, ApplicationError> {
+        self.find_trapped_context(army_id).await
+    }
+
     async fn army_context_for_village(
         &self,
         village_id: u32,
@@ -574,6 +632,21 @@ impl ArmyRepository for PostgresArmyRepository {
                     ArmyListFilter::new()
                         .home_village(village_id)
                         .state(ArmyState::Moving),
+                )
+                .await?,
+            trapped_here: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .current_village(village_id)
+                        .state(ArmyState::Trapped),
+                )
+                .await?,
+            trapped_away: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Trapped)
+                        .deployed(true),
                 )
                 .await?,
         })

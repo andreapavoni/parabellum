@@ -1,5 +1,4 @@
 /// Battle
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f64;
 
@@ -14,7 +13,12 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::models::{army::Army, buildings::Building, village::Village};
+use crate::models::{
+    army::Army,
+    buildings::Building,
+    trapper::{TrapCaptureOutcome, TrapFreeOutcome},
+    village::Village,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BattlePartyReport {
@@ -40,6 +44,9 @@ pub struct BattleReport {
 
     pub loyalty_before: u8,
     pub loyalty_after: u8,
+
+    pub trapped: Option<TrapCaptureOutcome>,
+    pub freed: Option<TrapFreeOutcome>,
 }
 
 pub struct Battle {
@@ -364,7 +371,7 @@ impl Battle {
         // TownHall celebrations are not implemented yet; keep neutral defaults for now.
         let attacker_great_celebration_active = false;
         let defender_great_celebration_active = false;
-        let loyalty_roll = rand::thread_rng().gen_range(0.0..1.0);
+        let loyalty_roll = rand::random_range(0.0..1.0);
         let loyalty_reduction_per_chief = loyalty_reduction_per_chief(
             &self.attacker.tribe,
             loyalty_roll,
@@ -401,6 +408,8 @@ impl Battle {
             catapult_damage: catapult_reports,
             loyalty_before,
             loyalty_after,
+            trapped: None,
+            freed: None,
         }
     }
 
@@ -509,6 +518,8 @@ impl Battle {
             catapult_damage: vec![],
             loyalty_before: 100, // TODO: calculate loyalty
             loyalty_after: 100,  // TODO: calculate loyalty
+            trapped: None,
+            freed: None,
         }
     }
 }
