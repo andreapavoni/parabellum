@@ -12,7 +12,7 @@ env:
 
 jobs:
   test:
-    runs-on: rust:1.95-slim-trixie
+    runs-on: ubuntu-slim
 
     services:
       postgres:
