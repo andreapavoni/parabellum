@@ -52,25 +52,9 @@ export function QueueList({
         <div class="space-y-1.5">
           {queue.map((item) => (
             <div
-              class={`flex w-full items-center justify-between gap-3 rounded border px-2 py-1.5 ${
-                item.isProcessing
-                  ? "border-green-200 bg-green-50"
-                  : "border-amber-200 bg-amber-50"
-              }`}
+              class="grid w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2 py-1"
               key={item.actionId}
             >
-              <Link
-                to={`/app/build/${item.slotId}`}
-                class="min-w-0 truncate font-semibold text-gray-800 hover:text-gray-900 hover:underline"
-              >
-                {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
-              </Link>
-              <QueueTimer
-                finishesAt={item.finishesAt}
-                serverTime={serverTime}
-                serverTimeObservedAtMs={serverTimeObservedAtMs}
-                onElapsed={onQueueElapsed}
-              />
               {!item.isProcessing ? (
                 <button
                   type="button"
@@ -91,7 +75,21 @@ export function QueueList({
                 >
                   <X size={14} aria-hidden="true" />
                 </button>
-              ) : null}
+              ) : (
+                <span aria-hidden="true" />
+              )}
+              <Link
+                to={`/app/build/${item.slotId}`}
+                class="min-w-0 truncate font-semibold text-gray-800 hover:text-gray-900 hover:underline"
+              >
+                {buildingLabel(item.buildingName)} (Lv {item.targetLevel})
+              </Link>
+              <QueueTimer
+                finishesAt={item.finishesAt}
+                serverTime={serverTime}
+                serverTimeObservedAtMs={serverTimeObservedAtMs}
+                onElapsed={onQueueElapsed}
+              />
             </div>
           ))}
         </div>

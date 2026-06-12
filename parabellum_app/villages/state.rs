@@ -400,14 +400,13 @@ impl VillageState {
 
     pub fn next_execution_time_for_slot(
         &self,
-        slot_id: u8,
+        _slot_id: u8,
         duration_secs: i64,
     ) -> chrono::DateTime<Utc> {
         let now = Utc::now();
         let ready_at = self
             .pending_building_actions
             .iter()
-            .filter(|action| action.slot_id == slot_id)
             .map(|action| action.execute_at)
             .max()
             .filter(|time| *time > now)

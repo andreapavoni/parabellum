@@ -192,4 +192,40 @@ mod tests {
         };
         assert!(*execute_at > first_eta);
     }
+
+    #[tokio::test]
+    async fn schedules_different_slot_after_existing_building_queue() {
+        let mut aggregate = aggregate_with_tribe(Tribe::Roman).await;
+        let player_id = aggregate.player_id();
+        let first_eta = Utc::now() + Duration::minutes(5);
+
+        aggregate
+            .apply(&VillageEvent::BuildingConstructionScheduled {
+                action_id: Uuid::new_v4(),
+                player_id,
+                village_id: 1,
+                slot_id: 22,
+                building_name: BuildingName::Cranny,
+                level: 1,
+                speed: 1,
+                cost: parabellum_types::common::ResourceGroup::new(0, 0, 0, 0),
+                execute_at: first_eta,
+            })
+            .await;
+
+        let events = AddBuilding {
+            player_id,
+            slot_id: 23,
+            building_name: BuildingName::Granary,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await
+        .unwrap();
+
+        let VillageEvent::BuildingConstructionScheduled { execute_at, .. } = &events[0] else {
+            panic!("expected BuildingConstructionScheduled");
+        };
+        assert!(*execute_at > first_eta);
+    }
 }
