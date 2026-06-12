@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use parabellum_game::models::{
     hero::Hero,
     smithy::SmithyUpgrades,
+    trapper::TrapperState,
     village::{AcademyResearch, VillageBuilding, VillageProduction, VillageStocks},
 };
 use parabellum_types::battle::AttackType;
@@ -37,6 +38,7 @@ pub struct VillageModel {
     pub academy_research: AcademyResearch,
     pub total_merchants: u8,
     pub busy_merchants: u8,
+    pub trapper: TrapperState,
     pub updated_at: DateTime<Utc>,
     pub parent_village_id: Option<u32>,
 }
@@ -185,6 +187,7 @@ pub enum ScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
+    TrapBuild,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -224,6 +227,27 @@ pub struct TrainingWorkflow {
     pub time_per_unit: i32,
     pub quantity_remaining: i32,
     pub execute_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrapBuildWorkflow {
+    pub village_id: u32,
+    pub player_id: Uuid,
+    pub quantity_remaining: i32,
+    pub time_per_trap: i32,
+    pub execute_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrappedTroopReturn {
+    pub action_id: Uuid,
+    pub movement_id: Uuid,
+    pub army_id: Uuid,
+    pub player_id: Uuid,
+    pub home_village_id: u32,
+    pub trapped_village_id: u32,
+    pub army: Army,
+    pub returns_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -398,6 +422,9 @@ pub enum ScheduledActionPayload {
     HeroRevival {
         workflow: HeroRevivalWorkflow,
     },
+    TrapBuild {
+        workflow: TrapBuildWorkflow,
+    },
 }
 
 impl ScheduledActionPayload {
@@ -418,6 +445,7 @@ impl ScheduledActionPayload {
             ScheduledActionPayload::Training { .. } => ScheduledActionType::TrainUnit,
             ScheduledActionPayload::Research { workflow } => workflow.kind.action_type(),
             ScheduledActionPayload::HeroRevival { .. } => ScheduledActionType::HeroRevival,
+            ScheduledActionPayload::TrapBuild { .. } => ScheduledActionType::TrapBuild,
         }
     }
 }

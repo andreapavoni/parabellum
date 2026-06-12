@@ -5,9 +5,13 @@
 //! domain to resolve the encounter, then converts app command outcomes into
 //! canonical aggregate events.
 
+use std::collections::HashMap;
+
 use mini_cqrs_es::CqrsError;
 use parabellum_app::ports::identity::PlayerRepository;
-use parabellum_app::villages::models::{AttackArrivalWorkflow, ScoutArrivalWorkflow, VillageModel};
+use parabellum_app::villages::models::{
+    AttackArrivalWorkflow, ScoutArrivalWorkflow, TrappedTroopReturn, VillageModel,
+};
 use parabellum_app::villages::repositories::{ArmyRepository, VillageRepository};
 use parabellum_app::villages::{
     ApplyBattleOutcomeToVillage, ConquestAttempt, ResolveAttackBattle, ResolveScoutBattle,
@@ -17,8 +21,10 @@ use parabellum_game::battle::Battle;
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::smithy::SmithyUpgrades;
+use parabellum_game::models::trapper::Trapper;
 use parabellum_game::models::village::Village;
-use parabellum_types::army::UnitRole;
+use parabellum_types::army::{TroopSet, UnitRole};
+use parabellum_types::battle::AttackType;
 
 use crate::es::{PostgresArmyRepository, PostgresVillageRepository, VillageEsService};
 use crate::identity::repositories::PostgresPlayerRepository;
@@ -86,7 +92,17 @@ async fn build_attack_outcome(
         && can_attempt_conquer(svc, &source, &target, &workflow.army).await?;
 
     let attacker_village = hydrate_village(source.clone(), VillageArmyContext::default());
-    let mut defender_village = hydrate_village_with_current_armies(svc, target.clone()).await?;
+    let defender_armies = PostgresArmyRepository::new(svc.pool().clone())
+        .army_context_for_village(target.village_id)
+        .await
+        .map_err(CqrsError::domain_source)?;
+    let trapped_here = defender_armies.trapped_here.clone();
+    let occupied_traps = trapped_here
+        .iter()
+        .map(|army| army.units().immensity())
+        .sum();
+    let mut trapper = Trapper::from_buildings(&target.buildings, target.trapper, occupied_traps);
+    let mut defender_village = hydrate_village(target.clone(), defender_armies);
     let no_smithy: SmithyUpgrades = [0; 8];
     let mut attacker_army = Army::new(
         Some(workflow.army_id),
@@ -98,6 +114,24 @@ async fn build_attack_outcome(
         workflow.army.smithy(),
         workflow.army.hero(),
     );
+
+    let mut captured_army = None;
+    let capture = trapper.capture(attacker_army.units());
+    if capture.traps_used > 0 {
+        let captured = attacker_army
+            .split_units(capture.trapped_units.clone(), None, workflow.target_village_id)
+            .map_err(CqrsError::domain_source)?;
+        captured_army = Some(Army::new(
+            Some(captured.id),
+            captured.village_id,
+            Some(workflow.target_village_id),
+            captured.player_id,
+            captured.tribe.clone(),
+            captured.units(),
+            captured.smithy(),
+            captured.hero(),
+        ));
+    }
 
     let mut selected_targets: Vec<Building> = Vec::new();
     for name in workflow.catapult_targets {
@@ -118,17 +152,122 @@ async fn build_attack_outcome(
         }
     }
     let selected_targets = selected_targets.try_into().ok();
-    let battle = Battle::new(
-        workflow.attack_type.clone(),
-        attacker_army.clone(),
-        attacker_village,
-        defender_village.clone(),
-        selected_targets,
-        can_attempt_conquer,
-    );
-    let report = battle.calculate_battle();
-    attacker_army.apply_battle_report(&report.attacker);
-    let _ = defender_village.apply_battle_report(&report, 1);
+    let mut report = if attacker_army.immensity() == 0 {
+        parabellum_game::battle::BattleReport {
+            attack_type: workflow.attack_type.clone(),
+            attacker: parabellum_game::battle::BattlePartyReport {
+                army_before: attacker_army.clone(),
+                survivors: TroopSet::default(),
+                losses: TroopSet::default(),
+                hero_exp_gained: 0,
+                loss_percentage: 0.0,
+            },
+            defender: defender_village
+                .army()
+                .cloned()
+                .map(|army| parabellum_game::battle::BattlePartyReport {
+                    survivors: army.units().clone(),
+                    losses: TroopSet::default(),
+                    army_before: army,
+                    hero_exp_gained: 0,
+                    loss_percentage: 0.0,
+                }),
+            reinforcements: defender_village
+                .reinforcements()
+                .iter()
+                .cloned()
+                .map(|army| parabellum_game::battle::BattlePartyReport {
+                    survivors: army.units().clone(),
+                    losses: TroopSet::default(),
+                    army_before: army,
+                    hero_exp_gained: 0,
+                    loss_percentage: 0.0,
+                })
+                .collect(),
+            scouting: None,
+            bounty: Some(Default::default()),
+            wall_damage: None,
+            catapult_damage: vec![],
+            loyalty_before: defender_village.loyalty(),
+            loyalty_after: defender_village.loyalty(),
+            trapped: None,
+            freed: None,
+        }
+    } else {
+        let battle = Battle::new(
+            workflow.attack_type.clone(),
+            attacker_army.clone(),
+            attacker_village,
+            defender_village.clone(),
+            selected_targets,
+            can_attempt_conquer,
+        );
+        let report = battle.calculate_battle();
+        attacker_army.apply_battle_report(&report.attacker);
+        let _ = defender_village.apply_battle_report(&report, 1);
+        report
+    };
+    if capture.traps_used > 0 {
+        report.trapped = Some(capture);
+    }
+
+    let freed_trapped: Vec<Army> = if workflow.attack_type == AttackType::Normal
+        && attacker_army.immensity() > 0
+    {
+        trapped_here
+            .iter()
+            .filter(|army| army.player_id == workflow.player_id)
+            .cloned()
+            .collect()
+    } else {
+        vec![]
+    };
+    let mut freed_trapped_army_ids = Vec::new();
+    let mut freed_trapped_returns = Vec::new();
+    if !freed_trapped.is_empty() {
+        let mut freed_units = TroopSet::default();
+        for army in &freed_trapped {
+            for (idx, quantity) in army.units().units().iter().enumerate() {
+                freed_units.add(idx, *quantity);
+            }
+            freed_trapped_army_ids.push(army.id);
+        }
+        let free = trapper.free_by_attack(&freed_units);
+        let survivor_units_by_home =
+            freed_survivor_units_by_home(&freed_trapped, &free.survivors);
+        for (home_village_id, survivors) in survivor_units_by_home {
+            if survivors.immensity() == 0 {
+                continue;
+            }
+            let freed_survivor_army = Army::new(
+                None,
+                home_village_id,
+                Some(workflow.target_village_id),
+                workflow.player_id,
+                source.tribe.clone(),
+                &survivors,
+                &no_smithy,
+                None,
+            );
+            if home_village_id == workflow.source_village_id {
+                attacker_army
+                    .merge(&freed_survivor_army)
+                    .map_err(CqrsError::domain_source)?;
+            } else {
+                freed_trapped_returns.push(TrappedTroopReturn {
+                    action_id: uuid::Uuid::new_v4(),
+                    movement_id: uuid::Uuid::new_v4(),
+                    army_id: freed_survivor_army.id,
+                    player_id: workflow.player_id,
+                    home_village_id,
+                    trapped_village_id: workflow.target_village_id,
+                    army: freed_survivor_army,
+                    returns_at: workflow.returns_at,
+                });
+            }
+        }
+        report.freed = Some(free);
+    }
 
     let conquered = can_attempt_conquer && report.loyalty_after == 0;
     let mut target_player_id = target.player_id;
@@ -191,6 +330,9 @@ async fn build_attack_outcome(
             attack_type: workflow.attack_type,
             report,
             returning_army,
+            trapped_attacker_army: captured_army,
+            freed_trapped_army_ids,
+            freed_trapped_returns,
             stationed_attacker_army,
             returns_at: workflow.returns_at,
         },
@@ -207,6 +349,7 @@ async fn build_attack_outcome(
             target_production: defender_village.production.clone(),
             target_population: defender_village.population,
             target_stocks: defender_village.stocks().clone(),
+            target_trapper: trapper.state(),
             target_army,
             target_reinforcements,
             stationed_attacker_army: stationed_attacker_for_target,
@@ -272,6 +415,27 @@ async fn build_scout_outcome(
         returning_army,
         returns_at: workflow.returns_at,
     })
+}
+
+fn freed_survivor_units_by_home(
+    trapped_armies: &[Army],
+    survivors: &TroopSet,
+) -> HashMap<u32, TroopSet> {
+    let mut remaining = survivors.clone();
+    let mut by_home: HashMap<u32, TroopSet> = HashMap::new();
+
+    for army in trapped_armies {
+        let entry = by_home.entry(army.village_id).or_default();
+        for (idx, trapped_quantity) in army.units().units().iter().enumerate() {
+            let assignable = remaining.get(idx).min(*trapped_quantity);
+            if assignable > 0 {
+                entry.add(idx, assignable);
+                remaining.remove(idx, assignable);
+            }
+        }
+    }
+
+    by_home
 }
 
 async fn can_attempt_conquer(

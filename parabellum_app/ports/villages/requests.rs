@@ -123,6 +123,27 @@ pub struct ReleaseReinforcementsRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct ReleaseTrappedTroopsRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct DisbandTrappedTroopsRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub army_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildTrapsRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub quantity: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct CancelTroopMovementRequest {
     pub player_id: Uuid,
     pub village_id: u32,

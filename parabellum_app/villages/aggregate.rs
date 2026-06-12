@@ -148,6 +148,8 @@ impl Aggregate for VillageAggregate {
             VillageEvent::AttackArrivalScheduled { .. } => {}
             VillageEvent::AttackArrived { .. } => {}
             VillageEvent::AttackBattleResolved { .. } => {}
+            VillageEvent::TrappedTroopsReleased { .. } => {}
+            VillageEvent::TrappedTroopsDisbanded { .. } => {}
             VillageEvent::BattleOutcomeAppliedToVillage {
                 target_player_id,
                 target_tribe,
@@ -398,6 +400,10 @@ impl Aggregate for VillageAggregate {
                 self.village.mark_training_action_consumed(*action_id);
                 let _ = self.village.train_units(unit.clone(), *quantity_trained);
             }
+            VillageEvent::TrapBuildScheduled { cost, .. } => {
+                let _ = self.village.village.deduct_resources(cost);
+            }
+            VillageEvent::TrapBuilt { .. } => {}
             VillageEvent::AcademyResearchScheduled {
                 action_id,
                 unit,

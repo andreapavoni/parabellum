@@ -318,6 +318,53 @@ function sumArrays(left: number[], right: number[]) {
   return Array.from({ length }, (_, idx) => (left[idx] ?? 0) + (right[idx] ?? 0));
 }
 
+function TrapBattleSection({
+  trapped,
+  freed,
+  tribe,
+}: {
+  trapped: Record<string, unknown> | null;
+  freed: Record<string, unknown> | null;
+  tribe?: string;
+}) {
+  if (!trapped && !freed) return null;
+
+  return (
+    <SectionCard title="Traps">
+      {trapped ? (
+        <div class="rounded-md border border-stone-200 bg-white p-3">
+          <p class="mb-2 text-xs font-semibold uppercase text-stone-500">
+            Captured by traps
+          </p>
+          <ArmyTable
+            title={`${readNumber(trapped, "traps_used")} traps used`}
+            before={troopArray(trapped.trapped_units)}
+            tribe={tribe}
+          />
+        </div>
+      ) : null}
+      {freed ? (
+        <div class="rounded-md border border-stone-200 bg-white p-3">
+          <p class="mb-2 text-xs font-semibold uppercase text-stone-500">
+            Freed from traps
+          </p>
+          <ArmyTable
+            title={`${readNumber(freed, "traps_destroyed")} traps destroyed`}
+            before={troopArray(freed.units_before)}
+            losses={troopArray(freed.deaths)}
+            tribe={tribe}
+          />
+          {sumTroops(freed.survivors) > 0 ? (
+            <p class="mt-2 text-sm text-stone-700">
+              {sumTroops(freed.survivors)} troops survived captivity and returned home.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </SectionCard>
+  );
+}
+
 function groupedReinforcementsByTribe(entries: unknown[]) {
   const groups = new Map<string, { before: number[]; losses: number[] }>();
   for (const entry of entries) {
@@ -387,6 +434,8 @@ function BattleReportDetail({
   const scouting = asRecord(payload.scouting);
   const wallDamage = asRecord(payload.wall_damage);
   const catapultDamage = Array.isArray(payload.catapult_damage) ? payload.catapult_damage : [];
+  const trapped = asRecord(payload.trapped);
+  const freed = asRecord(payload.freed);
   const attackerBefore = troopArray(attacker?.army_before);
   const attackerLosses = troopArray(attacker?.losses);
   const defenderBefore = troopArray(defender?.army_before);
@@ -463,6 +512,8 @@ function BattleReportDetail({
             </div>
           ) : null}
         </SectionCard>
+
+        <TrapBattleSection trapped={trapped} freed={freed} tribe={attackerTribe} />
 
         <SectionCard title="Defender">
           <p class="text-sm text-stone-700">

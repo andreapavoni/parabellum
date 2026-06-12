@@ -7,6 +7,7 @@ use parabellum_types::errors::AppError;
 use uuid::Uuid;
 
 use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
+use crate::villages::models::TrappedTroopReturn;
 
 #[derive(Debug, Clone)]
 pub struct ResolveAttackBattle {
@@ -20,6 +21,9 @@ pub struct ResolveAttackBattle {
     pub attack_type: AttackType,
     pub report: BattleReport,
     pub returning_army: Option<Army>,
+    pub trapped_attacker_army: Option<Army>,
+    pub freed_trapped_army_ids: Vec<Uuid>,
+    pub freed_trapped_returns: Vec<TrappedTroopReturn>,
     pub stationed_attacker_army: Option<Army>,
     pub returns_at: DateTime<Utc>,
 }
@@ -37,6 +41,9 @@ impl ResolveAttackBattle {
             attack_type: self.attack_type,
             report: self.report,
             returning_army: self.returning_army,
+            trapped_attacker_army: self.trapped_attacker_army,
+            freed_trapped_army_ids: self.freed_trapped_army_ids,
+            freed_trapped_returns: self.freed_trapped_returns,
             stationed_attacker_army: self.stationed_attacker_army,
             returns_at: self.returns_at,
         }

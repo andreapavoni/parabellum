@@ -343,6 +343,7 @@ pub enum ArmyState {
     Home,
     Stationed,
     Moving,
+    Trapped,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -439,6 +440,11 @@ pub trait ArmyRepository: Send + Sync {
         army_id: Uuid,
     ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
 
+    async fn find_trapped_context_by_army_id(
+        &self,
+        army_id: Uuid,
+    ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
+
     async fn army_context_for_village(
         &self,
         village_id: u32,
@@ -474,6 +480,21 @@ pub trait ArmyRepository: Send + Sync {
                     ArmyListFilter::new()
                         .home_village(village_id)
                         .state(ArmyState::Moving),
+                )
+                .await?,
+            trapped_here: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .current_village(village_id)
+                        .state(ArmyState::Trapped),
+                )
+                .await?,
+            trapped_away: self
+                .list_armies(
+                    ArmyListFilter::new()
+                        .home_village(village_id)
+                        .state(ArmyState::Trapped)
+                        .deployed(true),
                 )
                 .await?,
         })

@@ -10,8 +10,10 @@ import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import {
   useCancelTroopMovementMutation,
+  useDisbandTrappedTroopsMutation,
   useRecallTroopsMutation,
   useReleaseReinforcementsMutation,
+  useReleaseTrappedTroopsMutation,
   useSendTroopsMutation,
 } from "@/query/mutations";
 import type { BuildingPageResponse, MovementPreviewResponse, RallyCard } from "@/types/api";
@@ -38,6 +40,7 @@ const RALLY_SECTION_TITLES: Record<RallyCard["category"], string> = {
   stationed: "Stationed troops",
   deployed: "Deployed troops",
   reinforcement: "Reinforcements",
+  trapped: "Trapped troops",
   outgoing: "Outgoing movements",
   incoming: "Incoming movements",
 };
@@ -211,7 +214,7 @@ function RallyReinforcementActionForm({
   card: RallyCard;
   action: "recall" | "release";
   label: string;
-  variant: "warning" | "secondary";
+  variant: "warning" | "secondary" | "danger";
   unitNames: string[];
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -331,6 +334,8 @@ export function RallyPointBuilding({
   const sendTroops = useSendTroopsMutation();
   const recallTroops = useRecallTroopsMutation();
   const releaseReinforcements = useReleaseReinforcementsMutation();
+  const releaseTrappedTroops = useReleaseTrappedTroopsMutation();
+  const disbandTrappedTroops = useDisbandTrappedTroopsMutation();
   const cancelTroopMovement = useCancelTroopMovementMutation();
   useEffect(() => {
     if (!preview) return;
@@ -426,6 +431,7 @@ export function RallyPointBuilding({
                 disabled={sending}
                 renderIcon={(idx) => {
                   const unit = detail.rallyPoint!.sendableUnits[idx];
+                  if (!unit) return null;
                   return (
                     <UnitSpriteByName
                       unitName={unit.name}
@@ -435,6 +441,7 @@ export function RallyPointBuilding({
                 }}
                 onSetAll={(idx) => {
                   const unit = detail.rallyPoint!.sendableUnits[idx];
+                  if (!unit) return;
                   setUnits((current) => ({
                     ...current,
                     [unit.unitIdx]: unit.available,
@@ -442,6 +449,7 @@ export function RallyPointBuilding({
                 }}
                 onChange={(idx, value) => {
                   const unit = detail.rallyPoint!.sendableUnits[idx];
+                  if (!unit) return;
                   setUnits((current) => ({
                     ...current,
                     [unit.unitIdx]: value,
@@ -614,7 +622,7 @@ export function RallyPointBuilding({
 
       {activeTab === "armies" ? (
         <div class="space-y-4">
-          {(["stationed", "deployed", "reinforcement", "outgoing", "incoming"] as const).map((category) => {
+          {(["stationed", "deployed", "reinforcement", "trapped", "outgoing", "incoming"] as const).map((category) => {
             const cards = detail.rallyPoint!.cards.filter((card) => card.category === category);
             if (cards.length === 0) return null;
             return (
@@ -752,6 +760,50 @@ export function RallyPointBuilding({
                               }
                             }}
                           />
+                        ) : null}
+                        {card.action === "release_trapped" && card.actionId ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={releaseTrappedTroops.isPending}
+                            onClick={async () => {
+                              setError(null);
+                              try {
+                                await releaseTrappedTroops.mutateAsync({
+                                  villageId: detail.villageId,
+                                  armyId: card.actionId!,
+                                });
+                              } catch (err) {
+                                const message = err instanceof Error ? err.message : "Unable to release captives";
+                                setError(message);
+                              }
+                            }}
+                          >
+                            {releaseTrappedTroops.isPending ? "Releasing..." : "Release Captives"}
+                          </Button>
+                        ) : null}
+                        {card.action === "disband_trapped" && card.actionId ? (
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            disabled={disbandTrappedTroops.isPending}
+                            onClick={async () => {
+                              setError(null);
+                              try {
+                                await disbandTrappedTroops.mutateAsync({
+                                  villageId: detail.villageId,
+                                  armyId: card.actionId!,
+                                });
+                              } catch (err) {
+                                const message = err instanceof Error ? err.message : "Unable to disband trapped troops";
+                                setError(message);
+                              }
+                            }}
+                          >
+                            {disbandTrappedTroops.isPending ? "Disbanding..." : "Disband Trapped Troops"}
+                          </Button>
                         ) : null}
                         {card.action === "cancel" && card.actionId ? (
                           <Button

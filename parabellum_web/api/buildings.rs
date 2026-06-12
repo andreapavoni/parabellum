@@ -18,7 +18,7 @@ use serde::Serialize;
 use parabellum_app::{
     ports::queries::{
         AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
-        MerchantMovementKind, SmithyQueueItem, TrainingQueueItem, TroopMovementType,
+        MerchantMovementKind, SmithyQueueItem, TrainingQueueItem, TrapQueueItem, TroopMovementType,
         VillageArmyStateView, VillageTroopMovements,
     },
     read_models::VillageInfo,
@@ -28,6 +28,7 @@ use parabellum_game::models::{
     buildings::{Building, get_building_data},
     marketplace::MarketplaceOffer,
     smithy::smithy_upgrade_cost_for_unit,
+    trapper::{TRAP_BUILD_TIME_SECS, TRAP_COST, Trapper},
     village::VillageBuilding,
 };
 use parabellum_types::{
@@ -89,6 +90,8 @@ pub struct BuildingDetailDto {
     pub marketplace: Option<MarketplaceDetailDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rally_point: Option<RallyPointDetailDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trapper: Option<TrapperDetailDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_building: Option<MainBuildingDetailDto>,
 }
@@ -325,6 +328,31 @@ pub struct MerchantMovementDto {
 pub struct RallyPointDetailDto {
     pub cards: Vec<RallyCardDto>,
     pub sendable_units: Vec<RallySendableUnitDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trapper: Option<TrapperDetailDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrapperDetailDto {
+    pub capacity: u32,
+    pub active: u32,
+    pub occupied: u32,
+    pub broken: u32,
+    pub queued: u32,
+    pub buildable: u32,
+    pub queue: Vec<TrapQueueItemDto>,
+    pub cost_per_trap: ResourceAmountsDto,
+    pub time_per_trap_seconds: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrapQueueItemDto {
+    pub quantity: u32,
+    pub time_per_trap: u32,
+    pub finishes_at: chrono::DateTime<chrono::Utc>,
+    pub is_processing: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -363,6 +391,7 @@ pub enum RallyCardCategoryDto {
     Stationed,
     Reinforcement,
     Deployed,
+    Trapped,
     Incoming,
     Outgoing,
 }
@@ -384,6 +413,8 @@ pub enum RallyActionDto {
     Recall,
     Release,
     Cancel,
+    ReleaseTrapped,
+    DisbandTrapped,
 }
 
 #[derive(Debug, Serialize)]
@@ -434,6 +465,7 @@ enum ArmyCategory {
     Stationed,
     Reinforcement,
     Deployed,
+    Trapped,
     Incoming,
     Outgoing,
 }
@@ -443,6 +475,8 @@ enum ArmyAction {
     Recall { army_id: String },
     Release { army_id: String },
     Cancel { movement_id: String },
+    ReleaseTrapped { army_id: String },
+    DisbandTrapped { army_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -487,6 +521,11 @@ pub async fn building_detail(
     }
 
     let user = authenticated_user(&state, &headers).await?;
+    let village_model = state
+        .game_app
+        .get_village_model(user.village.id)
+        .await
+        .map_err(|err| map_application_error("unable_to_load_village", err))?;
     let queues = state
         .game_app
         .get_village_queues(user.village.id)
@@ -621,6 +660,18 @@ pub async fn building_detail(
                 smithy: None,
                 marketplace: None,
                 rally_point: None,
+                trapper: if slot.building.name == BuildingName::Trapper {
+                    let army_state = state
+                        .game_app
+                        .get_village_army_state_view(user.village.id)
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_village_army_state", err)
+                        })?;
+                    trapper_detail_for_village(&village_model, Some(&army_state), &queues.traps)
+                } else {
+                    None
+                },
                 main_building: main_building_detail,
             },
             BuildingTypeDto::Training => {
@@ -681,6 +732,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -762,6 +814,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -801,6 +854,7 @@ pub async fn building_detail(
                     smithy: None,
                     marketplace: None,
                     rally_point: None,
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -843,6 +897,7 @@ pub async fn building_detail(
                     }),
                     marketplace: None,
                     rally_point: None,
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -962,6 +1017,7 @@ pub async fn building_detail(
                         merchant_movements,
                     }),
                     rally_point: None,
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -1015,6 +1071,12 @@ pub async fn building_detail(
                         Some(ArmyAction::Cancel { movement_id }) => {
                             (Some(RallyActionDto::Cancel), Some(movement_id))
                         }
+                        Some(ArmyAction::ReleaseTrapped { army_id }) => {
+                            (Some(RallyActionDto::ReleaseTrapped), Some(army_id))
+                        }
+                        Some(ArmyAction::DisbandTrapped { army_id }) => {
+                            (Some(RallyActionDto::DisbandTrapped), Some(army_id))
+                        }
                         None => (None, None),
                     };
 
@@ -1029,6 +1091,7 @@ pub async fn building_detail(
                             ArmyCategory::Stationed => RallyCardCategoryDto::Stationed,
                             ArmyCategory::Reinforcement => RallyCardCategoryDto::Reinforcement,
                             ArmyCategory::Deployed => RallyCardCategoryDto::Deployed,
+                            ArmyCategory::Trapped => RallyCardCategoryDto::Trapped,
                             ArmyCategory::Incoming => RallyCardCategoryDto::Incoming,
                             ArmyCategory::Outgoing => RallyCardCategoryDto::Outgoing,
                         },
@@ -1094,7 +1157,13 @@ pub async fn building_detail(
                     rally_point: Some(RallyPointDetailDto {
                         cards,
                         sendable_units,
+                        trapper: trapper_detail_for_village(
+                            &village_model,
+                            Some(&army_state),
+                            &queues.traps,
+                        ),
                     }),
+                    trapper: None,
                     main_building: None,
                 }
             }
@@ -1208,6 +1277,7 @@ pub async fn building_detail(
             smithy: None,
             marketplace: None,
             rally_point: None,
+            trapper: None,
             main_building: None,
         }
     };
@@ -1232,6 +1302,16 @@ async fn fetch_village_info_for_rally_point(
 
     for reinforcement in &army_state.reinforcements {
         village_ids.insert(reinforcement.village_id);
+    }
+
+    for trapped in &army_state.trapped_here {
+        village_ids.insert(trapped.village_id);
+    }
+
+    for trapped in &army_state.trapped_away {
+        if let Some(dest_id) = trapped.current_map_field_id {
+            village_ids.insert(dest_id);
+        }
     }
 
     if village_ids.is_empty() {
@@ -1316,6 +1396,52 @@ fn prepare_rally_point_cards(
         });
     }
 
+    for trapped in &armies.trapped_here {
+        let origin_id = trapped.village_id;
+        let (origin_name, origin_position) = village_info
+            .get(&origin_id)
+            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
+            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
+
+        cards.push(ArmyCardData {
+            village_id: origin_id,
+            village_name: origin_name,
+            position: origin_position,
+            units: trapped.units().clone(),
+            tribe: trapped.tribe.clone(),
+            category: ArmyCategory::Trapped,
+            movement_kind: None,
+            arrives_at: None,
+            bounty: None,
+            action_button: Some(ArmyAction::ReleaseTrapped {
+                army_id: trapped.id.to_string(),
+            }),
+        });
+    }
+
+    for trapped in &armies.trapped_away {
+        let destination_id = trapped.current_map_field_id.unwrap_or(village_id);
+        let (destination_name, destination_position) = village_info
+            .get(&destination_id)
+            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
+            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
+
+        cards.push(ArmyCardData {
+            village_id: destination_id,
+            village_name: destination_name,
+            position: destination_position,
+            units: trapped.units().clone(),
+            tribe: trapped.tribe.clone(),
+            category: ArmyCategory::Trapped,
+            movement_kind: None,
+            arrives_at: None,
+            bounty: None,
+            action_button: Some(ArmyAction::DisbandTrapped {
+                army_id: trapped.id.to_string(),
+            }),
+        });
+    }
+
     for movement in &movements.outgoing {
         let action_button = if cancelable_movement_ids.contains(&movement.job_id) {
             Some(ArmyAction::Cancel {
@@ -1355,6 +1481,50 @@ fn prepare_rally_point_cards(
     }
 
     cards
+}
+
+fn trapper_detail_for_village(
+    village: &parabellum_app::villages::models::VillageModel,
+    army_state: Option<&VillageArmyStateView>,
+    queue: &[TrapQueueItem],
+) -> Option<TrapperDetailDto> {
+    let occupied = army_state
+        .map(|state| {
+            state
+                .trapped_here
+                .iter()
+                .map(|army| army.units().immensity())
+                .sum()
+        })
+        .unwrap_or(0);
+    let trapper = Trapper::from_buildings(&village.buildings, village.trapper, occupied);
+    if trapper.capacity() == 0 {
+        return None;
+    }
+
+    Some(TrapperDetailDto {
+        capacity: trapper.capacity(),
+        active: trapper.active_traps(),
+        occupied: trapper.occupied_traps(),
+        broken: trapper.broken_traps(),
+        queued: trapper.queued_traps(),
+        buildable: trapper.buildable_traps(),
+        queue: trap_queue_to_dto(queue),
+        cost_per_trap: resource_group_to_dto(&TRAP_COST),
+        time_per_trap_seconds: TRAP_BUILD_TIME_SECS,
+    })
+}
+
+fn trap_queue_to_dto(queue: &[TrapQueueItem]) -> Vec<TrapQueueItemDto> {
+    queue
+        .iter()
+        .map(|item| TrapQueueItemDto {
+            quantity: item.quantity.max(0) as u32,
+            time_per_trap: item.time_per_trap.max(0) as u32,
+            finishes_at: item.finishes_at,
+            is_processing: matches!(item.status, ScheduledActionStatus::Processing),
+        })
+        .collect()
 }
 
 fn movement_kind_to_card_kind(kind: TroopMovementType) -> MovementKind {

@@ -14,7 +14,12 @@ use parabellum_types::{
     tribe::Tribe,
 };
 
-use crate::models::{army::Army, buildings::Building, village::Village};
+use crate::models::{
+    army::Army,
+    buildings::Building,
+    trapper::{TrapCaptureOutcome, TrapFreeOutcome},
+    village::Village,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BattlePartyReport {
@@ -40,6 +45,9 @@ pub struct BattleReport {
 
     pub loyalty_before: u8,
     pub loyalty_after: u8,
+
+    pub trapped: Option<TrapCaptureOutcome>,
+    pub freed: Option<TrapFreeOutcome>,
 }
 
 pub struct Battle {
@@ -401,6 +409,8 @@ impl Battle {
             catapult_damage: catapult_reports,
             loyalty_before,
             loyalty_after,
+            trapped: None,
+            freed: None,
         }
     }
 
@@ -509,6 +519,8 @@ impl Battle {
             catapult_damage: vec![],
             loyalty_before: 100, // TODO: calculate loyalty
             loyalty_after: 100,  // TODO: calculate loyalty
+            trapped: None,
+            freed: None,
         }
     }
 }

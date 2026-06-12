@@ -21,6 +21,7 @@ struct ReturnProjection<'a> {
     returns_at: chrono::DateTime<chrono::Utc>,
     army: &'a Army,
     bounty: Option<ResourceGroup>,
+    show_at_origin: bool,
 }
 
 impl VillageProjector {
@@ -37,6 +38,9 @@ impl VillageProjector {
             target_village_id,
             report,
             returning_army,
+            trapped_attacker_army,
+            freed_trapped_army_ids,
+            freed_trapped_returns,
             stationed_attacker_army,
             returns_at,
             ..
@@ -47,6 +51,35 @@ impl VillageProjector {
             );
         };
         let _ = stationed_attacker_army;
+        if let Some(trapped) = trapped_attacker_army {
+            self.armies
+                .upsert_trapped_in_tx(tx, trapped, *target_village_id, *player_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+        for army_id in freed_trapped_army_ids {
+            self.armies
+                .delete_in_tx(tx, *army_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+        for trapped_return in freed_trapped_returns {
+            self.project_battle_return(
+                tx,
+                ReturnProjection {
+                    movement_id: trapped_return.movement_id,
+                    action_id: trapped_return.action_id,
+                    player_id: trapped_return.player_id,
+                    source_village_id: trapped_return.home_village_id,
+                    target_village_id: trapped_return.trapped_village_id,
+                    returns_at: trapped_return.returns_at,
+                    army: &trapped_return.army,
+                    bounty: None,
+                    show_at_origin: false,
+                },
+            )
+            .await?;
+        }
 
         let Some(return_army) = returning_army else {
             return Ok(());
@@ -62,9 +95,100 @@ impl VillageProjector {
                 returns_at: *returns_at,
                 army: return_army,
                 bounty: report.bounty.clone(),
+                show_at_origin: true,
             },
         )
         .await
+    }
+
+    pub(super) async fn project_trapped_troops_released(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        let VillageEvent::TrappedTroopsReleased {
+            action_id,
+            movement_id,
+            army_id,
+            player_id,
+            home_village_id,
+            trapped_village_id,
+            army,
+            trapper,
+            returns_at,
+            ..
+        } = event
+        else {
+            unreachable!(
+                "project_trapped_troops_released called with non-TrappedTroopsReleased event"
+            );
+        };
+
+        self.armies
+            .delete_in_tx(tx, *army_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        self.update_trapper_state_for_return_event(tx, *trapped_village_id, *trapper)
+            .await?;
+        self.project_battle_return(
+            tx,
+            ReturnProjection {
+                movement_id: *movement_id,
+                action_id: *action_id,
+                player_id: *player_id,
+                source_village_id: *home_village_id,
+                target_village_id: *trapped_village_id,
+                returns_at: *returns_at,
+                army,
+                bounty: None,
+                show_at_origin: false,
+            },
+        )
+        .await
+    }
+
+    pub(super) async fn project_trapped_troops_disbanded(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        let VillageEvent::TrappedTroopsDisbanded { army_id, .. } = event else {
+            unreachable!(
+                "project_trapped_troops_disbanded called with non-TrappedTroopsDisbanded event"
+            );
+        };
+        let VillageEvent::TrappedTroopsDisbanded {
+            trapped_village_id,
+            trapper,
+            ..
+        } = event
+        else {
+            unreachable!();
+        };
+        self.armies
+            .delete_in_tx(tx, *army_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        self.update_trapper_state_for_return_event(tx, *trapped_village_id, *trapper)
+            .await
+    }
+
+    async fn update_trapper_state_for_return_event(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+        trapper: parabellum_game::models::trapper::TrapperState,
+    ) -> Result<(), CqrsError> {
+        let mut current = self
+            .village
+            .get_by_village_id_in_tx(tx, village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        current.trapper = trapper;
+        self.village
+            .replace_village_state_in_tx(tx, &current)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     pub(super) async fn project_scout_battle_resolved(
@@ -99,6 +223,7 @@ impl VillageProjector {
                 returns_at: *returns_at,
                 army: return_army,
                 bounty: None,
+                show_at_origin: true,
             },
         )
         .await
@@ -135,10 +260,12 @@ impl VillageProjector {
             .upsert_in_tx(tx, &outgoing)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        self.movements
-            .upsert_in_tx(tx, &incoming)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        if projection.show_at_origin {
+            self.movements
+                .upsert_in_tx(tx, &incoming)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
         self.upsert_moving_army(
             tx,
             projection.army,

@@ -13,23 +13,25 @@ use parabellum_app::{
         },
         scheduler::SchedulerPort,
         villages::{
-            AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
-            CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
-            CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
-            ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
-            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
-            SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
-            UpgradeBuildingRequest, VillageCommandsPort,
+            AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
+            CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
+            CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
+            DisbandTrappedTroopsRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
+            ReleaseReinforcementsRequest, ReleaseTrappedTroopsRequest, RenameVillageRequest,
+            ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
+            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
+            TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
-        AddBuilding, AttackVillage, CancelBuildingConstruction, CancelTroopMovement, CreateHero,
-        CreateMarketplaceOffer, DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements,
-        ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero,
-        ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits,
-        UpgradeBuilding,
+        AddBuilding, AttackVillage, BuildTraps, CancelBuildingConstruction, CancelTroopMovement,
+        CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops, DowngradeBuilding,
+        ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops,
+        RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
+        SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
     },
 };
+use parabellum_game::models::trapper::{Trapper, TRAP_BUILD_TIME_SECS};
 use parabellum_types::{
     army::UnitRole,
     errors::{AppError, ApplicationError, DbError, GameError},
@@ -673,6 +675,188 @@ impl VillageCommandsPort for VillageEsAdapter {
                     units: request.units,
                     hero_id: request.hero_id,
                     returns_at,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn release_trapped_troops(
+        &self,
+        request: ReleaseTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError> {
+        let context = self
+            .service
+            .find_trapped_army_context(request.army_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if context.trapped_village_id != request.village_id {
+            return Err(ApplicationError::Unknown(
+                "Trapped army is not held in provided village".to_string(),
+            ));
+        }
+        let trapped_village = self
+            .service
+            .get_village(context.trapped_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if trapped_village.player_id != request.player_id {
+            return Err(ApplicationError::from(GameError::VillageNotOwned {
+                village_id: context.trapped_village_id,
+                player_id: request.player_id,
+            }));
+        }
+        let home = self
+            .service
+            .get_village(context.home_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let army_state = self
+            .service
+            .get_village_army_state_view(context.trapped_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let occupied = army_state
+            .trapped_here
+            .iter()
+            .map(|army| army.units().immensity())
+            .sum();
+        let mut trapper =
+            Trapper::from_buildings(&trapped_village.buildings, trapped_village.trapper, occupied);
+        trapper.release_by_owner(context.army.units());
+        let returns_at = chrono::Utc::now()
+            + self.compute_travel_duration(
+                &trapped_village,
+                &home,
+                Self::movement_speed(&context.army.tribe, context.army.units()),
+            );
+
+        self.service
+            .release_trapped_troops(
+                context.trapped_village_id,
+                &ReleaseTrappedTroops {
+                    action_id: Uuid::new_v4(),
+                    movement_id: Uuid::new_v4(),
+                    player_id: request.player_id,
+                    home_village_id: context.home_village_id,
+                    trapped_village_id: context.trapped_village_id,
+                    army: context.army,
+                    trapper: trapper.state(),
+                    returns_at,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn disband_trapped_troops(
+        &self,
+        request: DisbandTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError> {
+        let context = self
+            .service
+            .find_trapped_army_context(request.army_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if context.home_village_id != request.village_id {
+            return Err(ApplicationError::Unknown(
+                "Trapped army does not belong to provided home village".to_string(),
+            ));
+        }
+        let home = self
+            .service
+            .get_village(context.home_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if home.player_id != request.player_id {
+            return Err(ApplicationError::from(GameError::VillageNotOwned {
+                village_id: context.home_village_id,
+                player_id: request.player_id,
+            }));
+        }
+        let trapped_village = self
+            .service
+            .get_village(context.trapped_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let army_state = self
+            .service
+            .get_village_army_state_view(context.trapped_village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let occupied = army_state
+            .trapped_here
+            .iter()
+            .map(|army| army.units().immensity())
+            .sum();
+        let mut trapper =
+            Trapper::from_buildings(&trapped_village.buildings, trapped_village.trapper, occupied);
+        trapper.release_by_owner(context.army.units());
+
+        self.service
+            .disband_trapped_troops(
+                context.trapped_village_id,
+                &DisbandTrappedTroops {
+                    army_id: context.army.id,
+                    player_id: request.player_id,
+                    home_village_id: context.home_village_id,
+                    trapped_village_id: context.trapped_village_id,
+                    trapper: trapper.state(),
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn build_traps(&self, request: BuildTrapsRequest) -> Result<(), ApplicationError> {
+        let village = self
+            .service
+            .get_village(request.village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        if village.player_id != request.player_id {
+            return Err(ApplicationError::from(GameError::VillageNotOwned {
+                village_id: request.village_id,
+                player_id: request.player_id,
+            }));
+        }
+        let army_state = self
+            .service
+            .get_village_army_state_view(request.village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        let occupied = army_state
+            .trapped_here
+            .iter()
+            .map(|army| army.units().immensity())
+            .sum();
+        let mut trapper = Trapper::from_buildings(&village.buildings, village.trapper, occupied);
+        let Some(plan) = trapper.start_trap_build(request.quantity) else {
+            return Err(ApplicationError::Unknown(
+                "Requested trap quantity is not buildable".to_string(),
+            ));
+        };
+        let domain_village = hydrate_village(village.clone(), VillageArmyContext::default());
+        if !domain_village.has_enough_resources(&plan.cost) {
+            return Err(ApplicationError::from(GameError::NotEnoughResources));
+        }
+        let execute_at =
+            chrono::Utc::now() + chrono::Duration::seconds(TRAP_BUILD_TIME_SECS as i64);
+        self.service
+            .build_traps(
+                request.village_id,
+                &BuildTraps {
+                    action_id: Uuid::new_v4(),
+                    player_id: request.player_id,
+                    village_id: request.village_id,
+                    quantity_remaining: request.quantity as i32,
+                    time_per_trap: TRAP_BUILD_TIME_SECS as i32,
+                    cost: plan.cost,
+                    trapper: trapper.state(),
+                    execute_at,
                 },
             )
             .await

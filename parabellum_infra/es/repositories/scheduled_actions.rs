@@ -1,5 +1,6 @@
 use parabellum_app::ports::queries::{
-    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, VillageQueues,
+    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, TrapQueueItem,
+    VillageQueues,
 };
 use parabellum_app::villages::models::{
     ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
@@ -169,7 +170,8 @@ impl PostgresScheduledActionRepository {
                 'DowngradeBuilding',
                 'TrainUnit',
                 'ResearchAcademy',
-                'ResearchSmithy'
+                'ResearchSmithy',
+                'TrapBuild'
               )
             ORDER BY execute_at ASC, created_at ASC
             "#,
@@ -222,6 +224,15 @@ impl PostgresScheduledActionRepository {
                     }),
                     _ => {}
                 },
+                ScheduledActionPayload::TrapBuild { workflow } => {
+                    queues.traps.push(TrapQueueItem {
+                        job_id: row.id,
+                        quantity: workflow.quantity_remaining,
+                        time_per_trap: workflow.time_per_trap,
+                        status,
+                        finishes_at: row.execute_at,
+                    });
+                }
                 _ => {}
             }
         }
@@ -552,6 +563,7 @@ enum DbScheduledActionType {
     ResearchAcademy,
     ResearchSmithy,
     HeroRevival,
+    TrapBuild,
 }
 
 impl From<DbScheduledActionStatus> for ScheduledActionStatus {
@@ -595,6 +607,7 @@ impl From<DbScheduledActionType> for ScheduledActionType {
             DbScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             DbScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             DbScheduledActionType::HeroRevival => Self::HeroRevival,
+            DbScheduledActionType::TrapBuild => Self::TrapBuild,
         }
     }
 }
@@ -616,6 +629,7 @@ impl From<ScheduledActionType> for DbScheduledActionType {
             ScheduledActionType::ResearchAcademy => Self::ResearchAcademy,
             ScheduledActionType::ResearchSmithy => Self::ResearchSmithy,
             ScheduledActionType::HeroRevival => Self::HeroRevival,
+            ScheduledActionType::TrapBuild => Self::TrapBuild,
         }
     }
 }

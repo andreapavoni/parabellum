@@ -202,6 +202,30 @@ export function useReleaseReinforcementsMutation() {
   });
 }
 
+export function useReleaseTrappedTroopsMutation() {
+  const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.releaseTrappedTroops,
+    onSuccess: invalidateCurrentVillageBuildings,
+  });
+}
+
+export function useDisbandTrappedTroopsMutation() {
+  const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.disbandTrappedTroops,
+    onSuccess: invalidateCurrentVillageBuildings,
+  });
+}
+
+export function useBuildTrapsMutation() {
+  const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.buildTraps,
+    onSuccess: invalidateCurrentVillageBuildings,
+  });
+}
+
 export function useCancelTroopMovementMutation() {
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({

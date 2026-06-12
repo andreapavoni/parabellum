@@ -223,6 +223,7 @@ fn target_state_after_battle(
         target_production,
         target_population,
         target_stocks,
+        target_trapper,
         target_army,
         target_reinforcements,
         stationed_attacker_army,
@@ -242,18 +243,18 @@ fn target_state_after_battle(
     village.production = target_production.clone();
     village.population = *target_population;
     village.stocks = target_stocks.clone();
+    village.trapper = *target_trapper;
     let home = target_army.clone().filter(|army| army.immensity() > 0);
     let mut stationed: Vec<Army> = target_reinforcements
         .iter()
         .filter(|army| army.immensity() > 0)
         .cloned()
         .collect();
-    if let Some(stationed_attacker) = stationed_attacker_army
+        if let Some(stationed_attacker) = stationed_attacker_army
         && stationed_attacker.immensity() > 0
     {
         stationed.push(stationed_attacker.clone());
     }
-
     BattleTargetState {
         village,
         home,

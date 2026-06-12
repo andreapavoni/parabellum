@@ -48,6 +48,20 @@ pub struct BattlePartyPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrapCapturePayload {
+    pub trapped_units: TroopSet,
+    pub traps_used: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrapFreePayload {
+    pub units_before: TroopSet,
+    pub deaths: TroopSet,
+    pub survivors: TroopSet,
+    pub traps_destroyed: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BattleReportPayload {
     pub attack_type: AttackType,
     pub attacker_player: String,
@@ -75,4 +89,8 @@ pub struct BattleReportPayload {
     pub loyalty_after: Option<u8>,
     #[serde(default)]
     pub conquered: Option<bool>,
+    #[serde(default)]
+    pub trapped: Option<TrapCapturePayload>,
+    #[serde(default)]
+    pub freed: Option<TrapFreePayload>,
 }

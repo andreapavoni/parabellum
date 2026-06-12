@@ -2,10 +2,11 @@ use async_trait::async_trait;
 use parabellum_types::errors::ApplicationError;
 
 use super::{
-    AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
-    CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
-    CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
-    ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+    AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
+    CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest, CancelTroopMovementRequest,
+    CreateHeroRequest, CreateMarketplaceOfferRequest, DisbandTrappedTroopsRequest,
+    DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+    ReleaseTrappedTroopsRequest, RenameVillageRequest, ResearchAcademyRequest,
     ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
     SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
     UpgradeBuildingRequest,
@@ -49,6 +50,15 @@ pub trait VillageCommandsPort: Send + Sync {
         &self,
         request: ReleaseReinforcementsRequest,
     ) -> Result<(), ApplicationError>;
+    async fn release_trapped_troops(
+        &self,
+        request: ReleaseTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn disband_trapped_troops(
+        &self,
+        request: DisbandTrappedTroopsRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn build_traps(&self, request: BuildTrapsRequest) -> Result<(), ApplicationError>;
     async fn cancel_troop_movement(
         &self,
         request: CancelTroopMovementRequest,
