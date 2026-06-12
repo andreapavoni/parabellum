@@ -325,6 +325,14 @@ impl Aggregate for VillageAggregate {
                 building_name.clone(),
                 *execute_at,
             ),
+            VillageEvent::BuildingConstructionCanceled {
+                action_ids, refund, ..
+            } => {
+                for action_id in action_ids {
+                    self.village.mark_building_action_consumed(*action_id);
+                }
+                self.village.village.store_resources(refund);
+            }
             VillageEvent::BuildingAdded {
                 action_id,
                 slot_id,

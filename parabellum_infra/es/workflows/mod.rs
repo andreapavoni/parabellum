@@ -79,5 +79,6 @@ pub(crate) fn scheduled_action(
         execute_at,
         payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
         status: ScheduledActionStatus::Pending,
+        created_at: None,
     })
 }

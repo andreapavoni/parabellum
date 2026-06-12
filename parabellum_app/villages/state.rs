@@ -392,6 +392,12 @@ impl VillageState {
             .retain(|action| action.action_id != action_id);
     }
 
+    pub fn has_pending_building_action(&self, action_id: Uuid) -> bool {
+        self.pending_building_actions
+            .iter()
+            .any(|action| action.action_id == action_id)
+    }
+
     pub fn next_execution_time_for_slot(
         &self,
         slot_id: u8,

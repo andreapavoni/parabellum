@@ -1,9 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import { ArrowDownToLine } from "lucide-preact";
+import { ArrowDownToLine, X } from "lucide-preact";
 import { buildingLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
-import { useDowngradeBuildingMutation } from "@/query/mutations";
+import {
+  useCancelBuildingConstructionMutation,
+  useDowngradeBuildingMutation,
+} from "@/query/mutations";
 import { Button, Field, Panel, SectionHeader } from "@/components/ui";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import type { BuildingPageResponse } from "@/types/api";
@@ -45,6 +48,7 @@ export function MainBuilding({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const downgradeBuilding = useDowngradeBuildingMutation();
+  const cancelBuilding = useCancelBuildingConstructionMutation();
   const selectedSlotStillAvailable = detail.options.some((option) => option.slotId === selectedSlotId);
   const currentSelectedSlotId = selectedSlotStillAvailable ? selectedSlotId : (detail.options[0]?.slotId ?? 0);
   const selected = detail.options.find((option) => option.slotId === currentSelectedSlotId);
@@ -137,7 +141,7 @@ export function MainBuilding({
             <div class="space-y-2">
               {detail.queue.map((item) => (
                 <div
-                  key={`${item.slotId}-${item.targetLevel}`}
+                  key={item.actionId}
                   class={`flex items-center justify-between gap-3 rounded-md border px-2 py-1.5 text-sm ${
                     item.isProcessing
                       ? "border-green-200 bg-green-50"
@@ -153,6 +157,27 @@ export function MainBuilding({
                     serverTimeObservedAtMs={serverTimeObservedAtMs}
                     onElapsed={onMutate}
                   />
+                  {!item.isProcessing ? (
+                    <button
+                      type="button"
+                      title="Cancel downgrade"
+                      class="inline-flex h-7 w-7 shrink-0 items-center justify-center text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={cancelBuilding.isPending}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            "Cancel this downgrade and any later queued work for this slot?",
+                          )
+                        ) {
+                          return;
+                        }
+                        await cancelBuilding.mutateAsync({ actionId: item.actionId });
+                        await onMutate();
+                      }}
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>

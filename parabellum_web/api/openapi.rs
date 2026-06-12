@@ -4,13 +4,13 @@ use utoipa::OpenApi;
 
 use crate::api::{
     actions::{
-        ActionResponse, AddBuildingRequest, CreateOfferRequest, DowngradeBuildingRequest,
-        FoundVillageRequest, MovementKind, MovementPreviewResponse, OfferActionRequest,
-        PreviewDetectedKind, PreviewFoundVillageRequest, PreviewSendResourcesRequest,
-        PreviewTroopsRequest, RecallTroopsRequest, ReleaseReinforcementsRequest,
-        RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ScoutingTargetKind,
-        SendResourcesPreviewResponse, SendResourcesRequest, SendTroopsRequest, TrainUnitsRequest,
-        UpgradeBuildingRequest,
+        ActionResponse, AddBuildingRequest, CancelBuildingConstructionRequest, CreateOfferRequest,
+        DowngradeBuildingRequest, FoundVillageRequest, MovementKind, MovementPreviewResponse,
+        OfferActionRequest, PreviewDetectedKind, PreviewFoundVillageRequest,
+        PreviewSendResourcesRequest, PreviewTroopsRequest, RecallTroopsRequest,
+        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+        ResearchSmithyRequest, ScoutingTargetKind, SendResourcesPreviewResponse,
+        SendResourcesRequest, SendTroopsRequest, TrainUnitsRequest, UpgradeBuildingRequest,
     },
     auth::{
         LogoutResponse, TokenAuthResponse, TokenLoginRequest, TokenLogoutRequest,
@@ -47,6 +47,7 @@ use crate::api::{
         crate::api::actions::add_building,
         crate::api::actions::upgrade_building,
         crate::api::actions::downgrade_building,
+        crate::api::actions::cancel_building_construction,
         crate::api::actions::rename_village,
         crate::api::actions::train_units,
         crate::api::actions::send_resources,
@@ -112,6 +113,7 @@ use crate::api::{
         AddBuildingRequest,
         UpgradeBuildingRequest,
         DowngradeBuildingRequest,
+        CancelBuildingConstructionRequest,
         RenameVillageRequest,
         TrainUnitsRequest,
         SendResourcesRequest,

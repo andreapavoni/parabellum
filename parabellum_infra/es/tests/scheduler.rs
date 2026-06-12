@@ -1031,6 +1031,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
             execute_at: arrives_at,
             payload: serde_json::to_value(payload).unwrap(),
             status: ScheduledActionStatus::Pending,
+            created_at: None,
         })
         .await
         .unwrap();

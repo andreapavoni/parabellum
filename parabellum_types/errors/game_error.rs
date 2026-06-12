@@ -171,4 +171,7 @@ pub enum GameError {
 
     #[error("Troop movement cancel window has expired")]
     TroopMovementCancelWindowExpired,
+
+    #[error("Building construction can no longer be canceled")]
+    BuildingConstructionNotCancelable,
 }

@@ -2,12 +2,13 @@ use async_trait::async_trait;
 use parabellum_types::errors::ApplicationError;
 
 use super::{
-    AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-    CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
-    DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
-    RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
-    SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-    SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest,
+    AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
+    CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
+    CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
+    ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+    ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+    SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+    UpgradeBuildingRequest,
 };
 
 #[async_trait]
@@ -20,6 +21,10 @@ pub trait VillageCommandsPort: Send + Sync {
     async fn downgrade_building(
         &self,
         request: DowngradeBuildingRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn cancel_building_construction(
+        &self,
+        request: CancelBuildingConstructionRequest,
     ) -> Result<(), ApplicationError>;
     async fn rename_village(&self, request: RenameVillageRequest) -> Result<(), ApplicationError>;
     async fn train_units(&self, request: TrainUnitsRequest) -> Result<(), ApplicationError>;

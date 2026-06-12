@@ -13,19 +13,21 @@ use parabellum_app::{
         },
         scheduler::SchedulerPort,
         villages::{
-            AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-            CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
-            DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
-            RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
-            SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-            SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+            AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
+            CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
+            CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
+            ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+            ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+            SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+            UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
-        AddBuilding, AttackVillage, CancelTroopMovement, CreateHero, CreateMarketplaceOffer,
-        DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements,
-        RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-        SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
+        AddBuilding, AttackVillage, CancelBuildingConstruction, CancelTroopMovement, CreateHero,
+        CreateMarketplaceOffer, DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements,
+        ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero,
+        ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits,
+        UpgradeBuilding,
     },
 };
 use parabellum_types::{
@@ -221,6 +223,46 @@ impl VillageCommandsPort for VillageEsAdapter {
                     player_id: request.player_id,
                     slot_id: request.slot_id,
                     speed: self.config.speed,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn cancel_building_construction(
+        &self,
+        request: CancelBuildingConstructionRequest,
+    ) -> Result<(), ApplicationError> {
+        let now = chrono::Utc::now();
+        let context = self
+            .service
+            .find_cancel_building_construction_context(request.village_id, request.action_id, now)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+
+        if context.player_id != request.player_id || context.village_id != request.village_id {
+            return Err(ApplicationError::Game(GameError::VillageNotOwned {
+                village_id: request.village_id,
+                player_id: request.player_id,
+            }));
+        }
+
+        if now >= context.execute_at {
+            return Err(ApplicationError::Game(
+                GameError::BuildingConstructionNotCancelable,
+            ));
+        }
+
+        self.service
+            .cancel_building_construction(
+                context.village_id,
+                &CancelBuildingConstruction {
+                    action_ids: context.action_ids,
+                    player_id: request.player_id,
+                    village_id: context.village_id,
+                    refund: context.refund,
+                    canceled_at: now,
                 },
             )
             .await

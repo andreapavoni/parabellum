@@ -12,11 +12,11 @@ mod state;
 pub use aggregate::VillageAggregate;
 pub use commands::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage,
-    CancelMarketplaceOffer, CancelTroopMovement, CreateHero, CreateMarketplaceOffer,
-    DowngradeBuilding, FoundVillage, MarkReportRead, RecallReinforcements, ReleaseReinforcements,
-    RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ResolveScoutBattle,
-    ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
-    SetVillageResources, TrainUnits, UpgradeBuilding,
+    CancelBuildingConstruction, CancelMarketplaceOffer, CancelTroopMovement, CreateHero,
+    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, MarkReportRead, RecallReinforcements,
+    ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle,
+    ResolveScoutBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
+    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding,
 };
 pub use events::VillageEvent;
 pub use mapping::{VillageArmyContext, hydrate_village};

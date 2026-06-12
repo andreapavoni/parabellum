@@ -19,6 +19,8 @@ pub struct ScheduledActionStatusCounts {
     pub completed: usize,
     /// Number of actions failed.
     pub failed: usize,
+    /// Number of actions canceled.
+    pub canceled: usize,
 }
 
 /// Query that computes scheduled-action status counters for one village and action type.
@@ -52,6 +54,7 @@ impl Query for GetScheduledActionStatusCounts {
                 ScheduledActionStatus::Processing => counts.processing += 1,
                 ScheduledActionStatus::Completed => counts.completed += 1,
                 ScheduledActionStatus::Failed => counts.failed += 1,
+                ScheduledActionStatus::Canceled => counts.canceled += 1,
             }
         }
         Ok(counts)

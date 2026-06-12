@@ -88,6 +88,10 @@ impl VillageProjector {
             army: detached_army,
         } = event
         else {
+            tracing::error!(
+                "project_village_army_detached called with non-VillageArmyDetached event: {:#?}",
+                event
+            );
             unreachable!("project_village_army_detached called with non-VillageArmyDetached event");
         };
         let village_id = aggregate_id

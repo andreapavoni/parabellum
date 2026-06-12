@@ -426,6 +426,13 @@ pub enum VillageEvent {
         speed: i8,
         execute_at: DateTime<Utc>,
     },
+    BuildingConstructionCanceled {
+        action_ids: Vec<Uuid>,
+        player_id: Uuid,
+        village_id: u32,
+        refund: ResourceGroup,
+        canceled_at: DateTime<Utc>,
+    },
     BuildingAdded {
         action_id: Uuid,
         player_id: Uuid,
@@ -554,6 +561,7 @@ impl fmt::Display for VillageEvent {
             VillageEvent::BuildingConstructionScheduled { .. } => "BuildingConstructionScheduled",
             VillageEvent::BuildingUpgradeScheduled { .. } => "BuildingUpgradeScheduled",
             VillageEvent::BuildingDowngradeScheduled { .. } => "BuildingDowngradeScheduled",
+            VillageEvent::BuildingConstructionCanceled { .. } => "BuildingConstructionCanceled",
             VillageEvent::BuildingAdded { .. } => "BuildingAdded",
             VillageEvent::BuildingUpgraded { .. } => "BuildingUpgraded",
             VillageEvent::BuildingDowngraded { .. } => "BuildingDowngraded",

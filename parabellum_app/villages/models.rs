@@ -138,6 +138,7 @@ pub enum ScheduledActionStatus {
     Processing,
     Completed,
     Failed,
+    Canceled,
 }
 
 impl fmt::Display for ScheduledActionStatus {
@@ -147,6 +148,7 @@ impl fmt::Display for ScheduledActionStatus {
             Self::Processing => "processing",
             Self::Completed => "completed",
             Self::Failed => "failed",
+            Self::Canceled => "canceled",
         };
         f.write_str(value)
     }
@@ -161,6 +163,7 @@ impl FromStr for ScheduledActionStatus {
             "processing" => Ok(Self::Processing),
             "completed" => Ok(Self::Completed),
             "failed" => Ok(Self::Failed),
+            "canceled" => Ok(Self::Canceled),
             _ => Err("invalid scheduled action status"),
         }
     }
@@ -356,6 +359,7 @@ pub struct ScheduledAction {
     pub execute_at: DateTime<Utc>,
     pub payload: serde_json::Value,
     pub status: ScheduledActionStatus,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

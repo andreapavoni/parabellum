@@ -83,6 +83,7 @@ export type GameContextResponse = GameShellContext & {
 };
 
 export type BuildingQueueItem = {
+  actionId: string;
   kind: "add" | "upgrade" | "downgrade";
   slotId: number;
   buildingName: string;
@@ -426,6 +427,7 @@ export type BuildingDetail = {
       nextLevel: number;
     }[];
     queue: {
+      actionId: string;
       slotId: number;
       buildingName: string;
       targetLevel: number;

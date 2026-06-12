@@ -1,8 +1,10 @@
 import type { BuildingQueueItem } from "@/types/api";
+import { X } from "lucide-preact";
 import { Link } from "./Link";
 import { buildingLabel } from "@/lib/labels";
 import { formatDurationHms } from "@/lib/time";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
+import { useCancelBuildingConstructionMutation } from "@/query/mutations";
 import { ResourceSprite } from "@/components/ResourceSprite";
 
 function QueueTimer({
@@ -36,6 +38,8 @@ export function QueueList({
   serverTimeObservedAtMs: number;
   onQueueElapsed?: () => void;
 }) {
+  const cancelBuilding = useCancelBuildingConstructionMutation();
+
   return (
     <div class="w-full mt-4 max-w-[400px] rounded-md border border-stone-300 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-sm">
       <div class="mb-2 flex items-center justify-between border-b border-stone-200 pb-1.5">
@@ -53,7 +57,7 @@ export function QueueList({
                   ? "border-green-200 bg-green-50"
                   : "border-amber-200 bg-amber-50"
               }`}
-              key={`${item.slotId}-${item.targetLevel}`}
+              key={item.actionId}
             >
               <Link
                 to={`/app/build/${item.slotId}`}
@@ -67,6 +71,27 @@ export function QueueList({
                 serverTimeObservedAtMs={serverTimeObservedAtMs}
                 onElapsed={onQueueElapsed}
               />
+              {!item.isProcessing ? (
+                <button
+                  type="button"
+                  title="Cancel construction"
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={cancelBuilding.isPending}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "Cancel this construction and any later queued work for this slot?",
+                      )
+                    ) {
+                      return;
+                    }
+                    await cancelBuilding.mutateAsync({ actionId: item.actionId });
+                    onQueueElapsed?.();
+                  }}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
           ))}
         </div>

@@ -348,6 +348,7 @@ pub struct BuildingDowngradeOptionDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MainBuildingDowngradeQueueItemDto {
+    pub action_id: String,
     pub slot_id: u8,
     pub building_name: String,
     pub target_level: u8,
@@ -1410,6 +1411,7 @@ fn main_building_detail_for_village(
         .iter()
         .filter(|item| matches!(item.kind, BuildingWorkflowKind::Downgrade))
         .map(|item| MainBuildingDowngradeQueueItemDto {
+            action_id: item.job_id.to_string(),
             slot_id: item.slot_id,
             building_name: building_key(&item.building_name),
             target_level: item.target_level,

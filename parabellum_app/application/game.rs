@@ -15,12 +15,13 @@ use crate::ports::{
     queries::VillageQueryPort,
     scheduler::SchedulerPort,
     villages::{
-        AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelMarketplaceOfferRequest,
-        CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
-        DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
-        RenameVillageRequest, ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest,
-        SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-        SendSettlersRequest, TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+        AcceptMarketplaceOfferRequest, AddBuildingRequest, CancelBuildingConstructionRequest,
+        CancelMarketplaceOfferRequest, CancelTroopMovementRequest, CreateHeroRequest,
+        CreateMarketplaceOfferRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
+        ReleaseReinforcementsRequest, RenameVillageRequest, ResearchAcademyRequest,
+        ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
+        SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
+        UpgradeBuildingRequest, VillageCommandsPort,
     },
 };
 
@@ -182,6 +183,15 @@ impl GameApplication {
         request: DowngradeBuildingRequest,
     ) -> Result<(), ApplicationError> {
         self.villages_port().downgrade_building(request).await
+    }
+
+    pub async fn cancel_building_construction(
+        &self,
+        request: CancelBuildingConstructionRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port()
+            .cancel_building_construction(request)
+            .await
     }
 
     pub async fn rename_village(

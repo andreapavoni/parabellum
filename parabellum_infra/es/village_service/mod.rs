@@ -23,13 +23,14 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::{MarketplaceRepository, ScheduledActionRepository};
 use parabellum_app::villages::{
-    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelMarketplaceOffer, CreateHero,
-    CreateMarketplaceOffer, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
-    RecallReinforcements, ReleaseReinforcements, RenameVillage, ResearchAcademy, ResearchSmithy,
-    ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement,
-    SendSettlers, SetVillageResources, TrainUnits, UpgradeBuilding, VillageArmyContext,
-    VillageService, hydrate_village,
+    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, CancelBuildingConstruction,
+    CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer, DowngradeBuilding, FoundVillage,
+    MarketplaceAcceptance, RecallReinforcements, ReleaseReinforcements, RenameVillage,
+    ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage,
+    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
+    UpgradeBuilding, VillageArmyContext, VillageService, hydrate_village,
 };
+use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::GameError;
 use uuid::Uuid;
 
@@ -74,6 +75,14 @@ pub struct CancelTroopMovementContext {
     pub army: Army,
     pub sent_at: chrono::DateTime<chrono::Utc>,
     pub arrives_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub struct CancelBuildingConstructionContext {
+    pub action_ids: Vec<Uuid>,
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub execute_at: chrono::DateTime<chrono::Utc>,
+    pub refund: ResourceGroup,
 }
 
 impl VillageEsService {
@@ -336,6 +345,20 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.upgrade_building(village_id, command).await
+    }
+
+    pub async fn cancel_building_construction(
+        &self,
+        village_id: u32,
+        command: &CancelBuildingConstruction,
+    ) -> Result<u32, CqrsError> {
+        self.materialize_current_resources_for_command(village_id, command.player_id)
+            .await?;
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service
+            .cancel_building_construction(village_id, command)
+            .await
     }
 
     /// Renames a village for its owner.

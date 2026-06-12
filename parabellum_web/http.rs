@@ -26,11 +26,12 @@ use tower_http::{
 use crate::{
     api::{
         actions::{
-            accept_marketplace_offer, add_building, cancel_marketplace_offer,
-            cancel_troop_movement, create_marketplace_offer, downgrade_building, found_village,
-            preview_found_village, preview_send_resources, preview_troops, recall_troops,
-            release_reinforcements, rename_village, research_academy, research_smithy,
-            send_resources, send_troops, train_units, upgrade_building,
+            accept_marketplace_offer, add_building, cancel_building_construction,
+            cancel_marketplace_offer, cancel_troop_movement, create_marketplace_offer,
+            downgrade_building, found_village, preview_found_village, preview_send_resources,
+            preview_troops, recall_troops, release_reinforcements, rename_village,
+            research_academy, research_smithy, send_resources, send_troops, train_units,
+            upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
@@ -97,6 +98,7 @@ impl WebRouter {
             .route("/buildings/add", post(add_building))
             .route("/buildings/upgrade", post(upgrade_building))
             .route("/buildings/downgrade", post(downgrade_building))
+            .route("/buildings/cancel", post(cancel_building_construction))
             .route("/villages/rename", post(rename_village))
             .route("/army/train", post(train_units))
             .route("/army/send", post(send_troops))

@@ -29,6 +29,13 @@ pub struct DowngradeBuildingRequest {
 }
 
 #[derive(Debug, Clone)]
+pub struct CancelBuildingConstructionRequest {
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub action_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct RenameVillageRequest {
     pub player_id: Uuid,
     pub village_id: u32,

@@ -96,6 +96,16 @@ export function useDowngradeBuildingMutation() {
   });
 }
 
+export function useCancelBuildingConstructionMutation() {
+  const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.cancelBuildingConstruction,
+    onSuccess: async () => {
+      await invalidateCurrentVillageBuildings();
+    },
+  });
+}
+
 export function useTrainUnitsMutation() {
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({

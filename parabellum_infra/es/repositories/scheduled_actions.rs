@@ -159,7 +159,7 @@ impl PostgresScheduledActionRepository {
     ) -> Result<VillageQueues, ApplicationError> {
         let rows: Vec<DbScheduledActionRow> = sqlx::query_as(
             r#"
-            SELECT id, action_type, execute_at, payload, status
+            SELECT id, action_type, execute_at, payload, status, created_at
             FROM rm_scheduled_actions
             WHERE (payload->'workflow'->>'village_id')::int = $1
               AND status IN ('pending', 'processing')
@@ -289,7 +289,7 @@ impl PostgresScheduledActionRepository {
 
 fn scheduled_action_select_sql() -> &'static str {
     r#"
-    SELECT id, action_type, execute_at, payload, status
+    SELECT id, action_type, execute_at, payload, status, created_at
     FROM rm_scheduled_actions
     "#
 }
@@ -310,6 +310,7 @@ struct DbScheduledActionRow {
     execute_at: chrono::DateTime<chrono::Utc>,
     payload: serde_json::Value,
     status: DbScheduledActionStatus,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -328,6 +329,7 @@ impl From<DbScheduledActionRow> for ScheduledAction {
             execute_at: value.execute_at,
             payload: value.payload,
             status: value.status.into(),
+            created_at: Some(value.created_at),
         }
     }
 }
@@ -350,7 +352,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
     async fn get_by_id(&self, id: Uuid) -> Result<ScheduledAction, ApplicationError> {
         let row: DbScheduledActionRow = sqlx::query_as(
             r#"
-            SELECT id, action_type, execute_at, payload, status
+            SELECT id, action_type, execute_at, payload, status, created_at
             FROM rm_scheduled_actions
             WHERE id = $1
             "#,
@@ -388,7 +390,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             SET status = 'processing', updated_at = NOW()
             FROM due
             WHERE a.id = due.id
-            RETURNING a.id, a.action_type, a.execute_at, a.payload, a.status
+            RETURNING a.id, a.action_type, a.execute_at, a.payload, a.status, a.created_at
             "#,
         )
         .bind(before_or_equal)
@@ -492,13 +494,14 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         status_filter: Option<ScheduledActionStatus>,
     ) -> Result<ScheduledActionStatusCounts, ApplicationError> {
         let status_filter = status_filter.map(DbScheduledActionStatus::from);
-        let row: (i64, i64, i64, i64) = sqlx::query_as(
+        let row: (i64, i64, i64, i64, i64) = sqlx::query_as(
             r#"
             SELECT
               COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::bigint AS pending_count,
               COALESCE(SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END), 0)::bigint AS processing_count,
               COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0)::bigint AS completed_count,
-              COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::bigint AS failed_count
+              COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::bigint AS failed_count,
+              COALESCE(SUM(CASE WHEN status = 'canceled' THEN 1 ELSE 0 END), 0)::bigint AS canceled_count
             FROM rm_scheduled_actions
             WHERE action_type = $1
               AND (payload->'workflow'->>'village_id')::int = $2
@@ -517,6 +520,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             processing: row.1 as usize,
             completed: row.2 as usize,
             failed: row.3 as usize,
+            canceled: row.4 as usize,
         })
     }
 }
@@ -528,6 +532,7 @@ enum DbScheduledActionStatus {
     Processing,
     Completed,
     Failed,
+    Canceled,
 }
 
 #[derive(Debug, Clone, Copy, sqlx::Type)]
@@ -556,6 +561,7 @@ impl From<DbScheduledActionStatus> for ScheduledActionStatus {
             DbScheduledActionStatus::Processing => Self::Processing,
             DbScheduledActionStatus::Completed => Self::Completed,
             DbScheduledActionStatus::Failed => Self::Failed,
+            DbScheduledActionStatus::Canceled => Self::Canceled,
         }
     }
 }
@@ -567,6 +573,7 @@ impl From<ScheduledActionStatus> for DbScheduledActionStatus {
             ScheduledActionStatus::Processing => Self::Processing,
             ScheduledActionStatus::Completed => Self::Completed,
             ScheduledActionStatus::Failed => Self::Failed,
+            ScheduledActionStatus::Canceled => Self::Canceled,
         }
     }
 }

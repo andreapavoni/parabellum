@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
+    CancelBuildingConstructionRequest as CancelBuildingConstructionUseCaseRequest,
     CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
     CreateMarketplaceOfferRequest, DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
@@ -76,6 +77,13 @@ pub struct UpgradeBuildingRequest {
 /// Payload for downgrading a building by slot.
 pub struct DowngradeBuildingRequest {
     pub slot_id: u8,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for canceling a queued building action.
+pub struct CancelBuildingConstructionRequest {
+    pub action_id: Uuid,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -347,6 +355,33 @@ pub async fn downgrade_building(
             player_id: user.player.id,
             village_id: user.village.id,
             slot_id: payload.slot_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+/// Cancels a queued building add, upgrade, or downgrade action.
+#[utoipa::path(
+    post,
+    path = "/buildings/cancel",
+    request_body = CancelBuildingConstructionRequest,
+    responses((status = 200, body = ActionResponse))
+)]
+pub async fn cancel_building_construction(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CancelBuildingConstructionRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .cancel_building_construction(CancelBuildingConstructionUseCaseRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            action_id: payload.action_id,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;
