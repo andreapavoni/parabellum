@@ -28,6 +28,46 @@ impl PostgresVillageRepository {
         Self { pool }
     }
 
+    fn inferred_server_speed(buildings: &[VillageBuilding]) -> i8 {
+        buildings
+            .iter()
+            .filter_map(|building| building.building.inferred_server_speed())
+            .max()
+            .unwrap_or(1)
+    }
+
+    fn default_capacity_for_buildings(buildings: &[VillageBuilding]) -> u32 {
+        800 * Self::inferred_server_speed(buildings).max(1) as u32
+    }
+
+    fn warehouse_capacity_for_buildings(buildings: &[VillageBuilding]) -> u32 {
+        buildings
+            .iter()
+            .filter(|b| {
+                matches!(
+                    b.building.name,
+                    BuildingName::Warehouse | BuildingName::GreatWarehouse
+                )
+            })
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or_else(|| Self::default_capacity_for_buildings(buildings))
+    }
+
+    fn granary_capacity_for_buildings(buildings: &[VillageBuilding]) -> u32 {
+        buildings
+            .iter()
+            .filter(|b| {
+                matches!(
+                    b.building.name,
+                    BuildingName::Granary | BuildingName::GreatGranary
+                )
+            })
+            .map(|b| b.building.value)
+            .max()
+            .unwrap_or_else(|| Self::default_capacity_for_buildings(buildings))
+    }
+
     pub async fn replace_village_state(
         &self,
         model: &VillageModel,
@@ -220,18 +260,8 @@ impl PostgresVillageRepository {
         parent_village_id: Option<u32>,
         buildings: &[VillageBuilding],
     ) -> Result<(), ApplicationError> {
-        let warehouse_capacity = buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Warehouse)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
-        let granary_capacity = buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Granary)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
+        let warehouse_capacity = Self::warehouse_capacity_for_buildings(buildings);
+        let granary_capacity = Self::granary_capacity_for_buildings(buildings);
         let total_merchants = buildings
             .iter()
             .filter(|b| b.building.name == BuildingName::Marketplace)
@@ -339,10 +369,12 @@ impl PostgresVillageRepository {
     fn refresh_materialized_village_state(
         model: VillageModel,
         army_context: VillageArmyContext,
+        hero_resources: ResourceGroup,
     ) -> VillageModel {
         let moving_armies = army_context.moving.clone();
         let hydrated = hydrate_village(model.clone(), army_context);
         let busy_merchants = model.busy_merchants;
+        let previous_updated_at = model.updated_at;
         let mut refreshed = model;
         refreshed.production = hydrated.production.clone();
         refreshed.production.upkeep = refreshed
@@ -351,6 +383,7 @@ impl PostgresVillageRepository {
             .saturating_add(Self::moving_armies_upkeep(&hydrated, &moving_armies));
         refreshed.production.calculate_effective_production();
         refreshed.stocks = hydrated.stocks().clone();
+        Self::apply_hero_resource_bonus(&mut refreshed, previous_updated_at, hero_resources);
         refreshed.population = hydrated.population;
         refreshed.culture_points_production = hydrated.culture_points_production;
         refreshed.total_merchants = hydrated.total_merchants;
@@ -382,6 +415,136 @@ impl PostgresVillageRepository {
         refreshed.busy_merchants = busy_merchants.min(refreshed.total_merchants);
         refreshed.updated_at = hydrated.updated_at;
         refreshed
+    }
+
+    fn apply_hero_resource_bonus(
+        refreshed: &mut VillageModel,
+        previous_updated_at: chrono::DateTime<chrono::Utc>,
+        hero_resources: ResourceGroup,
+    ) {
+        if hero_resources == ResourceGroup::default() {
+            return;
+        }
+
+        refreshed.production.effective.lumber = refreshed
+            .production
+            .effective
+            .lumber
+            .saturating_add(hero_resources.lumber());
+        refreshed.production.effective.clay = refreshed
+            .production
+            .effective
+            .clay
+            .saturating_add(hero_resources.clay());
+        refreshed.production.effective.iron = refreshed
+            .production
+            .effective
+            .iron
+            .saturating_add(hero_resources.iron());
+        refreshed.production.effective.crop = refreshed
+            .production
+            .effective
+            .crop
+            .saturating_add(hero_resources.crop() as i64);
+
+        let elapsed = (chrono::Utc::now() - previous_updated_at).num_seconds() as f64;
+        if elapsed <= 0.0 {
+            return;
+        }
+
+        let add = |current: u32, per_hour: u32, capacity: u32| -> u32 {
+            (current as f64 + elapsed * (per_hour as f64 / 3600.0))
+                .min(capacity as f64)
+                .max(0.0)
+                .floor() as u32
+        };
+        refreshed.stocks.lumber = add(
+            refreshed.stocks.lumber,
+            hero_resources.lumber(),
+            refreshed.stocks.warehouse_capacity,
+        );
+        refreshed.stocks.clay = add(
+            refreshed.stocks.clay,
+            hero_resources.clay(),
+            refreshed.stocks.warehouse_capacity,
+        );
+        refreshed.stocks.iron = add(
+            refreshed.stocks.iron,
+            hero_resources.iron(),
+            refreshed.stocks.warehouse_capacity,
+        );
+        refreshed.stocks.crop = add(
+            refreshed.stocks.crop.max(0) as u32,
+            hero_resources.crop(),
+            refreshed.stocks.granary_capacity,
+        ) as i64;
+    }
+
+    async fn hero_resource_bonus(
+        &self,
+        village_id: u32,
+    ) -> Result<ResourceGroup, ApplicationError> {
+        let row: Option<(i16, Json<parabellum_game::models::hero::HeroResourceFocus>)> =
+            sqlx::query_as(
+                r#"
+                SELECT resources_points, resource_focus
+                FROM rm_heroes
+                WHERE home_village_id = $1 AND health > 0
+                LIMIT 1
+                "#,
+            )
+            .bind(village_id as i32)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let Some((points, focus)) = row else {
+            return Ok(ResourceGroup::default());
+        };
+        let mut hero = parabellum_game::models::hero::Hero::new(
+            None,
+            village_id,
+            Uuid::nil(),
+            Tribe::Roman,
+            None,
+        );
+        hero.resources_points = points.max(0) as u16;
+        hero.resource_focus = focus.0;
+        Ok(hero.resources())
+    }
+
+    async fn hero_resource_bonus_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        village_id: u32,
+    ) -> Result<ResourceGroup, ApplicationError> {
+        let row: Option<(i16, Json<parabellum_game::models::hero::HeroResourceFocus>)> =
+            sqlx::query_as(
+                r#"
+                SELECT resources_points, resource_focus
+                FROM rm_heroes
+                WHERE home_village_id = $1 AND health > 0
+                LIMIT 1
+                "#,
+            )
+            .bind(village_id as i32)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let Some((points, focus)) = row else {
+            return Ok(ResourceGroup::default());
+        };
+        let mut hero = parabellum_game::models::hero::Hero::new(
+            None,
+            village_id,
+            Uuid::nil(),
+            Tribe::Roman,
+            None,
+        );
+        hero.resources_points = points.max(0) as u16;
+        hero.resource_focus = focus.0;
+        Ok(hero.resources())
     }
 
     fn moving_armies_upkeep(
@@ -427,7 +590,12 @@ impl PostgresVillageRepository {
         model: VillageModel,
     ) -> Result<VillageModel, ApplicationError> {
         let army = self.load_army_context(model.village_id).await?;
-        Ok(Self::refresh_materialized_village_state(model, army))
+        let hero_resources = self.hero_resource_bonus(model.village_id).await?;
+        Ok(Self::refresh_materialized_village_state(
+            model,
+            army,
+            hero_resources,
+        ))
     }
 
     async fn fetch_village_model(&self, village_id: u32) -> Result<VillageModel, ApplicationError> {
@@ -484,18 +652,8 @@ impl PostgresVillageRepository {
             });
         }
 
-        let warehouse_capacity = next_buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Warehouse)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
-        let granary_capacity = next_buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Granary)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
+        let warehouse_capacity = Self::warehouse_capacity_for_buildings(&next_buildings);
+        let granary_capacity = Self::granary_capacity_for_buildings(&next_buildings);
         let total_merchants = next_buildings
             .iter()
             .filter(|b| b.building.name == BuildingName::Marketplace)
@@ -558,7 +716,12 @@ impl PostgresVillageRepository {
         model: VillageModel,
     ) -> Result<VillageModel, ApplicationError> {
         let army = self.load_army_context_in_tx(tx, model.village_id).await?;
-        Ok(Self::refresh_materialized_village_state(model, army))
+        let hero_resources = self.hero_resource_bonus_in_tx(tx, model.village_id).await?;
+        Ok(Self::refresh_materialized_village_state(
+            model,
+            army,
+            hero_resources,
+        ))
     }
 
     pub async fn refresh_derived_state_in_tx(
@@ -921,18 +1084,8 @@ impl VillageRepository for PostgresVillageRepository {
             });
         }
 
-        let warehouse_capacity = next_buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Warehouse)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
-        let granary_capacity = next_buildings
-            .iter()
-            .filter(|b| b.building.name == BuildingName::Granary)
-            .map(|b| b.building.value)
-            .max()
-            .unwrap_or(800);
+        let warehouse_capacity = Self::warehouse_capacity_for_buildings(&next_buildings);
+        let granary_capacity = Self::granary_capacity_for_buildings(&next_buildings);
         let total_merchants = next_buildings
             .iter()
             .filter(|b| b.building.name == BuildingName::Marketplace)
@@ -1067,5 +1220,38 @@ impl VillageRepository for PostgresVillageRepository {
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parabellum_game::models::buildings::Building;
+
+    #[test]
+    fn default_storage_capacity_for_founded_village_uses_inferred_server_speed() {
+        let buildings = vec![
+            VillageBuilding {
+                slot_id: 1,
+                building: Building::new(BuildingName::Woodcutter, 3)
+                    .at_level(0, 3)
+                    .unwrap(),
+            },
+            VillageBuilding {
+                slot_id: 2,
+                building: Building::new(BuildingName::Cropland, 3)
+                    .at_level(0, 3)
+                    .unwrap(),
+            },
+        ];
+
+        assert_eq!(
+            PostgresVillageRepository::warehouse_capacity_for_buildings(&buildings),
+            2400
+        );
+        assert_eq!(
+            PostgresVillageRepository::granary_capacity_for_buildings(&buildings),
+            2400
+        );
     }
 }

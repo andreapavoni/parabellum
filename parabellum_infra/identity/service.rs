@@ -8,7 +8,7 @@ use parabellum_app::{
     auth::hash_password,
     config::Config,
     ports::identity::{IdentityPort, RegisterPlayerRequest},
-    villages::{FoundVillage, SetVillageResources},
+    villages::{CreateHero, FoundVillage, SetVillageResources},
 };
 use parabellum_game::models::{
     buildings::Building,
@@ -180,6 +180,42 @@ impl IdentityService {
                     village_id,
                     error = %cleanup_err,
                     "failed to cleanup registration after village foundation error"
+                );
+            }
+            return Err(e);
+        }
+
+        if let Err(e) = VillageEsService::new(self.pool.clone())
+            .create_hero(
+                village_id,
+                &CreateHero {
+                    hero_id: Uuid::new_v4(),
+                    player_id: req.player_id,
+                    village_id,
+                    has_existing_hero: false,
+                    bypass_hero_mansion_requirement: true,
+                },
+            )
+            .await
+            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
+        {
+            warn!(
+                user_id = %user_id,
+                player_id = %req.player_id,
+                village_id,
+                error = %e,
+                "registration failed during initial hero creation; starting cleanup"
+            );
+            if let Err(cleanup_err) = self
+                .cleanup_failed_registration(user_id, req.player_id, village_id)
+                .await
+            {
+                warn!(
+                    user_id = %user_id,
+                    player_id = %req.player_id,
+                    village_id,
+                    error = %cleanup_err,
+                    "failed to cleanup registration after hero creation error"
                 );
             }
             return Err(e);

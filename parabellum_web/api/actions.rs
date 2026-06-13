@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
+    AssignHeroPointsRequest as AssignHeroPointsUseCaseRequest,
     BuildTrapsRequest as BuildTrapsUseCaseRequest,
     CancelBuildingConstructionRequest as CancelBuildingConstructionUseCaseRequest,
     CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
@@ -29,13 +30,16 @@ use parabellum_app::ports::villages::{
     RenameVillageRequest as RenameVillageUseCaseRequest,
     ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
     ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
+    ResetHeroPointsRequest as ResetHeroPointsUseCaseRequest,
     SendAttackRequest as SendAttackUseCaseRequest,
     SendReinforcementRequest as SendReinforcementUseCaseRequest,
     SendResourcesRequest as SendResourcesUseCaseRequest,
     SendScoutRequest as SendScoutUseCaseRequest, SendSettlersRequest as SendSettlersUseCaseRequest,
+    SetHeroResourceFocusRequest as SetHeroResourceFocusUseCaseRequest,
     TrainUnitsRequest as TrainUnitsUseCaseRequest,
     UpgradeBuildingRequest as UpgradeBuildingUseCaseRequest,
 };
+use parabellum_game::models::hero::HeroResourceFocus;
 use parabellum_types::{
     army::{TroopSet, UnitName},
     battle::{AttackType, ScoutingTarget},
@@ -58,6 +62,29 @@ const RALLY_POINT_SLOT: u8 = 39;
 /// Generic success response for command endpoints.
 pub struct ActionResponse {
     pub success: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Current player hero state.
+pub struct HeroResponse {
+    pub id: Uuid,
+    pub village_id: u32,
+    #[schema(value_type = String)]
+    pub tribe: parabellum_types::tribe::Tribe,
+    pub level: u16,
+    pub health: u16,
+    pub experience: u32,
+    pub xp_for_next_level: u32,
+    #[schema(value_type = String)]
+    pub resource_focus: HeroResourceFocus,
+    pub strength_points: u16,
+    pub off_bonus_points: u16,
+    pub def_bonus_points: u16,
+    pub regeneration_points: u16,
+    pub resources_points: u16,
+    pub unassigned_points: u16,
+    pub speed: u8,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -107,6 +134,37 @@ pub struct TrainUnitsRequest {
     pub quantity: i32,
     #[schema(value_type = String)]
     pub building_name: BuildingName,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for assigning hero points.
+pub struct AssignHeroPointsRequest {
+    pub hero_id: Uuid,
+    pub village_id: u32,
+    pub strength: u16,
+    pub off_bonus: u16,
+    pub def_bonus: u16,
+    pub regeneration: u16,
+    pub resources: u16,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for resetting a level-0 hero's assigned points.
+pub struct ResetHeroPointsRequest {
+    pub hero_id: Uuid,
+    pub village_id: u32,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for changing hero resource focus.
+pub struct SetHeroResourceFocusRequest {
+    pub hero_id: Uuid,
+    pub village_id: u32,
+    #[schema(value_type = String)]
+    pub focus: HeroResourceFocus,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -569,6 +627,103 @@ pub async fn send_resources(
             source_village_id: user.village.id,
             target_village_id,
             resources: ResourceGroup(payload.lumber, payload.clay, payload.iron, payload.crop),
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn current_hero(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+    let hero = state
+        .game_app
+        .get_hero_by_player(user.player.id)
+        .await
+        .map_err(|err| map_application_error("unable_to_load_hero", err))?
+        .ok_or_else(|| ApiError::not_found("Hero not found"))?;
+
+    Ok(Json(HeroResponse {
+        id: hero.id,
+        village_id: hero.village_id,
+        tribe: hero.tribe.clone(),
+        level: hero.level,
+        health: hero.health,
+        experience: hero.experience,
+        xp_for_next_level: hero.xp_for_next_level(),
+        resource_focus: hero.resource_focus,
+        strength_points: hero.strength_points,
+        off_bonus_points: hero.off_bonus_points,
+        def_bonus_points: hero.def_bonus_points,
+        regeneration_points: hero.regeneration_points,
+        resources_points: hero.resources_points,
+        unassigned_points: hero.unassigned_points,
+        speed: hero.speed(),
+    }))
+}
+
+pub async fn assign_hero_points(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AssignHeroPointsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .assign_hero_points(AssignHeroPointsUseCaseRequest {
+            hero_id: payload.hero_id,
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            strength: payload.strength,
+            off_bonus: payload.off_bonus,
+            def_bonus: payload.def_bonus,
+            regeneration: payload.regeneration,
+            resources: payload.resources,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn reset_hero_points(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ResetHeroPointsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .reset_hero_points(ResetHeroPointsUseCaseRequest {
+            hero_id: payload.hero_id,
+            player_id: user.player.id,
+            village_id: payload.village_id,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn set_hero_resource_focus(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SetHeroResourceFocusRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .set_hero_resource_focus(SetHeroResourceFocusUseCaseRequest {
+            hero_id: payload.hero_id,
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            focus: payload.focus,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;

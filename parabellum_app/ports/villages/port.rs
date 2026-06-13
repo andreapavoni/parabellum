@@ -2,14 +2,14 @@ use async_trait::async_trait;
 use parabellum_types::errors::ApplicationError;
 
 use super::{
-    AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
+    AcceptMarketplaceOfferRequest, AddBuildingRequest, AssignHeroPointsRequest, BuildTrapsRequest,
     CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest, CancelTroopMovementRequest,
     CreateHeroRequest, CreateMarketplaceOfferRequest, DisbandTrappedTroopsRequest,
     DowngradeBuildingRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
     ReleaseTrappedTroopsRequest, RenameVillageRequest, ResearchAcademyRequest,
-    ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest,
-    SendResourcesRequest, SendScoutRequest, SendSettlersRequest, TrainUnitsRequest,
-    UpgradeBuildingRequest,
+    ResearchSmithyRequest, ResetHeroPointsRequest, ReviveHeroRequest, SendAttackRequest,
+    SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
+    SetHeroResourceFocusRequest, TrainUnitsRequest, UpgradeBuildingRequest,
 };
 
 #[async_trait]
@@ -78,4 +78,16 @@ pub trait VillageCommandsPort: Send + Sync {
     ) -> Result<(), ApplicationError>;
     async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError>;
     async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError>;
+    async fn assign_hero_points(
+        &self,
+        request: AssignHeroPointsRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn reset_hero_points(
+        &self,
+        request: ResetHeroPointsRequest,
+    ) -> Result<(), ApplicationError>;
+    async fn set_hero_resource_focus(
+        &self,
+        request: SetHeroResourceFocusRequest,
+    ) -> Result<(), ApplicationError>;
 }

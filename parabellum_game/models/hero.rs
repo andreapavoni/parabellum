@@ -113,6 +113,16 @@ impl Hero {
         }
     }
 
+    /// Movement speed when the hero travels alone.
+    pub fn speed(&self) -> u8 {
+        self.tribe
+            .units()
+            .iter()
+            .map(|unit| unit.speed)
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Regeneration %/day (10% base + 5% * regeneration points).
     /// Returns integer value representing a percentage.
     pub fn regeneration(&self) -> u16 {
@@ -181,6 +191,30 @@ impl Hero {
 
         self.unassigned_points -= total;
         Ok(())
+    }
+
+    /// Resets all allocated points while the hero is still level 0.
+    pub fn reset_level_zero_points(&mut self) -> Result<(), GameError> {
+        if self.level > 0 {
+            return Err(GameError::HeroPointsResetLocked);
+        }
+
+        let assigned = self.strength_points
+            + self.off_bonus_points
+            + self.def_bonus_points
+            + self.regeneration_points
+            + self.resources_points;
+        self.strength_points = 0;
+        self.off_bonus_points = 0;
+        self.def_bonus_points = 0;
+        self.regeneration_points = 0;
+        self.resources_points = 0;
+        self.unassigned_points = self.unassigned_points.saturating_add(assigned);
+        Ok(())
+    }
+
+    pub fn set_resource_focus(&mut self, focus: HeroResourceFocus) {
+        self.resource_focus = focus;
     }
 
     /// Battle damages: if loss_ratio >= 0.9 → death; else (loss_ratio * 100) HP
@@ -455,6 +489,44 @@ mod tests {
         // fail on cap
         hero.strength_points = 100;
         assert!(hero.assign_points(1, 0, 0, 0, 0).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn speed_uses_fastest_unit_for_tribe() -> Result<()> {
+        let hero = Hero::new(None, 1, Uuid::new_v4(), Tribe::Teuton, Some(5));
+
+        assert_eq!(hero.speed(), 20);
+        Ok(())
+    }
+
+    #[test]
+    fn level_zero_points_can_be_reset() -> Result<()> {
+        let mut hero = setup()?;
+
+        hero.assign_points(1, 1, 1, 1, 1)?;
+        assert_eq!(hero.unassigned_points, 0);
+
+        hero.reset_level_zero_points()?;
+
+        assert_eq!(hero.strength_points, 0);
+        assert_eq!(hero.off_bonus_points, 0);
+        assert_eq!(hero.def_bonus_points, 0);
+        assert_eq!(hero.regeneration_points, 0);
+        assert_eq!(hero.resources_points, 0);
+        assert_eq!(hero.unassigned_points, 5);
+        Ok(())
+    }
+
+    #[test]
+    fn points_cannot_be_reset_after_level_zero() -> Result<()> {
+        let mut hero = setup()?;
+        hero.level = 1;
+
+        assert_eq!(
+            hero.reset_level_zero_points(),
+            Err(GameError::HeroPointsResetLocked)
+        );
         Ok(())
     }
 }

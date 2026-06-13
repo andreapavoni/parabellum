@@ -8,6 +8,7 @@ import { MarketplaceBuilding } from "@/components/buildings/MarketplaceBuilding"
 import { RallyPointBuilding } from "@/components/buildings/RallyPointBuilding";
 import { MainBuilding } from "@/components/buildings/MainBuilding";
 import { TrapperBuilding } from "@/components/buildings/TrapperBuilding";
+import { HeroMansionBuilding } from "@/components/buildings/HeroMansionBuilding";
 import { EmptySlotBuilding, QueuedConstructionUpgrade, UpgradeBuilding } from "@/components/buildings/buildingCards";
 import type { BuildingPageResponse } from "@/types/api";
 
@@ -110,6 +111,9 @@ export function BuildingPage({
             serverTimeObservedAtMs={serverTimeObservedAtMs}
             onMutate={onMutate}
           />
+        ) : null}
+        {detail.buildingName === "HeroMansion" ? (
+          <HeroMansionBuilding detail={detail} onMutate={onMutate} />
         ) : null}
         {detail.trapper ? (
           <TrapperBuilding

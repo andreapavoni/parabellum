@@ -135,6 +135,16 @@ impl Aggregate for VillageAggregate {
                 home_army.set_hero(Some(hero.clone()));
                 let _ = self.village.village.set_army(Some(&home_army));
             }
+            VillageEvent::HeroUpdated { hero, .. } => {
+                if let Some(mut home_army) = self.village.village.army().cloned()
+                    && home_army
+                        .hero()
+                        .is_some_and(|current| current.id == hero.id)
+                {
+                    home_army.set_hero(Some(hero.clone()));
+                    let _ = self.village.village.set_army(Some(&home_army));
+                }
+            }
             VillageEvent::ReinforcementSent { .. } => {}
             VillageEvent::ReinforcementArrived { .. } => {}
             VillageEvent::ReinforcementAppliedToVillage { .. } => {}

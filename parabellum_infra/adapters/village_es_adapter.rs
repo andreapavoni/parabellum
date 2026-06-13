@@ -13,22 +13,24 @@ use parabellum_app::{
         },
         scheduler::SchedulerPort,
         villages::{
-            AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
-            CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
+            AcceptMarketplaceOfferRequest, AddBuildingRequest, AssignHeroPointsRequest,
+            BuildTrapsRequest, CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
             CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
             DisbandTrappedTroopsRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
             ReleaseReinforcementsRequest, ReleaseTrappedTroopsRequest, RenameVillageRequest,
-            ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-            SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
-            TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+            ResearchAcademyRequest, ResearchSmithyRequest, ResetHeroPointsRequest,
+            ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
+            SendScoutRequest, SendSettlersRequest, SetHeroResourceFocusRequest, TrainUnitsRequest,
+            UpgradeBuildingRequest, VillageCommandsPort,
         },
     },
     villages::{
-        AddBuilding, AttackVillage, BuildTraps, CancelBuildingConstruction, CancelTroopMovement,
-        CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops, DowngradeBuilding,
-        ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops,
-        RenameVillage, ResearchAcademy, ResearchSmithy, ReviveHero, ScoutVillage,
-        SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
+        AddBuilding, AssignHeroPoints, AttackVillage, BuildTraps, CancelBuildingConstruction,
+        CancelTroopMovement, CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops,
+        DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements,
+        ReleaseTrappedTroops, RenameVillage, ResearchAcademy, ResearchSmithy, ResetHeroPoints,
+        ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
+        SetHeroResourceFocus, TrainUnits, UpgradeBuilding,
     },
 };
 use parabellum_game::models::trapper::{TRAP_BUILD_TIME_SECS, Trapper};
@@ -1056,6 +1058,7 @@ impl VillageCommandsPort for VillageEsAdapter {
                         .player_has_alive_hero(request.player_id)
                         .await
                         .map_err(Self::map_cqrs_error)?,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -1104,6 +1107,81 @@ impl VillageCommandsPort for VillageEsAdapter {
             .map_err(Self::map_cqrs_error)?;
         Ok(())
     }
+
+    async fn assign_hero_points(
+        &self,
+        request: AssignHeroPointsRequest,
+    ) -> Result<(), ApplicationError> {
+        let hero = self
+            .service
+            .get_hero(request.hero_id)
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        self.service
+            .assign_hero_points(
+                request.village_id,
+                &AssignHeroPoints {
+                    player_id: request.player_id,
+                    village_id: request.village_id,
+                    hero,
+                    strength: request.strength,
+                    off_bonus: request.off_bonus,
+                    def_bonus: request.def_bonus,
+                    regeneration: request.regeneration,
+                    resources: request.resources,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn reset_hero_points(
+        &self,
+        request: ResetHeroPointsRequest,
+    ) -> Result<(), ApplicationError> {
+        let hero = self
+            .service
+            .get_hero(request.hero_id)
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        self.service
+            .reset_hero_points(
+                request.village_id,
+                &ResetHeroPoints {
+                    player_id: request.player_id,
+                    village_id: request.village_id,
+                    hero,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
+
+    async fn set_hero_resource_focus(
+        &self,
+        request: SetHeroResourceFocusRequest,
+    ) -> Result<(), ApplicationError> {
+        let hero = self
+            .service
+            .get_hero(request.hero_id)
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        self.service
+            .set_hero_resource_focus(
+                request.village_id,
+                &SetHeroResourceFocus {
+                    player_id: request.player_id,
+                    village_id: request.village_id,
+                    hero,
+                    focus: request.focus,
+                },
+            )
+            .await
+            .map_err(Self::map_cqrs_error)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -1116,6 +1194,16 @@ impl VillageQueryPort for VillageEsAdapter {
             .get_marketplace_offer(offer_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::MarketplaceOfferNotFound(offer_id)))
+    }
+
+    async fn get_hero_by_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<parabellum_game::models::hero::Hero>, ApplicationError> {
+        self.service
+            .get_hero_by_player(player_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
     }
 
     async fn list_reports_for_player(

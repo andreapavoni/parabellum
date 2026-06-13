@@ -1,3 +1,4 @@
+use parabellum_game::models::hero::HeroResourceFocus;
 use parabellum_types::army::{TroopSet, UnitName};
 use parabellum_types::battle::{AttackType, ScoutingTarget};
 use parabellum_types::buildings::BuildingName;
@@ -193,4 +194,31 @@ pub struct ReviveHeroRequest {
     pub player_id: Uuid,
     pub village_id: u32,
     pub reset: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignHeroPointsRequest {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub strength: u16,
+    pub off_bonus: u16,
+    pub def_bonus: u16,
+    pub regeneration: u16,
+    pub resources: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResetHeroPointsRequest {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct SetHeroResourceFocusRequest {
+    pub hero_id: Uuid,
+    pub player_id: Uuid,
+    pub village_id: u32,
+    pub focus: HeroResourceFocus,
 }

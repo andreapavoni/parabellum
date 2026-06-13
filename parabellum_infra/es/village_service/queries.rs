@@ -354,6 +354,16 @@ impl VillageEsService {
             .map_err(CqrsError::domain_source)
     }
 
+    pub async fn get_hero_by_player(
+        &self,
+        player_id: uuid::Uuid,
+    ) -> Result<Option<parabellum_game::models::hero::Hero>, CqrsError> {
+        let repo = PostgresHeroRepository::new(self.pool.clone());
+        repo.get_by_player(player_id)
+            .await
+            .map_err(CqrsError::domain_source)
+    }
+
     pub async fn player_has_alive_hero(&self, player_id: uuid::Uuid) -> Result<bool, CqrsError> {
         let repo: Arc<dyn HeroRepository> =
             Arc::new(PostgresHeroRepository::new(self.pool.clone()));

@@ -76,6 +76,50 @@ impl PostgresHeroRepository {
 
         Ok(())
     }
+
+    pub async fn update_stats_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        hero: &Hero,
+    ) -> Result<(), ApplicationError> {
+        sqlx::query(
+            r#"
+            UPDATE rm_heroes
+            SET tribe = $2,
+                level = $3,
+                health = $4,
+                experience = $5,
+                resource_focus = $6::jsonb,
+                strength_points = $7,
+                off_bonus_points = $8,
+                def_bonus_points = $9,
+                regeneration_points = $10,
+                resources_points = $11,
+                unassigned_points = $12,
+                updated_at = NOW()
+            WHERE hero_id = $1
+            "#,
+        )
+        .bind(hero.id)
+        .bind(crate::persistence::models::Tribe::from(hero.tribe.clone()))
+        .bind(hero.level as i16)
+        .bind(hero.health as i16)
+        .bind(hero.experience as i32)
+        .bind(serde_json::to_string(&hero.resource_focus).map_err(|e| {
+            ApplicationError::Db(DbError::Database(sqlx::Error::Decode(Box::new(e))))
+        })?)
+        .bind(hero.strength_points as i16)
+        .bind(hero.off_bonus_points as i16)
+        .bind(hero.def_bonus_points as i16)
+        .bind(hero.regeneration_points as i16)
+        .bind(hero.resources_points as i16)
+        .bind(hero.unassigned_points as i16)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]

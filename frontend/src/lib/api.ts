@@ -1,6 +1,7 @@
 import type {
   BuildingPageResponse,
   GameContextResponse,
+  Hero,
   MapFieldDetailResponse,
   MovementPreviewResponse,
   SendResourcesPreviewResponse,
@@ -290,6 +291,34 @@ export const api = {
     buildingName: string;
   }) =>
     request<{ success: boolean }>("/army/train", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  currentHero: () => request<Hero>("/hero/current"),
+  assignHeroPoints: (payload: {
+    heroId: string;
+    villageId: number;
+    strength: number;
+    offBonus: number;
+    defBonus: number;
+    regeneration: number;
+    resources: number;
+  }) =>
+    request<{ success: boolean }>("/hero/points", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  resetHeroPoints: (payload: { heroId: string; villageId: number }) =>
+    request<{ success: boolean }>("/hero/points/reset", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setHeroResourceFocus: (payload: {
+    heroId: string;
+    villageId: number;
+    focus: Hero["resourceFocus"];
+  }) =>
+    request<{ success: boolean }>("/hero/resource-focus", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

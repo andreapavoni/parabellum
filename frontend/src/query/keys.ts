@@ -1,6 +1,7 @@
 export const queryKeys = {
   session: ["session"] as const,
   gameContext: ["gameContext"] as const,
+  currentHero: ["currentHero"] as const,
   building: (slotId: number) => ["building", slotId] as const,
   stats: (page: number) => ["stats", page] as const,
   player: (playerId: string) => ["player", playerId] as const,

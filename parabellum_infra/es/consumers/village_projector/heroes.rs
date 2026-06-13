@@ -17,11 +17,30 @@ impl VillageProjector {
             VillageEvent::HeroCreated { .. } | VillageEvent::HeroRevived { .. } => {
                 Some(self.project_hero_home(tx, event).await)
             }
+            VillageEvent::HeroUpdated { .. } => Some(self.project_hero_updated(tx, event).await),
             VillageEvent::HeroRevivalScheduled { .. } => {
                 Some(self.project_hero_revival_scheduled(tx, event).await)
             }
             _ => None,
         }
+    }
+
+    async fn project_hero_updated(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        event: &VillageEvent,
+    ) -> Result<(), CqrsError> {
+        let VillageEvent::HeroUpdated { hero, .. } = event else {
+            unreachable!("project_hero_updated called with non-HeroUpdated event");
+        };
+        self.heroes
+            .update_stats_in_tx(tx, hero)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        self.village
+            .refresh_derived_state_in_tx(tx, hero.village_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     async fn project_hero_home(

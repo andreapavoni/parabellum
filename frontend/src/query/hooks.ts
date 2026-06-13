@@ -20,6 +20,14 @@ export function useGameContextQuery(enabled = true) {
   });
 }
 
+export function useCurrentHeroQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.currentHero,
+    queryFn: api.currentHero,
+    enabled,
+  });
+}
+
 export function useBuildingQuery(slotId: number) {
   return useQuery({
     queryKey: queryKeys.building(slotId),
