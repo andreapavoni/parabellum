@@ -126,7 +126,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 40,
         defense_infantry: 35,
         defense_cavalry: 50,
-        speed: 12,
+        speed: 6,
         capacity: 50,
         cost: Cost {
             resources: ResourceGroup::new(120, 100, 150, 30),
@@ -147,7 +147,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 30,
         defense_infantry: 65,
         defense_cavalry: 35,
-        speed: 10,
+        speed: 5,
         capacity: 20,
         cost: Cost {
             resources: ResourceGroup::new(100, 130, 160, 70),
@@ -171,7 +171,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 70,
         defense_infantry: 40,
         defense_cavalry: 25,
-        speed: 14,
+        speed: 7,
         capacity: 50,
         cost: Cost {
             resources: ResourceGroup::new(150, 160, 210, 80),
@@ -195,7 +195,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 0,
         defense_infantry: 20,
         defense_cavalry: 10,
-        speed: 32,
+        speed: 16,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(140, 160, 20, 40),
@@ -219,7 +219,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 120,
         defense_infantry: 65,
         defense_cavalry: 50,
-        speed: 28,
+        speed: 14,
         capacity: 100,
         cost: Cost {
             resources: ResourceGroup::new(550, 440, 320, 100),
@@ -243,7 +243,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 180,
         defense_infantry: 80,
         defense_cavalry: 105,
-        speed: 20,
+        speed: 10,
         capacity: 70,
         cost: Cost {
             resources: ResourceGroup::new(550, 640, 800, 180),
@@ -267,7 +267,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 60,
         defense_infantry: 30,
         defense_cavalry: 75,
-        speed: 8,
+        speed: 4,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(900, 360, 500, 70),
@@ -291,7 +291,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 75,
         defense_infantry: 60,
         defense_cavalry: 10,
-        speed: 6,
+        speed: 3,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(950, 1350, 600, 90),
@@ -315,7 +315,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 50,
         defense_infantry: 40,
         defense_cavalry: 30,
-        speed: 8,
+        speed: 4,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(30750, 27200, 45000, 37500),
@@ -339,7 +339,7 @@ static ROMAN_UNITS: TribeUnits = [
         attack: 0,
         defense_infantry: 80,
         defense_cavalry: 80,
-        speed: 10,
+        speed: 5,
         capacity: 3000,
         cost: Cost {
             resources: ResourceGroup::new(4600, 4200, 5800, 4400),
@@ -363,7 +363,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 40,
         defense_infantry: 20,
         defense_cavalry: 5,
-        speed: 14,
+        speed: 7,
         capacity: 60,
         cost: Cost {
             resources: ResourceGroup::new(95, 75, 40, 40),
@@ -384,7 +384,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 10,
         defense_infantry: 35,
         defense_cavalry: 60,
-        speed: 14,
+        speed: 7,
         capacity: 40,
         cost: Cost {
             resources: ResourceGroup::new(145, 70, 85, 40),
@@ -408,12 +408,12 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 60,
         defense_infantry: 30,
         defense_cavalry: 30,
-        speed: 12,
+        speed: 6,
         capacity: 50,
         cost: Cost {
             resources: ResourceGroup::new(130, 120, 170, 70),
             upkeep: 1,
-            time: 76,
+            time: 1200,
         },
         research_cost: ResearchCost {
             resources: ResourceGroup::new(880, 580, 1560, 580),
@@ -432,7 +432,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 0,
         defense_infantry: 10,
         defense_cavalry: 5,
-        speed: 18,
+        speed: 9,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(160, 100, 50, 50),
@@ -456,7 +456,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 55,
         defense_infantry: 100,
         defense_cavalry: 40,
-        speed: 20,
+        speed: 10,
         capacity: 110,
         cost: Cost {
             resources: ResourceGroup::new(370, 270, 290, 75),
@@ -480,7 +480,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 150,
         defense_infantry: 50,
         defense_cavalry: 75,
-        speed: 18,
+        speed: 9,
         capacity: 80,
         cost: Cost {
             resources: ResourceGroup::new(450, 515, 480, 80),
@@ -504,7 +504,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 65,
         defense_infantry: 30,
         defense_cavalry: 80,
-        speed: 8,
+        speed: 4,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(1000, 300, 350, 70),
@@ -528,7 +528,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 50,
         defense_infantry: 60,
         defense_cavalry: 10,
-        speed: 6,
+        speed: 3,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(900, 1200, 600, 60),
@@ -552,7 +552,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 40,
         defense_infantry: 60,
         defense_cavalry: 40,
-        speed: 8,
+        speed: 4,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(35500, 26600, 25000, 27200),
@@ -576,7 +576,7 @@ static TEUTON_UNITS: TribeUnits = [
         attack: 10,
         defense_infantry: 80,
         defense_cavalry: 80,
-        speed: 10,
+        speed: 5,
         capacity: 3000,
         cost: Cost {
             resources: ResourceGroup::new(5800, 4400, 4600, 5200),
@@ -600,7 +600,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 15,
         defense_infantry: 40,
         defense_cavalry: 50,
-        speed: 14,
+        speed: 7,
         capacity: 35,
         cost: Cost {
             resources: ResourceGroup::new(100, 130, 55, 30),
@@ -621,7 +621,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 65,
         defense_infantry: 35,
         defense_cavalry: 20,
-        speed: 12,
+        speed: 6,
         capacity: 45,
         cost: Cost {
             resources: ResourceGroup::new(140, 150, 185, 60),
@@ -645,7 +645,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 0,
         defense_infantry: 20,
         defense_cavalry: 10,
-        speed: 34,
+        speed: 17,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(170, 150, 20, 40),
@@ -669,7 +669,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 100,
         defense_infantry: 25,
         defense_cavalry: 40,
-        speed: 38,
+        speed: 19,
         capacity: 75,
         cost: Cost {
             resources: ResourceGroup::new(350, 450, 230, 60),
@@ -693,7 +693,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 45,
         defense_infantry: 115,
         defense_cavalry: 55,
-        speed: 32,
+        speed: 16,
         capacity: 35,
         cost: Cost {
             resources: ResourceGroup::new(360, 330, 280, 120),
@@ -717,7 +717,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 140,
         defense_infantry: 60,
         defense_cavalry: 165,
-        speed: 26,
+        speed: 13,
         capacity: 65,
         cost: Cost {
             resources: ResourceGroup::new(500, 620, 675, 170),
@@ -741,7 +741,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 50,
         defense_infantry: 30,
         defense_cavalry: 105,
-        speed: 8,
+        speed: 4,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(950, 555, 330, 75),
@@ -765,7 +765,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 70,
         defense_infantry: 45,
         defense_cavalry: 10,
-        speed: 6,
+        speed: 3,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(960, 1450, 630, 90),
@@ -789,7 +789,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 40,
         defense_infantry: 50,
         defense_cavalry: 50,
-        speed: 10,
+        speed: 5,
         capacity: 0,
         cost: Cost {
             resources: ResourceGroup::new(15880, 22900, 25200, 22660),
@@ -813,7 +813,7 @@ static GAUL_UNITS: TribeUnits = [
         attack: 0,
         defense_infantry: 80,
         defense_cavalry: 80,
-        speed: 10,
+        speed: 5,
         capacity: 3000,
         cost: Cost {
             resources: ResourceGroup::new(4400, 5600, 4200, 3900),

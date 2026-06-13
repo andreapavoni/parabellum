@@ -19,6 +19,10 @@ path = "bin/parabellum_replay.rs"
 name = "parabellum-seed"
 path = "bin/parabellum_seed.rs"
 
+[[bin]]
+name = "parabellum-backfill-heroes"
+path = "bin/parabellum_backfill_heroes.rs"
+
 [dependencies]
 parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }

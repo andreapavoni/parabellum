@@ -15,7 +15,8 @@ RUN bun run build:release
 RUN cargo build --release \
     --bin parabellum \
     --bin parabellum-seed \
-    --bin parabellum-replay
+    --bin parabellum-replay \
+    --bin parabellum-backfill-heroes
 
 # Runtime stage
 FROM bitnami/minideb:trixie
@@ -30,6 +31,7 @@ RUN mkdir -p /app/logs /app/mnt
 COPY --from=builder /app/target/release/parabellum /app/bin/parabellum
 COPY --from=builder /app/target/release/parabellum-seed /app/bin/parabellum-seed
 COPY --from=builder /app/target/release/parabellum-replay /app/bin/parabellum-replay
+COPY --from=builder /app/target/release/parabellum-backfill-heroes /app/bin/parabellum-backfill-heroes
 COPY --from=builder /app/seed /app/seed/
 COPY --from=builder /app/frontend /app/frontend/
 
