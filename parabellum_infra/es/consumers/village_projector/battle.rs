@@ -250,7 +250,7 @@ fn target_state_after_battle(
         .filter(|army| army.immensity() > 0)
         .cloned()
         .collect();
-        if let Some(stationed_attacker) = stationed_attacker_army
+    if let Some(stationed_attacker) = stationed_attacker_army
         && stationed_attacker.immensity() > 0
     {
         stationed.push(stationed_attacker.clone());

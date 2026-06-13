@@ -165,6 +165,98 @@ async fn village_es_service_persists_events_and_projects_reinforcement() {
 }
 
 #[tokio::test]
+async fn village_es_service_merges_reinforcement_waves_from_same_source() {
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (_, source_player_id, source_village_id) = setup_village(
+            &pool,
+            &service,
+            "Source Village",
+            Position { x: 0, y: 0 },
+            Tribe::Roman,
+            vec![
+                main_building(1),
+                rally_point(1),
+                barracks(1),
+                warehouse(20),
+                granary(20),
+            ],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        let (_, _target_player_id, target_village_id) = setup_village(
+            &pool,
+            &service,
+            "Target Village",
+            Position { x: 10, y: 10 },
+            Tribe::Roman,
+            vec![main_building(1), warehouse(20), granary(20)],
+            resources(80_000, 80_000, 80_000, 80_000),
+        )
+        .await;
+
+        service
+            .train_units(
+                source_village_id,
+                &TrainUnits {
+                    player_id: source_player_id,
+                    unit_idx: 0,
+                    building_name: BuildingName::Barracks,
+                    quantity: 2,
+                    speed: 1,
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+            .await
+            .unwrap();
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::hours(2), 10)
+            .await
+            .unwrap();
+        assert_eq!(home_units(&pool, source_village_id, 0).await, 2);
+
+        for minutes in [5, 6] {
+            service
+                .send_reinforcement(
+                    source_village_id,
+                    &SendReinforcement {
+                        movement_id: Uuid::new_v4(),
+                        army_id: Uuid::new_v4(),
+                        player_id: source_player_id,
+                        target_village_id,
+                        units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                        hero_id: None,
+                        arrives_at: chrono::Utc::now() + chrono::Duration::minutes(minutes),
+                    },
+                )
+                .await
+                .unwrap();
+        }
+
+        service
+            .process_due_actions(chrono::Utc::now() + chrono::Duration::minutes(10), 10)
+            .await
+            .unwrap();
+
+        let stationed = stationed_armies(&pool, target_village_id).await;
+        assert_eq!(stationed.len(), 1);
+        assert_eq!(stationed[0].village_id, source_village_id);
+        assert_eq!(stationed[0].units().get(0), 2);
+        assert_eq!(stationed_units(&pool, target_village_id, 0).await, 2);
+        assert_eq!(
+            deployed_armies(&pool, source_village_id).await.len(),
+            1,
+            "owner-side deployed read model should reference the merged stationed army"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn village_es_service_recall_reinforcements_supports_partial_split() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());

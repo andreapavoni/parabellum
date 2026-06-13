@@ -210,7 +210,10 @@ mod tests {
         let outcome = trapper.capture(&TroopSet::new([4, 4, 0, 0, 0, 0, 0, 0, 0, 0]));
 
         assert_eq!(outcome.traps_used, 6);
-        assert_eq!(outcome.trapped_units, TroopSet::new([4, 2, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(
+            outcome.trapped_units,
+            TroopSet::new([4, 2, 0, 0, 0, 0, 0, 0, 0, 0])
+        );
         assert_eq!(trapper.active_traps(), 0);
         assert_eq!(trapper.occupied_traps(), 6);
     }
@@ -248,8 +251,14 @@ mod tests {
 
         let outcome = trapper.free_by_attack(&TroopSet::new([5, 3, 0, 0, 0, 0, 0, 0, 0, 0]));
 
-        assert_eq!(outcome.deaths, TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
-        assert_eq!(outcome.survivors, TroopSet::new([4, 3, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(
+            outcome.deaths,
+            TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        );
+        assert_eq!(
+            outcome.survivors,
+            TroopSet::new([4, 3, 0, 0, 0, 0, 0, 0, 0, 0])
+        );
         assert_eq!(trapper.occupied_traps(), 0);
         assert_eq!(trapper.broken_traps(), 8);
         assert_eq!(trapper.active_traps(), 5);

@@ -26,12 +26,12 @@ use tower_http::{
 use crate::{
     api::{
         actions::{
-            accept_marketplace_offer, add_building, cancel_building_construction,
-            build_traps, cancel_marketplace_offer, cancel_troop_movement,
-            create_marketplace_offer, disband_trapped_troops, downgrade_building, found_village,
-            preview_found_village, preview_send_resources, preview_troops, recall_troops,
-            release_reinforcements, release_trapped_troops, rename_village, research_academy,
-            research_smithy, send_resources, send_troops, train_units, upgrade_building,
+            accept_marketplace_offer, add_building, build_traps, cancel_building_construction,
+            cancel_marketplace_offer, cancel_troop_movement, create_marketplace_offer,
+            disband_trapped_troops, downgrade_building, found_village, preview_found_village,
+            preview_send_resources, preview_troops, recall_troops, release_reinforcements,
+            release_trapped_troops, rename_village, research_academy, research_smithy,
+            send_resources, send_troops, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,

@@ -207,7 +207,7 @@ impl PostgresArmyRepository {
             let stationed_village_id = row.get::<i32, _>("current_village_id") as u32;
             Self::army_from_row(row).map(|army| (stationed_village_id, army))
         })
-            .transpose()
+        .transpose()
     }
 
     async fn find_trapped_context(

@@ -15,9 +15,9 @@
 
 use crate::es::workflows;
 use crate::es::{CqrsError, PostgresArmyRepository, VillageEsService};
-use parabellum_app::villages::repositories::ArmyRepository;
 use parabellum_app::villages::VillageService;
 use parabellum_app::villages::models::ScheduledActionPayload;
+use parabellum_app::villages::repositories::ArmyRepository;
 
 /// Executes one scheduled action payload by appending canonical workflow fact(s).
 pub(super) async fn execute_action(

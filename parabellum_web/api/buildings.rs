@@ -427,7 +427,8 @@ pub struct RallyCardDto {
     pub position: Option<PositionDto>,
     pub tribe: String,
     pub units: Vec<u32>,
-    pub upkeep: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upkeep: Option<u32>,
     pub category: RallyCardCategoryDto,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub movement_kind: Option<RallyMovementKindDto>,
@@ -1960,28 +1961,37 @@ fn troop_upkeep_for_tribe(tribe: &Tribe, units: &[u32; 10]) -> u32 {
 fn troop_upkeep_for_rally_card(
     village: &parabellum_game::models::village::Village,
     card: &ArmyCardData,
-) -> u32 {
+) -> Option<u32> {
     let is_returning_own_movement = matches!(
         (card.category, card.movement_kind),
         (ArmyCategory::Incoming, Some(MovementKind::Return))
     );
+    let is_hidden_incoming_movement =
+        matches!(card.category, ArmyCategory::Incoming) && !is_returning_own_movement;
+    let is_stationed_away_from_current_village = matches!(card.category, ArmyCategory::Deployed);
+    if is_hidden_incoming_movement || is_stationed_away_from_current_village {
+        return None;
+    }
+
     let is_own_context = matches!(
         card.category,
-        ArmyCategory::Stationed | ArmyCategory::Deployed | ArmyCategory::Outgoing
+        ArmyCategory::Stationed | ArmyCategory::Outgoing
     ) || is_returning_own_movement;
     if is_own_context && card.tribe == village.tribe {
-        card.tribe
-            .units()
-            .iter()
-            .enumerate()
-            .map(|(idx, unit)| {
-                village
-                    .effective_unit_upkeep(unit)
-                    .saturating_mul(*card.units.units().get(idx).unwrap_or(&0))
-            })
-            .sum()
+        Some(
+            card.tribe
+                .units()
+                .iter()
+                .enumerate()
+                .map(|(idx, unit)| {
+                    village
+                        .effective_unit_upkeep(unit)
+                        .saturating_mul(*card.units.units().get(idx).unwrap_or(&0))
+                })
+                .sum(),
+        )
     } else {
-        troop_upkeep_for_tribe(&card.tribe, card.units.units())
+        Some(troop_upkeep_for_tribe(&card.tribe, card.units.units()))
     }
 }
 

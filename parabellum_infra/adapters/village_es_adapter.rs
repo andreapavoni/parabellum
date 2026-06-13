@@ -31,7 +31,7 @@ use parabellum_app::{
         SendMerchantsTransfer, SendReinforcement, SendSettlers, TrainUnits, UpgradeBuilding,
     },
 };
-use parabellum_game::models::trapper::{Trapper, TRAP_BUILD_TIME_SECS};
+use parabellum_game::models::trapper::{TRAP_BUILD_TIME_SECS, Trapper};
 use parabellum_types::{
     army::UnitRole,
     errors::{AppError, ApplicationError, DbError, GameError},
@@ -722,8 +722,11 @@ impl VillageCommandsPort for VillageEsAdapter {
             .iter()
             .map(|army| army.units().immensity())
             .sum();
-        let mut trapper =
-            Trapper::from_buildings(&trapped_village.buildings, trapped_village.trapper, occupied);
+        let mut trapper = Trapper::from_buildings(
+            &trapped_village.buildings,
+            trapped_village.trapper,
+            occupied,
+        );
         trapper.release_by_owner(context.army.units());
         let returns_at = chrono::Utc::now()
             + self.compute_travel_duration(
@@ -791,8 +794,11 @@ impl VillageCommandsPort for VillageEsAdapter {
             .iter()
             .map(|army| army.units().immensity())
             .sum();
-        let mut trapper =
-            Trapper::from_buildings(&trapped_village.buildings, trapped_village.trapper, occupied);
+        let mut trapper = Trapper::from_buildings(
+            &trapped_village.buildings,
+            trapped_village.trapper,
+            occupied,
+        );
         trapper.release_by_owner(context.army.units());
 
         self.service

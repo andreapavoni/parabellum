@@ -709,7 +709,8 @@ mod tests {
         payload.remove("freed_trapped_returns");
         payload.remove("stationed_attacker_army");
 
-        let decoded: VillageEvent = serde_json::from_value(value).expect("deserialize legacy event");
+        let decoded: VillageEvent =
+            serde_json::from_value(value).expect("deserialize legacy event");
 
         match decoded {
             VillageEvent::AttackBattleResolved {

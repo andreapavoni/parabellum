@@ -17,9 +17,10 @@ use uuid::Uuid;
 
 use parabellum_app::ports::villages::{
     AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
+    BuildTrapsRequest as BuildTrapsUseCaseRequest,
     CancelBuildingConstructionRequest as CancelBuildingConstructionUseCaseRequest,
     CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
-    BuildTrapsRequest as BuildTrapsUseCaseRequest, CreateMarketplaceOfferRequest,
+    CreateMarketplaceOfferRequest,
     DisbandTrappedTroopsRequest as DisbandTrappedTroopsUseCaseRequest,
     DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,

@@ -508,7 +508,7 @@ export type RallyCard = {
   position?: Position;
   tribe: string;
   units: number[];
-  upkeep: number;
+  upkeep?: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
   arrivesAt?: string;

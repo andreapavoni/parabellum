@@ -248,13 +248,12 @@ fn attack_battle_payload(
         loyalty_before: Some(report.loyalty_before),
         loyalty_after: Some(report.loyalty_after),
         conquered: Some(success && report.loyalty_after == 0),
-        trapped: report
-            .trapped
-            .as_ref()
-            .map(|trapped| parabellum_types::reports::TrapCapturePayload {
+        trapped: report.trapped.as_ref().map(|trapped| {
+            parabellum_types::reports::TrapCapturePayload {
                 trapped_units: trapped.trapped_units.clone(),
                 traps_used: trapped.traps_used,
-            }),
+            }
+        }),
         freed: report
             .freed
             .as_ref()

@@ -65,7 +65,9 @@ impl VillageProjector {
     ) -> Result<(), CqrsError> {
         match event {
             VillageEvent::TrapBuilt {
-                village_id, trapper, ..
+                village_id,
+                trapper,
+                ..
             }
             | VillageEvent::TrappedTroopsReleased {
                 trapped_village_id: village_id,
@@ -76,7 +78,10 @@ impl VillageProjector {
                 trapped_village_id: village_id,
                 trapper,
                 ..
-            } => self.update_trapper_state_in_tx(tx, *village_id, *trapper).await,
+            } => {
+                self.update_trapper_state_in_tx(tx, *village_id, *trapper)
+                    .await
+            }
             _ => unreachable!("project_trapper_state called with non-trapper state event"),
         }
     }

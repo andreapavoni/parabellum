@@ -1,10 +1,14 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::models::{ScheduledAction, ScheduledActionPayload, TrapBuildWorkflow};
+use parabellum_app::villages::models::{
+    ScheduledAction, ScheduledActionPayload, TrapBuildWorkflow,
+};
 use parabellum_game::models::trapper::TrapperState;
 use uuid::Uuid;
 
-pub(crate) fn scheduled_action_from_event(event: &VillageEvent) -> Result<ScheduledAction, CqrsError> {
+pub(crate) fn scheduled_action_from_event(
+    event: &VillageEvent,
+) -> Result<ScheduledAction, CqrsError> {
     let VillageEvent::TrapBuildScheduled {
         action_id,
         player_id,

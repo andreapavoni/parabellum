@@ -700,12 +700,14 @@ export function RallyPointBuilding({
                                 </tr>
                               </tbody>
                             </table>
-                            <div class="mt-2 flex justify-end">
-                              <span class="inline-flex items-center gap-1 text-xs text-gray-500">
-                                <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
-                                {card.upkeep}
-                              </span>
-                            </div>
+                            {card.upkeep !== undefined ? (
+                              <div class="mt-2 flex justify-end">
+                                <span class="inline-flex items-center gap-1 text-xs text-gray-500">
+                                  <ResourceSprite kind="upkeep" size={12} label="Upkeep" />
+                                  {card.upkeep}
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
 

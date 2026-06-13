@@ -119,7 +119,11 @@ async fn build_attack_outcome(
     let capture = trapper.capture(attacker_army.units());
     if capture.traps_used > 0 {
         let captured = attacker_army
-            .split_units(capture.trapped_units.clone(), None, workflow.target_village_id)
+            .split_units(
+                capture.trapped_units.clone(),
+                None,
+                workflow.target_village_id,
+            )
             .map_err(CqrsError::domain_source)?;
         captured_army = Some(Army::new(
             Some(captured.id),
@@ -162,16 +166,15 @@ async fn build_attack_outcome(
                 hero_exp_gained: 0,
                 loss_percentage: 0.0,
             },
-            defender: defender_village
-                .army()
-                .cloned()
-                .map(|army| parabellum_game::battle::BattlePartyReport {
+            defender: defender_village.army().cloned().map(|army| {
+                parabellum_game::battle::BattlePartyReport {
                     survivors: army.units().clone(),
                     losses: TroopSet::default(),
                     army_before: army,
                     hero_exp_gained: 0,
                     loss_percentage: 0.0,
-                }),
+                }
+            }),
             reinforcements: defender_village
                 .reinforcements()
                 .iter()
@@ -211,17 +214,16 @@ async fn build_attack_outcome(
         report.trapped = Some(capture);
     }
 
-    let freed_trapped: Vec<Army> = if workflow.attack_type == AttackType::Normal
-        && attacker_army.immensity() > 0
-    {
-        trapped_here
-            .iter()
-            .filter(|army| army.player_id == workflow.player_id)
-            .cloned()
-            .collect()
-    } else {
-        vec![]
-    };
+    let freed_trapped: Vec<Army> =
+        if workflow.attack_type == AttackType::Normal && attacker_army.immensity() > 0 {
+            trapped_here
+                .iter()
+                .filter(|army| army.player_id == workflow.player_id)
+                .cloned()
+                .collect()
+        } else {
+            vec![]
+        };
     let mut freed_trapped_army_ids = Vec::new();
     let mut freed_trapped_returns = Vec::new();
     if !freed_trapped.is_empty() {
@@ -233,8 +235,7 @@ async fn build_attack_outcome(
             freed_trapped_army_ids.push(army.id);
         }
         let free = trapper.free_by_attack(&freed_units);
-        let survivor_units_by_home =
-            freed_survivor_units_by_home(&freed_trapped, &free.survivors);
+        let survivor_units_by_home = freed_survivor_units_by_home(&freed_trapped, &free.survivors);
         for (home_village_id, survivors) in survivor_units_by_home {
             if survivors.immensity() == 0 {
                 continue;

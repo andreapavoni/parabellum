@@ -6,8 +6,8 @@ use parabellum_types::battle::AttackType;
 use parabellum_types::errors::AppError;
 use uuid::Uuid;
 
-use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 use crate::villages::models::TrappedTroopReturn;
+use crate::villages::{VillageAggregate, VillageEvent, commands::as_invariant_error};
 
 #[derive(Debug, Clone)]
 pub struct ResolveAttackBattle {

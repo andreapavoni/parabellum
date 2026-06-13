@@ -87,6 +87,8 @@ impl VillageProjector {
         event: &VillageEvent,
     ) -> Result<(), CqrsError> {
         let VillageEvent::ReinforcementAppliedToVillage {
+            army_id,
+            source_village_id,
             target_village_id,
             player_id,
             army,
@@ -139,19 +141,83 @@ impl VillageProjector {
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
         } else {
-            self.armies
-                .upsert_stationed_in_tx(tx, army, *target_village_id, *player_id)
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            if let Some(hero) = army.hero() {
-                self.heroes
-                    .upsert_in_tx(tx, &hero, hero.village_id, *target_village_id, "stationed")
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            }
+            self.merge_stationed_reinforcement(
+                tx,
+                *army_id,
+                *source_village_id,
+                *target_village_id,
+                *player_id,
+                army,
+            )
+            .await?;
         }
         self.refresh_village_derived_state_in_tx(tx, *target_village_id)
             .await
+    }
+
+    async fn merge_stationed_reinforcement(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        arriving_army_id: uuid::Uuid,
+        source_village_id: u32,
+        target_village_id: u32,
+        player_id: uuid::Uuid,
+        army: &Army,
+    ) -> Result<(), CqrsError> {
+        let mut stationed = self
+            .armies
+            .list_armies_in_tx(
+                tx,
+                ArmyListFilter::new()
+                    .home_village(source_village_id)
+                    .current_village(target_village_id)
+                    .state(ArmyState::Stationed),
+            )
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        let mut target_army = stationed.pop().unwrap_or_else(|| army.clone());
+        if target_army.id != army.id {
+            target_army
+                .merge(army)
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            if army.hero().is_some() {
+                target_army.set_hero(army.hero());
+            }
+        }
+
+        for redundant in stationed {
+            target_army
+                .merge(&redundant)
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            if redundant.hero().is_some() {
+                target_army.set_hero(redundant.hero());
+            }
+            self.armies
+                .delete_in_tx(tx, redundant.id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+
+        if target_army.id != arriving_army_id {
+            self.armies
+                .delete_in_tx(tx, arriving_army_id)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+
+        self.armies
+            .upsert_stationed_in_tx(tx, &target_army, target_village_id, player_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        if let Some(hero) = target_army.hero() {
+            self.heroes
+                .upsert_in_tx(tx, &hero, hero.village_id, target_village_id, "stationed")
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+
+        Ok(())
     }
 
     pub(super) async fn project_reinforcements_recalled(
