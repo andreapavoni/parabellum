@@ -138,9 +138,16 @@ impl Trapper {
             deaths.set(idx, dead);
             survivors.set(idx, quantity.saturating_sub(dead));
         }
-        let traps_destroyed = trapped_units.immensity();
-        self.occupied_traps = self.occupied_traps.saturating_sub(traps_destroyed);
+        let released = trapped_units.immensity();
+        let traps_destroyed = released.saturating_mul(2) / 3;
+        let traps_recovered = released.saturating_sub(traps_destroyed);
+        self.occupied_traps = self.occupied_traps.saturating_sub(released);
         self.state.broken_traps = self.state.broken_traps.saturating_add(traps_destroyed);
+        self.state.active_traps = self
+            .state
+            .active_traps
+            .saturating_add(traps_recovered)
+            .min(self.capacity.saturating_sub(self.occupied_traps));
         TrapFreeOutcome {
             units_before,
             deaths,
@@ -238,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn attack_free_kills_quarter_and_breaks_used_traps() {
+    fn attack_free_kills_quarter_and_breaks_two_thirds_of_used_traps() {
         let mut trapper = Trapper::from_buildings(
             &[trapper_building(20)],
             TrapperState {
@@ -260,7 +267,28 @@ mod tests {
             TroopSet::new([4, 3, 0, 0, 0, 0, 0, 0, 0, 0])
         );
         assert_eq!(trapper.occupied_traps(), 0);
-        assert_eq!(trapper.broken_traps(), 8);
-        assert_eq!(trapper.active_traps(), 5);
+        assert_eq!(outcome.traps_destroyed, 5);
+        assert_eq!(trapper.broken_traps(), 5);
+        assert_eq!(trapper.active_traps(), 8);
+    }
+
+    #[test]
+    fn attack_free_rounds_trap_losses_down_like_unit_deaths() {
+        let mut trapper = Trapper::from_buildings(
+            &[trapper_building(10)],
+            TrapperState {
+                active_traps: 0,
+                broken_traps: 0,
+                queued_traps: 0,
+            },
+            2,
+        );
+
+        let outcome = trapper.free_by_attack(&TroopSet::new([2, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+
+        assert_eq!(outcome.traps_destroyed, 1);
+        assert_eq!(trapper.occupied_traps(), 0);
+        assert_eq!(trapper.broken_traps(), 1);
+        assert_eq!(trapper.active_traps(), 1);
     }
 }

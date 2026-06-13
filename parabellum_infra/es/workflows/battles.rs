@@ -214,7 +214,7 @@ async fn build_attack_outcome(
         report.trapped = Some(capture);
     }
 
-    let freed_trapped: Vec<Army> =
+    let mut freed_trapped: Vec<Army> =
         if workflow.attack_type == AttackType::Normal && attacker_army.immensity() > 0 {
             trapped_here
                 .iter()
@@ -224,6 +224,12 @@ async fn build_attack_outcome(
         } else {
             vec![]
         };
+    let captured_freed_by_attack = workflow.attack_type == AttackType::Normal
+        && attacker_army.immensity() > 0
+        && captured_army.is_some();
+    if captured_freed_by_attack && let Some(captured) = captured_army.clone() {
+        freed_trapped.push(captured);
+    }
     let mut freed_trapped_army_ids = Vec::new();
     let mut freed_trapped_returns = Vec::new();
     if !freed_trapped.is_empty() {
@@ -268,6 +274,9 @@ async fn build_attack_outcome(
             }
         }
         report.freed = Some(free);
+    }
+    if captured_freed_by_attack {
+        captured_army = None;
     }
 
     let conquered = can_attempt_conquer && report.loyalty_after == 0;

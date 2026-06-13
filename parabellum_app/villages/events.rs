@@ -458,6 +458,7 @@ pub enum VillageEvent {
         execute_at: DateTime<Utc>,
     },
     BuildingConstructionCanceled {
+        #[serde(default)]
         action_ids: Vec<Uuid>,
         player_id: Uuid,
         village_id: u32,
