@@ -389,6 +389,7 @@ export const api = {
     targetY: number;
     movement: "attack" | "raid" | "reinforcement";
     units: number[];
+    heroId?: string;
     scoutingTarget?: "resources" | "defenses";
     catapultTargets?: string[];
   }) =>
@@ -401,6 +402,7 @@ export const api = {
     targetY: number;
     movement: "attack" | "raid" | "reinforcement";
     units: number[];
+    heroId?: string;
   }) =>
     request<MovementPreviewResponse>("/army/preview", {
       method: "POST",

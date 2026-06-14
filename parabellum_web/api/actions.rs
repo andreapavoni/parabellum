@@ -244,6 +244,7 @@ pub struct SendTroopsRequest {
     pub target_y: i32,
     pub movement: MovementKind,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
     pub scouting_target: Option<ScoutingTargetKind>,
     #[schema(value_type = Option<Vec<String>>)]
     pub catapult_targets: Option<Vec<CatapultTargetInput>>,
@@ -312,6 +313,7 @@ pub struct PreviewTroopsRequest {
     pub target_y: i32,
     pub movement: MovementKind,
     pub units: Vec<i32>,
+    pub hero_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -898,7 +900,7 @@ pub async fn send_troops(
 
     let units = parse_troop_set(&payload.units)?;
 
-    if units.units().iter().all(|value| *value == 0) {
+    if units.units().iter().all(|value| *value == 0) && payload.hero_id.is_none() {
         return Err(ApiError::unprocessable("At least one unit is required"));
     }
 
@@ -909,6 +911,12 @@ pub async fn send_troops(
     let target_village_id = position.to_id(state.world_size);
 
     if let Some(target) = payload.scouting_target {
+        if payload.hero_id.is_some() {
+            return Err(ApiError::bad_request(
+                "Heroes cannot be sent with scout-only movements",
+            ));
+        }
+
         let attack_type = match payload.movement {
             MovementKind::Attack => AttackType::Normal,
             MovementKind::Raid => AttackType::Raid,
@@ -951,7 +959,7 @@ pub async fn send_troops(
                     source_village_id: user.village.id,
                     target_village_id,
                     units,
-                    hero_id: None,
+                    hero_id: payload.hero_id,
                     catapult_targets,
                     attack_type: match payload.movement {
                         MovementKind::Attack => AttackType::Normal,
@@ -970,7 +978,7 @@ pub async fn send_troops(
                     source_village_id: user.village.id,
                     target_village_id,
                     units,
-                    hero_id: None,
+                    hero_id: payload.hero_id,
                 })
                 .await
                 .map_err(|err| map_application_error("action_failed", err))?;
@@ -993,7 +1001,7 @@ pub async fn preview_troops(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = authenticated_user(&state, &headers).await?;
     let units = parse_troop_set(&payload.units)?;
-    if units.units().iter().all(|value| *value == 0) {
+    if units.units().iter().all(|value| *value == 0) && payload.hero_id.is_none() {
         return Err(ApiError::unprocessable("At least one unit is required"));
     }
 
@@ -1009,12 +1017,28 @@ pub async fn preview_troops(
             },
         )
         .collect::<Vec<_>>();
+    let selected_hero_speed = if let Some(hero_id) = payload.hero_id {
+        let hero = state
+            .game_app
+            .get_hero_by_player(user.player.id)
+            .await
+            .map_err(|err| map_application_error("unable_to_load_hero", err))?
+            .ok_or_else(|| ApiError::not_found("Hero not found"))?;
+        if hero.id != hero_id {
+            return Err(ApiError::not_found("Hero not found"));
+        }
+        Some(hero.speed())
+    } else {
+        None
+    };
     let min_speed = selected_units
         .iter()
         .map(|unit| unit.speed)
+        .chain(selected_hero_speed)
         .min()
         .unwrap_or(1);
-    let scout_only = !selected_units.is_empty()
+    let scout_only = payload.hero_id.is_none()
+        && !selected_units.is_empty()
         && selected_units
             .iter()
             .all(|unit| matches!(unit.role, parabellum_types::army::UnitRole::Scout));
