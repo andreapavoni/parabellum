@@ -254,6 +254,7 @@ mod tests {
                 receiver_position: Position { x: 1, y: 1 },
                 tribe: Tribe::Roman,
                 units: TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                has_hero: false,
             }),
             actor_player_id: player_id,
             actor_village_id: Some(100),

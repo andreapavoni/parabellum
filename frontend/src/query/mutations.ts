@@ -158,6 +158,20 @@ export function useSetHeroResourceFocusMutation() {
   });
 }
 
+export function useReviveHeroMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateCurrentVillage } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.reviveHero,
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateCurrentVillage(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
+      ]);
+    },
+  });
+}
+
 export function useResearchAcademyMutation() {
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({

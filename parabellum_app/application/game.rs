@@ -286,6 +286,15 @@ impl GameApplication {
         self.queries_port().get_hero_by_player(player_id).await
     }
 
+    pub async fn get_pending_hero_revival(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
+        self.queries_port()
+            .get_pending_hero_revival(player_id)
+            .await
+    }
+
     pub async fn list_reports_for_player(
         &self,
         player_id: Uuid,

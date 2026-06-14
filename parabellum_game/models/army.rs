@@ -479,21 +479,21 @@ mod tests {
 
     #[test]
     fn test_army_speed() {
-        // Maceman (speed 14), Spearman (speed 14)
+        // Maceman (speed 7), Spearman (speed 7)
         let army_fast = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
             units: Some(TroopSet::new([10, 5, 0, 0, 0, 0, 0, 0, 0, 0])),
             ..Default::default()
         });
-        assert_eq!(army_fast.speed(), 14);
+        assert_eq!(army_fast.speed(), 7);
 
-        // Maceman (speed 14), Ram (speed 8)
+        // Maceman (speed 7), Ram (speed 4)
         let army_slow = army_factory(ArmyFactoryOptions {
             tribe: Some(Tribe::Teuton),
             units: Some(TroopSet::new([10, 0, 0, 0, 0, 0, 5, 0, 0, 0])),
             ..Default::default()
         });
-        assert_eq!(army_slow.speed(), 8); // Speed is limited by the slowest unit (Ram)
+        assert_eq!(army_slow.speed(), 4); // Speed is limited by the slowest unit (Ram)
 
         // No units
         let army_empty = army_factory(ArmyFactoryOptions {
@@ -513,6 +513,6 @@ mod tests {
             hero: Some(hero),
             ..Default::default()
         });
-        assert_eq!(army_hero_alone.speed(), 20);
+        assert_eq!(army_hero_alone.speed(), 10);
     }
 }

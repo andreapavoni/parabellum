@@ -75,6 +75,8 @@ pub struct VillageMovement {
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: Option<u32>,
     pub units: parabellum_types::army::TroopSet,
+    #[serde(default)]
+    pub has_hero: bool,
     pub tribe: Option<Tribe>,
     pub bounty: Option<ResourceGroup>,
 }

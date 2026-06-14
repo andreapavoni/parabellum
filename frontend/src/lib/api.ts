@@ -322,6 +322,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  reviveHero: (payload: { heroId: string; villageId: number; reset: boolean }) =>
+    request<{ success: boolean }>("/hero/revive", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   researchAcademy: (payload: { slotId: number; unitName: string }) =>
     request<{ success: boolean }>("/academy/research", {
       method: "POST",

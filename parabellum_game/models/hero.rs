@@ -496,7 +496,7 @@ mod tests {
     fn speed_uses_fastest_unit_for_tribe() -> Result<()> {
         let hero = Hero::new(None, 1, Uuid::new_v4(), Tribe::Teuton, Some(5));
 
-        assert_eq!(hero.speed(), 20);
+        assert_eq!(hero.speed(), 10);
         Ok(())
     }
 

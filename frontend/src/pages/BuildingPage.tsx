@@ -113,7 +113,12 @@ export function BuildingPage({
           />
         ) : null}
         {detail.buildingName === "HeroMansion" ? (
-          <HeroMansionBuilding detail={detail} onMutate={onMutate} />
+          <HeroMansionBuilding
+            detail={detail}
+            serverTime={data.serverTime}
+            serverTimeObservedAtMs={serverTimeObservedAtMs}
+            onMutate={onMutate}
+          />
         ) : null}
         {detail.trapper ? (
           <TrapperBuilding

@@ -456,6 +456,18 @@ export type Hero = {
   resourcesPoints: number;
   unassignedPoints: number;
   speed: number;
+  strengthValue: number;
+  strengthPerPoint: number;
+  offBonusPercent: number;
+  offBonusPercentPerPoint: number;
+  defBonusPercent: number;
+  defBonusPercentPerPoint: number;
+  regenerationPercentPerDay: number;
+  regenerationPercentPerPoint: number;
+  resourceProduction: ResourceAmounts;
+  resurrectionCost: ResourceAmounts;
+  resurrectionTimeSecs: number;
+  revivalFinishesAt?: string;
 };
 
 export type TrapperDetail = {
@@ -526,6 +538,7 @@ export type RallyCard = {
   position?: Position;
   tribe: string;
   units: number[];
+  hasHero: boolean;
   upkeep?: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;

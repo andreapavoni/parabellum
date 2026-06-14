@@ -6,6 +6,7 @@ import { unitLabel } from "@/lib/labels";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
+import { ArmyTable } from "@/components/ArmyTable";
 import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import {
@@ -704,27 +705,8 @@ export function RallyPointBuilding({
                         </div>
 
                         {!isActionEditorOpen ? (
-                          <div class="overflow-x-auto">
-                            <table class="w-full border-collapse">
-                              <thead>
-                                <tr>
-                                  {card.units.map((_, idx) => (
-                                    <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
-                                      <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  {card.units.map((count, idx) => (
-                                    <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
-                                      <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
-                                    </td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
+                          <div>
+                            <ArmyTable units={card.units} tribe={card.tribe} hasHero={card.hasHero} />
                             {card.upkeep !== undefined ? (
                               <div class="mt-2 flex justify-end">
                                 <span class="inline-flex items-center gap-1 text-xs text-gray-500">

@@ -1,7 +1,7 @@
 import type { ReportDetailResponse, ReportListItem, ReportsResponse } from "@/types/api";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
-import { UnitSprite } from "@/components/UnitSprite";
+import { ArmyTable } from "@/components/ArmyTable";
 import { Button, Panel } from "@/components/ui";
 import { useGameContextQuery } from "@/query/hooks";
 import { useMemo, useState } from "preact/hooks";
@@ -246,73 +246,6 @@ function reportSubject(report: ReportSubjectInput, villageNamesById: VillageName
   return report.reportType;
 }
 
-function ArmyTable({
-  title,
-  before,
-  losses,
-  tribe,
-}: {
-  title: string;
-  before: number[];
-  losses?: number[];
-  tribe?: string;
-}) {
-  const length = Math.max(before.length, losses?.length ?? 0);
-  if (length === 0) {
-    return null;
-  }
-
-  return (
-    <div class="rounded-md border border-stone-200 bg-stone-50 p-2">
-      <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">{title}</p>
-      <div class="overflow-x-auto">
-        <table class="w-full table-fixed border-collapse overflow-hidden rounded-md border border-stone-200 bg-white text-xs">
-          <thead>
-            <tr>
-              {Array.from({ length }, (_, idx) => (
-                <th key={`u-${idx}`} class="border-b border-stone-200 p-0.5 text-center text-stone-500">
-                  <UnitSprite tribe={tribe} unitIndex={idx} label={`U${idx + 1}`} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {Array.from({ length }, (_, idx) => {
-                const value = before[idx] ?? 0;
-                return (
-                  <td
-                    key={`before-${idx}`}
-                    class={`border-r border-stone-200 p-1 text-center last:border-r-0 ${value === 0 ? "bg-stone-50 opacity-50" : "bg-white"}`}
-                  >
-                    <div class={value === 0 ? "text-stone-400" : "font-semibold text-stone-900"}>
-                      {value}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-            {losses ? (
-              <tr>
-                {Array.from({ length }, (_, idx) => {
-                  const loss = losses[idx] ?? 0;
-                  return (
-                    <td key={`loss-${idx}`} class="border-r border-stone-200 bg-stone-100 p-1 text-center last:border-r-0">
-                      <div class={loss > 0 ? "font-semibold text-stone-700" : "text-stone-300"}>
-                        {loss > 0 ? `↓${loss}` : "-"}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function sumArrays(left: number[], right: number[]) {
   const length = Math.max(left.length, right.length);
   return Array.from({ length }, (_, idx) => (left[idx] ?? 0) + (right[idx] ?? 0));
@@ -338,7 +271,7 @@ function TrapBattleSection({
           </p>
           <ArmyTable
             title={`${readNumber(trapped, "traps_used")} traps used`}
-            before={troopArray(trapped.trapped_units)}
+            units={troopArray(trapped.trapped_units)}
             tribe={tribe}
           />
         </div>
@@ -350,7 +283,7 @@ function TrapBattleSection({
           </p>
           <ArmyTable
             title={`${readNumber(freed, "traps_destroyed")} traps destroyed`}
-            before={troopArray(freed.units_before)}
+            units={troopArray(freed.units_before)}
             losses={troopArray(freed.deaths)}
             tribe={tribe}
           />
@@ -366,13 +299,14 @@ function TrapBattleSection({
 }
 
 function groupedReinforcementsByTribe(entries: unknown[]) {
-  const groups = new Map<string, { before: number[]; losses: number[] }>();
+  const groups = new Map<string, { before: number[]; losses: number[]; hasHero: boolean }>();
   for (const entry of entries) {
     const record = asRecord(entry) ?? {};
     const tribe = readString(record, "tribe", "Unknown");
-    const current = groups.get(tribe) ?? { before: [], losses: [] };
+    const current = groups.get(tribe) ?? { before: [], losses: [], hasHero: false };
     current.before = sumArrays(current.before, troopArray(record.army_before));
     current.losses = sumArrays(current.losses, troopArray(record.losses));
+    current.hasHero = current.hasHero || Boolean(record.has_hero);
     groups.set(tribe, current);
   }
   return Array.from(groups.entries()).map(([tribe, data]) => ({ tribe, ...data }));
@@ -470,7 +404,7 @@ function BattleReportDetail({
               villageNamesById,
             )}
           </p>
-          <ArmyTable title="Sent troops" before={attackerBefore} losses={attackerLosses} tribe={attackerTribe} />
+          <ArmyTable title="Sent troops" units={attackerBefore} losses={attackerLosses} tribe={attackerTribe} hasHero={Boolean(attacker?.has_hero)} />
           {totalResources(bounty) > 0 ? (
             <div class="rounded-md border border-stone-200 bg-white p-3">
               <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Bounty</p>
@@ -527,7 +461,7 @@ function BattleReportDetail({
             )}
           </p>
           {defender ? (
-            <ArmyTable title="Village troops" before={defenderBefore} losses={defenderLosses} tribe={defenderTribe} />
+            <ArmyTable title="Village troops" units={defenderBefore} losses={defenderLosses} tribe={defenderTribe} hasHero={Boolean(defender?.has_hero)} />
           ) : (
             <p class="rounded-md border border-stone-200 bg-white p-3 text-sm text-stone-500">No village troops were present.</p>
           )}
@@ -538,9 +472,10 @@ function BattleReportDetail({
                 <ArmyTable
                   key={group.tribe}
                   title={`${tribeLabel(group.tribe)} reinforcements`}
-                  before={group.before}
+                  units={group.before}
                   losses={group.losses}
                   tribe={group.tribe}
+                  hasHero={group.hasHero}
 
                 />
               ))}
@@ -609,7 +544,7 @@ function ReinforcementReportDetail({
               villageNamesById,
             )}
           </p>
-          <ArmyTable title="Sent troops" before={troopArray(payload.units)} tribe={readString(payload, "tribe")} />
+          <ArmyTable title="Sent troops" units={troopArray(payload.units)} tribe={readString(payload, "tribe")} hasHero={Boolean(payload.has_hero)} />
         </SectionCard>
         <SectionCard title="Receiver">
           <p class="text-sm text-stone-700">
