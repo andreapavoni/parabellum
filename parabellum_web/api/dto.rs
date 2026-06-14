@@ -579,6 +579,10 @@ fn current_troops(
     // (home + stationed reinforcements), not from rm_village snapshots.
     let mut grouped: std::collections::BTreeMap<String, u32> = std::collections::BTreeMap::new();
     let mut accumulate = |army: &parabellum_game::models::army::Army| {
+        if army.hero().is_some() {
+            *grouped.entry("Hero".to_string()).or_insert(0) += 1;
+        }
+
         for (idx, count) in army.units().units().iter().enumerate() {
             if *count == 0 {
                 continue;
