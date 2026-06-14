@@ -129,6 +129,7 @@ fn battle_party_payload(report: &BattlePartyReport) -> BattlePartyPayload {
         army_before: report.army_before.units().clone(),
         survivors: report.survivors.clone(),
         losses: report.losses.clone(),
+        has_hero: report.army_before.hero().is_some(),
     }
 }
 
@@ -167,6 +168,10 @@ fn scout_battle_payload(
                     .map(|a| a.units().clone())
                     .unwrap_or_default(),
                 losses: TroopSet::default(),
+                has_hero: context
+                    .target_home_army
+                    .as_ref()
+                    .is_some_and(|army| army.hero().is_some()),
             })
         } else {
             None
@@ -180,6 +185,7 @@ fn scout_battle_payload(
                     army_before: r.units().clone(),
                     survivors: r.units().clone(),
                     losses: TroopSet::default(),
+                    has_hero: r.hero().is_some(),
                 })
                 .collect()
         } else {

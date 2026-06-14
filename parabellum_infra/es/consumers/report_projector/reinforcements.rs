@@ -82,5 +82,6 @@ fn reinforcement_payload(context: &SourceTargetReportContext, army: &Army) -> Re
         receiver_position: context.target.position.clone(),
         tribe: army.tribe.clone(),
         units: army.units().clone(),
+        has_hero: army.hero().is_some(),
     })
 }

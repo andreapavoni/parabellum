@@ -33,6 +33,7 @@ use parabellum_app::{
         SetHeroResourceFocus, TrainUnits, UpgradeBuilding,
     },
 };
+use parabellum_game::models::hero::Hero;
 use parabellum_game::models::trapper::{TRAP_BUILD_TIME_SECS, Trapper};
 use parabellum_types::{
     army::UnitRole,
@@ -72,6 +73,7 @@ impl VillageEsAdapter {
     fn movement_speed(
         tribe: &parabellum_types::tribe::Tribe,
         units: &parabellum_types::army::TroopSet,
+        hero: Option<&Hero>,
     ) -> u8 {
         let mut min_speed: Option<u8> = None;
         for (idx, qty) in units.units().iter().enumerate() {
@@ -81,6 +83,9 @@ impl VillageEsAdapter {
             if let Some(unit) = tribe.units().get(idx) {
                 min_speed = Some(min_speed.map_or(unit.speed, |current| current.min(unit.speed)));
             }
+        }
+        if let Some(hero) = hero {
+            min_speed = Some(min_speed.map_or(hero.speed(), |current| current.min(hero.speed())));
         }
         min_speed.unwrap_or(1)
     }
@@ -435,7 +440,17 @@ impl VillageCommandsPort for VillageEsAdapter {
             .get_village(request.target_village_id)
             .await
             .map_err(Self::map_query_cqrs_error)?;
-        let speed = Self::movement_speed(&source.tribe, &request.units);
+        let hero = if let Some(hero_id) = request.hero_id {
+            Some(
+                self.service
+                    .get_hero(hero_id)
+                    .await
+                    .map_err(Self::map_cqrs_error)?,
+            )
+        } else {
+            None
+        };
+        let speed = Self::movement_speed(&source.tribe, &request.units, hero.as_ref());
         let arrives_at = chrono::Utc::now() + self.compute_travel_duration(&source, &target, speed);
 
         self.service
@@ -467,7 +482,17 @@ impl VillageCommandsPort for VillageEsAdapter {
             .get_village(request.target_village_id)
             .await
             .map_err(Self::map_query_cqrs_error)?;
-        let speed = Self::movement_speed(&source.tribe, &request.units);
+        let hero = if let Some(hero_id) = request.hero_id {
+            Some(
+                self.service
+                    .get_hero(hero_id)
+                    .await
+                    .map_err(Self::map_cqrs_error)?,
+            )
+        } else {
+            None
+        };
+        let speed = Self::movement_speed(&source.tribe, &request.units, hero.as_ref());
         let one_way = self.compute_travel_duration(&source, &target, speed);
         let arrives_at = chrono::Utc::now() + one_way;
         let returns_at = arrives_at + one_way;
@@ -505,7 +530,7 @@ impl VillageCommandsPort for VillageEsAdapter {
             .get_village(request.target_village_id)
             .await
             .map_err(Self::map_query_cqrs_error)?;
-        let speed = Self::movement_speed(&source.tribe, &request.units);
+        let speed = Self::movement_speed(&source.tribe, &request.units, None);
         let one_way = self.compute_travel_duration(&source, &target, speed);
         let arrives_at = chrono::Utc::now() + one_way;
         let returns_at = arrives_at + one_way;
@@ -604,11 +629,7 @@ impl VillageCommandsPort for VillageEsAdapter {
         let reinforcement_army = context.army;
 
         let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(
-                &stationed,
-                &home,
-                Self::movement_speed(&stationed.tribe, reinforcement_army.units()),
-            );
+            + self.compute_travel_duration(&stationed, &home, reinforcement_army.speed());
 
         self.service
             .recall_reinforcements(
@@ -658,11 +679,7 @@ impl VillageCommandsPort for VillageEsAdapter {
         let reinforcement_army = context.army;
 
         let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(
-                &stationed,
-                &home,
-                Self::movement_speed(&stationed.tribe, reinforcement_army.units()),
-            );
+            + self.compute_travel_duration(&stationed, &home, reinforcement_army.speed());
 
         self.service
             .release_reinforcements(
@@ -731,11 +748,7 @@ impl VillageCommandsPort for VillageEsAdapter {
         );
         trapper.release_by_owner(context.army.units());
         let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(
-                &trapped_village,
-                &home,
-                Self::movement_speed(&context.army.tribe, context.army.units()),
-            );
+            + self.compute_travel_duration(&trapped_village, &home, context.army.speed());
 
         self.service
             .release_trapped_troops(
@@ -1202,6 +1215,16 @@ impl VillageQueryPort for VillageEsAdapter {
     ) -> Result<Option<parabellum_game::models::hero::Hero>, ApplicationError> {
         self.service
             .get_hero_by_player(player_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_pending_hero_revival(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
+        self.service
+            .pending_hero_revival_at(player_id)
             .await
             .map_err(Self::map_query_cqrs_error)
     }

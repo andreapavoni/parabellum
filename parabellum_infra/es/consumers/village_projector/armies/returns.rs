@@ -249,6 +249,7 @@ impl VillageProjector {
             arrives_at: projection.returns_at,
             time_seconds: None,
             units: projection.army.units().clone(),
+            has_hero: projection.army.hero().is_some(),
             tribe: Some(projection.army.tribe.clone()),
             bounty: projection.bounty.clone(),
         };
@@ -338,6 +339,7 @@ impl VillageProjector {
             arrives_at: *returns_at,
             time_seconds: None,
             units: army.units().clone(),
+            has_hero: army.hero().is_some(),
             tribe: Some(army.tribe.clone()),
             bounty: None,
         };

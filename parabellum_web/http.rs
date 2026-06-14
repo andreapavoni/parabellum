@@ -31,8 +31,8 @@ use crate::{
             create_marketplace_offer, current_hero, disband_trapped_troops, downgrade_building,
             found_village, preview_found_village, preview_send_resources, preview_troops,
             recall_troops, release_reinforcements, release_trapped_troops, rename_village,
-            research_academy, research_smithy, reset_hero_points, send_resources, send_troops,
-            set_hero_resource_focus, train_units, upgrade_building,
+            research_academy, research_smithy, reset_hero_points, revive_hero, send_resources,
+            send_troops, set_hero_resource_focus, train_units, upgrade_building,
         },
         auth::{token_login, token_logout, token_refresh, token_register},
         buildings::building_detail,
@@ -106,6 +106,7 @@ impl WebRouter {
             .route("/hero/points", post(assign_hero_points))
             .route("/hero/points/reset", post(reset_hero_points))
             .route("/hero/resource-focus", post(set_hero_resource_focus))
+            .route("/hero/revive", post(revive_hero))
             .route("/army/send", post(send_troops))
             .route("/army/preview", post(preview_troops))
             .route("/army/recall", post(recall_troops))

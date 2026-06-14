@@ -78,6 +78,7 @@ impl VillageProjector {
             arrives_at: *arrives_at,
             time_seconds: None,
             units: army.units().clone(),
+            has_hero: army.hero().is_some(),
             tribe: Some(tribe.clone()),
             bounty: None,
         };

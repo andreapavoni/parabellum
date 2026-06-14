@@ -31,7 +31,7 @@ use parabellum_app::ports::villages::{
     ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
     ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
     ResetHeroPointsRequest as ResetHeroPointsUseCaseRequest,
-    SendAttackRequest as SendAttackUseCaseRequest,
+    ReviveHeroRequest as ReviveHeroUseCaseRequest, SendAttackRequest as SendAttackUseCaseRequest,
     SendReinforcementRequest as SendReinforcementUseCaseRequest,
     SendResourcesRequest as SendResourcesUseCaseRequest,
     SendScoutRequest as SendScoutUseCaseRequest, SendSettlersRequest as SendSettlersUseCaseRequest,
@@ -48,6 +48,7 @@ use parabellum_types::{
     map::Position,
 };
 
+use crate::api::dto::ResourceAmountsDto;
 use crate::api::errors::ApiError;
 use crate::http::AppState;
 
@@ -85,6 +86,19 @@ pub struct HeroResponse {
     pub resources_points: u16,
     pub unassigned_points: u16,
     pub speed: u8,
+    pub strength_value: u32,
+    pub strength_per_point: u32,
+    pub off_bonus_percent: f64,
+    pub off_bonus_percent_per_point: f64,
+    pub def_bonus_percent: f64,
+    pub def_bonus_percent_per_point: f64,
+    pub regeneration_percent_per_day: u16,
+    pub regeneration_percent_per_point: u16,
+    pub resource_production: ResourceAmountsDto,
+    pub resurrection_cost: ResourceAmountsDto,
+    pub resurrection_time_secs: u32,
+    #[schema(value_type = Option<String>)]
+    pub revival_finishes_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -165,6 +179,15 @@ pub struct SetHeroResourceFocusRequest {
     pub village_id: u32,
     #[schema(value_type = String)]
     pub focus: HeroResourceFocus,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+/// Payload for reviving a dead hero.
+pub struct ReviveHeroRequest {
+    pub hero_id: Uuid,
+    pub village_id: u32,
+    pub reset: bool,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -647,6 +670,22 @@ pub async fn current_hero(
         .await
         .map_err(|err| map_application_error("unable_to_load_hero", err))?
         .ok_or_else(|| ApiError::not_found("Hero not found"))?;
+    let strength_per_point = hero
+        .tribe
+        .get_top_unit()
+        .map(|unit| {
+            unit.attack
+                .max(unit.defense_infantry)
+                .max(unit.defense_cavalry)
+        })
+        .unwrap_or(0);
+    let resource_production = hero.resources();
+    let resurrection_cost = hero.resurrection_cost(state.server_speed);
+    let revival_finishes_at = state
+        .game_app
+        .get_pending_hero_revival(user.player.id)
+        .await
+        .map_err(|err| map_application_error("unable_to_load_hero_revival", err))?;
 
     Ok(Json(HeroResponse {
         id: hero.id,
@@ -664,6 +703,28 @@ pub async fn current_hero(
         resources_points: hero.resources_points,
         unassigned_points: hero.unassigned_points,
         speed: hero.speed(),
+        strength_value: hero.strength(),
+        strength_per_point,
+        off_bonus_percent: (hero.off_bonus() - 1.0) * 100.0,
+        off_bonus_percent_per_point: 0.2,
+        def_bonus_percent: (hero.def_bonus() - 1.0) * 100.0,
+        def_bonus_percent_per_point: 0.2,
+        regeneration_percent_per_day: hero.regeneration(),
+        regeneration_percent_per_point: 5,
+        resource_production: ResourceAmountsDto {
+            lumber: resource_production.lumber(),
+            clay: resource_production.clay(),
+            iron: resource_production.iron(),
+            crop: resource_production.crop(),
+        },
+        resurrection_cost: ResourceAmountsDto {
+            lumber: resurrection_cost.resources.lumber(),
+            clay: resurrection_cost.resources.clay(),
+            iron: resurrection_cost.resources.iron(),
+            crop: resurrection_cost.resources.crop(),
+        },
+        resurrection_time_secs: resurrection_cost.time,
+        revival_finishes_at,
     }))
 }
 
@@ -726,6 +787,27 @@ pub async fn set_hero_resource_focus(
             player_id: user.player.id,
             village_id: payload.village_id,
             focus: payload.focus,
+        })
+        .await
+        .map_err(|err| map_application_error("action_failed", err))?;
+
+    Ok(Json(ActionResponse { success: true }))
+}
+
+pub async fn revive_hero(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ReviveHeroRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = authenticated_user(&state, &headers).await?;
+
+    state
+        .game_app
+        .revive_hero(ReviveHeroUseCaseRequest {
+            hero_id: payload.hero_id,
+            player_id: user.player.id,
+            village_id: payload.village_id,
+            reset: payload.reset,
         })
         .await
         .map_err(|err| map_application_error("action_failed", err))?;

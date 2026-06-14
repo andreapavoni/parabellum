@@ -351,6 +351,7 @@ pub struct BattlePartyPayloadDoc {
     pub army_before: Vec<u32>,
     pub survivors: Vec<u32>,
     pub losses: Vec<u32>,
+    pub has_hero: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -422,6 +423,7 @@ pub struct ReinforcementReportPayloadDoc {
     #[schema(value_type = String)]
     pub tribe: parabellum_types::tribe::Tribe,
     pub units: Vec<u32>,
+    pub has_hero: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
