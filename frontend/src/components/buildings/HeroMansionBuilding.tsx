@@ -81,29 +81,45 @@ function formatResourceCost(resources: Hero["resourceProduction"]) {
   return parts.map(([label, value]) => `${formatNumber(Number(value))} ${label}`).join(", ");
 }
 
-function PointInput({
+function PointStepper({
   label,
   value,
   max,
-  onInput,
+  onChange,
 }: {
   label: string;
   value: number;
   max: number;
-  onInput: (value: number) => void;
+  onChange: (value: number) => void;
 }) {
+  const canDecrease = value > 0;
+  const canIncrease = value < max;
+
   return (
-    <label class="block text-sm">
-      <span class="text-gray-600">{label}</span>
-      <input
-        class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        type="number"
-        min={0}
-        max={max}
-        value={value}
-        onInput={(event) => onInput(Math.max(0, Number((event.currentTarget as HTMLInputElement).value) || 0))}
-      />
-    </label>
+    <div class="text-sm">
+      <div class="text-stone-600">{label}</div>
+      <div class="mt-1 grid grid-cols-[36px_1fr_36px] overflow-hidden rounded-md border border-stone-300 bg-white">
+        <button
+          class="flex h-9 items-center justify-center border-r border-stone-300 text-lg font-semibold text-stone-700 disabled:opacity-35"
+          type="button"
+          disabled={!canDecrease}
+          onClick={() => onChange(value - 1)}
+          aria-label={`Remove ${label} point`}
+        >
+          -
+        </button>
+        <div class="flex h-9 items-center justify-center font-semibold text-stone-900">{value}</div>
+        <button
+          class="flex h-9 items-center justify-center border-l border-stone-300 text-lg font-semibold text-stone-700 disabled:opacity-35"
+          type="button"
+          disabled={!canIncrease}
+          onClick={() => onChange(value + 1)}
+          aria-label={`Add ${label} point`}
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -139,28 +155,35 @@ export function HeroMansionBuilding({
     return <div class="border rounded-md p-4 bg-gray-50 text-sm text-gray-600">No hero available.</div>;
   }
 
-  const updateDraft = (key: keyof PointDraft, value: number) => {
-    if (!hero) return;
-    const currentPoints = {
+  const currentPointsFor = (key: keyof PointDraft) =>
+    ({
       strength: hero.strengthPoints,
       offBonus: hero.offBonusPoints,
       defBonus: hero.defBonusPoints,
       regeneration: hero.regenerationPoints,
       resources: hero.resourcesPoints,
-    }[key];
-    const max = Math.min(hero.unassignedPoints, Math.max(0, 100 - currentPoints));
-    setDraft((current) => ({ ...current, [key]: Math.min(max, value) }));
+    })[key];
+
+  const updateDraft = (key: keyof PointDraft, value: number) => {
+    if (!hero) return;
+    setDraft((current) => {
+      const currentPoints = currentPointsFor(key);
+      const selectedElsewhere =
+        current.strength + current.offBonus + current.defBonus + current.regeneration + current.resources - current[key];
+      const max = Math.min(
+        Math.max(0, 100 - currentPoints),
+        Math.max(0, hero.unassignedPoints - selectedElsewhere),
+      );
+      return { ...current, [key]: Math.min(max, Math.max(0, value)) };
+    });
   };
 
   const pointCap = (key: keyof PointDraft) => {
-    const currentPoints = {
-      strength: hero.strengthPoints,
-      offBonus: hero.offBonusPoints,
-      defBonus: hero.defBonusPoints,
-      regeneration: hero.regenerationPoints,
-      resources: hero.resourcesPoints,
-    }[key];
-    return Math.min(hero.unassignedPoints, Math.max(0, 100 - currentPoints));
+    const selectedElsewhere = totalDraft - draft[key];
+    return Math.min(
+      Math.max(0, 100 - currentPointsFor(key)),
+      Math.max(0, hero.unassignedPoints - selectedElsewhere),
+    );
   };
   const projected = {
     strengthPoints: hero.strengthPoints + draft.strength,
@@ -264,22 +287,6 @@ export function HeroMansionBuilding({
               <div class="mt-1 text-2xl font-semibold text-stone-900">{hero.speed}</div>
             </div>
           </div>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <div class="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
-              <div class="text-xs uppercase text-stone-500">Strength</div>
-              <div class="mt-1 font-semibold text-stone-900">{formatNumber(hero.strengthValue)}</div>
-            </div>
-            <div class="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
-              <div class="text-xs uppercase text-stone-500">Unit bonuses</div>
-              <div class="mt-1 font-semibold text-stone-900">
-                {formatPercent(hero.offBonusPercent)} off / {formatPercent(hero.defBonusPercent)} def
-              </div>
-            </div>
-            <div class="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
-              <div class="text-xs uppercase text-stone-500">Resources</div>
-              <div class="mt-1 font-semibold text-stone-900">{formatResourceProduction(hero.resourceProduction)}</div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -357,11 +364,11 @@ export function HeroMansionBuilding({
         </div>
 
         <div class="mt-4 grid gap-3 md:grid-cols-5">
-          <PointInput label="Strength" value={draft.strength} max={pointCap("strength")} onInput={(value) => updateDraft("strength", value)} />
-          <PointInput label="Off bonus" value={draft.offBonus} max={pointCap("offBonus")} onInput={(value) => updateDraft("offBonus", value)} />
-          <PointInput label="Def bonus" value={draft.defBonus} max={pointCap("defBonus")} onInput={(value) => updateDraft("defBonus", value)} />
-          <PointInput label="Regeneration" value={draft.regeneration} max={pointCap("regeneration")} onInput={(value) => updateDraft("regeneration", value)} />
-          <PointInput label="Resources" value={draft.resources} max={pointCap("resources")} onInput={(value) => updateDraft("resources", value)} />
+          <PointStepper label="Strength" value={draft.strength} max={pointCap("strength")} onChange={(value) => updateDraft("strength", value)} />
+          <PointStepper label="Off bonus" value={draft.offBonus} max={pointCap("offBonus")} onChange={(value) => updateDraft("offBonus", value)} />
+          <PointStepper label="Def bonus" value={draft.defBonus} max={pointCap("defBonus")} onChange={(value) => updateDraft("defBonus", value)} />
+          <PointStepper label="Regeneration" value={draft.regeneration} max={pointCap("regeneration")} onChange={(value) => updateDraft("regeneration", value)} />
+          <PointStepper label="Resources" value={draft.resources} max={pointCap("resources")} onChange={(value) => updateDraft("resources", value)} />
         </div>
 
         <button
