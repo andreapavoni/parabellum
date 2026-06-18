@@ -23,13 +23,14 @@ use parabellum_app::villages::models::{
 };
 use parabellum_app::villages::repositories::{MarketplaceRepository, ScheduledActionRepository};
 use parabellum_app::villages::{
-    AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, BuildTraps,
+    AddBuilding, ApplyBattleOutcomeToVillage, AssignHeroPoints, AttackVillage, BuildTraps,
     CancelBuildingConstruction, CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer,
     DisbandTrappedTroops, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
     RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops, RenameVillage,
-    ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
-    UpgradeBuilding, VillageArmyContext, VillageService, hydrate_village,
+    ResearchAcademy, ResearchSmithy, ResetHeroPoints, ResolveAttackBattle, ReviveHero,
+    ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetHeroResourceFocus,
+    SetVillageResources, TrainUnits, UpgradeBuilding, VillageArmyContext, VillageService,
+    hydrate_village,
 };
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::GameError;
@@ -340,6 +341,36 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.revive_hero(village_id, command).await
+    }
+
+    pub async fn assign_hero_points(
+        &self,
+        village_id: u32,
+        command: &AssignHeroPoints,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.assign_hero_points(village_id, command).await
+    }
+
+    pub async fn reset_hero_points(
+        &self,
+        village_id: u32,
+        command: &ResetHeroPoints,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.reset_hero_points(village_id, command).await
+    }
+
+    pub async fn set_hero_resource_focus(
+        &self,
+        village_id: u32,
+        command: &SetHeroResourceFocus,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.set_hero_resource_focus(village_id, command).await
     }
 
     /// Returns whether a target map field is currently an unoccupied valley.

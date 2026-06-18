@@ -57,6 +57,7 @@ async fn village_es_service_create_hero_projects_rm_heroes() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -67,6 +68,13 @@ async fn village_es_service_create_hero_projects_rm_heroes() {
         assert_eq!(hero.player_id, player_id);
         assert_eq!(hero.village_id, village_id);
         assert_eq!(hero.health, 100);
+        assert_eq!(
+            home_army(&pool, village_id)
+                .await
+                .and_then(|army| army.hero())
+                .map(|hero| hero.id),
+            Some(hero_id)
+        );
 
         assert!(service.player_has_alive_hero(player_id).await.unwrap());
     })
@@ -103,6 +111,7 @@ async fn village_es_service_revive_hero_schedules_and_completes_action() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -262,6 +271,7 @@ async fn village_es_service_hero_alone_reinforcement_transfers_home_when_both_ha
                     player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -368,6 +378,7 @@ async fn village_es_service_hero_with_troops_reinforcement_does_not_transfer_hom
                     player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -444,6 +455,7 @@ async fn village_es_service_hero_alone_to_village_without_hero_mansion_does_not_
                     player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -508,6 +520,7 @@ async fn village_es_service_create_hero_rejects_when_alive_hero_exists() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -521,6 +534,7 @@ async fn village_es_service_create_hero_rejects_when_alive_hero_exists() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await;
@@ -559,6 +573,7 @@ async fn village_es_service_revive_hero_rejects_when_alive_hero_exists() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -614,6 +629,7 @@ async fn village_es_service_revive_hero_rejects_when_pending_revival_exists() {
                     player_id,
                     village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -722,6 +738,7 @@ async fn village_es_service_attack_with_hero_returns_hero_home() {
                     player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await

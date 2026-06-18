@@ -4,6 +4,7 @@ use crate::read_models::VillageInfo;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parabellum_game::models::army::Army;
+use parabellum_game::models::hero::Hero;
 use parabellum_game::models::map::MapField;
 use parabellum_game::models::marketplace::MarketplaceOffer;
 use parabellum_types::errors::ApplicationError;
@@ -107,6 +108,7 @@ pub struct TroopMovement {
     pub arrives_at: DateTime<Utc>,
     pub time_seconds: u32,
     pub units: TroopSet,
+    pub has_hero: bool,
     pub tribe: parabellum_types::tribe::Tribe,
     pub bounty: Option<ResourceGroup>,
 }
@@ -172,6 +174,11 @@ pub trait VillageQueryPort: Send + Sync {
         &self,
         offer_id: Uuid,
     ) -> Result<MarketplaceOfferModel, ApplicationError>;
+    async fn get_hero_by_player(&self, player_id: Uuid) -> Result<Option<Hero>, ApplicationError>;
+    async fn get_pending_hero_revival(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, ApplicationError>;
     async fn list_reports_for_player(
         &self,
         player_id: Uuid,

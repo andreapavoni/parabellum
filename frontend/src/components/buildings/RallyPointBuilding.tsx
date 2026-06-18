@@ -6,6 +6,7 @@ import { unitLabel } from "@/lib/labels";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
 import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
+import { ArmyTable } from "@/components/ArmyTable";
 import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
 import {
@@ -16,6 +17,7 @@ import {
   useReleaseTrappedTroopsMutation,
   useSendTroopsMutation,
 } from "@/query/mutations";
+import { useCurrentHeroQuery } from "@/query/hooks";
 import type { BuildingPageResponse, MovementPreviewResponse, RallyCard } from "@/types/api";
 
 function unitsFromCard(card: RallyCard) {
@@ -322,6 +324,7 @@ export function RallyPointBuilding({
   const [catapultTarget1, setCatapultTarget1] = useState("MainBuilding");
   const [catapultTarget2, setCatapultTarget2] = useState("Warehouse");
   const [units, setUnits] = useState<Record<number, number>>({});
+  const [includeHero, setIncludeHero] = useState(false);
   const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
   const [previewStartedAtMs, setPreviewStartedAtMs] = useState<number | null>(null);
   const [previewTravelSeconds, setPreviewTravelSeconds] = useState(0);
@@ -331,6 +334,7 @@ export function RallyPointBuilding({
   const [error, setError] = useState<string | null>(null);
   const [expandedActionKey, setExpandedActionKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RallyTab>(() => initialRallyTab(query, window.location.hash));
+  const currentHeroQuery = useCurrentHeroQuery(activeTab === "send");
   const sendTroops = useSendTroopsMutation();
   const recallTroops = useRecallTroopsMutation();
   const releaseReinforcements = useReleaseReinforcementsMutation();
@@ -364,6 +368,10 @@ export function RallyPointBuilding({
     unit.isResearched ? unit.available : 0
   );
   const sendableUnitLabels = detail.rallyPoint.sendableUnits.map((unit) => unitLabel(unit.name));
+  const currentHero = currentHeroQuery.data;
+  const canSendHero =
+    !!currentHero && currentHero.villageId === detail.villageId && currentHero.health > 0;
+  const selectedHeroId = includeHero && canSendHero ? currentHero.id : undefined;
 
   const isScoutUnitName = (name: string) =>
     name === "Scout" || name === "Pathfinder" || name === "EquitesLegati";
@@ -379,7 +387,7 @@ export function RallyPointBuilding({
     .reduce((sum, unit) => sum + (units[unit.unitIdx] ?? 0), 0);
   const isScoutDetected = preview?.detectedKind === "scout_only";
   const showScoutingTargetChoice =
-    movement !== "reinforcement" && !!preview?.supportsScoutingTargetChoice;
+    !selectedHeroId && movement !== "reinforcement" && !!preview?.supportsScoutingTargetChoice;
   const showCatapultTargets =
     movement === "attack" && !isScoutDetected && !!preview?.hasCatapultUnits;
   const catapultTargetSelectionCount = selectedCatapultUnits <= 1 ? 1 : 2;
@@ -457,6 +465,22 @@ export function RallyPointBuilding({
                 }}
               />
             </div>
+            {canSendHero ? (
+              <label class="flex items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  checked={includeHero}
+                  disabled={sending}
+                  onChange={(e) => {
+                    setIncludeHero((e.target as HTMLInputElement).checked);
+                    setPreview(null);
+                  }}
+                  class="h-4 w-4 rounded border-stone-300 text-green-700"
+                />
+                <span class="font-medium">Send hero</span>
+                <span class="text-xs text-stone-500">speed {currentHero.speed}</span>
+              </label>
+            ) : null}
           </div>
 
           <Button
@@ -473,6 +497,7 @@ export function RallyPointBuilding({
                   targetY,
                   movement,
                   units: toUnitsArray(),
+                  heroId: selectedHeroId,
                 });
                 setPreview(result);
                 setPreviewStartedAtMs(Date.now());
@@ -596,6 +621,7 @@ export function RallyPointBuilding({
                       targetX,
                       targetY,
                       movement,
+                      heroId: selectedHeroId,
                       scoutingTarget: showScoutingTargetChoice ? scoutingTarget : undefined,
                       catapultTargets: showCatapultTargets
                         ? (catapultTargetSelectionCount === 1
@@ -679,27 +705,8 @@ export function RallyPointBuilding({
                         </div>
 
                         {!isActionEditorOpen ? (
-                          <div class="overflow-x-auto">
-                            <table class="w-full border-collapse">
-                              <thead>
-                                <tr>
-                                  {card.units.map((_, idx) => (
-                                    <th key={`icon-${idx}`} class="text-center p-1 border-r last:border-r-0 bg-white">
-                                      <UnitSprite tribe={card.tribe} unitIndex={idx} label={unitLabel(detail.rallyPoint!.sendableUnits[idx]?.name ?? `U${idx + 1}`)} />
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  {card.units.map((count, idx) => (
-                                    <td key={idx} class={count === 0 ? "text-center p-2 border-r last:border-r-0 bg-gray-50 opacity-40" : "text-center p-2 border-r last:border-r-0 bg-gray-100"}>
-                                      <div class={count === 0 ? "text-gray-400 text-sm" : "text-gray-900 font-semibold"}>{count}</div>
-                                    </td>
-                                  ))}
-                                </tr>
-                              </tbody>
-                            </table>
+                          <div>
+                            <ArmyTable units={card.units} tribe={card.tribe} hasHero={card.hasHero} />
                             {card.upkeep !== undefined ? (
                               <div class="mt-2 flex justify-end">
                                 <span class="inline-flex items-center gap-1 text-xs text-gray-500">

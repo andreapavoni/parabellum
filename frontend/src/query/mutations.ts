@@ -116,6 +116,62 @@ export function useTrainUnitsMutation() {
   });
 }
 
+export function useAssignHeroPointsMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateCurrentVillage } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.assignHeroPoints,
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateCurrentVillage(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
+      ]);
+    },
+  });
+}
+
+export function useResetHeroPointsMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateCurrentVillage } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.resetHeroPoints,
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateCurrentVillage(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
+      ]);
+    },
+  });
+}
+
+export function useSetHeroResourceFocusMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateCurrentVillage } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.setHeroResourceFocus,
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateCurrentVillage(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
+      ]);
+    },
+  });
+}
+
+export function useReviveHeroMutation() {
+  const queryClient = useQueryClient();
+  const { invalidateCurrentVillage } = useInvalidateGameState();
+  return useMutation({
+    mutationFn: api.reviveHero,
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateCurrentVillage(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
+      ]);
+    },
+  });
+}
+
 export function useResearchAcademyMutation() {
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({

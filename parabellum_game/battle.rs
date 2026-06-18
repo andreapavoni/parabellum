@@ -123,6 +123,7 @@ impl Battle {
                 (total_attacker_cavalry_points as f64 * hero.off_bonus()) as u32;
 
             total_attacker_infantry_points += hero.strength();
+            total_attacker_cavalry_points += hero.strength();
         }
 
         let mut total_defender_immensity: u32 = 0;
@@ -131,6 +132,15 @@ impl Battle {
             self.defender_village
                 .army()
                 .map_or((0, 0), |a| a.defense_points());
+
+        if let Some(hero) = self.defender_village.army().and_then(|army| army.hero()) {
+            total_defender_infantry_points =
+                (total_defender_infantry_points as f64 * hero.def_bonus()) as u32;
+            total_defender_cavalry_points =
+                (total_defender_cavalry_points as f64 * hero.def_bonus()) as u32;
+            total_defender_infantry_points += hero.strength();
+            total_defender_cavalry_points += hero.strength();
+        }
 
         total_defender_immensity += self.defender_village.army().map_or(0, |a| a.immensity());
 

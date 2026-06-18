@@ -18,6 +18,8 @@ pub struct ReinforcementReportPayload {
     pub receiver_position: Position,
     pub tribe: Tribe,
     pub units: TroopSet,
+    #[serde(default)]
+    pub has_hero: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,6 +47,8 @@ pub struct BattlePartyPayload {
     pub army_before: TroopSet,
     pub survivors: TroopSet,
     pub losses: TroopSet,
+    #[serde(default)]
+    pub has_hero: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

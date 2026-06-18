@@ -19,6 +19,7 @@ import { formatDurationHms } from "@/lib/time";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
 
 const CANONICAL_UNIT_ORDER: string[] = [
+  "Hero",
   "Legionnaire", "Praetorian", "Imperian", "EquitesLegati", "EquitesImperatoris", "EquitesCaesaris", "BatteringRam", "FireCatapult", "Senator", "Settler",
   "Maceman", "Spearman", "Axeman", "Scout", "Paladin", "TeutonicKnight", "Ram", "Catapult", "Chief",
   "Phalanx", "Swordsman", "Pathfinder", "TheutatesThunder", "Druidrider", "Haeduan", "Trebuchet", "Chieftain",
@@ -29,6 +30,21 @@ const CANONICAL_UNIT_ORDER: string[] = [
 const UNIT_ORDER_INDEX = new Map<string, number>(
   CANONICAL_UNIT_ORDER.map((name, idx) => [name, idx]),
 );
+
+function CurrentTroopIcon({ unitName }: { unitName: string }) {
+  if (unitName === "Hero") {
+    return (
+      <span
+        title="Hero"
+        class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-[9px] font-bold text-amber-800"
+      >
+        H
+      </span>
+    );
+  }
+
+  return <UnitSpriteByName unitName={unitName} label={unitLabel(unitName)} />;
+}
 
 export function ResourcesPage({
   data,
@@ -147,8 +163,8 @@ export function ResourcesPage({
                     key={troop.unitName}
                   >
                     <span class="inline-flex items-center gap-2">
-                      <UnitSpriteByName unitName={troop.unitName} label={unitLabel(troop.unitName)} />
-                      <span>{unitLabel(troop.unitName)}</span>
+                      <CurrentTroopIcon unitName={troop.unitName} />
+                      <span>{troop.unitName === "Hero" ? "Hero" : unitLabel(troop.unitName)}</span>
                     </span>
                     <span class="font-bold text-gray-900">{troop.count}</span>
                   </Link>

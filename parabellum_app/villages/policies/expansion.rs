@@ -415,6 +415,7 @@ mod tests {
             arrives_at: Utc::now(),
             time_seconds: 10,
             units,
+            has_hero: false,
             tribe: Tribe::Roman,
             bounty: Some(ResourceGroup::default()),
         }

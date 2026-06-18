@@ -1,6 +1,7 @@
 import type {
   BuildingPageResponse,
   GameContextResponse,
+  Hero,
   MapFieldDetailResponse,
   MovementPreviewResponse,
   SendResourcesPreviewResponse,
@@ -293,6 +294,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  currentHero: () => request<Hero>("/hero/current"),
+  assignHeroPoints: (payload: {
+    heroId: string;
+    villageId: number;
+    strength: number;
+    offBonus: number;
+    defBonus: number;
+    regeneration: number;
+    resources: number;
+  }) =>
+    request<{ success: boolean }>("/hero/points", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  resetHeroPoints: (payload: { heroId: string; villageId: number }) =>
+    request<{ success: boolean }>("/hero/points/reset", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setHeroResourceFocus: (payload: {
+    heroId: string;
+    villageId: number;
+    focus: Hero["resourceFocus"];
+  }) =>
+    request<{ success: boolean }>("/hero/resource-focus", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  reviveHero: (payload: { heroId: string; villageId: number; reset: boolean }) =>
+    request<{ success: boolean }>("/hero/revive", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   researchAcademy: (payload: { slotId: number; unitName: string }) =>
     request<{ success: boolean }>("/academy/research", {
       method: "POST",
@@ -360,6 +394,7 @@ export const api = {
     targetY: number;
     movement: "attack" | "raid" | "reinforcement";
     units: number[];
+    heroId?: string;
     scoutingTarget?: "resources" | "defenses";
     catapultTargets?: string[];
   }) =>
@@ -372,6 +407,7 @@ export const api = {
     targetY: number;
     movement: "attack" | "raid" | "reinforcement";
     units: number[];
+    heroId?: string;
   }) =>
     request<MovementPreviewResponse>("/army/preview", {
       method: "POST",

@@ -229,7 +229,7 @@ impl Village {
             busy_merchants: 0,
             culture_points: 0,
             culture_points_production: 0,
-            stocks: Default::default(),
+            stocks: VillageStocks::default_for_speed(server_speed),
             updated_at: Utc::now(),
             parent_village_id: None,
         };
@@ -1218,6 +1218,7 @@ impl Village {
     fn update_state(&mut self) {
         self.population = 0;
         self.production = Default::default();
+        let default_capacity = 800 * self.inferred_server_speed().max(1) as u32;
 
         // reset the stocks capacities because we're going to recalculate them
         self.stocks.warehouse_capacity = 0;
@@ -1246,12 +1247,11 @@ impl Village {
         }
 
         // set default stocks capacities if no warehouse/granary present
-        let default_socks = VillageStocks::default();
         if self.stocks.granary_capacity == 0 {
-            self.stocks.granary_capacity = default_socks.granary_capacity;
+            self.stocks.granary_capacity = default_capacity;
         }
         if self.stocks.warehouse_capacity == 0 {
-            self.stocks.warehouse_capacity = default_socks.warehouse_capacity;
+            self.stocks.warehouse_capacity = default_capacity;
         }
 
         // population upkeep
@@ -1338,6 +1338,14 @@ impl Village {
         }
 
         self.updated_at = now;
+    }
+
+    fn inferred_server_speed(&self) -> i8 {
+        self.buildings
+            .iter()
+            .filter_map(|building| building.building.inferred_server_speed())
+            .max()
+            .unwrap_or(1)
     }
 
     fn init_village_buildings(
@@ -1476,6 +1484,18 @@ pub struct VillageStocks {
 }
 
 impl VillageStocks {
+    pub fn default_for_speed(server_speed: i8) -> Self {
+        let capacity = 800 * server_speed.max(1) as u32;
+        Self {
+            warehouse_capacity: capacity,
+            granary_capacity: capacity,
+            lumber: 800,
+            clay: 800,
+            iron: 800,
+            crop: 800,
+        }
+    }
+
     /// Returns the currently stored resources as ResourceGroup
     pub fn stored(&self) -> ResourceGroup {
         ResourceGroup::new(self.lumber, self.clay, self.iron, self.crop.max(0) as u32)
@@ -1608,6 +1628,17 @@ mod tests {
         // Effective production
         // 12 crop - 2 upkeep = 10 effective crop
         assert_eq!(v.production.effective.crop, 10, "effective crop production");
+    }
+
+    #[test]
+    fn initial_storage_capacity_scales_with_server_speed_without_storage_buildings() {
+        let village = village_factory(VillageFactoryOptions {
+            server_speed: Some(3),
+            ..Default::default()
+        });
+
+        assert_eq!(village.stocks.warehouse_capacity, 2400);
+        assert_eq!(village.stocks.granary_capacity, 2400);
     }
 
     #[test]

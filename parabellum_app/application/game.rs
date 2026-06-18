@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use parabellum_game::models::hero::Hero;
 use parabellum_types::common::{Player, User};
 use parabellum_types::errors::ApplicationError;
 use uuid::Uuid;
@@ -15,14 +16,15 @@ use crate::ports::{
     queries::VillageQueryPort,
     scheduler::SchedulerPort,
     villages::{
-        AcceptMarketplaceOfferRequest, AddBuildingRequest, BuildTrapsRequest,
-        CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
+        AcceptMarketplaceOfferRequest, AddBuildingRequest, AssignHeroPointsRequest,
+        BuildTrapsRequest, CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
         CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
         DisbandTrappedTroopsRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
         ReleaseReinforcementsRequest, ReleaseTrappedTroopsRequest, RenameVillageRequest,
-        ResearchAcademyRequest, ResearchSmithyRequest, ReviveHeroRequest, SendAttackRequest,
-        SendReinforcementRequest, SendResourcesRequest, SendScoutRequest, SendSettlersRequest,
-        TrainUnitsRequest, UpgradeBuildingRequest, VillageCommandsPort,
+        ResearchAcademyRequest, ResearchSmithyRequest, ResetHeroPointsRequest, ReviveHeroRequest,
+        SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
+        SendSettlersRequest, SetHeroResourceFocusRequest, TrainUnitsRequest,
+        UpgradeBuildingRequest, VillageCommandsPort,
     },
 };
 
@@ -249,11 +251,48 @@ impl GameApplication {
         self.villages_port().revive_hero(request).await
     }
 
+    pub async fn assign_hero_points(
+        &self,
+        request: AssignHeroPointsRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().assign_hero_points(request).await
+    }
+
+    pub async fn reset_hero_points(
+        &self,
+        request: ResetHeroPointsRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().reset_hero_points(request).await
+    }
+
+    pub async fn set_hero_resource_focus(
+        &self,
+        request: SetHeroResourceFocusRequest,
+    ) -> Result<(), ApplicationError> {
+        self.villages_port().set_hero_resource_focus(request).await
+    }
+
     pub async fn get_marketplace_offer(
         &self,
         offer_id: Uuid,
     ) -> Result<crate::villages::models::MarketplaceOfferModel, ApplicationError> {
         self.queries_port().get_marketplace_offer(offer_id).await
+    }
+
+    pub async fn get_hero_by_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<Hero>, ApplicationError> {
+        self.queries_port().get_hero_by_player(player_id).await
+    }
+
+    pub async fn get_pending_hero_revival(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
+        self.queries_port()
+            .get_pending_hero_revival(player_id)
+            .await
     }
 
     pub async fn list_reports_for_player(

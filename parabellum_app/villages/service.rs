@@ -1,12 +1,13 @@
 use mini_cqrs_es::{Cqrs, CqrsError};
 
 use crate::villages::{
-    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AttackVillage, BuildTraps,
-    CancelBuildingConstruction, CancelMarketplaceOffer, CancelTroopMovement, CompleteTrapBuild,
-    CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops, DowngradeBuilding, FoundVillage,
-    MarkReportRead, RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops,
-    RenameVillage, ResearchAcademy, ResearchSmithy, ResolveAttackBattle, ReviveHero, ScoutVillage,
-    SendMerchantsTransfer, SendReinforcement, SendSettlers, SetVillageResources, TrainUnits,
+    AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AssignHeroPoints,
+    AttackVillage, BuildTraps, CancelBuildingConstruction, CancelMarketplaceOffer,
+    CancelTroopMovement, CompleteTrapBuild, CreateHero, CreateMarketplaceOffer,
+    DisbandTrappedTroops, DowngradeBuilding, FoundVillage, MarkReportRead, RecallReinforcements,
+    ReleaseReinforcements, ReleaseTrappedTroops, RenameVillage, ResearchAcademy, ResearchSmithy,
+    ResetHeroPoints, ResolveAttackBattle, ReviveHero, ScoutVillage, SendMerchantsTransfer,
+    SendReinforcement, SendSettlers, SetHeroResourceFocus, SetVillageResources, TrainUnits,
     UpgradeBuilding,
 };
 
@@ -91,6 +92,36 @@ impl<'a, C: Cqrs> VillageService<'a, C> {
         command: &ReviveHero,
     ) -> Result<u32, CqrsError> {
         self.cqrs.execute::<ReviveHero>(&village_id, command).await
+    }
+
+    pub async fn assign_hero_points(
+        &self,
+        village_id: u32,
+        command: &AssignHeroPoints,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<AssignHeroPoints>(&village_id, command)
+            .await
+    }
+
+    pub async fn reset_hero_points(
+        &self,
+        village_id: u32,
+        command: &ResetHeroPoints,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<ResetHeroPoints>(&village_id, command)
+            .await
+    }
+
+    pub async fn set_hero_resource_focus(
+        &self,
+        village_id: u32,
+        command: &SetHeroResourceFocus,
+    ) -> Result<u32, CqrsError> {
+        self.cqrs
+            .execute::<SetHeroResourceFocus>(&village_id, command)
+            .await
     }
 
     pub async fn recall_reinforcements(

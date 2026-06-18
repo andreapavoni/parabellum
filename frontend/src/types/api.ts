@@ -440,6 +440,36 @@ export type BuildingDetail = {
   };
 };
 
+export type Hero = {
+  id: string;
+  villageId: number;
+  tribe: string;
+  level: number;
+  health: number;
+  experience: number;
+  xpForNextLevel: number;
+  resourceFocus: "Balanced" | "Wood" | "Clay" | "Iron" | "Crop";
+  strengthPoints: number;
+  offBonusPoints: number;
+  defBonusPoints: number;
+  regenerationPoints: number;
+  resourcesPoints: number;
+  unassignedPoints: number;
+  speed: number;
+  strengthValue: number;
+  strengthPerPoint: number;
+  offBonusPercent: number;
+  offBonusPercentPerPoint: number;
+  defBonusPercent: number;
+  defBonusPercentPerPoint: number;
+  regenerationPercentPerDay: number;
+  regenerationPercentPerPoint: number;
+  resourceProduction: ResourceAmounts;
+  resurrectionCost: ResourceAmounts;
+  resurrectionTimeSecs: number;
+  revivalFinishesAt?: string;
+};
+
 export type TrapperDetail = {
   capacity: number;
   active: number;
@@ -508,6 +538,7 @@ export type RallyCard = {
   position?: Position;
   tribe: string;
   units: number[];
+  hasHero: boolean;
   upkeep?: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;

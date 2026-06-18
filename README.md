@@ -154,6 +154,18 @@ cargo run -p parabellum_server --bin parabellum-replay -- --from 1000 --to 2000
 
 The replay entrypoint is provided by the server runtime and is intended for maintenance/operations tasks in development or controlled environments.
 
+### Hero Backfill
+
+Older databases created before automatic hero assignment may have players without heroes. Use the backfill command to append missing `HeroCreated` events through the normal event-sourced flow.
+
+```sh
+# dry-run: list players that would receive a hero
+cargo run -p parabellum_server --bin parabellum-backfill-heroes
+
+# execute: create one level-0 hero for each player missing one
+cargo run -p parabellum_server --bin parabellum-backfill-heroes -- --execute
+```
+
 ---
 
 ## Screenshots

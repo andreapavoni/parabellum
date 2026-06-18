@@ -864,6 +864,7 @@ async fn village_es_service_recall_partial_split_with_hero_moves_hero_with_retur
                     player_id: source_player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await
@@ -999,6 +1000,7 @@ async fn village_es_service_release_partial_split_without_hero_keeps_hero_statio
                     player_id: source_player_id,
                     village_id: source_village_id,
                     has_existing_hero: false,
+                    bypass_hero_mansion_requirement: false,
                 },
             )
             .await

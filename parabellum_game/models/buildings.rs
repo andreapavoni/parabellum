@@ -112,6 +112,22 @@ impl Building {
         }
     }
 
+    pub fn inferred_server_speed(&self) -> Option<i8> {
+        if !Self::is_speed_scaled_value(&self.name) {
+            return None;
+        }
+
+        let base_value = Building::new(self.name.clone(), 1)
+            .at_level(self.level, 1)
+            .ok()?
+            .value;
+        if base_value == 0 {
+            return None;
+        }
+
+        Some((self.value / base_value).max(1) as i8)
+    }
+
     /// Returns the building effective value (production/capacity) based on server speed.
     pub fn effective_value(name: &BuildingName, base_value: u32, server_speed: i8) -> u32 {
         if server_speed <= 1 {
@@ -132,6 +148,20 @@ impl Building {
 
             _ => base_value,
         }
+    }
+
+    fn is_speed_scaled_value(name: &BuildingName) -> bool {
+        matches!(
+            name,
+            BuildingName::Woodcutter
+                | BuildingName::ClayPit
+                | BuildingName::IronMine
+                | BuildingName::Cropland
+                | BuildingName::Warehouse
+                | BuildingName::Granary
+                | BuildingName::GreatWarehouse
+                | BuildingName::GreatGranary
+        )
     }
 }
 

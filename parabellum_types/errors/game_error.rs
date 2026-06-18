@@ -18,6 +18,9 @@ pub enum GameError {
     #[error("Hero attribute over limit 100")]
     HeroAttributeOverflow,
 
+    #[error("Hero points can only be reset at level 0")]
+    HeroPointsResetLocked,
+
     #[error("Hero is not dead")]
     HeroNotDead,
 

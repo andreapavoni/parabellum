@@ -28,6 +28,7 @@ import {
 import { queryErrorMessage } from "@/query/options";
 import { queryKeys } from "@/query/keys";
 import { useGlobalTimer } from "@/live/useGlobalTimer";
+import "preact/debug";
 
 export function App() {
   const {

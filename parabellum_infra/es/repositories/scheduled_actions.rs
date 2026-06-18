@@ -154,6 +154,29 @@ impl PostgresScheduledActionRepository {
         Ok(exists)
     }
 
+    pub async fn pending_hero_revival_at_for_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
+        let execute_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            r#"
+            SELECT execute_at
+            FROM rm_scheduled_actions
+            WHERE action_type = 'HeroRevival'
+              AND status = 'pending'
+              AND payload->'workflow'->>'player_id' = $1
+            ORDER BY execute_at ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(player_id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        Ok(execute_at)
+    }
+
     pub async fn list_village_queues(
         &self,
         village_id: u32,
