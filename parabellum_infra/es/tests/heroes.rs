@@ -68,6 +68,13 @@ async fn village_es_service_create_hero_projects_rm_heroes() {
         assert_eq!(hero.player_id, player_id);
         assert_eq!(hero.village_id, village_id);
         assert_eq!(hero.health, 100);
+        assert_eq!(
+            home_army(&pool, village_id)
+                .await
+                .and_then(|army| army.hero())
+                .map(|hero| hero.id),
+            Some(hero_id)
+        );
 
         assert!(service.player_has_alive_hero(player_id).await.unwrap());
     })
