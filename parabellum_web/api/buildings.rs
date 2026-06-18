@@ -1573,6 +1573,7 @@ fn main_building_detail_for_village(
         village
             .buildings()
             .iter()
+            .filter(|building| building.slot_id > 18)
             .filter(|building| building.building.level > 0)
             .filter(|building| !queued_slots.contains(&building.slot_id))
             .map(|building| BuildingDowngradeOptionDto {

@@ -382,6 +382,10 @@ impl Village {
         slot_id: u8,
         server_speed: i8,
     ) -> Result<(BuildingName, u8, u32), GameError> {
+        if slot_id <= RESOURCE_FIELDS_LAST_SLOT {
+            return Err(GameError::BuildingCannotBeDowngraded { slot_id });
+        }
+
         if self.main_building_level() < 10 {
             return Err(GameError::BuildingRequirementsNotMet {
                 building: BuildingName::MainBuilding,

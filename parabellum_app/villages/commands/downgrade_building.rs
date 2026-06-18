@@ -115,6 +115,49 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    #[tokio::test]
+    async fn rejects_downgrade_for_resource_fields() {
+        let player_id = Uuid::new_v4();
+        let aggregate = VillageAggregate::founded(
+            1,
+            player_id,
+            vec![
+                VillageBuilding {
+                    slot_id: 1,
+                    building: Building {
+                        name: BuildingName::Woodcutter,
+                        group: BuildingGroup::Resources,
+                        value: 0,
+                        population: 0,
+                        culture_points: 0,
+                        level: 1,
+                    },
+                },
+                VillageBuilding {
+                    slot_id: 19,
+                    building: Building {
+                        name: BuildingName::MainBuilding,
+                        group: BuildingGroup::Infrastructure,
+                        value: 0,
+                        population: 0,
+                        culture_points: 0,
+                        level: 10,
+                    },
+                },
+            ],
+        );
+
+        let result = DowngradeBuilding {
+            player_id,
+            slot_id: 1,
+            speed: 1,
+        }
+        .handle(&aggregate)
+        .await;
+
+        assert!(result.is_err());
+    }
+
     async fn aggregate_with_tribe(tribe: Tribe) -> VillageAggregate {
         let mut aggregate = VillageAggregate::default();
         let player_id = Uuid::new_v4();
