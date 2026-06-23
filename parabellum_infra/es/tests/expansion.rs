@@ -1,11 +1,10 @@
-use std::sync::Arc;
-
 use chrono::{Duration, Utc};
-use parabellum_app::ports::identity::PlayerRepository;
-use parabellum_app::{config::Config, ports::queries::VillageQueryPort};
+use parabellum_app::identity::PlayerRepository;
+use parabellum_app::villages::{GetExpansionCultureInfoRequest, VillageExpansionUseCases};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
 use parabellum_types::buildings::BuildingName;
 use parabellum_types::{common::Speed, map::Position, tribe::Tribe};
+use std::sync::Arc;
 
 use crate::identity::repositories::PostgresPlayerRepository;
 use crate::{adapters::VillageEsAdapter, es::VillageEsService};
@@ -16,7 +15,7 @@ use super::fixtures::{
 };
 
 #[tokio::test]
-async fn village_query_port_returns_expansion_culture_info() {
+async fn village_expansion_use_case_returns_expansion_culture_info() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
         let (_user_id, player_id, village_id) = setup_village(
@@ -38,20 +37,14 @@ async fn village_query_port_returns_expansion_culture_info() {
             .await
             .unwrap();
 
-        let adapter = VillageEsAdapter::new(
-            service,
-            Arc::new(Config {
-                world_size: 100,
-                port: 8000,
-                speed: 1,
-                access_token_ttl_secs: 900,
-                refresh_token_ttl_secs: 2_592_000,
-                token_signing_key: "test-key".to_string(),
-            }),
-        );
+        let expansion = VillageExpansionUseCases::new(Arc::new(VillageEsAdapter::new(service)));
 
-        let info = adapter
-            .get_expansion_culture_info(player_id, village_id, 1)
+        let info = expansion
+            .get_expansion_culture_info(GetExpansionCultureInfoRequest {
+                player_id,
+                village_id,
+                server_speed: 1,
+            })
             .await
             .unwrap();
 
@@ -113,20 +106,14 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_single_village
         .await
         .unwrap();
 
-        let adapter = VillageEsAdapter::new(
-            service,
-            Arc::new(Config {
-                world_size: 100,
-                port: 8000,
-                speed: 1,
-                access_token_ttl_secs: 900,
-                refresh_token_ttl_secs: 2_592_000,
-                token_signing_key: "test-key".to_string(),
-            }),
-        );
+        let expansion = VillageExpansionUseCases::new(Arc::new(VillageEsAdapter::new(service)));
 
-        let info = adapter
-            .get_expansion_culture_info(player_id, village_id, 1)
+        let info = expansion
+            .get_expansion_culture_info(GetExpansionCultureInfoRequest {
+                player_id,
+                village_id,
+                server_speed: 1,
+            })
             .await
             .unwrap();
 
@@ -206,20 +193,14 @@ async fn expansion_culture_info_ticks_player_cp_from_elapsed_time_multi_village_
         .await
         .unwrap();
 
-        let adapter = VillageEsAdapter::new(
-            service,
-            Arc::new(Config {
-                world_size: 100,
-                port: 8000,
-                speed: 1,
-                access_token_ttl_secs: 900,
-                refresh_token_ttl_secs: 2_592_000,
-                token_signing_key: "test-key".to_string(),
-            }),
-        );
+        let expansion = VillageExpansionUseCases::new(Arc::new(VillageEsAdapter::new(service)));
 
-        let info = adapter
-            .get_expansion_culture_info(player_id, village_a_id, 1)
+        let info = expansion
+            .get_expansion_culture_info(GetExpansionCultureInfoRequest {
+                player_id,
+                village_id: village_a_id,
+                server_speed: 1,
+            })
             .await
             .unwrap();
 

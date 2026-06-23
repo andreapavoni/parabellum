@@ -1,8 +1,8 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
-use parabellum_app::ports::identity::PlayerRepository;
+use parabellum_app::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use sqlx::{PgPool, Postgres, Transaction};
 use tracing::warn;

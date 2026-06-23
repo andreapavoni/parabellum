@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use parabellum_app::ports::identity::UserRepository;
+use parabellum_app::identity::UserRepository;
 use parabellum_types::common::User;
 use parabellum_types::errors::{ApplicationError, DbError};
 

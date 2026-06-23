@@ -1,5 +1,5 @@
 use parabellum_app::villages::models::ReportModel;
-use parabellum_app::villages::repositories::{ProjectedReport, ReportRepository};
+use parabellum_app::villages::projection_repositories::{ProjectedReport, ReportRepository};
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::postgres::PgQueryResult;
 use sqlx::{FromRow, PgPool, types::Json};

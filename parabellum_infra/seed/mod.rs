@@ -2,9 +2,12 @@ use std::fs;
 use std::path::Path;
 
 use parabellum_app::config::Config;
-use parabellum_app::ports::identity::{IdentityPort, InitialVillageSetup, RegisterPlayerRequest};
+use parabellum_app::identity::{
+    InitialVillageCommandExecutor, InitialVillageSetup, RegisterPlayerRequest,
+    RegistrationIdentityPort, RegistrationSettings, RegistrationUseCases,
+};
 use parabellum_app::villages::{
-    FoundVillage, SetVillageResources, VillageArmyContext, hydrate_village,
+    FoundVillage, SetVillageResources, UuidGenerator, VillageArmyContext, hydrate_village,
 };
 use parabellum_game::models::map::MapFieldTopology;
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
@@ -18,6 +21,7 @@ use serde::Deserialize;
 use sqlx::types::Json;
 use uuid::Uuid;
 
+use crate::adapters::VillageEsAdapter;
 use crate::bootstrap_world_map;
 use crate::es::{PostgresArmyRepository, VillageEsService};
 use crate::identity::IdentityService;
@@ -160,6 +164,19 @@ pub async fn run_seed(
     ensure_migrations_and_map(pool, config).await?;
     let map_repository = PostgresMapRepository::new(pool.clone());
     let service = VillageEsService::new(pool.clone());
+    let identity = std::sync::Arc::new(IdentityService::new(pool.clone()));
+    let registration_identities: std::sync::Arc<dyn RegistrationIdentityPort> = identity;
+    let initial_village_executor: std::sync::Arc<dyn InitialVillageCommandExecutor> =
+        std::sync::Arc::new(VillageEsAdapter::new(service.clone()));
+    let registration = RegistrationUseCases::new(
+        registration_identities,
+        initial_village_executor,
+        std::sync::Arc::new(UuidGenerator),
+        RegistrationSettings {
+            world_size: config.world_size as i32,
+            server_speed: config.speed,
+        },
+    );
     let mut out = Vec::new();
 
     for player in seed.players {
@@ -180,9 +197,8 @@ pub async fn run_seed(
             .clone()
             .unwrap_or_else(|| player.username.clone());
         let player_id = Uuid::new_v4();
-        let identity = IdentityService::new(pool.clone(), std::sync::Arc::new(config.clone()));
 
-        identity
+        registration
             .register_player(RegisterPlayerRequest {
                 player_id,
                 username: player.username.clone(),
@@ -207,7 +223,7 @@ pub async fn run_seed(
             .await?;
 
         let created_villages = service
-            .list_villages_by_player_id(player_id)
+            .list_player_village_states(player_id)
             .await
             .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
         let first = created_villages

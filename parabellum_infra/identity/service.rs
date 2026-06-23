@@ -1,54 +1,35 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use parabellum_app::{
-    auth::hash_password,
-    config::Config,
-    ports::identity::{IdentityPort, RegisterPlayerRequest},
-    villages::{CreateHero, FoundVillage, SetVillageResources},
+use parabellum_app::identity::{
+    CreatedRegistrationIdentity, IdentityPort, RegistrationIdentityPort, RegistrationIdentityRecord,
 };
-use parabellum_game::models::{
-    buildings::Building,
-    map::{MapQuadrant, Valley},
-    village::{Village, VillageBuilding},
-};
+use parabellum_game::models::map::{MapQuadrant, Valley};
 use parabellum_types::{
-    buildings::BuildingName,
     common::{Player, User},
     errors::{AppError, ApplicationError, DbError},
     map::ValleyTopology,
 };
 use sqlx::PgPool;
 
-use crate::es::VillageEsService;
 use crate::map::repository::random_unoccupied_4446_valley_for_update_query;
 use crate::persistence::models as db_models;
 
 #[derive(Clone)]
-/// Core registration service that persists identity/player data and initializes
-/// the starting village through the ES village service.
+/// Core identity service for authentication and identity persistence.
 pub struct IdentityService {
     pool: PgPool,
-    config: Arc<Config>,
 }
 
 impl IdentityService {
-    pub fn new(pool: PgPool, config: Arc<Config>) -> Self {
-        Self { pool, config }
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 
-    async fn register(&self, req: RegisterPlayerRequest) -> Result<(), ApplicationError> {
-        info!(
-            player_id = %req.player_id,
-            username = %req.username,
-            email = %req.email,
-            quadrant = ?req.quadrant,
-            "starting player registration"
-        );
-        let password_hash = hash_password(&req.password)?;
+    async fn create_registration_identity_record(
+        &self,
+        record: RegistrationIdentityRecord,
+    ) -> Result<CreatedRegistrationIdentity, ApplicationError> {
         let mut tx = self
             .pool
             .begin()
@@ -62,21 +43,21 @@ impl IdentityService {
             RETURNING id
             "#,
         )
-        .bind(&req.email)
-        .bind(password_hash)
+        .bind(&record.email)
+        .bind(&record.password_hash)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        let tribe: crate::persistence::models::Tribe = req.tribe.clone().into();
+        let tribe: crate::persistence::models::Tribe = record.tribe.clone().into();
         sqlx::query(
             r#"
             INSERT INTO players (id, username, tribe, user_id, culture_points)
             VALUES ($1, $2, $3, $4, 0)
             "#,
         )
-        .bind(req.player_id)
-        .bind(&req.username)
+        .bind(record.player_id)
+        .bind(&record.username)
         .bind(tribe)
         .bind(user_id)
         .execute(&mut *tx)
@@ -84,51 +65,21 @@ impl IdentityService {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         let valley = self
-            .select_unoccupied_valley(&mut tx, &req.quadrant)
+            .select_unoccupied_valley(&mut tx, &record.quadrant)
             .await?;
         if valley.topology != ValleyTopology(4, 4, 4, 6) {
             return Err(ApplicationError::Db(DbError::Transaction(
                 "initial village must be founded on a 4-4-4-6 valley".to_string(),
             )));
         }
-        debug!(
-            player_id = %req.player_id,
-            village_id = valley.id,
-            x = valley.position.x,
-            y = valley.position.y,
-            "selected initial unoccupied valley"
-        );
         let player = Player {
-            id: req.player_id,
-            username: req.username.clone(),
-            tribe: req.tribe.clone(),
+            id: record.player_id,
+            username: record.username.clone(),
+            tribe: record.tribe.clone(),
             user_id,
             culture_points: 0,
         };
-        let village = Village::new(
-            format!("{}'s Village", req.username),
-            &valley,
-            &player,
-            true,
-            self.config.world_size as i32,
-            self.config.speed,
-        );
-
-        let server_speed = req
-            .initial_village
-            .as_ref()
-            .and_then(|s| s.speed)
-            .unwrap_or(self.config.speed);
-        let (village_name, buildings) = village_setup_from_request(&req, &village, server_speed)?;
-        let village_id = village.id;
-        let found = FoundVillage {
-            village_name,
-            position: village.position.clone(),
-            tribe: village.tribe.clone(),
-            player_id: village.player_id,
-            parent_village_id: None,
-            buildings,
-        };
+        let village_id = valley.id;
 
         // Soft-reserve the selected map field with player ownership while
         // keeping village_id NULL until FoundVillage projection writes rm_village.
@@ -140,7 +91,7 @@ impl IdentityService {
             "#,
         )
         .bind(village_id as i32)
-        .bind(req.player_id)
+        .bind(record.player_id)
         .execute(&mut *tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
@@ -154,101 +105,14 @@ impl IdentityService {
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
-        // ES runtime owns a separate transaction; call it only after the
-        // player row is committed so rm_village FK checks can succeed.
-        if let Err(e) = VillageEsService::new(self.pool.clone())
-            .found_village(village_id, &found)
-            .await
-            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
-        {
-            warn!(
-                user_id = %user_id,
-                player_id = %req.player_id,
-                village_id,
-                error = %e,
-                "registration failed during initial village foundation; starting cleanup"
-            );
-            // Registration must be all-or-nothing. If village foundation fails
-            // after identity commit, rollback identity + map reservation.
-            if let Err(cleanup_err) = self
-                .cleanup_failed_registration(user_id, req.player_id, village_id)
-                .await
-            {
-                warn!(
-                    user_id = %user_id,
-                    player_id = %req.player_id,
-                    village_id,
-                    error = %cleanup_err,
-                    "failed to cleanup registration after village foundation error"
-                );
-            }
-            return Err(e);
-        }
-
-        if let Err(e) = VillageEsService::new(self.pool.clone())
-            .create_hero(
-                village_id,
-                &CreateHero {
-                    hero_id: Uuid::new_v4(),
-                    player_id: req.player_id,
-                    village_id,
-                    has_existing_hero: false,
-                    bypass_hero_mansion_requirement: true,
-                },
-            )
-            .await
-            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
-        {
-            warn!(
-                user_id = %user_id,
-                player_id = %req.player_id,
-                village_id,
-                error = %e,
-                "registration failed during initial hero creation; starting cleanup"
-            );
-            if let Err(cleanup_err) = self
-                .cleanup_failed_registration(user_id, req.player_id, village_id)
-                .await
-            {
-                warn!(
-                    user_id = %user_id,
-                    player_id = %req.player_id,
-                    village_id,
-                    error = %cleanup_err,
-                    "failed to cleanup registration after hero creation error"
-                );
-            }
-            return Err(e);
-        }
-
-        if let Some(resources) = req
-            .initial_village
-            .as_ref()
-            .and_then(|s| s.resources.clone())
-        {
-            VillageEsService::new(self.pool.clone())
-                .set_village_resources(
-                    village_id,
-                    &SetVillageResources {
-                        player_id: req.player_id,
-                        resources,
-                    },
-                )
-                .await
-                .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
-        }
-
-        info!(
-            user_id = %user_id,
-            player_id = %req.player_id,
-            village_id,
-            "player registration completed"
-        );
-
-        Ok(())
+        Ok(CreatedRegistrationIdentity {
+            user_id,
+            player,
+            valley,
+        })
     }
 
-    async fn cleanup_failed_registration(
+    async fn cleanup_failed_registration_rows(
         &self,
         user_id: Uuid,
         player_id: Uuid,
@@ -387,98 +251,8 @@ impl IdentityService {
     }
 }
 
-fn village_setup_from_request(
-    req: &RegisterPlayerRequest,
-    village: &Village,
-    speed: i8,
-) -> Result<(String, Vec<VillageBuilding>), ApplicationError> {
-    let Some(setup) = &req.initial_village else {
-        return Ok((village.name.clone(), village.buildings().clone()));
-    };
-
-    let village_name = setup
-        .village_name
-        .clone()
-        .unwrap_or_else(|| village.name.clone());
-    let mut buildings = village.buildings().clone();
-
-    if setup.resource_fields_target_level > 0 {
-        for vb in &mut buildings {
-            if vb.slot_id <= 18 {
-                vb.building = Building::new(vb.building.name.clone(), speed)
-                    .at_level(setup.resource_fields_target_level, speed)
-                    .map_err(ApplicationError::from)?;
-            }
-        }
-    }
-
-    for override_building in &setup.buildings {
-        if override_building.slot_id <= 18 {
-            continue;
-        }
-        let normalized = VillageBuilding {
-            slot_id: override_building.slot_id,
-            building: Building::new(override_building.building.name.clone(), speed)
-                .at_level(override_building.building.level, speed)
-                .map_err(ApplicationError::from)?,
-        };
-        upsert_building(&mut buildings, normalized);
-    }
-
-    ensure_rally_point_minimum(&mut buildings, speed)?;
-    normalize_buildings_by_slot(&mut buildings);
-    Ok((village_name, buildings))
-}
-
-fn upsert_building(buildings: &mut Vec<VillageBuilding>, building: VillageBuilding) {
-    if let Some(existing) = buildings.iter_mut().find(|b| b.slot_id == building.slot_id) {
-        *existing = building;
-        return;
-    }
-    buildings.push(building);
-}
-
-fn ensure_rally_point_minimum(
-    buildings: &mut Vec<VillageBuilding>,
-    speed: i8,
-) -> Result<(), ApplicationError> {
-    if buildings.iter().any(|b| b.slot_id == 39) {
-        return Ok(());
-    }
-    let rally = Building::new(BuildingName::RallyPoint, speed)
-        .at_level(1, speed)
-        .map_err(ApplicationError::from)?;
-    buildings.push(VillageBuilding {
-        slot_id: 39,
-        building: rally,
-    });
-    Ok(())
-}
-
-fn normalize_buildings_by_slot(buildings: &mut Vec<VillageBuilding>) {
-    let mut normalized = Vec::with_capacity(buildings.len());
-    for building in buildings.drain(..) {
-        if let Some(existing) = normalized
-            .iter_mut()
-            .find(|b: &&mut VillageBuilding| b.slot_id == building.slot_id)
-        {
-            *existing = building;
-        } else {
-            normalized.push(building);
-        }
-    }
-    *buildings = normalized;
-}
-
 #[async_trait]
 impl IdentityPort for IdentityService {
-    async fn register_player(
-        &self,
-        request: RegisterPlayerRequest,
-    ) -> Result<(), ApplicationError> {
-        self.register(request).await
-    }
-
     async fn authenticate_user(
         &self,
         username: &str,
@@ -501,5 +275,25 @@ impl IdentityPort for IdentityService {
 
     async fn get_player_by_id(&self, player_id: Uuid) -> Result<Player, ApplicationError> {
         self.player_by_id(player_id).await
+    }
+}
+
+#[async_trait]
+impl RegistrationIdentityPort for IdentityService {
+    async fn create_registration_identity(
+        &self,
+        record: RegistrationIdentityRecord,
+    ) -> Result<CreatedRegistrationIdentity, ApplicationError> {
+        self.create_registration_identity_record(record).await
+    }
+
+    async fn cleanup_failed_registration(
+        &self,
+        user_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<(), ApplicationError> {
+        self.cleanup_failed_registration_rows(user_id, player_id, village_id)
+            .await
     }
 }

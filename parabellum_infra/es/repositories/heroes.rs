@@ -1,4 +1,4 @@
-use parabellum_app::villages::repositories::HeroRepository;
+use parabellum_app::villages::projection_repositories::HeroRepository;
 use parabellum_game::models::hero::Hero;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};

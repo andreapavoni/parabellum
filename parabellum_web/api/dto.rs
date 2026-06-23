@@ -28,7 +28,7 @@ struct BuildingQueueItemView {
 }
 
 fn building_queue_to_views(
-    items: &[parabellum_app::ports::queries::BuildingQueueItem],
+    items: &[parabellum_app::villages::read_models::BuildingQueueItem],
 ) -> Vec<BuildingQueueItemView> {
     let now = Utc::now();
     items
@@ -573,7 +573,7 @@ fn resource_slots(
 }
 
 fn current_troops(
-    army_state: &parabellum_app::ports::queries::VillageArmyStateView,
+    army_state: &parabellum_app::villages::read_models::VillageArmyStateView,
 ) -> Vec<CurrentTroopDto> {
     // Troop counters are derived from rm_armies-backed state view
     // (home + stationed reinforcements), not from rm_village snapshots.
@@ -618,13 +618,13 @@ pub fn game_context_response(
     unread_reports_count: i64,
     user: &CurrentUser,
     village: &Village,
-    queues: &parabellum_app::ports::queries::VillageQueues,
-    army_state: &parabellum_app::ports::queries::VillageArmyStateView,
-    movements: &parabellum_app::ports::queries::VillageTroopMovements,
+    queues: &parabellum_app::villages::read_models::VillageQueues,
+    army_state: &parabellum_app::villages::read_models::VillageArmyStateView,
+    movements: &parabellum_app::villages::read_models::VillageTroopMovements,
 ) -> GameContextResponse {
-    use parabellum_app::ports::queries::TroopMovementType;
+    use parabellum_app::villages::read_models::TroopMovementType;
     let queue_views = building_queue_to_views(&queues.building);
-    let summarize = |items: &[parabellum_app::ports::queries::TroopMovement],
+    let summarize = |items: &[parabellum_app::villages::read_models::TroopMovement],
                      predicate: fn(TroopMovementType) -> bool| {
         let mut count = 0usize;
         let mut next_at: Option<chrono::DateTime<chrono::Utc>> = None;

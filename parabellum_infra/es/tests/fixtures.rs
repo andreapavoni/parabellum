@@ -19,7 +19,9 @@ use crate::es::VillageEsService;
 use crate::es::repositories::PostgresArmyRepository;
 use crate::establish_test_connection_pool;
 use parabellum_app::villages::models::ScheduledActionStatus;
-use parabellum_app::villages::repositories::{ArmyListFilter, ArmyRepository, ArmyState};
+use parabellum_app::villages::projection_repositories::{
+    ArmyListFilter, ArmyRepository, ArmyState,
+};
 use parabellum_app::villages::{ResearchAcademy, SetVillageResources, TrainUnits};
 use parabellum_types::army::UnitName;
 

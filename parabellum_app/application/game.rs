@@ -1,54 +1,135 @@
 //! Application service that orchestrates game use cases.
 //!
 //! `GameApplication` is the only entrypoint used by the HTTP layer.
-//! It composes identity, command, query, and scheduler ports and delegates
-//! each use case to the proper adapter implementation.
+//! It composes identity, use-case, query, and scheduler ports and delegates
+//! gameplay orchestration to application use cases.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use parabellum_game::models::hero::Hero;
 use parabellum_types::common::{Player, User};
 use parabellum_types::errors::ApplicationError;
 use uuid::Uuid;
 
-use crate::ports::{
-    identity::{IdentityPort, RegisterPlayerRequest},
-    queries::VillageQueryPort,
-    scheduler::SchedulerPort,
-    villages::{
-        AcceptMarketplaceOfferRequest, AddBuildingRequest, AssignHeroPointsRequest,
-        BuildTrapsRequest, CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
-        CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
-        DisbandTrappedTroopsRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
-        ReleaseReinforcementsRequest, ReleaseTrappedTroopsRequest, RenameVillageRequest,
-        ResearchAcademyRequest, ResearchSmithyRequest, ResetHeroPointsRequest, ReviveHeroRequest,
-        SendAttackRequest, SendReinforcementRequest, SendResourcesRequest, SendScoutRequest,
-        SendSettlersRequest, SetHeroResourceFocusRequest, TrainUnitsRequest,
-        UpgradeBuildingRequest, VillageCommandsPort,
+use crate::identity::{IdentityPort, RegisterPlayerRequest, RegistrationUseCases};
+use crate::leaderboards::{GetPlayerPopulationLeaderboardPageRequest, LeaderboardUseCases};
+use crate::map::{
+    GetMapFieldRequest, GetMapRegionRequest, GetMapRegionTileByFieldIdRequest, MapUseCases,
+};
+use crate::scheduler::{ProcessDueActionsRequest, SchedulerUseCases};
+use crate::villages::{
+    BuildingUseCases, DevelopmentUseCases, HeroUseCases, MarketplaceUseCases,
+    MovementControlUseCases, MovementUseCases, ReinforcementUseCases, ReportUseCases, TrapUseCases,
+    VillageActivityUseCases, VillageArmyUseCases, VillageExpansionUseCases, VillageProfileUseCases,
+    VillageReferenceUseCases, VillageStateUseCases,
+    requests::activity::{
+        GetVillageQueuesRequest, GetVillageTroopMovementsRequest,
+        ListCancelableOutgoingMovementIdsRequest,
     },
+    requests::buildings::{
+        AddBuildingRequest, CancelBuildingConstructionRequest, DowngradeBuildingRequest,
+        UpgradeBuildingRequest,
+    },
+    requests::development::{ResearchAcademyRequest, ResearchSmithyRequest, TrainUnitsRequest},
+    requests::expansion::GetExpansionCultureInfoRequest,
+    requests::heroes::{
+        AssignHeroPointsRequest, CreateHeroRequest, GetHeroByPlayerRequest,
+        GetPendingHeroRevivalRequest, ResetHeroPointsRequest, ReviveHeroRequest,
+        SetHeroResourceFocusRequest,
+    },
+    requests::marketplace::{
+        AcceptMarketplaceOfferRequest, CancelMarketplaceOfferRequest,
+        CreateMarketplaceOfferRequest, GetMarketplaceDataRequest, GetMarketplaceOfferRequest,
+        SendResourcesRequest,
+    },
+    requests::movement_control::CancelTroopMovementRequest,
+    requests::movements::{
+        SendAttackRequest, SendReinforcementRequest, SendScoutRequest, SendSettlersRequest,
+    },
+    requests::reinforcements::{
+        DisbandTrappedTroopsRequest, RecallReinforcementsRequest, ReleaseReinforcementsRequest,
+        ReleaseTrappedTroopsRequest,
+    },
+    requests::reports::{
+        CountUnreadReportsForPlayerRequest, GetReportForPlayerRequest, ListReportsForPlayerRequest,
+        MarkReportReadRequest,
+    },
+    requests::traps::BuildTrapsRequest,
+    requests::village_army::GetVillageArmyStateViewRequest,
+    requests::village_profile::RenameVillageRequest,
+    requests::village_references::GetVillageReferencesRequest,
+    requests::village_state::{GetVillageStateRequest, ListPlayerVillageStatesRequest},
 };
 
 #[derive(Clone)]
 /// High-level application facade for game, identity, and scheduler use cases.
 pub struct GameApplication {
     identity: Arc<dyn IdentityPort>,
-    villages: Arc<dyn VillageCommandsPort>,
-    queries: Arc<dyn VillageQueryPort>,
-    scheduler: Arc<dyn SchedulerPort>,
+    registration: RegistrationUseCases,
+    leaderboards: LeaderboardUseCases,
+    map: MapUseCases,
+    village_profile: VillageProfileUseCases,
+    buildings: BuildingUseCases,
+    development: DevelopmentUseCases,
+    heroes: HeroUseCases,
+    movements: MovementUseCases,
+    movement_control: MovementControlUseCases,
+    marketplace: MarketplaceUseCases,
+    reinforcements: ReinforcementUseCases,
+    reports: ReportUseCases,
+    activity: VillageActivityUseCases,
+    army: VillageArmyUseCases,
+    expansion: VillageExpansionUseCases,
+    village_references: VillageReferenceUseCases,
+    village_state: VillageStateUseCases,
+    traps: TrapUseCases,
+    scheduler: SchedulerUseCases,
 }
 
 impl GameApplication {
     /// Creates a new application facade from its required ports.
     pub fn new(
         identity: Arc<dyn IdentityPort>,
-        villages: Arc<dyn VillageCommandsPort>,
-        queries: Arc<dyn VillageQueryPort>,
-        scheduler: Arc<dyn SchedulerPort>,
+        registration: RegistrationUseCases,
+        leaderboards: LeaderboardUseCases,
+        map: MapUseCases,
+        village_profile: VillageProfileUseCases,
+        buildings: BuildingUseCases,
+        development: DevelopmentUseCases,
+        heroes: HeroUseCases,
+        movements: MovementUseCases,
+        movement_control: MovementControlUseCases,
+        marketplace: MarketplaceUseCases,
+        reinforcements: ReinforcementUseCases,
+        reports: ReportUseCases,
+        activity: VillageActivityUseCases,
+        army: VillageArmyUseCases,
+        expansion: VillageExpansionUseCases,
+        village_references: VillageReferenceUseCases,
+        village_state: VillageStateUseCases,
+        traps: TrapUseCases,
+        scheduler: SchedulerUseCases,
     ) -> Self {
         Self {
             identity,
-            villages,
-            queries,
+            registration,
+            leaderboards,
+            map,
+            village_profile,
+            buildings,
+            development,
+            heroes,
+            movements,
+            movement_control,
+            marketplace,
+            reinforcements,
+            reports,
+            activity,
+            army,
+            expansion,
+            village_references,
+            village_state,
+            traps,
             scheduler,
         }
     }
@@ -57,15 +138,79 @@ impl GameApplication {
         &self.identity
     }
 
-    pub(crate) fn villages_port(&self) -> &Arc<dyn VillageCommandsPort> {
-        &self.villages
+    pub(crate) fn registration_use_cases(&self) -> &RegistrationUseCases {
+        &self.registration
     }
 
-    pub(crate) fn queries_port(&self) -> &Arc<dyn VillageQueryPort> {
-        &self.queries
+    pub(crate) fn leaderboard_use_cases(&self) -> &LeaderboardUseCases {
+        &self.leaderboards
     }
 
-    pub(crate) fn scheduler_port(&self) -> &Arc<dyn SchedulerPort> {
+    pub(crate) fn map_use_cases(&self) -> &MapUseCases {
+        &self.map
+    }
+
+    pub(crate) fn building_use_cases(&self) -> &BuildingUseCases {
+        &self.buildings
+    }
+
+    pub(crate) fn village_profile_use_cases(&self) -> &VillageProfileUseCases {
+        &self.village_profile
+    }
+
+    pub(crate) fn development_use_cases(&self) -> &DevelopmentUseCases {
+        &self.development
+    }
+
+    pub(crate) fn hero_use_cases(&self) -> &HeroUseCases {
+        &self.heroes
+    }
+
+    pub(crate) fn movement_use_cases(&self) -> &MovementUseCases {
+        &self.movements
+    }
+
+    pub(crate) fn movement_control_use_cases(&self) -> &MovementControlUseCases {
+        &self.movement_control
+    }
+
+    pub(crate) fn marketplace_use_cases(&self) -> &MarketplaceUseCases {
+        &self.marketplace
+    }
+
+    pub(crate) fn reinforcement_use_cases(&self) -> &ReinforcementUseCases {
+        &self.reinforcements
+    }
+
+    pub(crate) fn report_use_cases(&self) -> &ReportUseCases {
+        &self.reports
+    }
+
+    pub(crate) fn activity_use_cases(&self) -> &VillageActivityUseCases {
+        &self.activity
+    }
+
+    pub(crate) fn army_use_cases(&self) -> &VillageArmyUseCases {
+        &self.army
+    }
+
+    pub(crate) fn expansion_use_cases(&self) -> &VillageExpansionUseCases {
+        &self.expansion
+    }
+
+    pub(crate) fn village_reference_use_cases(&self) -> &VillageReferenceUseCases {
+        &self.village_references
+    }
+
+    pub(crate) fn village_state_use_cases(&self) -> &VillageStateUseCases {
+        &self.village_state
+    }
+
+    pub(crate) fn trap_use_cases(&self) -> &TrapUseCases {
+        &self.traps
+    }
+
+    pub(crate) fn scheduler_use_cases(&self) -> &SchedulerUseCases {
         &self.scheduler
     }
 
@@ -73,7 +218,7 @@ impl GameApplication {
         &self,
         request: RegisterPlayerRequest,
     ) -> Result<(), ApplicationError> {
-        self.identity_port().register_player(request).await
+        self.registration_use_cases().register_player(request).await
     }
 
     pub async fn authenticate_user(
@@ -106,111 +251,121 @@ impl GameApplication {
         &self,
         request: SendResourcesRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().send_resources(request).await
+        self.marketplace_use_cases().send_resources(request).await
     }
 
     pub async fn train_units(&self, request: TrainUnitsRequest) -> Result<(), ApplicationError> {
-        self.villages_port().train_units(request).await
+        self.development_use_cases().train_units(request).await
     }
 
     pub async fn research_academy(
         &self,
         request: ResearchAcademyRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().research_academy(request).await
+        self.development_use_cases().research_academy(request).await
     }
 
     pub async fn research_smithy(
         &self,
         request: ResearchSmithyRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().research_smithy(request).await
+        self.development_use_cases().research_smithy(request).await
     }
 
     pub async fn send_reinforcement(
         &self,
         request: SendReinforcementRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().send_reinforcement(request).await
+        self.movement_use_cases().send_reinforcement(request).await
     }
 
     pub async fn send_attack(&self, request: SendAttackRequest) -> Result<(), ApplicationError> {
-        self.villages_port().send_attack(request).await
+        self.movement_use_cases().send_attack(request).await
     }
 
     pub async fn send_scout(&self, request: SendScoutRequest) -> Result<(), ApplicationError> {
-        self.villages_port().send_scout(request).await
+        self.movement_use_cases().send_scout(request).await
     }
 
     pub async fn send_settlers(
         &self,
         request: SendSettlersRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().send_settlers(request).await
+        self.movement_use_cases().send_settlers(request).await
     }
 
     pub async fn recall_reinforcements(
         &self,
         request: RecallReinforcementsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().recall_reinforcements(request).await
+        self.reinforcement_use_cases()
+            .recall_reinforcements(request)
+            .await
     }
 
     pub async fn release_reinforcements(
         &self,
         request: ReleaseReinforcementsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().release_reinforcements(request).await
+        self.reinforcement_use_cases()
+            .release_reinforcements(request)
+            .await
     }
 
     pub async fn release_trapped_troops(
         &self,
         request: ReleaseTrappedTroopsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().release_trapped_troops(request).await
+        self.reinforcement_use_cases()
+            .release_trapped_troops(request)
+            .await
     }
 
     pub async fn disband_trapped_troops(
         &self,
         request: DisbandTrappedTroopsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().disband_trapped_troops(request).await
+        self.reinforcement_use_cases()
+            .disband_trapped_troops(request)
+            .await
     }
 
     pub async fn build_traps(&self, request: BuildTrapsRequest) -> Result<(), ApplicationError> {
-        self.villages_port().build_traps(request).await
+        self.trap_use_cases().build_traps(request).await
     }
 
     pub async fn cancel_troop_movement(
         &self,
         request: CancelTroopMovementRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().cancel_troop_movement(request).await
+        self.movement_control_use_cases()
+            .cancel_troop_movement(request)
+            .await
     }
 
     pub async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {
-        self.villages_port().add_building(request).await
+        self.building_use_cases().add_building(request).await
     }
 
     pub async fn upgrade_building(
         &self,
         request: UpgradeBuildingRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().upgrade_building(request).await
+        self.building_use_cases().upgrade_building(request).await
     }
 
     pub async fn downgrade_building(
         &self,
         request: DowngradeBuildingRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().downgrade_building(request).await
+        self.building_use_cases().downgrade_building(request).await
     }
 
     pub async fn cancel_building_construction(
         &self,
         request: CancelBuildingConstructionRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port()
+        self.building_use_cases()
             .cancel_building_construction(request)
             .await
     }
@@ -219,79 +374,91 @@ impl GameApplication {
         &self,
         request: RenameVillageRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().rename_village(request).await
+        self.village_profile_use_cases()
+            .rename_village(request)
+            .await
     }
 
     pub async fn create_marketplace_offer(
         &self,
         request: CreateMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().create_marketplace_offer(request).await
+        self.marketplace_use_cases()
+            .create_marketplace_offer(request)
+            .await
     }
 
     pub async fn accept_marketplace_offer(
         &self,
         request: AcceptMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().accept_marketplace_offer(request).await
+        self.marketplace_use_cases()
+            .accept_marketplace_offer(request)
+            .await
     }
 
     pub async fn cancel_marketplace_offer(
         &self,
         request: CancelMarketplaceOfferRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().cancel_marketplace_offer(request).await
+        self.marketplace_use_cases()
+            .cancel_marketplace_offer(request)
+            .await
     }
 
     pub async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError> {
-        self.villages_port().create_hero(request).await
+        self.hero_use_cases().create_hero(request).await
     }
 
     pub async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError> {
-        self.villages_port().revive_hero(request).await
+        self.hero_use_cases().revive_hero(request).await
     }
 
     pub async fn assign_hero_points(
         &self,
         request: AssignHeroPointsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().assign_hero_points(request).await
+        self.hero_use_cases().assign_hero_points(request).await
     }
 
     pub async fn reset_hero_points(
         &self,
         request: ResetHeroPointsRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().reset_hero_points(request).await
+        self.hero_use_cases().reset_hero_points(request).await
     }
 
     pub async fn set_hero_resource_focus(
         &self,
         request: SetHeroResourceFocusRequest,
     ) -> Result<(), ApplicationError> {
-        self.villages_port().set_hero_resource_focus(request).await
+        self.hero_use_cases().set_hero_resource_focus(request).await
     }
 
     pub async fn get_marketplace_offer(
         &self,
         offer_id: Uuid,
     ) -> Result<crate::villages::models::MarketplaceOfferModel, ApplicationError> {
-        self.queries_port().get_marketplace_offer(offer_id).await
+        self.marketplace_use_cases()
+            .get_marketplace_offer(GetMarketplaceOfferRequest { offer_id })
+            .await
     }
 
     pub async fn get_hero_by_player(
         &self,
         player_id: Uuid,
     ) -> Result<Option<Hero>, ApplicationError> {
-        self.queries_port().get_hero_by_player(player_id).await
+        self.hero_use_cases()
+            .get_hero_by_player(GetHeroByPlayerRequest { player_id })
+            .await
     }
 
-    pub async fn get_pending_hero_revival(
+    pub async fn get_pending_hero_revival_at(
         &self,
         player_id: Uuid,
     ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
-        self.queries_port()
-            .get_pending_hero_revival(player_id)
+        self.hero_use_cases()
+            .get_pending_hero_revival_at(GetPendingHeroRevivalRequest { player_id })
             .await
     }
 
@@ -301,8 +468,12 @@ impl GameApplication {
         offset: i64,
         limit: i64,
     ) -> Result<Vec<crate::villages::models::ReportModel>, ApplicationError> {
-        self.queries_port()
-            .list_reports_for_player(player_id, offset, limit)
+        self.report_use_cases()
+            .list_reports_for_player(ListReportsForPlayerRequest {
+                player_id,
+                offset,
+                limit,
+            })
             .await
     }
 
@@ -311,8 +482,11 @@ impl GameApplication {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<Option<crate::villages::models::ReportModel>, ApplicationError> {
-        self.queries_port()
-            .get_report_for_player(report_id, player_id)
+        self.report_use_cases()
+            .get_report_for_player(GetReportForPlayerRequest {
+                report_id,
+                player_id,
+            })
             .await
     }
 
@@ -320,8 +494,8 @@ impl GameApplication {
         &self,
         player_id: Uuid,
     ) -> Result<i64, ApplicationError> {
-        self.queries_port()
-            .count_unread_reports_for_player(player_id)
+        self.report_use_cases()
+            .count_unread_reports_for_player(CountUnreadReportsForPlayerRequest { player_id })
             .await
     }
 
@@ -330,24 +504,29 @@ impl GameApplication {
         report_id: Uuid,
         player_id: Uuid,
     ) -> Result<(), ApplicationError> {
-        self.queries_port()
-            .mark_report_as_read(report_id, player_id)
+        self.report_use_cases()
+            .mark_report_as_read(MarkReportReadRequest {
+                report_id,
+                player_id,
+            })
             .await
     }
 
     pub async fn get_village_queues(
         &self,
         village_id: u32,
-    ) -> Result<crate::ports::queries::VillageQueues, ApplicationError> {
-        self.queries_port().get_village_queues(village_id).await
+    ) -> Result<crate::villages::read_models::VillageQueues, ApplicationError> {
+        self.activity_use_cases()
+            .get_village_queues(GetVillageQueuesRequest { village_id })
+            .await
     }
 
     pub async fn get_village_troop_movements(
         &self,
         village_id: u32,
-    ) -> Result<crate::ports::queries::VillageTroopMovements, ApplicationError> {
-        self.queries_port()
-            .get_village_troop_movements(village_id)
+    ) -> Result<crate::villages::read_models::VillageTroopMovements, ApplicationError> {
+        self.activity_use_cases()
+            .get_village_troop_movements(GetVillageTroopMovementsRequest { village_id })
             .await
     }
 
@@ -355,34 +534,37 @@ impl GameApplication {
         &self,
         village_id: u32,
     ) -> Result<std::collections::HashSet<Uuid>, ApplicationError> {
-        self.queries_port()
-            .list_cancelable_outgoing_movement_ids(village_id)
+        self.activity_use_cases()
+            .list_cancelable_outgoing_movement_ids(ListCancelableOutgoingMovementIdsRequest {
+                village_id,
+            })
             .await
     }
 
     pub async fn get_marketplace_data(
         &self,
         village_id: u32,
-    ) -> Result<crate::ports::queries::MarketplaceData, ApplicationError> {
-        self.queries_port().get_marketplace_data(village_id).await
+    ) -> Result<crate::villages::read_models::MarketplaceData, ApplicationError> {
+        self.marketplace_use_cases()
+            .get_marketplace_data(GetMarketplaceDataRequest { village_id })
+            .await
     }
 
     pub async fn get_village_army_state_view(
         &self,
         village_id: u32,
-    ) -> Result<crate::ports::queries::VillageArmyStateView, ApplicationError> {
-        self.queries_port()
-            .get_village_army_state_view(village_id)
+    ) -> Result<crate::villages::read_models::VillageArmyStateView, ApplicationError> {
+        self.army_use_cases()
+            .get_village_army_state_view(GetVillageArmyStateViewRequest { village_id })
             .await
     }
 
-    pub async fn get_village_info_by_ids(
+    pub async fn get_village_references(
         &self,
         village_ids: Vec<u32>,
-    ) -> Result<std::collections::HashMap<u32, crate::read_models::VillageInfo>, ApplicationError>
-    {
-        self.queries_port()
-            .get_village_info_by_ids(village_ids)
+    ) -> Result<HashMap<u32, crate::read_models::VillageReference>, ApplicationError> {
+        self.village_reference_use_cases()
+            .get_village_references(GetVillageReferencesRequest { village_ids })
             .await
     }
 
@@ -391,36 +573,45 @@ impl GameApplication {
         player_id: Uuid,
         village_id: u32,
         server_speed: i8,
-    ) -> Result<crate::ports::queries::ExpansionCultureInfo, ApplicationError> {
-        self.queries_port()
-            .get_expansion_culture_info(player_id, village_id, server_speed)
+    ) -> Result<crate::villages::ExpansionCultureInfo, ApplicationError> {
+        self.expansion_use_cases()
+            .get_expansion_culture_info(GetExpansionCultureInfoRequest {
+                player_id,
+                village_id,
+                server_speed,
+            })
             .await
     }
 
-    pub async fn get_leaderboard_page(
+    pub async fn get_player_population_leaderboard_page(
         &self,
         page: i64,
         per_page: i64,
-    ) -> Result<crate::ports::queries::LeaderboardPage, ApplicationError> {
-        self.queries_port()
-            .get_leaderboard_page(page, per_page)
+    ) -> Result<crate::leaderboards::PlayerPopulationLeaderboardPage, ApplicationError> {
+        self.leaderboard_use_cases()
+            .get_player_population_page(GetPlayerPopulationLeaderboardPageRequest {
+                page,
+                per_page,
+            })
             .await
     }
 
-    pub async fn list_villages_by_player_id(
+    pub async fn list_player_village_states(
         &self,
         player_id: Uuid,
     ) -> Result<Vec<crate::villages::models::VillageModel>, ApplicationError> {
-        self.queries_port()
-            .list_villages_by_player_id(player_id)
+        self.village_state_use_cases()
+            .list_player_village_states(ListPlayerVillageStatesRequest { player_id })
             .await
     }
 
-    pub async fn get_village_model(
+    pub async fn get_village_state(
         &self,
         village_id: u32,
     ) -> Result<crate::villages::models::VillageModel, ApplicationError> {
-        self.queries_port().get_village_model(village_id).await
+        self.village_state_use_cases()
+            .get_village_state(GetVillageStateRequest { village_id })
+            .await
     }
 
     pub async fn get_map_region(
@@ -430,8 +621,13 @@ impl GameApplication {
         radius: i32,
         world_size: i32,
     ) -> Result<Vec<crate::read_models::MapRegionTile>, ApplicationError> {
-        self.queries_port()
-            .get_map_region(center_x, center_y, radius, world_size)
+        self.map_use_cases()
+            .get_map_region(GetMapRegionRequest {
+                center_x,
+                center_y,
+                radius,
+                world_size,
+            })
             .await
     }
 
@@ -439,15 +635,17 @@ impl GameApplication {
         &self,
         field_id: u32,
     ) -> Result<parabellum_game::models::map::MapField, ApplicationError> {
-        self.queries_port().get_map_field(field_id).await
+        self.map_use_cases()
+            .get_map_field(GetMapFieldRequest { field_id })
+            .await
     }
 
     pub async fn get_map_region_tile_by_field_id(
         &self,
         field_id: u32,
     ) -> Result<Option<crate::read_models::MapRegionTile>, ApplicationError> {
-        self.queries_port()
-            .get_map_region_tile_by_field_id(field_id)
+        self.map_use_cases()
+            .get_map_region_tile_by_field_id(GetMapRegionTileByFieldIdRequest { field_id })
             .await
     }
 
@@ -456,8 +654,11 @@ impl GameApplication {
         before_or_equal: chrono::DateTime<chrono::Utc>,
         limit: i64,
     ) -> Result<usize, ApplicationError> {
-        self.scheduler_port()
-            .process_due_actions(before_or_equal, limit)
+        self.scheduler_use_cases()
+            .process_due_actions(ProcessDueActionsRequest {
+                before_or_equal,
+                limit,
+            })
             .await
     }
 }

@@ -1,7 +1,7 @@
-mod leaderboard;
 mod map;
-mod village;
+mod player_population_leaderboard;
+mod village_reference;
 
-pub use leaderboard::PlayerLeaderboardEntry;
 pub use map::MapRegionTile;
-pub use village::VillageInfo;
+pub use player_population_leaderboard::PlayerPopulationLeaderboardEntry;
+pub use village_reference::VillageReference;

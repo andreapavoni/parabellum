@@ -2,7 +2,10 @@ use parabellum_types::common::Player;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use parabellum_app::{ports::identity::PlayerRepository, read_models::PlayerLeaderboardEntry};
+use parabellum_app::{
+    identity::PlayerRepository, leaderboards::LeaderboardReadPort,
+    read_models::PlayerPopulationLeaderboardEntry,
+};
 use parabellum_types::{
     Result,
     errors::{ApplicationError, DbError},
@@ -75,64 +78,6 @@ impl PlayerRepository for PostgresPlayerRepository {
         .map_err(|_| ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))?;
 
         Ok(player.into())
-    }
-
-    async fn leaderboard_page(
-        &self,
-        offset: i64,
-        limit: i64,
-    ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
-        // Total player count for pagination
-        let total_players = sqlx::query!("SELECT COUNT(*) as count FROM players")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
-            .count
-            .unwrap_or(0);
-
-        #[derive(Debug)]
-        struct LeaderboardRow {
-            player_id: Uuid,
-            username: String,
-            tribe: db_models::Tribe,
-            village_count: i64,
-            population: i64,
-        }
-
-        let rows = sqlx::query_as!(
-            LeaderboardRow,
-            r#"
-            SELECT
-                p.id as player_id,
-                p.username,
-                p.tribe as "tribe: _",
-                COUNT(v.village_id) as "village_count!: i64",
-                COALESCE(SUM(v.population), 0) as "population!: i64"
-            FROM players p
-            LEFT JOIN rm_village v ON v.player_id = p.id
-            GROUP BY p.id, p.username
-            ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC
-            LIMIT $1 OFFSET $2
-            "#,
-            limit,
-            offset
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-
-        let entries = rows
-            .into_iter()
-            .map(|row| PlayerLeaderboardEntry {
-                player_id: row.player_id,
-                username: row.username,
-                village_count: row.village_count,
-                population: row.population,
-                tribe: row.tribe.into(),
-            })
-            .collect();
-
-        Ok((entries, total_players))
     }
 
     async fn update_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
@@ -213,5 +158,65 @@ impl PlayerRepository for PostgresPlayerRepository {
         .total;
 
         Ok(total_cpp as u32)
+    }
+}
+
+#[async_trait::async_trait]
+impl LeaderboardReadPort for PostgresPlayerRepository {
+    async fn list_player_population_entries(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<PlayerPopulationLeaderboardEntry>, i64), ApplicationError> {
+        let total_players = sqlx::query!("SELECT COUNT(*) as count FROM players")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+            .count
+            .unwrap_or(0);
+
+        #[derive(Debug)]
+        struct LeaderboardRow {
+            player_id: Uuid,
+            username: String,
+            tribe: db_models::Tribe,
+            village_count: i64,
+            population: i64,
+        }
+
+        let rows = sqlx::query_as!(
+            LeaderboardRow,
+            r#"
+            SELECT
+                p.id as player_id,
+                p.username,
+                p.tribe as "tribe: _",
+                COUNT(v.village_id) as "village_count!: i64",
+                COALESCE(SUM(v.population), 0) as "population!: i64"
+            FROM players p
+            LEFT JOIN rm_village v ON v.player_id = p.id
+            GROUP BY p.id, p.username
+            ORDER BY COALESCE(SUM(v.population), 0) DESC, p.username ASC
+            LIMIT $1 OFFSET $2
+            "#,
+            limit,
+            offset
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+
+        let entries = rows
+            .into_iter()
+            .map(|row| PlayerPopulationLeaderboardEntry {
+                player_id: row.player_id,
+                username: row.username,
+                village_count: row.village_count,
+                population: row.population,
+                tribe: row.tribe.into(),
+            })
+            .collect();
+
+        Ok((entries, total_players))
     }
 }

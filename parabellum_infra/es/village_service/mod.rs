@@ -16,16 +16,18 @@ use parabellum_game::models::army::Army;
 use sqlx::PgPool;
 use tracing::{info, warn};
 
-use parabellum_app::ports::map::MapRepository;
-use parabellum_app::ports::queries::TroopMovementType;
+use parabellum_app::map::MapReadPort;
 use parabellum_app::villages::models::{
     MarketplaceOfferSnapshot, MarketplaceOfferStatus, ScheduledAction, ScheduledActionStatus,
 };
-use parabellum_app::villages::repositories::{MarketplaceRepository, ScheduledActionRepository};
+use parabellum_app::villages::projection_repositories::{
+    MarketplaceRepository, ScheduledActionRepository,
+};
+use parabellum_app::villages::read_models::TroopMovementType;
 use parabellum_app::villages::{
     AddBuilding, ApplyBattleOutcomeToVillage, AssignHeroPoints, AttackVillage, BuildTraps,
     CancelBuildingConstruction, CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer,
-    DisbandTrappedTroops, DowngradeBuilding, FoundVillage, MarketplaceAcceptance,
+    DisbandTrappedTroops, DowngradeBuilding, FoundVillage, MarkReportRead, MarketplaceAcceptance,
     RecallReinforcements, ReleaseReinforcements, ReleaseTrappedTroops, RenameVillage,
     ResearchAcademy, ResearchSmithy, ResetHeroPoints, ResolveAttackBattle, ReviveHero,
     ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers, SetHeroResourceFocus,
@@ -211,7 +213,7 @@ impl VillageEsService {
         &self,
         village_id: u32,
         command: &FoundVillage,
-    ) -> Result<u32, CqrsError> {
+    ) -> Result<(), CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.found_village(village_id, command).await
@@ -285,6 +287,16 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.cancel_troop_movement(village_id, command).await
+    }
+
+    pub async fn mark_report_read(
+        &self,
+        village_id: u32,
+        command: &MarkReportRead,
+    ) -> Result<u32, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool.clone());
+        let service = VillageService::new(&runtime);
+        service.mark_report_read(village_id, command).await
     }
 
     pub async fn send_scout(
@@ -648,7 +660,7 @@ impl VillageEsService {
         &self,
         village_id: u32,
         command: &SetVillageResources,
-    ) -> Result<u32, CqrsError> {
+    ) -> Result<(), CqrsError> {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         service.set_village_resources(village_id, command).await

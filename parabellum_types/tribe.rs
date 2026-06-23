@@ -255,8 +255,8 @@ static ROMAN_UNITS: TribeUnits = [
             time: 15000,
         },
         requirements: &[
-            BuildingRequirement(BuildingName::Academy, 5),
-            BuildingRequirement(BuildingName::Stable, 5),
+            BuildingRequirement(BuildingName::Academy, 15),
+            BuildingRequirement(BuildingName::Stable, 10),
         ],
         buildings: &[BuildingName::Stable, BuildingName::GreatStable],
     },

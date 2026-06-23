@@ -8,11 +8,11 @@
 use std::collections::HashMap;
 
 use mini_cqrs_es::CqrsError;
-use parabellum_app::ports::identity::PlayerRepository;
+use parabellum_app::identity::PlayerRepository;
 use parabellum_app::villages::models::{
     AttackArrivalWorkflow, ScoutArrivalWorkflow, TrappedTroopReturn, VillageModel,
 };
-use parabellum_app::villages::repositories::{ArmyRepository, VillageRepository};
+use parabellum_app::villages::projection_repositories::{ArmyRepository, VillageRepository};
 use parabellum_app::villages::{
     ApplyBattleOutcomeToVillage, ConquestAttempt, ResolveAttackBattle, ResolveScoutBattle,
     VillageArmyContext, hydrate_village,

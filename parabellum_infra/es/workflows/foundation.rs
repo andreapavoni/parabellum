@@ -5,10 +5,12 @@
 //! field is treated as an unavailable target and schedules the settlers return.
 
 use mini_cqrs_es::CqrsError;
-use parabellum_app::ports::map::MapRepository;
+use parabellum_app::map::MapReadPort;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::SettlersArrivalWorkflow;
-use parabellum_app::villages::repositories::{ArmyRepository, ScheduledActionRepository};
+use parabellum_app::villages::projection_repositories::{
+    ArmyRepository, ScheduledActionRepository,
+};
 use parabellum_game::models::buildings::Building;
 use parabellum_game::models::village::VillageBuilding;
 use parabellum_types::buildings::BuildingName;

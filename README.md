@@ -239,10 +239,15 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
   - [x] Merchant, Marketplace
     - [x] Send resources to a village
     - [x] Sell/buy resources
-  - [ ] Hero Mansion (hero stuff)
+  - [ ] **Heroes**:
+    - [x] Complete integration into battles and reports
+    - [x] Lifecycle: complete integration with hero lifecycle
+    - [ ] Oases conquering
   - [x] Palace/Residence (train settlers, expansion slots, culture points)
   - [ ] Town Hall (small/big party)
-  - [ ] Main Building (building downgrades)
+  - [x] Main Building (building downgrades)
+  - [x] Romans Horse Drinking Throught
+  - [x] Gauls Trappers: Build and apply traps lifecycle
 - [x] Map
 
 ### ToDo (Not Started)
@@ -251,16 +256,11 @@ Here's a high-level tracker of what's working, what's in progress, and what's st
 - [ ] **Messages**
   - [ ] Player-Player
   - [ ] Alliance-Player
-- [ ] **Heroes**:
-  - [ ] Complete integration into battles and reports
-  - [ ] Lifecycle: complete integration with hero lifecycle (points, levels...)
-  - [ ] Oases conquering
 - [ ] **Oases**:
   - [ ] Capturing and managing oases (models exist, logic does not).
   - [ ] Resources bonus when conquered.
   - [ ] Resource production and spawn Nature army in free oases.
 - [ ] **Alliances**: Creating and managing alliances.
- Chiefs are already researchable in Academy and trainable in Palace/Residence.
 - [ ] **User Password recovery**: using email? Switching to OAuth?
 - [ ] **End Game**: Wonder of the World, Natars, etc.
 - [ ] **Admin UI**: a minimal dashboard to manage the game.

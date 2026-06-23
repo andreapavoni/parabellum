@@ -2,7 +2,7 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::repositories::ProjectedReport;
+use parabellum_app::villages::projection_repositories::ProjectedReport;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::reports::{MarketplaceDeliveryReportPayload, ReportPayload};
 use sqlx::{Postgres, Transaction};

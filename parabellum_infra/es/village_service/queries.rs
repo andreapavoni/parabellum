@@ -7,29 +7,25 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use mini_cqrs_es::{CqrsError, QueryRunner};
-use parabellum_app::ports::identity::PlayerRepository;
-use parabellum_app::ports::map::MapRepository;
-use parabellum_app::ports::queries::{
-    ExpansionCultureInfo, LeaderboardPage, MarketplaceData, TroopMovement, TroopMovementDirection,
-    VillageArmyStateView, VillageQueues, VillageTroopMovements,
-};
-use parabellum_app::read_models::{MapRegionTile, VillageInfo};
+use parabellum_app::read_models::VillageReference;
 use parabellum_app::villages::VillageService;
+use parabellum_app::villages::cqrs_queries::{
+    CountUnreadReportsForPlayer, GetMarketplaceOfferById, GetOpenMarketplaceOffers,
+    GetReportForPlayer, ListReportsForPlayer, ScheduledActionStatusCounts,
+};
 use parabellum_app::villages::models::{
     BuildingWorkflow, BuildingWorkflowKind, ReportModel, ScheduledAction, ScheduledActionPayload,
     ScheduledActionStatus, ScheduledActionType, VillageModel,
 };
-use parabellum_app::villages::queries::{
-    CountUnreadReportsForPlayer, GetMarketplaceOfferById, GetOpenMarketplaceOffers,
-    GetReportForPlayer, ListReportsForPlayer, ScheduledActionStatusCounts,
-};
-use parabellum_app::villages::repositories::{
+use parabellum_app::villages::projection_repositories::{
     ArmyRepository, HeroRepository, MarketplaceRepository, ReportRepository,
     ScheduledActionRepository, VillageMovementRepository, VillageRepository,
 };
+use parabellum_app::villages::read_models::{
+    MarketplaceData, TroopMovement, TroopMovementDirection, VillageArmyStateView, VillageQueues,
+    VillageTroopMovements,
+};
 use parabellum_game::models::buildings::Building;
-use parabellum_game::models::culture_points::required_cp;
-use parabellum_game::models::map::MapField;
 use parabellum_game::models::marketplace::MarketplaceOffer;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{DbError, GameError};
@@ -39,8 +35,6 @@ use crate::es::{
     PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
     PostgresVillageRepository, village_cqrs_runtime,
 };
-use crate::identity::repositories::PostgresPlayerRepository;
-use crate::map::PostgresMapRepository;
 
 use super::{
     CancelBuildingConstructionContext, CancelTroopMovementContext, ReinforcementContext,
@@ -393,7 +387,7 @@ impl VillageEsService {
             .map_err(CqrsError::domain_source)
     }
 
-    pub async fn list_villages_by_player_id(
+    pub async fn list_player_village_states(
         &self,
         player_id: uuid::Uuid,
     ) -> Result<Vec<VillageModel>, CqrsError> {
@@ -412,46 +406,6 @@ impl VillageEsService {
         repo.count_child_villages(player_id, parent_village_id)
             .await
             .map_err(CqrsError::domain_source)
-    }
-
-    pub async fn get_expansion_culture_info(
-        &self,
-        player_id: uuid::Uuid,
-        village_id: u32,
-        server_speed: i8,
-    ) -> Result<ExpansionCultureInfo, CqrsError> {
-        let player_repo = PostgresPlayerRepository::new(self.pool.clone());
-        let village_repo = PostgresVillageRepository::new(self.pool.clone());
-        let culture = village_repo
-            .get_expansion_culture_snapshot(player_id, village_id)
-            .await
-            .map_err(CqrsError::domain_source)?;
-
-        player_repo
-            .update_culture_points(player_id)
-            .await
-            .map_err(CqrsError::domain_source)?;
-        let player = player_repo
-            .get_by_id(player_id)
-            .await
-            .map_err(CqrsError::domain_source)?;
-
-        let speed = match server_speed {
-            1 => parabellum_types::common::Speed::X1,
-            2 => parabellum_types::common::Speed::X2,
-            3 => parabellum_types::common::Speed::X3,
-            5 => parabellum_types::common::Speed::X5,
-            10 => parabellum_types::common::Speed::X10,
-            _ => parabellum_types::common::Speed::X1,
-        };
-        let next_cp_required = required_cp(speed, culture.player_village_count + 1);
-
-        Ok(ExpansionCultureInfo {
-            village_culture_points_production: culture.village_culture_points_production,
-            player_culture_points: player.culture_points,
-            player_culture_points_production: culture.player_culture_points_production,
-            next_cp_required,
-        })
     }
 
     pub async fn find_reinforcement_context(
@@ -672,14 +626,14 @@ impl VillageEsService {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        let village_info = self.get_village_info_by_ids(village_ids).await?;
+        let village_references = self.village_references(village_ids).await?;
 
         Ok(MarketplaceData {
             own_offers: own_open_models.iter().cloned().map(to_offer).collect(),
             global_offers: global_open_models.into_iter().map(to_offer).collect(),
             outgoing_merchants,
             incoming_merchants,
-            village_info,
+            village_references,
         })
     }
 
@@ -704,10 +658,10 @@ impl VillageEsService {
         })
     }
 
-    pub async fn get_village_info_by_ids(
+    async fn village_references(
         &self,
         village_ids: Vec<u32>,
-    ) -> Result<HashMap<u32, VillageInfo>, CqrsError> {
+    ) -> Result<HashMap<u32, VillageReference>, CqrsError> {
         if village_ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -723,7 +677,7 @@ impl VillageEsService {
             .map(|v| {
                 (
                     v.village_id,
-                    VillageInfo {
+                    VillageReference {
                         id: v.village_id,
                         name: v.village_name,
                         position: v.position,
@@ -731,55 +685,6 @@ impl VillageEsService {
                 )
             })
             .collect())
-    }
-
-    pub async fn get_leaderboard_page(
-        &self,
-        page: i64,
-        per_page: i64,
-    ) -> Result<LeaderboardPage, CqrsError> {
-        let page = page.max(1);
-        let per_page = per_page.max(1);
-        let offset = (page - 1) * per_page;
-        let repo = PostgresPlayerRepository::new(self.pool.clone());
-        let (entries, total_players) = repo
-            .leaderboard_page(offset, per_page)
-            .await
-            .map_err(CqrsError::domain_source)?;
-        Ok(LeaderboardPage {
-            entries,
-            total_players,
-        })
-    }
-
-    pub async fn get_map_region(
-        &self,
-        center_x: i32,
-        center_y: i32,
-        radius: i32,
-        world_size: i32,
-    ) -> Result<Vec<MapRegionTile>, CqrsError> {
-        let repo = PostgresMapRepository::new(self.pool.clone());
-        repo.get_region(center_x, center_y, radius, world_size)
-            .await
-            .map_err(CqrsError::domain_source)
-    }
-
-    pub async fn get_map_field(&self, field_id: u32) -> Result<MapField, CqrsError> {
-        let repo = PostgresMapRepository::new(self.pool.clone());
-        repo.get_field_by_id(field_id as i32)
-            .await
-            .map_err(CqrsError::domain_source)
-    }
-
-    pub async fn get_map_region_tile_by_field_id(
-        &self,
-        field_id: u32,
-    ) -> Result<Option<MapRegionTile>, CqrsError> {
-        let repo = PostgresMapRepository::new(self.pool.clone());
-        repo.get_region_tile_by_field_id(field_id as i32)
-            .await
-            .map_err(CqrsError::domain_source)
     }
 
     pub async fn list_reports_for_player(
@@ -854,6 +759,7 @@ impl VillageEsService {
                 &parabellum_app::villages::MarkReportRead {
                     report_id,
                     player_id,
+                    read_at: chrono::Utc::now(),
                 },
             )
             .await?;

@@ -1,5 +1,5 @@
 use parabellum_app::villages::models::{MovementDirection, VillageMovement};
-use parabellum_app::villages::repositories::VillageMovementRepository;
+use parabellum_app::villages::projection_repositories::VillageMovementRepository;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, Postgres, Transaction, types::Json};
 use uuid::Uuid;

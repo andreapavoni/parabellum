@@ -1,13 +1,13 @@
-use parabellum_app::ports::queries::{
-    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, TrapQueueItem,
-    VillageQueues,
-};
+use parabellum_app::villages::cqrs_queries::ScheduledActionStatusCounts;
 use parabellum_app::villages::models::{
     ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
-use parabellum_app::villages::queries::ScheduledActionStatusCounts;
-use parabellum_app::villages::repositories::{
+use parabellum_app::villages::projection_repositories::{
     ScheduledActionListFilter, ScheduledActionRepository, ScheduledActionVillageFilter,
+};
+use parabellum_app::villages::read_models::{
+    AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, TrapQueueItem,
+    VillageQueues,
 };
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};

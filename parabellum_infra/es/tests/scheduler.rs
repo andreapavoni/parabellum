@@ -1,8 +1,8 @@
-use parabellum_app::ports::queries::TroopMovementType;
 use parabellum_app::villages::models::{
     self, ScheduledAction, ScheduledActionPayload, ScheduledActionStatus, ScheduledActionType,
 };
-use parabellum_app::villages::repositories::ScheduledActionRepository;
+use parabellum_app::villages::projection_repositories::ScheduledActionRepository;
+use parabellum_app::villages::read_models::TroopMovementType;
 use parabellum_app::villages::{
     AttackVillage, ResearchAcademy, ResearchSmithy, ScoutVillage, SendMerchantsTransfer,
     SendReinforcement, TrainUnits, UpgradeBuilding, VillageArmyContext, hydrate_village,
@@ -117,7 +117,7 @@ async fn village_es_service_scheduler_is_idempotent_and_lists_player_villages() 
         .await;
         assert_eq!(second_processed, 0);
 
-        let models = service.list_villages_by_player_id(player_id).await.unwrap();
+        let models = service.list_player_village_states(player_id).await.unwrap();
         assert_eq!(models.len(), 2);
         assert!(models.iter().any(|v| v.village_id == village_id));
         assert!(models.iter().any(|v| v.village_id == second_village_id));

@@ -1,97 +1,44 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use async_trait::async_trait;
 
-use parabellum_app::villages::{VillageArmyContext, hydrate_village};
 use parabellum_app::{
-    config::Config,
-    ports::{
-        queries::{
-            LeaderboardPage, MarketplaceData, VillageArmyStateView, VillageQueryPort,
-            VillageQueues, VillageTroopMovements,
-        },
-        scheduler::SchedulerPort,
-        villages::{
-            AcceptMarketplaceOfferRequest, AddBuildingRequest, AssignHeroPointsRequest,
-            BuildTrapsRequest, CancelBuildingConstructionRequest, CancelMarketplaceOfferRequest,
-            CancelTroopMovementRequest, CreateHeroRequest, CreateMarketplaceOfferRequest,
-            DisbandTrappedTroopsRequest, DowngradeBuildingRequest, RecallReinforcementsRequest,
-            ReleaseReinforcementsRequest, ReleaseTrappedTroopsRequest, RenameVillageRequest,
-            ResearchAcademyRequest, ResearchSmithyRequest, ResetHeroPointsRequest,
-            ReviveHeroRequest, SendAttackRequest, SendReinforcementRequest, SendResourcesRequest,
-            SendScoutRequest, SendSettlersRequest, SetHeroResourceFocusRequest, TrainUnitsRequest,
-            UpgradeBuildingRequest, VillageCommandsPort,
-        },
+    identity::{InitialVillageCommandExecutor, PlayerRepository},
+    scheduler::SchedulerPort,
+    villages::ports::{
+        BuildingCommandExecutor, BuildingCommandIntent, BuildingReadPort,
+        DevelopmentCommandExecutor, DevelopmentCommandIntent, DevelopmentReadPort,
+        ExpansionReadPort, HeroCommandExecutor, HeroCommandIntent, HeroReadPort,
+        MarketplaceCommandExecutor, MarketplaceCommandIntent, MarketplaceReadPort,
+        MovementControlCommandExecutor, MovementControlCommandIntent, MovementControlReadPort,
+        MovementReadPort, ReinforcementArmyContext, ReinforcementCommandExecutor,
+        ReinforcementCommandIntent, ReinforcementReadPort, ReportCommandExecutor,
+        ReportCommandIntent, ReportReadPort, TrapCommandExecutor, TrapCommandIntent, TrapReadPort,
+        TrappedArmyContext, VillageActivityReadPort, VillageArmyReadPort, VillageCommandExecutor,
+        VillageCommandIntent, VillageProfileCommandExecutor, VillageProfileCommandIntent,
+        VillageReferenceReadPort, VillageStateReadPort,
     },
-    villages::{
-        AddBuilding, AssignHeroPoints, AttackVillage, BuildTraps, CancelBuildingConstruction,
-        CancelTroopMovement, CreateHero, CreateMarketplaceOffer, DisbandTrappedTroops,
-        DowngradeBuilding, ExpansionSlotUsage, RecallReinforcements, ReleaseReinforcements,
-        ReleaseTrappedTroops, RenameVillage, ResearchAcademy, ResearchSmithy, ResetHeroPoints,
-        ReviveHero, ScoutVillage, SendMerchantsTransfer, SendReinforcement, SendSettlers,
-        SetHeroResourceFocus, TrainUnits, UpgradeBuilding,
+    villages::projection_repositories::VillageRepository,
+    villages::read_models::{
+        MarketplaceData, VillageArmyStateView, VillageQueues, VillageTroopMovements,
     },
+    villages::{CreateHero, FoundVillage, SetVillageResources},
 };
-use parabellum_game::models::hero::Hero;
-use parabellum_game::models::trapper::{TRAP_BUILD_TIME_SECS, Trapper};
-use parabellum_types::{
-    army::UnitRole,
-    errors::{AppError, ApplicationError, DbError, GameError},
-    map::Position,
-};
+use parabellum_types::errors::{AppError, ApplicationError, DbError, GameError};
 
-use crate::es::VillageEsService;
+use crate::es::{PostgresVillageRepository, VillageEsService};
+use crate::identity::repositories::PostgresPlayerRepository;
 
 #[derive(Clone)]
 /// Transport adapter implementing app ports by delegating to ES service/query flows.
 pub struct VillageEsAdapter {
     service: VillageEsService,
-    config: Arc<Config>,
 }
 
 impl VillageEsAdapter {
-    pub fn new(service: VillageEsService, config: Arc<Config>) -> Self {
-        Self { service, config }
-    }
-
-    fn compute_travel_duration(
-        &self,
-        source: &parabellum_app::villages::models::VillageModel,
-        target: &parabellum_app::villages::models::VillageModel,
-        speed: u8,
-    ) -> chrono::Duration {
-        let secs = source.position.calculate_travel_time_secs(
-            target.position.clone(),
-            speed,
-            self.config.world_size as i32,
-            self.config.speed as u8,
-        );
-        chrono::Duration::seconds(std::cmp::max(1, secs) as i64)
-    }
-
-    fn movement_speed(
-        tribe: &parabellum_types::tribe::Tribe,
-        units: &parabellum_types::army::TroopSet,
-        hero: Option<&Hero>,
-    ) -> u8 {
-        let mut min_speed: Option<u8> = None;
-        for (idx, qty) in units.units().iter().enumerate() {
-            if *qty == 0 {
-                continue;
-            }
-            if let Some(unit) = tribe.units().get(idx) {
-                min_speed = Some(min_speed.map_or(unit.speed, |current| current.min(unit.speed)));
-            }
-        }
-        if let Some(hero) = hero {
-            min_speed = Some(min_speed.map_or(hero.speed(), |current| current.min(hero.speed())));
-        }
-        min_speed.unwrap_or(1)
-    }
-
-    fn position_to_field_id(&self, position: &Position) -> u32 {
-        position.to_id(self.config.world_size as i32)
+    pub fn new(service: VillageEsService) -> Self {
+        Self { service }
     }
 
     /// Maps CQRS/runtime failures to stable app-layer error categories.
@@ -186,1027 +133,261 @@ impl VillageEsAdapter {
 }
 
 #[async_trait]
-impl VillageCommandsPort for VillageEsAdapter {
-    async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {
-        self.service
-            .add_building(
-                request.village_id,
-                &AddBuilding {
-                    player_id: request.player_id,
-                    slot_id: request.slot_id,
-                    building_name: request.building_name,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn upgrade_building(
+impl MovementReadPort for VillageEsAdapter {
+    async fn get_movement_village(
         &self,
-        request: UpgradeBuildingRequest,
-    ) -> Result<(), ApplicationError> {
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
         self.service
-            .upgrade_building(
-                request.village_id,
-                &UpgradeBuilding {
-                    player_id: request.player_id,
-                    slot_id: request.slot_id,
-                    speed: self.config.speed,
-                },
-            )
+            .get_village(village_id)
             .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
+            .map_err(Self::map_query_cqrs_error)
     }
 
-    async fn downgrade_building(
+    async fn get_movement_hero(
         &self,
-        request: DowngradeBuildingRequest,
-    ) -> Result<(), ApplicationError> {
+        hero_id: Uuid,
+    ) -> Result<parabellum_game::models::hero::Hero, ApplicationError> {
         self.service
-            .downgrade_building(
-                request.village_id,
-                &DowngradeBuilding {
-                    player_id: request.player_id,
-                    slot_id: request.slot_id,
-                    speed: self.config.speed,
-                },
-            )
+            .get_hero(hero_id)
             .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
+            .map_err(Self::map_cqrs_error)
     }
 
-    async fn cancel_building_construction(
-        &self,
-        request: CancelBuildingConstructionRequest,
-    ) -> Result<(), ApplicationError> {
-        let now = chrono::Utc::now();
-        let context = self
-            .service
-            .find_cancel_building_construction_context(request.village_id, request.action_id, now)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-
-        if context.player_id != request.player_id || context.village_id != request.village_id {
-            return Err(ApplicationError::Game(GameError::VillageNotOwned {
-                village_id: request.village_id,
-                player_id: request.player_id,
-            }));
-        }
-
-        if now >= context.execute_at {
-            return Err(ApplicationError::Game(
-                GameError::BuildingConstructionNotCancelable,
-            ));
-        }
-
+    async fn is_unoccupied_valley(&self, field_id: u32) -> Result<bool, ApplicationError> {
         self.service
-            .cancel_building_construction(
-                context.village_id,
-                &CancelBuildingConstruction {
-                    action_ids: context.action_ids,
-                    player_id: request.player_id,
-                    village_id: context.village_id,
-                    refund: context.refund,
-                    canceled_at: now,
-                },
-            )
+            .is_unoccupied_valley(field_id)
             .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn rename_village(&self, request: RenameVillageRequest) -> Result<(), ApplicationError> {
-        self.service
-            .rename_village(
-                request.village_id,
-                &RenameVillage {
-                    player_id: request.player_id,
-                    village_name: request.village_name,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn send_resources(&self, request: SendResourcesRequest) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let target = self
-            .service
-            .get_village(request.target_village_id)
-            .await
-            .map_err(|err| match Self::map_query_cqrs_error(err) {
-                ApplicationError::Db(DbError::VillageNotFound(_)) => {
-                    ApplicationError::Game(GameError::InvalidValley(request.target_village_id))
-                }
-                other => other,
-            })?;
-        let travel_secs = source.position.calculate_travel_time_secs(
-            target.position,
-            source.tribe.merchant_stats().speed,
-            self.config.world_size as i32,
-            self.config.speed as u8,
-        );
-        let arrives_at =
-            chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_secs) as i64);
-
-        self.service
-            .send_resources(
-                request.source_village_id,
-                &SendMerchantsTransfer {
-                    player_id: request.player_id,
-                    target_village_id: request.target_village_id,
-                    resources: request.resources,
-                    arrives_at,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn train_units(&self, request: TrainUnitsRequest) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let unit = source
-            .tribe
-            .units()
-            .get(request.unit_idx as usize)
-            .ok_or(GameError::InvalidUnitIndex(request.unit_idx))
-            .map_err(ApplicationError::from)?;
-        if matches!(unit.role, UnitRole::Chief | UnitRole::Settler) {
-            let source_village = hydrate_village(source.clone(), VillageArmyContext::default());
-            let child_villages = self
-                .service
-                .count_child_villages(request.player_id, request.village_id)
-                .await
-                .map_err(Self::map_query_cqrs_error)?;
-            let queues = self
-                .service
-                .get_village_queues(request.village_id)
-                .await
-                .map_err(Self::map_query_cqrs_error)?;
-            let movements = self
-                .service
-                .get_village_troop_movements(request.village_id)
-                .await
-                .map_err(Self::map_query_cqrs_error)?;
-            ExpansionSlotUsage::from_village_context(
-                &source_village,
-                child_villages,
-                &queues.training,
-                &movements,
-                request.player_id,
-            )
-            .validate_training(unit.role, request.quantity)
-            .map_err(ApplicationError::Game)?;
-        }
-
-        self.service
-            .train_units(
-                request.village_id,
-                &TrainUnits {
-                    player_id: request.player_id,
-                    unit_idx: request.unit_idx,
-                    building_name: request.building_name,
-                    quantity: request.quantity,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn research_academy(
-        &self,
-        request: ResearchAcademyRequest,
-    ) -> Result<(), ApplicationError> {
-        self.service
-            .research_academy(
-                request.village_id,
-                &ResearchAcademy {
-                    player_id: request.player_id,
-                    unit: request.unit,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn research_smithy(
-        &self,
-        request: ResearchSmithyRequest,
-    ) -> Result<(), ApplicationError> {
-        self.service
-            .research_smithy(
-                request.village_id,
-                &ResearchSmithy {
-                    player_id: request.player_id,
-                    unit: request.unit,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn send_reinforcement(
-        &self,
-        request: SendReinforcementRequest,
-    ) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let target = self
-            .service
-            .get_village(request.target_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let hero = if let Some(hero_id) = request.hero_id {
-            Some(
-                self.service
-                    .get_hero(hero_id)
-                    .await
-                    .map_err(Self::map_cqrs_error)?,
-            )
-        } else {
-            None
-        };
-        let speed = Self::movement_speed(&source.tribe, &request.units, hero.as_ref());
-        let arrives_at = chrono::Utc::now() + self.compute_travel_duration(&source, &target, speed);
-
-        self.service
-            .send_reinforcement(
-                request.source_village_id,
-                &SendReinforcement {
-                    movement_id: Uuid::new_v4(),
-                    army_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    target_village_id: request.target_village_id,
-                    units: request.units,
-                    hero_id: request.hero_id,
-                    arrives_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn send_attack(&self, request: SendAttackRequest) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let target = self
-            .service
-            .get_village(request.target_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let hero = if let Some(hero_id) = request.hero_id {
-            Some(
-                self.service
-                    .get_hero(hero_id)
-                    .await
-                    .map_err(Self::map_cqrs_error)?,
-            )
-        } else {
-            None
-        };
-        let speed = Self::movement_speed(&source.tribe, &request.units, hero.as_ref());
-        let one_way = self.compute_travel_duration(&source, &target, speed);
-        let arrives_at = chrono::Utc::now() + one_way;
-        let returns_at = arrives_at + one_way;
-
-        self.service
-            .send_attack(
-                request.source_village_id,
-                &AttackVillage {
-                    movement_id: Uuid::new_v4(),
-                    arrival_action_id: Uuid::new_v4(),
-                    return_action_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    target_village_id: request.target_village_id,
-                    units: request.units,
-                    hero_id: request.hero_id,
-                    attack_type: request.attack_type,
-                    catapult_targets: request.catapult_targets,
-                    arrives_at,
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn send_scout(&self, request: SendScoutRequest) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let target = self
-            .service
-            .get_village(request.target_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let speed = Self::movement_speed(&source.tribe, &request.units, None);
-        let one_way = self.compute_travel_duration(&source, &target, speed);
-        let arrives_at = chrono::Utc::now() + one_way;
-        let returns_at = arrives_at + one_way;
-
-        self.service
-            .send_scout(
-                request.source_village_id,
-                &ScoutVillage {
-                    movement_id: Uuid::new_v4(),
-                    arrival_action_id: Uuid::new_v4(),
-                    return_action_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    target_village_id: request.target_village_id,
-                    units: request.units,
-                    target: request.target,
-                    attack_type: request.attack_type,
-                    arrives_at,
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn send_settlers(&self, request: SendSettlersRequest) -> Result<(), ApplicationError> {
-        let source = self
-            .service
-            .get_village(request.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let settlers_speed = source.tribe.units().get(9).map(|u| u.speed).unwrap_or(1);
-        let travel_secs = source.position.calculate_travel_time_secs(
-            request.target_position.clone(),
-            settlers_speed,
-            self.config.world_size as i32,
-            self.config.speed as u8,
-        );
-        let arrives_at =
-            chrono::Utc::now() + chrono::Duration::seconds(std::cmp::max(1, travel_secs) as i64);
-        let target_field_id = self.position_to_field_id(&request.target_position);
-        let target_is_empty_valley = self
-            .service
-            .is_unoccupied_valley(target_field_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if !target_is_empty_valley {
-            return Err(parabellum_types::errors::GameError::InvalidValley(target_field_id).into());
-        }
-
-        self.service
-            .send_settlers(
-                request.source_village_id,
-                &SendSettlers {
-                    action_id: Uuid::new_v4(),
-                    movement_id: Uuid::new_v4(),
-                    army_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    target_village_id: target_field_id,
-                    target_position: request.target_position,
-                    village_name: request.village_name,
-                    tribe: request.tribe,
-                    arrives_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn recall_reinforcements(
-        &self,
-        request: RecallReinforcementsRequest,
-    ) -> Result<(), ApplicationError> {
-        let context = self
-            .service
-            .find_reinforcement_context(request.army_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if context.home_village_id != request.village_id {
-            return Err(ApplicationError::Unknown(
-                "Reinforcement army does not belong to provided home village".to_string(),
-            ));
-        }
-
-        let stationed = self
-            .service
-            .get_village(context.stationed_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let home = self
-            .service
-            .get_village(request.village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let reinforcement_army = context.army;
-
-        let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(&stationed, &home, reinforcement_army.speed());
-
-        self.service
-            .recall_reinforcements(
-                request.village_id,
-                &RecallReinforcements {
-                    action_id: Uuid::new_v4(),
-                    movement_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    home_village_id: request.village_id,
-                    stationed_village_id: context.stationed_village_id,
-                    reinforcement_army,
-                    units: request.units,
-                    hero_id: request.hero_id,
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn release_reinforcements(
-        &self,
-        request: ReleaseReinforcementsRequest,
-    ) -> Result<(), ApplicationError> {
-        let context = self
-            .service
-            .find_reinforcement_context(request.army_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if context.home_village_id != request.village_id {
-            return Err(ApplicationError::Unknown(
-                "Reinforcement army does not belong to provided home village".to_string(),
-            ));
-        }
-
-        let stationed = self
-            .service
-            .get_village(context.stationed_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let home = self
-            .service
-            .get_village(request.village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let reinforcement_army = context.army;
-
-        let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(&stationed, &home, reinforcement_army.speed());
-
-        self.service
-            .release_reinforcements(
-                context.stationed_village_id,
-                &ReleaseReinforcements {
-                    action_id: Uuid::new_v4(),
-                    movement_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    stationed_village_id: context.stationed_village_id,
-                    home_village_id: request.village_id,
-                    reinforcement_army,
-                    units: request.units,
-                    hero_id: request.hero_id,
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn release_trapped_troops(
-        &self,
-        request: ReleaseTrappedTroopsRequest,
-    ) -> Result<(), ApplicationError> {
-        let context = self
-            .service
-            .find_trapped_army_context(request.army_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if context.trapped_village_id != request.village_id {
-            return Err(ApplicationError::Unknown(
-                "Trapped army is not held in provided village".to_string(),
-            ));
-        }
-        let trapped_village = self
-            .service
-            .get_village(context.trapped_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if trapped_village.player_id != request.player_id {
-            return Err(ApplicationError::from(GameError::VillageNotOwned {
-                village_id: context.trapped_village_id,
-                player_id: request.player_id,
-            }));
-        }
-        let home = self
-            .service
-            .get_village(context.home_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let army_state = self
-            .service
-            .get_village_army_state_view(context.trapped_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let occupied = army_state
-            .trapped_here
-            .iter()
-            .map(|army| army.units().immensity())
-            .sum();
-        let mut trapper = Trapper::from_buildings(
-            &trapped_village.buildings,
-            trapped_village.trapper,
-            occupied,
-        );
-        trapper.release_by_owner(context.army.units());
-        let returns_at = chrono::Utc::now()
-            + self.compute_travel_duration(&trapped_village, &home, context.army.speed());
-
-        self.service
-            .release_trapped_troops(
-                context.trapped_village_id,
-                &ReleaseTrappedTroops {
-                    action_id: Uuid::new_v4(),
-                    movement_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    home_village_id: context.home_village_id,
-                    trapped_village_id: context.trapped_village_id,
-                    army: context.army,
-                    trapper: trapper.state(),
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn disband_trapped_troops(
-        &self,
-        request: DisbandTrappedTroopsRequest,
-    ) -> Result<(), ApplicationError> {
-        let context = self
-            .service
-            .find_trapped_army_context(request.army_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if context.home_village_id != request.village_id {
-            return Err(ApplicationError::Unknown(
-                "Trapped army does not belong to provided home village".to_string(),
-            ));
-        }
-        let home = self
-            .service
-            .get_village(context.home_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if home.player_id != request.player_id {
-            return Err(ApplicationError::from(GameError::VillageNotOwned {
-                village_id: context.home_village_id,
-                player_id: request.player_id,
-            }));
-        }
-        let trapped_village = self
-            .service
-            .get_village(context.trapped_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let army_state = self
-            .service
-            .get_village_army_state_view(context.trapped_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let occupied = army_state
-            .trapped_here
-            .iter()
-            .map(|army| army.units().immensity())
-            .sum();
-        let mut trapper = Trapper::from_buildings(
-            &trapped_village.buildings,
-            trapped_village.trapper,
-            occupied,
-        );
-        trapper.release_by_owner(context.army.units());
-
-        self.service
-            .disband_trapped_troops(
-                context.trapped_village_id,
-                &DisbandTrappedTroops {
-                    army_id: context.army.id,
-                    player_id: request.player_id,
-                    home_village_id: context.home_village_id,
-                    trapped_village_id: context.trapped_village_id,
-                    trapper: trapper.state(),
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn build_traps(&self, request: BuildTrapsRequest) -> Result<(), ApplicationError> {
-        let village = self
-            .service
-            .get_village(request.village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if village.player_id != request.player_id {
-            return Err(ApplicationError::from(GameError::VillageNotOwned {
-                village_id: request.village_id,
-                player_id: request.player_id,
-            }));
-        }
-        let army_state = self
-            .service
-            .get_village_army_state_view(request.village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        let occupied = army_state
-            .trapped_here
-            .iter()
-            .map(|army| army.units().immensity())
-            .sum();
-        let mut trapper = Trapper::from_buildings(&village.buildings, village.trapper, occupied);
-        let Some(plan) = trapper.start_trap_build(request.quantity) else {
-            return Err(ApplicationError::Unknown(
-                "Requested trap quantity is not buildable".to_string(),
-            ));
-        };
-        let domain_village = hydrate_village(village.clone(), VillageArmyContext::default());
-        if !domain_village.has_enough_resources(&plan.cost) {
-            return Err(ApplicationError::from(GameError::NotEnoughResources));
-        }
-        let execute_at =
-            chrono::Utc::now() + chrono::Duration::seconds(TRAP_BUILD_TIME_SECS as i64);
-        self.service
-            .build_traps(
-                request.village_id,
-                &BuildTraps {
-                    action_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    quantity_remaining: request.quantity as i32,
-                    time_per_trap: TRAP_BUILD_TIME_SECS as i32,
-                    cost: plan.cost,
-                    trapper: trapper.state(),
-                    execute_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn cancel_troop_movement(
-        &self,
-        request: CancelTroopMovementRequest,
-    ) -> Result<(), ApplicationError> {
-        let context = self
-            .service
-            .find_cancel_troop_movement_context(request.movement_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-
-        if context.source_village_id != request.village_id {
-            return Err(ApplicationError::Game(GameError::VillageNotOwned {
-                village_id: request.village_id,
-                player_id: request.player_id,
-            }));
-        }
-
-        let source = self
-            .service
-            .get_village(context.source_village_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)?;
-        if source.player_id != request.player_id {
-            return Err(ApplicationError::Game(GameError::VillageNotOwned {
-                village_id: context.source_village_id,
-                player_id: request.player_id,
-            }));
-        }
-
-        let now = chrono::Utc::now();
-        if now >= context.arrives_at {
-            return Err(ApplicationError::Game(
-                GameError::TroopMovementNotCancelable,
-            ));
-        }
-
-        let cancel_deadline = context.sent_at + chrono::Duration::seconds(60);
-        if now > cancel_deadline {
-            return Err(ApplicationError::Game(
-                GameError::TroopMovementCancelWindowExpired,
-            ));
-        }
-
-        let elapsed = (now - context.sent_at).num_seconds().max(1);
-        let returns_at = now + chrono::Duration::seconds(elapsed);
-
-        self.service
-            .cancel_troop_movement(
-                context.source_village_id,
-                &CancelTroopMovement {
-                    movement_id: context.movement_id,
-                    arrival_action_id: context.arrival_action_id,
-                    return_action_id: Uuid::new_v4(),
-                    army_id: context.army_id,
-                    player_id: request.player_id,
-                    source_village_id: context.source_village_id,
-                    target_village_id: context.target_village_id,
-                    army: context.army,
-                    returns_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-
-        Ok(())
-    }
-
-    async fn create_marketplace_offer(
-        &self,
-        request: CreateMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError> {
-        self.service
-            .create_marketplace_offer(
-                request.village_id,
-                &CreateMarketplaceOffer {
-                    player_id: request.player_id,
-                    offer_resources: request.offer_resources,
-                    seek_resources: request.seek_resources,
-                    speed: self.config.speed,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn accept_marketplace_offer(
-        &self,
-        request: AcceptMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError> {
-        let offer = self
-            .service
-            .get_marketplace_offer(request.offer_id)
-            .await
-            .map_err(|_| {
-                ApplicationError::Db(DbError::MarketplaceOfferNotFound(request.offer_id))
-            })?;
-        let owner = self
-            .service
-            .get_village(offer.owner_village_id)
-            .await
-            .map_err(|e| {
-                let mapped = Self::map_query_cqrs_error(e);
-                match mapped {
-                    ApplicationError::Db(DbError::VillageNotFound(_)) => {
-                        ApplicationError::Db(DbError::VillageNotFound(offer.owner_village_id))
-                    }
-                    other => other,
-                }
-            })?;
-        let accepting = self
-            .service
-            .get_village(request.village_id)
-            .await
-            .map_err(|e| {
-                let mapped = Self::map_query_cqrs_error(e);
-                match mapped {
-                    ApplicationError::Db(DbError::VillageNotFound(_)) => {
-                        ApplicationError::Db(DbError::VillageNotFound(request.village_id))
-                    }
-                    other => other,
-                }
-            })?;
-
-        let owner_secs = owner.position.calculate_travel_time_secs(
-            accepting.position.clone(),
-            owner.tribe.merchant_stats().speed,
-            self.config.world_size as i32,
-            self.config.speed as u8,
-        );
-        let accepting_secs = accepting.position.calculate_travel_time_secs(
-            owner.position,
-            accepting.tribe.merchant_stats().speed,
-            self.config.world_size as i32,
-            self.config.speed as u8,
-        );
-        let now = chrono::Utc::now();
-        let owner_arrives_at = now + chrono::Duration::seconds(std::cmp::max(1, owner_secs) as i64);
-        let accepting_arrives_at =
-            now + chrono::Duration::seconds(std::cmp::max(1, accepting_secs) as i64);
-
-        self.service
-            .accept_marketplace_offer(
-                request.village_id,
-                request.player_id,
-                request.offer_id,
-                owner_arrives_at,
-                accepting_arrives_at,
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn cancel_marketplace_offer(
-        &self,
-        request: CancelMarketplaceOfferRequest,
-    ) -> Result<(), ApplicationError> {
-        let _offer = self
-            .service
-            .get_marketplace_offer(request.offer_id)
-            .await
-            .map_err(|_| {
-                ApplicationError::Db(DbError::MarketplaceOfferNotFound(request.offer_id))
-            })?;
-
-        self.service
-            .cancel_marketplace_offer(request.village_id, request.player_id, request.offer_id)
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn create_hero(&self, request: CreateHeroRequest) -> Result<(), ApplicationError> {
-        self.service
-            .create_hero(
-                request.village_id,
-                &CreateHero {
-                    hero_id: request.hero_id,
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    has_existing_hero: self
-                        .service
-                        .player_has_alive_hero(request.player_id)
-                        .await
-                        .map_err(Self::map_cqrs_error)?,
-                    bypass_hero_mansion_requirement: false,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn revive_hero(&self, request: ReviveHeroRequest) -> Result<(), ApplicationError> {
-        let hero = self
-            .service
-            .get_hero(request.hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        if self
-            .service
-            .player_has_pending_hero_revival(request.player_id)
-            .await
-            .map_err(Self::map_cqrs_error)?
-        {
-            return Err(ApplicationError::Game(GameError::HeroRevivalAlreadyPending));
-        }
-        if self
-            .service
-            .player_has_alive_hero(request.player_id)
-            .await
-            .map_err(Self::map_cqrs_error)?
-        {
-            return Err(ApplicationError::Game(GameError::HeroAlreadyExists));
-        }
-        let revive_at = chrono::Utc::now()
-            + chrono::Duration::seconds(hero.resurrection_cost(self.config.speed).time as i64);
-        self.service
-            .revive_hero(
-                request.village_id,
-                &ReviveHero {
-                    action_id: Uuid::new_v4(),
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    hero,
-                    reset: request.reset,
-                    speed: self.config.speed,
-                    revive_at,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn assign_hero_points(
-        &self,
-        request: AssignHeroPointsRequest,
-    ) -> Result<(), ApplicationError> {
-        let hero = self
-            .service
-            .get_hero(request.hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        self.service
-            .assign_hero_points(
-                request.village_id,
-                &AssignHeroPoints {
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    hero,
-                    strength: request.strength,
-                    off_bonus: request.off_bonus,
-                    def_bonus: request.def_bonus,
-                    regeneration: request.regeneration,
-                    resources: request.resources,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn reset_hero_points(
-        &self,
-        request: ResetHeroPointsRequest,
-    ) -> Result<(), ApplicationError> {
-        let hero = self
-            .service
-            .get_hero(request.hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        self.service
-            .reset_hero_points(
-                request.village_id,
-                &ResetHeroPoints {
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    hero,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
-    }
-
-    async fn set_hero_resource_focus(
-        &self,
-        request: SetHeroResourceFocusRequest,
-    ) -> Result<(), ApplicationError> {
-        let hero = self
-            .service
-            .get_hero(request.hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        self.service
-            .set_hero_resource_focus(
-                request.village_id,
-                &SetHeroResourceFocus {
-                    player_id: request.player_id,
-                    village_id: request.village_id,
-                    hero,
-                    focus: request.focus,
-                },
-            )
-            .await
-            .map_err(Self::map_cqrs_error)?;
-        Ok(())
+            .map_err(Self::map_query_cqrs_error)
     }
 }
 
 #[async_trait]
-impl VillageQueryPort for VillageEsAdapter {
+impl MarketplaceReadPort for VillageEsAdapter {
+    async fn get_marketplace_village(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
     async fn get_marketplace_offer(
         &self,
-        offer_id: uuid::Uuid,
+        offer_id: Uuid,
     ) -> Result<parabellum_app::villages::models::MarketplaceOfferModel, ApplicationError> {
         self.service
             .get_marketplace_offer(offer_id)
             .await
             .map_err(|_| ApplicationError::Db(DbError::MarketplaceOfferNotFound(offer_id)))
+    }
+
+    async fn get_marketplace_data(
+        &self,
+        village_id: u32,
+    ) -> Result<MarketplaceData, ApplicationError> {
+        self.service
+            .get_marketplace_data(village_id)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+}
+
+#[async_trait]
+impl MovementControlReadPort for VillageEsAdapter {
+    async fn get_cancel_troop_movement_context(
+        &self,
+        movement_id: Uuid,
+    ) -> Result<parabellum_app::villages::CancelTroopMovementContext, ApplicationError> {
+        let context = self
+            .service
+            .find_cancel_troop_movement_context(movement_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        Ok(parabellum_app::villages::CancelTroopMovementContext {
+            movement_id: context.movement_id,
+            arrival_action_id: context.arrival_action_id,
+            army_id: context.army_id,
+            player_id: context.player_id,
+            source_village_id: context.source_village_id,
+            target_village_id: context.target_village_id,
+            army: context.army,
+            sent_at: context.sent_at,
+            arrives_at: context.arrives_at,
+        })
+    }
+
+    async fn get_movement_control_village(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+}
+
+#[async_trait]
+impl ReinforcementReadPort for VillageEsAdapter {
+    async fn get_reinforcement_context(
+        &self,
+        army_id: Uuid,
+    ) -> Result<ReinforcementArmyContext, ApplicationError> {
+        let context = self
+            .service
+            .find_reinforcement_context(army_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        Ok(ReinforcementArmyContext {
+            stationed_village_id: context.stationed_village_id,
+            home_village_id: context.home_village_id,
+            army: context.army,
+        })
+    }
+
+    async fn get_trapped_army_context(
+        &self,
+        army_id: Uuid,
+    ) -> Result<TrappedArmyContext, ApplicationError> {
+        let context = self
+            .service
+            .find_trapped_army_context(army_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+        Ok(TrappedArmyContext {
+            trapped_village_id: context.trapped_village_id,
+            home_village_id: context.home_village_id,
+            army: context.army,
+        })
+    }
+
+    async fn get_reinforcement_village(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_reinforcement_army_state(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageArmyStateView, ApplicationError> {
+        self.service
+            .get_village_army_state_view(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+}
+
+#[async_trait]
+impl TrapReadPort for VillageEsAdapter {
+    async fn get_trap_village(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_trap_army_state(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageArmyStateView, ApplicationError> {
+        self.service
+            .get_village_army_state_view(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+}
+
+#[async_trait]
+impl BuildingReadPort for VillageEsAdapter {
+    async fn get_cancel_building_construction_context(
+        &self,
+        village_id: u32,
+        action_id: Uuid,
+        canceled_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<parabellum_app::villages::CancelBuildingConstructionContext, ApplicationError> {
+        let context = self
+            .service
+            .find_cancel_building_construction_context(village_id, action_id, canceled_at)
+            .await
+            .map_err(Self::map_query_cqrs_error)?;
+
+        Ok(
+            parabellum_app::villages::CancelBuildingConstructionContext {
+                action_ids: context.action_ids,
+                player_id: context.player_id,
+                village_id: context.village_id,
+                execute_at: context.execute_at,
+                refund: context.refund,
+            },
+        )
+    }
+}
+
+#[async_trait]
+impl DevelopmentReadPort for VillageEsAdapter {
+    async fn get_development_village(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn count_development_child_villages(
+        &self,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<u8, ApplicationError> {
+        self.service
+            .count_child_villages(player_id, village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_development_village_queues(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageQueues, ApplicationError> {
+        self.service
+            .get_village_queues(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_development_troop_movements(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageTroopMovements, ApplicationError> {
+        self.service
+            .get_village_troop_movements(village_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+}
+
+#[async_trait]
+impl HeroReadPort for VillageEsAdapter {
+    async fn get_hero(
+        &self,
+        hero_id: Uuid,
+    ) -> Result<parabellum_game::models::hero::Hero, ApplicationError> {
+        self.service
+            .get_hero(hero_id)
+            .await
+            .map_err(Self::map_cqrs_error)
     }
 
     async fn get_hero_by_player(
@@ -1219,7 +400,24 @@ impl VillageQueryPort for VillageEsAdapter {
             .map_err(Self::map_query_cqrs_error)
     }
 
-    async fn get_pending_hero_revival(
+    async fn player_has_alive_hero(&self, player_id: Uuid) -> Result<bool, ApplicationError> {
+        self.service
+            .player_has_alive_hero(player_id)
+            .await
+            .map_err(Self::map_cqrs_error)
+    }
+
+    async fn player_has_pending_hero_revival(
+        &self,
+        player_id: Uuid,
+    ) -> Result<bool, ApplicationError> {
+        self.service
+            .player_has_pending_hero_revival(player_id)
+            .await
+            .map_err(Self::map_cqrs_error)
+    }
+
+    async fn get_pending_hero_revival_at(
         &self,
         player_id: Uuid,
     ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ApplicationError> {
@@ -1228,7 +426,456 @@ impl VillageQueryPort for VillageEsAdapter {
             .await
             .map_err(Self::map_query_cqrs_error)
     }
+}
 
+#[async_trait]
+impl VillageCommandExecutor for VillageEsAdapter {
+    async fn execute_village_command(
+        &self,
+        village_id: u32,
+        command: VillageCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            VillageCommandIntent::SendReinforcement(command) => self
+                .service
+                .send_reinforcement(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            VillageCommandIntent::AttackVillage(command) => self
+                .service
+                .send_attack(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            VillageCommandIntent::ScoutVillage(command) => self
+                .service
+                .send_scout(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            VillageCommandIntent::SendSettlers(command) => self
+                .service
+                .send_settlers(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl BuildingCommandExecutor for VillageEsAdapter {
+    async fn execute_building_command(
+        &self,
+        command: BuildingCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            BuildingCommandIntent::AddBuilding {
+                village_id,
+                command,
+            } => self
+                .service
+                .add_building(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            BuildingCommandIntent::UpgradeBuilding {
+                village_id,
+                command,
+            } => self
+                .service
+                .upgrade_building(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            BuildingCommandIntent::DowngradeBuilding {
+                village_id,
+                command,
+            } => self
+                .service
+                .downgrade_building(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            BuildingCommandIntent::CancelBuildingConstruction {
+                village_id,
+                command,
+            } => self
+                .service
+                .cancel_building_construction(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl VillageProfileCommandExecutor for VillageEsAdapter {
+    async fn execute_village_profile_command(
+        &self,
+        command: VillageProfileCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            VillageProfileCommandIntent::RenameVillage {
+                village_id,
+                command,
+            } => self
+                .service
+                .rename_village(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DevelopmentCommandExecutor for VillageEsAdapter {
+    async fn execute_development_command(
+        &self,
+        command: DevelopmentCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            DevelopmentCommandIntent::TrainUnits {
+                village_id,
+                command,
+            } => self
+                .service
+                .train_units(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            DevelopmentCommandIntent::ResearchAcademy {
+                village_id,
+                command,
+            } => self
+                .service
+                .research_academy(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            DevelopmentCommandIntent::ResearchSmithy {
+                village_id,
+                command,
+            } => self
+                .service
+                .research_smithy(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl HeroCommandExecutor for VillageEsAdapter {
+    async fn execute_hero_command(
+        &self,
+        command: HeroCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            HeroCommandIntent::CreateHero {
+                village_id,
+                command,
+            } => self
+                .service
+                .create_hero(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            HeroCommandIntent::ReviveHero {
+                village_id,
+                command,
+            } => self
+                .service
+                .revive_hero(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            HeroCommandIntent::AssignHeroPoints {
+                village_id,
+                command,
+            } => self
+                .service
+                .assign_hero_points(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            HeroCommandIntent::ResetHeroPoints {
+                village_id,
+                command,
+            } => self
+                .service
+                .reset_hero_points(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            HeroCommandIntent::SetHeroResourceFocus {
+                village_id,
+                command,
+            } => self
+                .service
+                .set_hero_resource_focus(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl MarketplaceCommandExecutor for VillageEsAdapter {
+    async fn execute_marketplace_command(
+        &self,
+        command: MarketplaceCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            MarketplaceCommandIntent::SendResources {
+                source_village_id,
+                command,
+            } => self
+                .service
+                .send_resources(source_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            MarketplaceCommandIntent::CreateOffer {
+                village_id,
+                command,
+            } => self
+                .service
+                .create_marketplace_offer(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            MarketplaceCommandIntent::AcceptOffer {
+                accepting_village_id,
+                accepting_player_id,
+                offer_id,
+                owner_arrives_at,
+                accepting_arrives_at,
+            } => self
+                .service
+                .accept_marketplace_offer(
+                    accepting_village_id,
+                    accepting_player_id,
+                    offer_id,
+                    owner_arrives_at,
+                    accepting_arrives_at,
+                )
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            MarketplaceCommandIntent::CancelOffer {
+                village_id,
+                player_id,
+                offer_id,
+            } => self
+                .service
+                .cancel_marketplace_offer(village_id, player_id, offer_id)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl MovementControlCommandExecutor for VillageEsAdapter {
+    async fn execute_movement_control_command(
+        &self,
+        command: MovementControlCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            MovementControlCommandIntent::CancelTroopMovement {
+                source_village_id,
+                command,
+            } => self
+                .service
+                .cancel_troop_movement(source_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl ReinforcementCommandExecutor for VillageEsAdapter {
+    async fn execute_reinforcement_command(
+        &self,
+        command: ReinforcementCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            ReinforcementCommandIntent::RecallReinforcements {
+                home_village_id,
+                command,
+            } => self
+                .service
+                .recall_reinforcements(home_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            ReinforcementCommandIntent::ReleaseReinforcements {
+                stationed_village_id,
+                command,
+            } => self
+                .service
+                .release_reinforcements(stationed_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            ReinforcementCommandIntent::ReleaseTrappedTroops {
+                trapped_village_id,
+                command,
+            } => self
+                .service
+                .release_trapped_troops(trapped_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+            ReinforcementCommandIntent::DisbandTrappedTroops {
+                trapped_village_id,
+                command,
+            } => self
+                .service
+                .disband_trapped_troops(trapped_village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl TrapCommandExecutor for VillageEsAdapter {
+    async fn execute_trap_command(
+        &self,
+        command: TrapCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            TrapCommandIntent::BuildTraps {
+                village_id,
+                command,
+            } => self
+                .service
+                .build_traps(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl VillageActivityReadPort for VillageEsAdapter {
+    async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, ApplicationError> {
+        self.service
+            .get_village_queues(village_id)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+
+    async fn get_village_troop_movements(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageTroopMovements, ApplicationError> {
+        self.service
+            .get_village_troop_movements(village_id)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+
+    async fn list_cancelable_outgoing_movement_ids(
+        &self,
+        village_id: u32,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<std::collections::HashSet<Uuid>, ApplicationError> {
+        self.service
+            .list_cancelable_outgoing_movement_ids(village_id, now)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+}
+
+#[async_trait]
+impl VillageArmyReadPort for VillageEsAdapter {
+    async fn get_village_army_state_view(
+        &self,
+        village_id: u32,
+    ) -> Result<VillageArmyStateView, ApplicationError> {
+        self.service
+            .get_village_army_state_view(village_id)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+}
+
+#[async_trait]
+impl VillageStateReadPort for VillageEsAdapter {
+    async fn list_player_village_states(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Vec<parabellum_app::villages::models::VillageModel>, ApplicationError> {
+        self.service
+            .list_player_village_states(player_id)
+            .await
+            .map_err(Self::map_query_cqrs_error)
+    }
+
+    async fn get_village_state(
+        &self,
+        village_id: u32,
+    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
+        self.service
+            .get_village(village_id)
+            .await
+            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+    }
+}
+
+#[async_trait]
+impl VillageReferenceReadPort for VillageEsAdapter {
+    async fn get_village_references(
+        &self,
+        village_ids: Vec<u32>,
+    ) -> Result<HashMap<u32, parabellum_app::read_models::VillageReference>, ApplicationError> {
+        let repo = PostgresVillageRepository::new(self.service.pool().clone());
+        let villages = repo.list_by_village_ids(&village_ids).await?;
+
+        Ok(villages
+            .into_iter()
+            .map(|v| {
+                (
+                    v.village_id,
+                    parabellum_app::read_models::VillageReference {
+                        id: v.village_id,
+                        name: v.village_name,
+                        position: v.position,
+                    },
+                )
+            })
+            .collect())
+    }
+}
+
+#[async_trait]
+impl ExpansionReadPort for VillageEsAdapter {
+    async fn get_expansion_culture_snapshot(
+        &self,
+        player_id: Uuid,
+        village_id: u32,
+    ) -> Result<
+        parabellum_app::villages::projection_repositories::ExpansionCultureSnapshot,
+        ApplicationError,
+    > {
+        PostgresVillageRepository::new(self.service.pool().clone())
+            .get_expansion_culture_snapshot(player_id, village_id)
+            .await
+    }
+
+    async fn refresh_player_culture_points(&self, player_id: Uuid) -> Result<(), ApplicationError> {
+        PostgresPlayerRepository::new(self.service.pool().clone())
+            .update_culture_points(player_id)
+            .await
+    }
+
+    async fn get_player(
+        &self,
+        player_id: Uuid,
+    ) -> Result<parabellum_types::common::Player, ApplicationError> {
+        PostgresPlayerRepository::new(self.service.pool().clone())
+            .get_by_id(player_id)
+            .await
+    }
+}
+
+#[async_trait]
+impl ReportReadPort for VillageEsAdapter {
     async fn list_reports_for_player(
         &self,
         player_id: Uuid,
@@ -1261,154 +908,62 @@ impl VillageQueryPort for VillageEsAdapter {
             .await
             .map_err(Self::map_query_cqrs_error)
     }
+}
 
-    async fn mark_report_as_read(
+#[async_trait]
+impl ReportCommandExecutor for VillageEsAdapter {
+    async fn execute_report_command(
         &self,
-        report_id: Uuid,
-        player_id: Uuid,
+        command: ReportCommandIntent,
+    ) -> Result<(), ApplicationError> {
+        match command {
+            ReportCommandIntent::MarkReportRead {
+                village_id,
+                command,
+            } => self
+                .service
+                .mark_report_read(village_id, &command)
+                .await
+                .map_err(Self::map_cqrs_error)?,
+        };
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl InitialVillageCommandExecutor for VillageEsAdapter {
+    async fn found_initial_village(
+        &self,
+        village_id: u32,
+        command: FoundVillage,
     ) -> Result<(), ApplicationError> {
         self.service
-            .mark_report_as_read(report_id, player_id)
+            .found_village(village_id, &command)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(Self::map_cqrs_error)
     }
 
-    async fn get_village_queues(&self, village_id: u32) -> Result<VillageQueues, ApplicationError> {
-        self.service
-            .get_village_queues(village_id)
-            .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
-    }
-
-    async fn get_village_troop_movements(
+    async fn create_initial_hero(
         &self,
         village_id: u32,
-    ) -> Result<VillageTroopMovements, ApplicationError> {
+        command: CreateHero,
+    ) -> Result<(), ApplicationError> {
         self.service
-            .get_village_troop_movements(village_id)
+            .create_hero(village_id, &command)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map(|_| ())
+            .map_err(Self::map_cqrs_error)
     }
 
-    async fn list_cancelable_outgoing_movement_ids(
+    async fn set_initial_village_resources(
         &self,
         village_id: u32,
-    ) -> Result<std::collections::HashSet<Uuid>, ApplicationError> {
+        command: SetVillageResources,
+    ) -> Result<(), ApplicationError> {
         self.service
-            .list_cancelable_outgoing_movement_ids(village_id, chrono::Utc::now())
+            .set_village_resources(village_id, &command)
             .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn get_marketplace_data(
-        &self,
-        village_id: u32,
-    ) -> Result<MarketplaceData, ApplicationError> {
-        self.service
-            .get_marketplace_data(village_id)
-            .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
-    }
-
-    async fn get_village_army_state_view(
-        &self,
-        village_id: u32,
-    ) -> Result<VillageArmyStateView, ApplicationError> {
-        self.service
-            .get_village_army_state_view(village_id)
-            .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
-    }
-
-    async fn get_village_info_by_ids(
-        &self,
-        village_ids: Vec<u32>,
-    ) -> Result<HashMap<u32, parabellum_app::read_models::VillageInfo>, ApplicationError> {
-        self.service
-            .get_village_info_by_ids(village_ids)
-            .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn get_expansion_culture_info(
-        &self,
-        player_id: Uuid,
-        village_id: u32,
-        server_speed: i8,
-    ) -> Result<parabellum_app::ports::queries::ExpansionCultureInfo, ApplicationError> {
-        self.service
-            .get_expansion_culture_info(player_id, village_id, server_speed)
-            .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn get_leaderboard_page(
-        &self,
-        page: i64,
-        per_page: i64,
-    ) -> Result<LeaderboardPage, ApplicationError> {
-        self.service
-            .get_leaderboard_page(page, per_page)
-            .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn list_villages_by_player_id(
-        &self,
-        player_id: Uuid,
-    ) -> Result<Vec<parabellum_app::villages::models::VillageModel>, ApplicationError> {
-        self.service
-            .list_villages_by_player_id(player_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn get_village_model(
-        &self,
-        village_id: u32,
-    ) -> Result<parabellum_app::villages::models::VillageModel, ApplicationError> {
-        self.service
-            .get_village(village_id)
-            .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
-    }
-
-    async fn get_map_region(
-        &self,
-        center_x: i32,
-        center_y: i32,
-        radius: i32,
-        world_size: i32,
-    ) -> Result<Vec<parabellum_app::read_models::MapRegionTile>, ApplicationError> {
-        self.service
-            .get_map_region(center_x, center_y, radius, world_size)
-            .await
-            .map_err(Self::map_query_cqrs_error)
-    }
-
-    async fn get_map_field(
-        &self,
-        field_id: u32,
-    ) -> Result<parabellum_game::models::map::MapField, ApplicationError> {
-        self.service.get_map_field(field_id).await.map_err(|e| {
-            let mapped = Self::map_query_cqrs_error(e);
-            match mapped {
-                ApplicationError::Db(DbError::MapFieldNotFound(_)) => {
-                    ApplicationError::Db(DbError::MapFieldNotFound(field_id))
-                }
-                other => other,
-            }
-        })
-    }
-
-    async fn get_map_region_tile_by_field_id(
-        &self,
-        field_id: u32,
-    ) -> Result<Option<parabellum_app::read_models::MapRegionTile>, ApplicationError> {
-        self.service
-            .get_map_region_tile_by_field_id(field_id)
-            .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(Self::map_cqrs_error)
     }
 }
 

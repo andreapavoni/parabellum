@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
-use parabellum_app::ports::queries::{MerchantMovement, MerchantMovementKind};
 use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferStatus};
-use parabellum_app::villages::repositories::{MarketplaceOfferListFilter, MarketplaceRepository};
+use parabellum_app::villages::projection_repositories::{
+    MarketplaceOfferListFilter, MarketplaceRepository,
+};
+use parabellum_app::villages::read_models::{MerchantMovement, MerchantMovementKind};
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction, types::Json};

@@ -251,16 +251,25 @@ impl Army {
 
     /// Returns the actual speed of the Army by taking the speed of slowest unit.
     pub fn speed(&self) -> u8 {
+        Self::speed_for_units(&self.tribe, &self.units, self.hero.as_ref())
+    }
+
+    /// Returns movement speed for a selected troop set and optional hero.
+    ///
+    /// The result is the speed of the slowest selected unit, including the hero
+    /// when present. Empty selections without a hero have speed `0`.
+    pub fn speed_for_units(tribe: &Tribe, units: &TroopSet, hero: Option<&Hero>) -> u8 {
         let mut speed: u8 = 0;
-        for (idx, quantity) in self.units.units().iter().enumerate() {
+        for (idx, quantity) in units.units().iter().enumerate() {
             if *quantity > 0 {
-                let u = self.get_unit_by_idx(idx as u8).unwrap();
-                if speed == 0 || u.speed < speed {
-                    speed = u.speed;
+                if let Some(unit) = tribe.units().get(idx) {
+                    if speed == 0 || unit.speed < speed {
+                        speed = unit.speed;
+                    }
                 }
             }
         }
-        if let Some(hero) = &self.hero {
+        if let Some(hero) = hero {
             let hero_speed = hero.speed();
             if speed == 0 || hero_speed < speed {
                 speed = hero_speed;

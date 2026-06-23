@@ -6,7 +6,7 @@ use parabellum_types::{
 };
 use uuid::Uuid;
 
-use crate::ports::queries::{TrainingQueueItem, VillageTroopMovements};
+use crate::villages::read_models::{TrainingQueueItem, VillageTroopMovements};
 
 /// Expansion slot usage for a village.
 ///
@@ -243,7 +243,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::ports::queries::{TroopMovement, TroopMovementDirection};
+    use crate::villages::read_models::{TroopMovement, TroopMovementDirection};
 
     fn usage(max_slots: u8, child_villages: u8) -> ExpansionSlotUsage {
         ExpansionSlotUsage {
@@ -402,7 +402,7 @@ mod tests {
         units.set(9, settlers);
         TroopMovement {
             job_id: Uuid::new_v4(),
-            movement_type: crate::ports::queries::TroopMovementType::Attack,
+            movement_type: crate::villages::read_models::TroopMovementType::Attack,
             direction: TroopMovementDirection::Outgoing,
             origin_village_id: 1,
             origin_village_name: None,

@@ -1,5 +1,5 @@
-use parabellum_app::ports::map::MapRepository;
-use parabellum_app::ports::queries::TroopMovementType;
+use parabellum_app::map::MapReadPort;
+use parabellum_app::villages::read_models::TroopMovementType;
 use parabellum_app::villages::{SendSettlers, TrainUnits};
 use parabellum_game::models::map::{MapQuadrant, Valley};
 use parabellum_game::models::{buildings::Building, village::VillageBuilding};
@@ -397,13 +397,17 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
         assert_eq!(founded_after_second.village_name, "First Colony");
         assert_eq!(founded_after_second.tribe, Tribe::Roman);
 
-        let map_field = service.get_map_field(target_field_id).await.unwrap();
+        let map_repository = PostgresMapRepository::new(pool.clone());
+        let map_field = map_repository
+            .get_field_by_id(target_field_id as i32)
+            .await
+            .unwrap();
         assert_eq!(map_field.id, target_field_id);
         assert_eq!(map_field.village_id, Some(target_field_id));
         assert_eq!(map_field.player_id, Some(player_a));
 
-        let map_tile = service
-            .get_map_region_tile_by_field_id(target_field_id)
+        let map_tile = map_repository
+            .get_region_tile_by_field_id(target_field_id as i32)
             .await
             .unwrap()
             .expect("founded village map tile should exist");

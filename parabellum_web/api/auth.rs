@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use utoipa::ToSchema;
 
-use parabellum_app::ports::identity::RegisterPlayerRequest;
+use parabellum_app::identity::RegisterPlayerRequest;
 use parabellum_game::models::map::MapQuadrant;
 use parabellum_types::{
     errors::{AppError, ApplicationError, DbError},

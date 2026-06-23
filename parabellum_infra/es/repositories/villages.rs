@@ -1,5 +1,5 @@
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::{
+use parabellum_app::villages::projection_repositories::{
     ArmyRepository, ExpansionCultureSnapshot, ExpansionOwnershipSnapshot, VillageRepository,
 };
 use parabellum_app::villages::{VillageArmyContext, hydrate_village};

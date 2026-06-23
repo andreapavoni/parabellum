@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use parabellum_app::villages::repositories::HeroRepository;
+use parabellum_app::villages::projection_repositories::HeroRepository;
 use parabellum_app::villages::{
     AttackVillage, CreateHero, ReviveHero, SendReinforcement, TrainUnits,
     models::ScheduledActionType,

@@ -2,7 +2,7 @@ use serde_json::Value;
 use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};
 use uuid::Uuid;
 
-use parabellum_app::{ports::map::MapRepository, read_models::MapRegionTile};
+use parabellum_app::{map::MapReadPort, read_models::MapRegionTile};
 use parabellum_game::models::map::{
     MapField, MapFieldTopology, MapQuadrant, Valley, generate_new_map,
 };
@@ -41,7 +41,7 @@ impl PostgresMapRepository {
 }
 
 #[async_trait::async_trait]
-impl MapRepository for PostgresMapRepository {
+impl MapReadPort for PostgresMapRepository {
     async fn find_unoccupied_valley(
         &self,
         quadrant: &MapQuadrant,

@@ -102,7 +102,7 @@ async fn list_player_villages(
     state: &AppState,
     player_id: Uuid,
 ) -> Result<Vec<Village>, ApplicationError> {
-    let models = state.game_app.list_villages_by_player_id(player_id).await?;
+    let models = state.game_app.list_player_village_states(player_id).await?;
     models.into_iter().map(village_from_model).collect()
 }
 

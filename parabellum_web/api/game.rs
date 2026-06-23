@@ -369,7 +369,7 @@ pub async fn stats(
 
     let mut data = state
         .game_app
-        .get_leaderboard_page(requested_page, LEADERBOARD_PAGE_SIZE)
+        .get_player_population_leaderboard_page(requested_page, LEADERBOARD_PAGE_SIZE)
         .await
         .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
 
@@ -384,7 +384,7 @@ pub async fn stats(
         page = total_pages;
         data = state
             .game_app
-            .get_leaderboard_page(page, LEADERBOARD_PAGE_SIZE)
+            .get_player_population_leaderboard_page(page, LEADERBOARD_PAGE_SIZE)
             .await
             .map_err(|err| map_application_error("unable_to_load_leaderboard", err))?;
     }
@@ -437,7 +437,7 @@ pub async fn player_profile(
 
     let villages = state
         .game_app
-        .list_villages_by_player_id(player_id)
+        .list_player_village_states(player_id)
         .await
         .map_err(|err| map_application_error("unable_to_load_player_villages", err))?;
 
@@ -661,7 +661,7 @@ pub async fn map_field(
                 .unwrap_or(false);
             let owned_villages = state
                 .game_app
-                .list_villages_by_player_id(user.player.id)
+                .list_player_village_states(user.player.id)
                 .await
                 .ok();
             let child_villages_count = owned_villages

@@ -22,7 +22,7 @@ export function MapFieldPage({
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const foundVillage = useFoundVillageMutation(data.fieldId);
+  const foundVillage = useFoundVillageMutation(data.id);
   const canFoundHere = !data.villageId && data.tileType === "valley" && data.canPreviewFounding;
   const canRenameVillage =
     data.tileType === "village" &&
@@ -39,8 +39,8 @@ export function MapFieldPage({
             {data.tileType === "valley"
               ? "Unoccupied valley"
               : data.tileType === "village"
-              ? data.villageName ?? "Village"
-              : "Oasis"}
+                ? data.villageName ?? "Village"
+                : "Oasis"}
           </h1>
           <Link to={`/map?x=${data.x}&y=${data.y}`} class="text-sm text-green-700 hover:underline">
             Show on Map

@@ -1,6 +1,6 @@
 use parabellum_app::villages::{
     VillageArmyContext,
-    repositories::{ArmyListFilter, ArmyRepository, ArmyState},
+    projection_repositories::{ArmyListFilter, ArmyRepository, ArmyState},
 };
 use parabellum_game::models::{
     army::Army,

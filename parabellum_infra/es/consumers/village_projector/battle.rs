@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::get_building_data;
 use parabellum_game::models::village::Village;

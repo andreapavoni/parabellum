@@ -15,30 +15,41 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use parabellum_app::ports::villages::{
-    AcceptMarketplaceOfferRequest, AddBuildingRequest as AddBuildingUseCaseRequest,
-    AssignHeroPointsRequest as AssignHeroPointsUseCaseRequest,
-    BuildTrapsRequest as BuildTrapsUseCaseRequest,
+use parabellum_app::villages::requests::buildings::{
+    AddBuildingRequest as AddBuildingUseCaseRequest,
     CancelBuildingConstructionRequest as CancelBuildingConstructionUseCaseRequest,
-    CancelMarketplaceOfferRequest, CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest,
-    CreateMarketplaceOfferRequest,
-    DisbandTrappedTroopsRequest as DisbandTrappedTroopsUseCaseRequest,
     DowngradeBuildingRequest as DowngradeBuildingUseCaseRequest,
+    UpgradeBuildingRequest as UpgradeBuildingUseCaseRequest,
+};
+use parabellum_app::villages::requests::development::{
+    ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
+    ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
+    TrainUnitsRequest as TrainUnitsUseCaseRequest,
+};
+use parabellum_app::villages::requests::heroes::{
+    AssignHeroPointsRequest as AssignHeroPointsUseCaseRequest,
+    ResetHeroPointsRequest as ResetHeroPointsUseCaseRequest,
+    ReviveHeroRequest as ReviveHeroUseCaseRequest,
+    SetHeroResourceFocusRequest as SetHeroResourceFocusUseCaseRequest,
+};
+use parabellum_app::villages::requests::marketplace::{
+    AcceptMarketplaceOfferRequest, CancelMarketplaceOfferRequest, CreateMarketplaceOfferRequest,
+    SendResourcesRequest as SendResourcesUseCaseRequest,
+};
+use parabellum_app::villages::requests::movement_control::CancelTroopMovementRequest as CancelTroopMovementUseCaseRequest;
+use parabellum_app::villages::requests::movements::{
+    SendAttackRequest as SendAttackUseCaseRequest,
+    SendReinforcementRequest as SendReinforcementUseCaseRequest,
+    SendScoutRequest as SendScoutUseCaseRequest, SendSettlersRequest as SendSettlersUseCaseRequest,
+};
+use parabellum_app::villages::requests::reinforcements::{
+    DisbandTrappedTroopsRequest as DisbandTrappedTroopsUseCaseRequest,
     RecallReinforcementsRequest as RecallReinforcementsUseCaseRequest,
     ReleaseReinforcementsRequest as ReleaseReinforcementsUseCaseRequest,
     ReleaseTrappedTroopsRequest as ReleaseTrappedTroopsUseCaseRequest,
-    RenameVillageRequest as RenameVillageUseCaseRequest,
-    ResearchAcademyRequest as ResearchAcademyUseCaseRequest,
-    ResearchSmithyRequest as ResearchSmithyUseCaseRequest,
-    ResetHeroPointsRequest as ResetHeroPointsUseCaseRequest,
-    ReviveHeroRequest as ReviveHeroUseCaseRequest, SendAttackRequest as SendAttackUseCaseRequest,
-    SendReinforcementRequest as SendReinforcementUseCaseRequest,
-    SendResourcesRequest as SendResourcesUseCaseRequest,
-    SendScoutRequest as SendScoutUseCaseRequest, SendSettlersRequest as SendSettlersUseCaseRequest,
-    SetHeroResourceFocusRequest as SetHeroResourceFocusUseCaseRequest,
-    TrainUnitsRequest as TrainUnitsUseCaseRequest,
-    UpgradeBuildingRequest as UpgradeBuildingUseCaseRequest,
 };
+use parabellum_app::villages::requests::traps::BuildTrapsRequest as BuildTrapsUseCaseRequest;
+use parabellum_app::villages::requests::village_profile::RenameVillageRequest as RenameVillageUseCaseRequest;
 use parabellum_game::models::hero::HeroResourceFocus;
 use parabellum_types::{
     army::{TroopSet, UnitName},
@@ -683,7 +694,7 @@ pub async fn current_hero(
     let resurrection_cost = hero.resurrection_cost(state.server_speed);
     let revival_finishes_at = state
         .game_app
-        .get_pending_hero_revival(user.player.id)
+        .get_pending_hero_revival_at(user.player.id)
         .await
         .map_err(|err| map_application_error("unable_to_load_hero_revival", err))?;
 

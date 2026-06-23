@@ -9,15 +9,45 @@ pub mod tests {
     use uuid::Uuid;
 
     use parabellum_app::auth::hash_password;
-    use parabellum_app::{application::GameApplication, config::Config};
+    use parabellum_app::{
+        application::GameApplication,
+        config::Config,
+        identity::{
+            InitialVillageCommandExecutor, RegistrationIdentityPort, RegistrationSettings,
+            RegistrationUseCases,
+        },
+        leaderboards::LeaderboardUseCases,
+        map::MapUseCases,
+        scheduler::{SchedulerPort, SchedulerUseCases},
+        villages::{
+            BuildingSettings, BuildingUseCases, DevelopmentSettings, DevelopmentUseCases,
+            HeroSettings, HeroUseCases, MarketplaceSettings, MarketplaceUseCases,
+            MovementControlUseCases, MovementSettings, MovementUseCases, ReinforcementSettings,
+            ReinforcementUseCases, ReportUseCases, SystemClock, TrapUseCases, UuidGenerator,
+            VillageActivityUseCases, VillageArmyUseCases, VillageExpansionUseCases,
+            VillageProfileUseCases, VillageReferenceUseCases, VillageStateUseCases,
+            ports::{
+                BuildingCommandExecutor, BuildingReadPort, DevelopmentCommandExecutor,
+                DevelopmentReadPort, ExpansionReadPort, HeroCommandExecutor, HeroReadPort,
+                MarketplaceCommandExecutor, MarketplaceReadPort, MovementControlCommandExecutor,
+                MovementControlReadPort, MovementReadPort, ReinforcementCommandExecutor,
+                ReinforcementReadPort, ReportCommandExecutor, ReportReadPort, TrapCommandExecutor,
+                TrapReadPort, VillageActivityReadPort, VillageArmyReadPort, VillageCommandExecutor,
+                VillageProfileCommandExecutor, VillageReferenceReadPort, VillageStateReadPort,
+            },
+        },
+    };
     use parabellum_game::models::{
         buildings::Building,
         map::Valley,
         village::{Village, VillageBuilding},
     };
     use parabellum_infra::{
-        adapters::VillageEsAdapter, bootstrap_world_map, es::VillageEsService,
-        identity::IdentityService,
+        adapters::VillageEsAdapter,
+        bootstrap_world_map,
+        es::VillageEsService,
+        identity::{IdentityService, repositories::PostgresPlayerRepository},
+        map::PostgresMapRepository,
     };
     use parabellum_types::buildings::BuildingName;
     use parabellum_types::common::Player;
@@ -110,15 +140,141 @@ pub mod tests {
     }
 
     fn build_game_app(pool: &PgPool, config: Arc<Config>) -> Arc<GameApplication> {
-        let villages = Arc::new(VillageEsAdapter::new(
-            VillageEsService::new(pool.clone()),
-            config.clone(),
-        ));
+        let leaderboards =
+            LeaderboardUseCases::new(Arc::new(PostgresPlayerRepository::new(pool.clone())));
+        let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(pool.clone())));
+        let identity = Arc::new(IdentityService::new(pool.clone()));
+        let villages = Arc::new(VillageEsAdapter::new(VillageEsService::new(pool.clone())));
+        let registration_identities: Arc<dyn RegistrationIdentityPort> = identity.clone();
+        let initial_village_executor: Arc<dyn InitialVillageCommandExecutor> = villages.clone();
+        let registration = RegistrationUseCases::new(
+            registration_identities,
+            initial_village_executor,
+            Arc::new(UuidGenerator),
+            RegistrationSettings {
+                world_size: config.world_size as i32,
+                server_speed: config.speed,
+            },
+        );
+        let building_reads: Arc<dyn BuildingReadPort> = villages.clone();
+        let building_executor: Arc<dyn BuildingCommandExecutor> = villages.clone();
+        let development_reads: Arc<dyn DevelopmentReadPort> = villages.clone();
+        let development_executor: Arc<dyn DevelopmentCommandExecutor> = villages.clone();
+        let hero_reads: Arc<dyn HeroReadPort> = villages.clone();
+        let hero_executor: Arc<dyn HeroCommandExecutor> = villages.clone();
+        let village_profile_executor: Arc<dyn VillageProfileCommandExecutor> = villages.clone();
+        let movement_reads: Arc<dyn MovementReadPort> = villages.clone();
+        let movement_executor: Arc<dyn VillageCommandExecutor> = villages.clone();
+        let movement_control_reads: Arc<dyn MovementControlReadPort> = villages.clone();
+        let movement_control_executor: Arc<dyn MovementControlCommandExecutor> = villages.clone();
+        let marketplace_reads: Arc<dyn MarketplaceReadPort> = villages.clone();
+        let marketplace_executor: Arc<dyn MarketplaceCommandExecutor> = villages.clone();
+        let reinforcement_reads: Arc<dyn ReinforcementReadPort> = villages.clone();
+        let reinforcement_executor: Arc<dyn ReinforcementCommandExecutor> = villages.clone();
+        let report_reads: Arc<dyn ReportReadPort> = villages.clone();
+        let report_executor: Arc<dyn ReportCommandExecutor> = villages.clone();
+        let activity_reads: Arc<dyn VillageActivityReadPort> = villages.clone();
+        let army_reads: Arc<dyn VillageArmyReadPort> = villages.clone();
+        let expansion_reads: Arc<dyn ExpansionReadPort> = villages.clone();
+        let village_reference_reads: Arc<dyn VillageReferenceReadPort> = villages.clone();
+        let village_state_reads: Arc<dyn VillageStateReadPort> = villages.clone();
+        let trap_reads: Arc<dyn TrapReadPort> = villages.clone();
+        let trap_executor: Arc<dyn TrapCommandExecutor> = villages.clone();
+        let scheduler_port: Arc<dyn SchedulerPort> = villages.clone();
+        let scheduler = SchedulerUseCases::new(scheduler_port);
+        let buildings = BuildingUseCases::new(
+            building_reads,
+            building_executor,
+            Arc::new(SystemClock),
+            BuildingSettings {
+                server_speed: config.speed,
+            },
+        );
+        let village_profile = VillageProfileUseCases::new(village_profile_executor);
+        let development = DevelopmentUseCases::new(
+            development_reads,
+            development_executor,
+            DevelopmentSettings {
+                server_speed: config.speed,
+            },
+        );
+        let heroes = HeroUseCases::new(
+            hero_reads,
+            hero_executor,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+            HeroSettings {
+                server_speed: config.speed,
+            },
+        );
+        let movements = MovementUseCases::new(
+            movement_reads,
+            movement_executor,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+            MovementSettings {
+                world_size: config.world_size as i32,
+                server_speed: config.speed as u8,
+            },
+        );
+        let movement_control = MovementControlUseCases::new(
+            movement_control_reads,
+            movement_control_executor,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+        );
+        let marketplace = MarketplaceUseCases::new(
+            marketplace_reads,
+            marketplace_executor,
+            Arc::new(SystemClock),
+            MarketplaceSettings {
+                world_size: config.world_size as i32,
+                server_speed: config.speed,
+            },
+        );
+        let reinforcements = ReinforcementUseCases::new(
+            reinforcement_reads,
+            reinforcement_executor,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+            ReinforcementSettings {
+                world_size: config.world_size as i32,
+                server_speed: config.speed as u8,
+            },
+        );
+        let reports = ReportUseCases::new(report_reads, report_executor, Arc::new(SystemClock));
+        let activity = VillageActivityUseCases::new(activity_reads, Arc::new(SystemClock));
+        let army = VillageArmyUseCases::new(army_reads);
+        let expansion = VillageExpansionUseCases::new(expansion_reads);
+        let village_references = VillageReferenceUseCases::new(village_reference_reads);
+        let village_state = VillageStateUseCases::new(village_state_reads);
+        let traps = TrapUseCases::new(
+            trap_reads,
+            trap_executor,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+        );
         Arc::new(GameApplication::new(
-            Arc::new(IdentityService::new(pool.clone(), config.clone())),
-            villages.clone(),
-            villages.clone(),
-            villages,
+            identity,
+            registration,
+            leaderboards,
+            map,
+            village_profile,
+            buildings,
+            development,
+            heroes,
+            movements,
+            movement_control,
+            marketplace,
+            reinforcements,
+            reports,
+            activity,
+            army,
+            expansion,
+            village_references,
+            village_state,
+            traps,
+            scheduler,
         ))
     }
 
@@ -274,7 +430,7 @@ pub mod tests {
             .authenticate_user(&seeded.username, &seeded.password)
             .await?;
         let player = game_app.get_player_by_user_id(auth_user.id).await?;
-        let _ = game_app.list_villages_by_player_id(player.id).await?;
+        let _ = game_app.list_player_village_states(player.id).await?;
         let villages_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*)::bigint FROM rm_village WHERE player_id = $1")
                 .bind(player.id)

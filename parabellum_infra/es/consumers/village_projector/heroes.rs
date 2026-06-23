@@ -2,7 +2,7 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
 use parabellum_game::models::army::Army;
 use sqlx::{Postgres, Transaction};
 
@@ -53,11 +53,15 @@ impl VillageProjector {
         let (player_id, village_id, hero) = match event {
             VillageEvent::HeroCreated {
                 player_id,
-                village_id, hero, ..
+                village_id,
+                hero,
+                ..
             }
             | VillageEvent::HeroRevived {
                 player_id,
-                village_id, hero, ..
+                village_id,
+                hero,
+                ..
             } => (player_id, village_id, hero),
             _ => unreachable!("project_hero_home called with non-hero-home event"),
         };

@@ -16,11 +16,9 @@ pub mod tests {
     };
 
     use crate::{
-        ports::{
-            identity::{PlayerRepository, UserRepository},
-            map::MapRepository,
-        },
-        read_models::{MapRegionTile, PlayerLeaderboardEntry},
+        identity::{PlayerRepository, UserRepository},
+        map::MapReadPort,
+        read_models::MapRegionTile,
     };
 
     #[derive(Default, Clone)]
@@ -57,43 +55,6 @@ pub mod tests {
                 .ok_or(ApplicationError::Db(DbError::UserPlayerNotFound(user_id)))
         }
 
-        async fn leaderboard_page(
-            &self,
-            offset: i64,
-            limit: i64,
-        ) -> Result<(Vec<PlayerLeaderboardEntry>, i64), ApplicationError> {
-            let mut entries: Vec<PlayerLeaderboardEntry> = self
-                .players
-                .lock()
-                .unwrap()
-                .values()
-                .map(|player| PlayerLeaderboardEntry {
-                    player_id: player.id,
-                    username: player.username.clone(),
-                    village_count: 0,
-                    population: 0,
-                    tribe: player.tribe.clone(),
-                })
-                .collect();
-
-            entries.sort_by(|a, b| {
-                b.population
-                    .cmp(&a.population)
-                    .then_with(|| b.village_count.cmp(&a.village_count))
-                    .then_with(|| a.username.cmp(&b.username))
-            });
-
-            let total = entries.len() as i64;
-            let start = offset.max(0) as usize;
-            let end = (start + limit as usize).min(entries.len());
-            let page_entries = if start >= entries.len() {
-                Vec::new()
-            } else {
-                entries[start..end].to_vec()
-            };
-            Ok((page_entries, total))
-        }
-
         async fn update_culture_points(&self, _player_id: Uuid) -> Result<(), ApplicationError> {
             Ok(())
         }
@@ -107,12 +68,20 @@ pub mod tests {
     }
 
     #[derive(Default, Clone)]
-    pub struct MockMapRepository {
+    pub struct MockMapReadPort {
         fields: Arc<Mutex<HashMap<u32, MapField>>>,
     }
 
+    impl MockMapReadPort {
+        pub fn with_fields(fields: HashMap<u32, MapField>) -> Self {
+            Self {
+                fields: Arc::new(Mutex::new(fields)),
+            }
+        }
+    }
+
     #[async_trait]
-    impl MapRepository for MockMapRepository {
+    impl MapReadPort for MockMapReadPort {
         async fn find_unoccupied_valley(
             &self,
             _quadrant: &MapQuadrant,
@@ -136,7 +105,11 @@ pub mod tests {
             Ok(Some(ValleyTopology(4, 4, 4, 6)))
         }
 
-        async fn get_field_by_id(&self, _id: i32) -> Result<MapField, ApplicationError> {
+        async fn get_field_by_id(&self, id: i32) -> Result<MapField, ApplicationError> {
+            if let Some(field) = self.fields.lock().unwrap().get(&(id as u32)) {
+                return Ok(field.clone());
+            }
+
             Ok(MapField {
                 id: 100,
                 position: Position { x: 10, y: 10 },

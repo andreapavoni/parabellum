@@ -16,13 +16,13 @@ use chrono::Utc;
 use serde::Serialize;
 
 use parabellum_app::{
-    ports::queries::{
+    read_models::VillageReference,
+    villages::models::{BuildingWorkflowKind, ScheduledActionStatus},
+    villages::read_models::{
         AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
         MerchantMovementKind, SmithyQueueItem, TrainingQueueItem, TrapQueueItem, TroopMovementType,
         VillageArmyStateView, VillageTroopMovements,
     },
-    read_models::VillageInfo,
-    villages::models::{BuildingWorkflowKind, ScheduledActionStatus},
 };
 use parabellum_game::models::{
     buildings::{Building, get_building_data},
@@ -526,7 +526,7 @@ pub async fn building_detail(
     let user = authenticated_user(&state, &headers).await?;
     let village_model = state
         .game_app
-        .get_village_model(user.village.id)
+        .get_village_state(user.village.id)
         .await
         .map_err(|err| map_application_error("unable_to_load_village", err))?;
     let queues = state
@@ -1039,11 +1039,12 @@ pub async fn building_detail(
                     .map_err(|err| {
                         map_application_error("unable_to_load_village_army_state", err)
                     })?;
-                let village_info = fetch_village_info_for_rally_point(&state, &army_state)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_rally_village_info", err)
-                    })?;
+                let village_references =
+                    fetch_village_references_for_rally_point(&state, &army_state)
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_rally_village_references", err)
+                        })?;
                 let cancelable_movement_ids = state
                     .game_app
                     .list_cancelable_outgoing_movement_ids(user.village.id)
@@ -1058,7 +1059,7 @@ pub async fn building_detail(
                     &user.village.tribe,
                     &army_state,
                     &movements,
-                    &village_info,
+                    &village_references,
                     &cancelable_movement_ids,
                 )
                 .into_iter()
@@ -1292,10 +1293,10 @@ pub async fn building_detail(
     }))
 }
 
-async fn fetch_village_info_for_rally_point(
+async fn fetch_village_references_for_rally_point(
     state: &AppState,
     army_state: &VillageArmyStateView,
-) -> Result<HashMap<u32, VillageInfo>, ApplicationError> {
+) -> Result<HashMap<u32, VillageReference>, ApplicationError> {
     let mut village_ids = std::collections::HashSet::new();
 
     for army in &army_state.deployed_armies {
@@ -1324,7 +1325,7 @@ async fn fetch_village_info_for_rally_point(
 
     let ids: Vec<u32> = village_ids.into_iter().collect();
 
-    state.game_app.get_village_info_by_ids(ids).await
+    state.game_app.get_village_references(ids).await
 }
 
 fn prepare_rally_point_cards(
@@ -1334,7 +1335,7 @@ fn prepare_rally_point_cards(
     village_tribe: &Tribe,
     armies: &VillageArmyStateView,
     movements: &VillageTroopMovements,
-    village_info: &HashMap<u32, VillageInfo>,
+    village_references: &HashMap<u32, VillageReference>,
     cancelable_movement_ids: &std::collections::HashSet<uuid::Uuid>,
 ) -> Vec<ArmyCardData> {
     let mut cards = Vec::new();
@@ -1357,7 +1358,7 @@ fn prepare_rally_point_cards(
 
     for army in &armies.deployed_armies {
         let destination_id = army.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_info
+        let (destination_name, destination_position) = village_references
             .get(&destination_id)
             .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
             .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
@@ -1381,7 +1382,7 @@ fn prepare_rally_point_cards(
 
     for reinforcement in &armies.reinforcements {
         let origin_id = reinforcement.village_id;
-        let (origin_name, origin_position) = village_info
+        let (origin_name, origin_position) = village_references
             .get(&origin_id)
             .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
             .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
@@ -1405,7 +1406,7 @@ fn prepare_rally_point_cards(
 
     for trapped in &armies.trapped_here {
         let origin_id = trapped.village_id;
-        let (origin_name, origin_position) = village_info
+        let (origin_name, origin_position) = village_references
             .get(&origin_id)
             .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
             .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
@@ -1429,7 +1430,7 @@ fn prepare_rally_point_cards(
 
     for trapped in &armies.trapped_away {
         let destination_id = trapped.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_info
+        let (destination_name, destination_position) = village_references
             .get(&destination_id)
             .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
             .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
@@ -1619,13 +1620,13 @@ fn marketplace_offer_to_dto(
     world_size: i32,
     server_speed: u8,
 ) -> MarketplaceOfferDto {
-    let village_info = data
-        .village_info
+    let village_reference = data
+        .village_references
         .get(&offer.village_id)
-        .expect("Village info should exist for marketplace offer");
-    let distance = current_position.distance(&village_info.position, world_size);
+        .expect("Village reference should exist for marketplace offer");
+    let distance = current_position.distance(&village_reference.position, world_size);
     let travel_time_seconds = current_position.calculate_travel_time_secs(
-        village_info.position.clone(),
+        village_reference.position.clone(),
         merchant_speed,
         world_size,
         server_speed.max(1),
@@ -1633,8 +1634,8 @@ fn marketplace_offer_to_dto(
     MarketplaceOfferDto {
         offer_id: offer.id.to_string(),
         village_id: offer.village_id,
-        village_name: village_info.name.clone(),
-        position: position_to_dto(&village_info.position),
+        village_name: village_reference.name.clone(),
+        position: position_to_dto(&village_reference.position),
         distance,
         travel_time_seconds,
         offer_resources: resource_group_to_dto(&offer.offer_resources.into()),
@@ -1649,8 +1650,10 @@ fn merchant_movement_to_dto(
     movement: &MerchantMovement,
     direction: MerchantMovementDirectionDto,
 ) -> MerchantMovementDto {
-    let origin_info = data.village_info.get(&movement.origin_village_id);
-    let destination_info = data.village_info.get(&movement.destination_village_id);
+    let origin_info = data.village_references.get(&movement.origin_village_id);
+    let destination_info = data
+        .village_references
+        .get(&movement.destination_village_id);
     MerchantMovementDto {
         job_id: movement.job_id.to_string(),
         direction,
@@ -1678,21 +1681,21 @@ fn paired_outgoing_going_exists(
     outgoing_goings: &[&MerchantMovement],
 ) -> bool {
     let return_origin = data
-        .village_info
+        .village_references
         .get(&return_movement.origin_village_id)
         .map(|info| &info.position);
     let return_destination = data
-        .village_info
+        .village_references
         .get(&return_movement.destination_village_id)
         .map(|info| &info.position);
 
     outgoing_goings.iter().any(|going| {
         let going_origin = data
-            .village_info
+            .village_references
             .get(&going.origin_village_id)
             .map(|info| &info.position);
         let going_destination = data
-            .village_info
+            .village_references
             .get(&going.destination_village_id)
             .map(|info| &info.position);
         let reverse_route_match =

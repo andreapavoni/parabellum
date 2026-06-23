@@ -2,7 +2,7 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::repositories::ProjectedReport;
+use parabellum_app::villages::projection_repositories::ProjectedReport;
 use parabellum_game::battle::{BattlePartyReport, BattleReport};
 use parabellum_types::army::TroopSet;
 use parabellum_types::common::ResourceGroup;
