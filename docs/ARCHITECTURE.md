@@ -103,13 +103,13 @@ parabellum_app/
   villages/
     requests/
       buildings.rs           # transport-independent app inputs
-      training.rs
+      development.rs
       movements.rs
       marketplace.rs
       heroes.rs
     use_cases/
       buildings.rs
-      training.rs
+      development.rs
       movements.rs
       reinforcements.rs
       marketplace.rs
@@ -120,19 +120,17 @@ parabellum_app/
       command_executor.rs    # aggregate command execution gateway
       movement_reads.rs      # concern-specific read/context gateways
       marketplace_reads.rs
-      army_reads.rs
+      village_army_reads.rs
       hero_reads.rs
-      village_reads.rs
+      village_state_reads.rs
       clock.rs               # time source when a use case needs "now"
       ids.rs                 # id source when a use case creates canonical ids
     policies/
       ...                    # app policies combining domain rules and app context
-    views/
-      queues.rs              # app/API query response shapes
-      movements.rs
+    read_models/
+      activity.rs            # app/API query response shapes
       marketplace.rs
-      reports.rs
-      army_state.rs
+      village_army.rs
     commands/
       ...                    # aggregate-local command intent and outcome commands
 ```
@@ -221,7 +219,7 @@ resource reservation, prefer adding or using a domain method in
 
 Before adding a new domain helper, search `parabellum_game` for the existing
 model behavior. The domain crate already contains many small helpers, and app
-refactors should reuse or lightly improve them instead of adding parallel
+code should reuse or lightly improve them instead of adding parallel
 calculations. For example, movement speed should use the army/domain model
 behavior (`Army::speed` or a domain helper extracted from it), not an
 infrastructure-local copy of the slowest-unit calculation.
@@ -306,8 +304,8 @@ mini-CQRS command/query helper or a projection repository contract, make that
 role visible in the filename instead of using generic names like `service.rs`,
 `queries.rs`, or `repositories.rs`.
 
-`parabellum_app/ports/*` is deprecated as an app organization pattern. App
-contracts belong with their concern:
+Do not create root app contracts under `parabellum_app/ports/*`. App contracts
+belong with their concern:
 `parabellum_app/identity/ports.rs`,
 `parabellum_app/scheduler/ports.rs`, `parabellum_app/villages/ports`,
 `parabellum_app/map/ports.rs`, `parabellum_app/leaderboards/ports.rs`, etc.
@@ -342,30 +340,28 @@ If an old name must remain for a concrete release need, mark it as
 compatibility-only with rustdoc, route it through the new concern-specific use
 case or port, and include the removal condition.
 
-### Deprecation And Migration Rules
+### Compatibility Rules
 
-Use replacement-first migration for architectural refactors. The preferred
-default is to capture current behavior, introduce the new pattern, rewire call
-sites, and remove the old path in the same slice. Do not keep old broad ports or
-adapter-heavy methods as compatibility context unless there is a concrete
-release need.
+Prefer one canonical app path for each operation. Compatibility facades,
+adapter-heavy pass-through methods, and broad ports are exceptions, not
+architectural context.
 
 Git history is the long-term context for removed implementations. Tests and
-short migration notes are the working context during the refactor.
+short behavior notes are the working context when replacing an implementation.
 
-Migration steps for each concern:
+When replacing a concern boundary:
 
 1. Write behavior-focused tests that describe the target use case through app
    requests and observable command/fact outcomes.
-2. Write a short behavior checklist from the old implementation before deleting
-   it. The checklist should name observable behavior, not private helper
-   structure.
+2. Write a short behavior checklist before deleting the superseded
+   implementation. The checklist should name observable behavior, not private
+   helper structure.
 3. Add the concern-specific `requests`, `ports`, `use_cases`, and
    `read_models` modules needed by those tests.
 4. Move orchestration from infrastructure adapters into the app use case.
 5. Update web/infra call sites to depend on the new app entrypoint.
-6. Remove the old facade or adapter-heavy method as soon as the new path owns
-   the behavior.
+6. Remove the superseded facade or adapter-heavy method as soon as the
+   canonical path owns the behavior.
 
 Temporary compatibility is an exception. If it is required, it must be
 explicitly documented with a removal condition and should not be treated as
@@ -383,11 +379,10 @@ Use Rust `#[deprecated]` for temporary compatibility exceptions. Deprecation is
 more predictable than rustdoc alone because remaining call sites become visible
 during checks. The note must name the replacement.
 
-### Normalization During Rewrites
+### Normalization Rules
 
-When a refactor reveals several methods that are identical except for one or two
-details, normalize the shared behavior in the new use-case layer before wiring
-new call sites.
+When several methods are identical except for one or two details, normalize the
+shared behavior in the use-case layer before adding more call sites.
 
 Good normalization candidates:
 
@@ -404,7 +399,7 @@ the business step, not the technical shape. Prefer names such as
 `execute_village_command` over generic names such as `handle_request` or
 `process_action`.
 
-For movement dispatch, attack and scout can share round-trip planning, while
+For movement dispatch, attack and scout share round-trip planning, while
 reinforcement can share one-way dispatch planning. Settlers can share travel
 planning but should keep target-valley validation explicit because it is a
 different game intent.
@@ -429,7 +424,7 @@ Avoid tests that assert:
 - CQRS/ES runtime wiring from app-layer unit tests,
 - adapter implementation details when testing app orchestration.
 
-For refactors, use TDD at the concern boundary:
+For substantial behavior changes, use TDD at the concern boundary:
 
 1. Add app-layer use-case tests with fake read ports, fake command executor,
    fixed clock, and deterministic id generator.
@@ -441,589 +436,238 @@ The developer running the change should run `cargo fmt`, `cargo check`, and the
 relevant tests before merging. When Codex is asked not to run those commands, it
 must document that they were intentionally not run.
 
-### First Refactor Target: Movement Dispatch
+### Application Components
 
-The first vertical slice is outbound movement dispatch:
+The app layer is organized by application concern. Each concern owns its
+request types, orchestration service, and required ports. Public callers should
+enter through `GameApplication` or through the concern use-case service during
+composition and tests.
 
-- `send_reinforcement`
-- `send_attack`
-- `send_scout`
-- `send_settlers`
+#### Game Application Facade
 
-This slice is the pattern-setter because it exercises source/target
-context loading, hero context, movement speed, travel duration, canonical id
-generation, timestamp generation, aggregate command construction, and domain
-dispatch policies.
+`GameApplication` is the public facade used by the web layer. It delegates to
+concern-specific use-case services and should not contain gameplay
+orchestration. Adding a new public operation means:
 
-Target app modules:
+- add a transport-independent request type in the owning concern,
+- implement orchestration in the owning `*UseCases` type,
+- add the narrow read/executor port required by that use case,
+- expose a small delegating method on `GameApplication` only when the web/API
+  boundary needs it.
 
-```text
-parabellum_app/villages/requests/movements.rs
-parabellum_app/villages/use_cases/movements.rs
-parabellum_app/villages/ports/command_executor.rs
-parabellum_app/villages/ports/movement_reads.rs
-parabellum_app/villages/ports/clock.rs
-parabellum_app/villages/ports/ids.rs
-```
+The facade may remain broad because it is a composition boundary. Its methods
+should stay shallow.
 
-Target public names:
+#### Village Command Use Cases
 
-- `MovementUseCases`
-- `MovementReadPort`
-- `VillageCommandExecutor`
-- `Clock`
-- `IdGenerator`
-- `MovementDispatchContext`
-- `SendAttackRequest`
-- `SendReinforcementRequest`
-- `SendScoutRequest`
-- `SendSettlersRequest`
+Village command use cases translate player intent into aggregate command intent
+or workflow command intent. They load the minimum read context needed for the
+operation, perform app-level checks, delegate pure rules to `parabellum_game`,
+and then execute through a focused command executor port.
 
-Finalized movement dispatch means:
+Current village command concerns:
 
-- movement request types live under `parabellum_app/villages/requests`,
-- app orchestration lives in `MovementUseCases`,
-- the broad `VillageCommandsPort` no longer exposes dispatch methods,
-- infrastructure implements focused read/executor ports for the slice,
-- HTTP handlers import movement requests from the new request module,
-- public boundary types have rustdoc,
-- behavior tests cover app-visible outcomes and command intent.
+- `MovementUseCases` owns outbound dispatch: reinforcement, attack, scout, and
+  settlers.
+- `MovementControlUseCases` owns changes to already-dispatched movement
+  workflows, such as cancellation.
+- `ReinforcementUseCases` owns reinforcement recall/release and trapped-troop
+  control.
+- `BuildingUseCases` owns add, upgrade, downgrade, and cancellation of building
+  work.
+- `DevelopmentUseCases` owns unit training plus Academy and Smithy research.
+- `MarketplaceUseCases` owns resource sending and marketplace offer lifecycle.
+- `HeroUseCases` owns hero creation, revival, point allocation, reset, resource
+  focus, and hero lifecycle reads.
+- `TrapUseCases` owns trap construction planning.
+- `VillageProfileUseCases` owns village metadata changes such as renaming.
+- `ReportUseCases` owns report reads and the event-backed report read marker.
 
-Behavior tests cover:
+Use-case modules live in `parabellum_app/villages/use_cases/<concern>.rs`.
+Request types live in `parabellum_app/villages/requests/<concern>.rs`.
 
-- attack dispatch computes arrival/return timestamps from domain travel
-  mechanics and deterministic clock/id inputs,
-- reinforcement dispatch includes optional hero context when present,
-- scout dispatch enforces scout-only dispatch through the app/domain policy,
-- settlers dispatch rejects occupied or non-valley targets before command
+#### Village Read Use Cases
+
+Village read use cases return app-facing query shapes. They should be explicit
+about whether they return full projected state, a compact reference, an activity
+view, or a gameplay snapshot used by another command.
+
+Current village read concerns:
+
+- `VillageActivityUseCases` returns queues, troop movements, and cancelable
+  outgoing movement ids.
+- `VillageArmyUseCases` returns army occupancy/state views.
+- `MarketplaceUseCases` returns marketplace data and individual offers.
+- `VillageExpansionUseCases` returns culture-point information for expansion
+  buildings and explicitly refreshes player culture points before reading the
+  player snapshot.
+- `VillageReferenceUseCases` returns compact labels and positions for related
+  villages.
+- `VillageStateUseCases` returns full `VillageModel` projections.
+- `HeroUseCases` returns player hero state and pending revival timestamps.
+- `ReportUseCases` returns projected reports and unread counts.
+
+Read use cases depend on focused read ports, not on a broad village query
+facade. Read ports live in `parabellum_app/villages/ports/*_reads.rs`.
+
+#### Movement Semantics
+
+Movement dispatch uses domain travel mechanics and deterministic app sources
+for ids and timestamps:
+
+- attack and scout dispatch plan an outbound arrival and a return journey,
+- reinforcement dispatch plans one-way support movement,
+- settler dispatch validates target valley/foundation context before command
   execution,
-- ownership errors are reported as `ApplicationError::Game` and do not execute
-  commands.
+- scout dispatch enforces scout-only selection through app/domain policy,
+- hero participation is loaded as explicit context when a request includes a
+  hero.
 
-### Refactor Slice: Reinforcement Control
+Movement cancellation uses an explicit source context:
 
-Reinforcement and trapped-troop control follows the same replacement-first
-application pattern as movement dispatch:
-
-- request types live in `parabellum_app/villages/requests/reinforcements.rs`,
-- orchestration lives in `ReinforcementUseCases`,
-- infrastructure implements `ReinforcementReadPort` and
-  `ReinforcementCommandExecutor`,
-- `VillageCommandsPort` does not expose recall/release/disband methods,
-- HTTP handlers import reinforcement requests from the new request module,
-- selected-unit validation delegates to `ReinforcementControl`,
-- trap release state is planned in the use case from current read-model
-  context and `Trapper` domain helpers,
-- behavior tests assert ownership, deterministic ids/timestamps, and command
-  intent without binding to adapter internals.
-
-### Refactor Slice: Movement Control
-
-Movement control covers operations that alter already-dispatched movement
-workflows. The first operation in this slice is troop movement cancellation.
-
-This slice follows the same app-layer pattern:
-
-- request types live in `parabellum_app/villages/requests/movement_control.rs`,
-- orchestration lives in `MovementControlUseCases`,
-- infrastructure implements `MovementControlReadPort` and
-  `MovementControlCommandExecutor`,
-- `VillageCommandsPort` does not expose movement-control methods,
-- HTTP handlers import movement-control requests from the new request module,
-- the use case owns app-level ownership and cancel-window checks,
-- command construction uses injected `Clock` and `IdGenerator`,
-- behavior tests assert source ownership, arrived/expired rejection,
-  deterministic ids/timestamps, and command intent.
-
-Movement cancellation context is intentionally explicit:
-
-- `request.village_id` is the source village chosen by the player,
-- `CancelTroopMovementContext.source_village_id` is the movement's canonical
-  source village from the read model,
-- cancellation is rejected before owner lookup when those two villages differ,
-- the source village owner must match `request.player_id`,
+- `request.village_id` is the source village selected by the player,
+- `CancelTroopMovementContext.source_village_id` is the canonical source from
+  the scheduled movement,
+- cancellation is rejected before owner lookup if those two villages differ,
 - return timing is derived from elapsed outbound travel at cancellation time.
 
-### Refactor Slice: Building Lifecycle
+#### Building, Development, And Trap Semantics
 
-Building lifecycle covers scheduling and canceling building construction:
+Building, development, hero, and trap use cases keep server speed explicit in
+settings structs such as `BuildingSettings`, `DevelopmentSettings`, and
+`HeroSettings`. Server speed should not be hidden inside an infrastructure
+adapter.
 
-- `add_building`
-- `upgrade_building`
-- `downgrade_building`
-- `cancel_building_construction`
+Aggregate commands keep aggregate-local validation such as queue capacity,
+resource availability, building prerequisites, research state, and hero-point
+rules. Use cases may perform app-visible pre-command checks when the answer
+comes from read models or pending workflows, such as expansion-slot usage or a
+pending hero revival.
 
-This slice follows the same app-layer pattern:
+Trap capacity and cost planning delegates to `parabellum_game` trapper/domain
+helpers. Resource availability checks should hydrate a domain `Village` when the
+rule depends on domain stock behavior.
 
-- request types live in `parabellum_app/villages/requests/buildings.rs`,
-- orchestration lives in `BuildingUseCases`,
-- infrastructure implements `BuildingReadPort` and `BuildingCommandExecutor`,
-- `VillageCommandsPort` does not expose building lifecycle methods,
-- HTTP handlers import building requests from the new request module,
-- server speed is explicit `BuildingSettings`, not hidden adapter state,
-- add/upgrade/downgrade use cases translate player intent into command intent,
-- cancellation loads scheduled-action context through the read port, checks
-  ownership and execution time, then builds cancellation command intent.
+#### Reports
 
-Building lifecycle tests should stay behavior-oriented:
+Reports are projected read models, but marking a report as read is represented
+as a village event. `ReportUseCases::mark_report_as_read` loads the report to
+choose the stream anchor, obtains the read timestamp from `Clock`, and emits the
+already-planned report read command intent.
 
-- command intent contains the configured server speed,
-- cancellation rejects non-owner context before command execution,
-- cancellation rejects actions whose execution time has passed,
-- cancellation uses read-model refund/action context and injected time.
+Projectors own report materialization and audience rows. App use cases own only
+the public operation semantics.
 
-### Refactor Slice: Village Profile
+#### Root App Concerns
 
-Village profile covers metadata changes for an existing village. The first
-operation in this slice is `rename_village`.
+Some use cases are not village concerns:
 
-This slice follows the same app-layer pattern:
+- `identity` owns authentication, player/user lookup, and registration
+  orchestration.
+- `map` owns world-map reads through `MapUseCases` and `MapReadPort`.
+- `leaderboards` owns ranking reads through metric-specific result types and
+  `LeaderboardReadPort`.
+- `scheduler` owns the public operation boundary for processing due actions.
 
-- request types live in
-  `parabellum_app/villages/requests/village_profile.rs`,
-- orchestration lives in `VillageProfileUseCases`,
-- infrastructure implements `VillageProfileCommandExecutor`,
-- `VillageCommandsPort` does not expose village profile methods,
-- HTTP handlers import village profile requests from the new request module,
-- command validation, including name trimming and length checks, remains in
-  the aggregate command handler.
+Root concerns follow the same structure as village concerns:
 
-Village profile tests should assert command intent and avoid duplicating domain
-validation already covered by aggregate command tests.
+```text
+parabellum_app/<concern>/requests.rs
+parabellum_app/<concern>/ports.rs
+parabellum_app/<concern>/use_cases.rs
+```
 
-### Refactor Slice: Village Development
+Map reads must stay outside the village module. Leaderboard result names should
+include the metric, such as `PlayerPopulationLeaderboardPage`, because future
+leaderboards may rank different entities and metrics.
 
-Village development covers queueing unit training and research:
+#### Registration
 
-- `train_units`
-- `research_academy`
-- `research_smithy`
-
-This slice follows the same app-layer pattern:
-
-- request types live in `parabellum_app/villages/requests/development.rs`,
-- orchestration lives in `DevelopmentUseCases`,
-- infrastructure implements `DevelopmentReadPort` and
-  `DevelopmentCommandExecutor`,
-- `VillageCommandsPort` does not expose training or research methods,
-- HTTP handlers import development requests from the new request module,
-- server speed is explicit `DevelopmentSettings`, not hidden adapter state,
-- aggregate commands keep queue, resource, building, and research rules,
-- the app use case performs read-side expansion-unit validation before
-  queueing settlers or chiefs.
-
-Development tests should assert command intent, configured server speed, and
-app-visible pre-command guards such as invalid unit index or expansion-slot
-rejection. They should not duplicate aggregate queue/resource/building tests.
-
-### Refactor Slice: Marketplace Queries
-
-Marketplace queries covers app-facing marketplace reads:
-
-- `get_marketplace_offer`
-- `get_marketplace_data`
-
-This slice keeps marketplace reads inside the marketplace concern:
-
-- request types live in `parabellum_app/villages/requests/marketplace.rs`,
-- read orchestration lives in `MarketplaceUseCases`,
-- infrastructure implements the existing `MarketplaceReadPort`,
-- `VillageQueryPort` no longer exposes marketplace methods,
-- offer and marketplace view reads share the same port used by marketplace
-  command orchestration.
-
-Marketplace query tests should assert read-port delegation and no command
-execution. They should not duplicate marketplace repository or projection tests.
-
-### Refactor Slice: Village Activity Queries
-
-Village activity queries covers app-facing queue and movement activity reads:
-
-- `get_village_queues`
-- `get_village_troop_movements`
-- `list_cancelable_outgoing_movement_ids`
-
-This slice keeps dashboard/activity reads out of the broad query port:
-
-- request types live in `parabellum_app/villages/requests/activity.rs`,
-- read orchestration lives in `VillageActivityUseCases`,
-- infrastructure implements `VillageActivityReadPort`,
-- `VillageQueryPort` no longer exposes queue or troop-movement activity methods,
-- cancelable movement filtering receives `Clock::now()` from the use case, not
-  from the adapter.
-
-Activity query tests should assert read-port delegation and deterministic clock
-usage. They should not duplicate scheduled-action or movement repository tests.
-
-### Refactor Slice: Village Army Queries
-
-Village army queries covers app-facing army state reads:
-
-- `get_village_army_state_view`
-
-This slice keeps army views separate from queue/movement activity reads:
-
-- request types live in `parabellum_app/villages/requests/village_army.rs`,
-- read orchestration lives in `VillageArmyUseCases`,
-- infrastructure implements `VillageArmyReadPort`,
-- `VillageQueryPort` no longer exposes army state methods.
-
-Army query tests should assert read-port delegation. They should not duplicate
-army repository, reinforcement, or trap projection tests.
-
-### Refactor Slice: Map Queries
-
-Map queries are cross-context reads and are not village use cases:
-
-- `get_map_region`
-- `get_map_field`
-- `get_map_region_tile_by_field_id`
-
-This slice keeps world-map reads outside the village module:
-
-- request types live in `parabellum_app/map/requests.rs`,
-- read contracts live in `parabellum_app/map/ports.rs`,
-- orchestration lives in `MapUseCases`,
-- map reads use `MapReadPort`,
-- `GameApplication` delegates map facade methods to `MapUseCases`,
-- `VillageQueryPort` does not expose map methods,
-- infrastructure composes `PostgresMapRepository` into `MapUseCases`,
-- `VillageEsService` must not grow pass-through map query helpers.
-
-Map query tests should assert app-visible repository delegation and any
-coordinate/id wrapping behavior owned by the map repository. They should not
-duplicate village projection tests.
-
-### Refactor Slice: Map Organization
-
-Map is a first-class app concern. It should not use root `ports` or a flat
-`map.rs` module.
-
-This slice normalizes map into the same concern-owned layout:
-
-- map request shapes live in `parabellum_app/map/requests.rs`,
-- map read contracts live in `parabellum_app/map/ports.rs`,
-- map orchestration lives in `parabellum_app/map/use_cases.rs`,
-- `MapRepository` is renamed to `MapReadPort`,
-- infrastructure keeps the concrete adapter name `PostgresMapRepository`,
-- root `parabellum_app/ports` is removed.
-
-Do not reintroduce `parabellum_app::ports`. New contracts must live with their
-owning app concern.
-
-### Refactor Slice: Leaderboards
-
-Leaderboards are root application reads because future rankings may aggregate
-player, village, army, alliance, or other cross-context metrics.
-
-The first leaderboard metric is player population:
-
-- `get_player_population_leaderboard_page`
-
-This slice keeps ranking reads outside identity and villages:
-
-- request types live in `parabellum_app/leaderboards/requests.rs`,
-- app orchestration lives in `LeaderboardUseCases`,
-- result types are metric-specific, for example
-  `PlayerPopulationLeaderboardPage` and `PlayerPopulationLeaderboardEntry`,
-- read ports live in `parabellum_app/leaderboards/ports.rs`,
-- infrastructure implements `LeaderboardReadPort` directly,
-- `PlayerRepository` does not expose leaderboard methods,
-- `VillageQueryPort` and `VillageEsService` do not expose leaderboard methods.
-
-Leaderboard naming must include the metric when the app boundary can be called
-from another layer. Avoid generic names like `LeaderboardPage` once more than
-one ranking can plausibly exist.
-
-Leaderboard tests should assert pagination normalization and read-port
-delegation. SQL ordering and aggregation should be covered by infra repository
-or endpoint integration tests.
-
-### Refactor Slice: Village Expansion Reads
-
-Village expansion reads cover culture-point information used by expansion
-buildings:
-
-- `get_expansion_culture_info`
-
-This slice keeps expansion-specific read behavior out of the broad village
-query port:
-
-- request types live in `parabellum_app/villages/requests/expansion.rs`,
-- orchestration lives in `VillageExpansionUseCases`,
-- read ports live in `parabellum_app/villages/ports/expansion_reads.rs`,
-- infrastructure implements `ExpansionReadPort`,
-- `VillageQueryPort` does not expose expansion culture methods,
-- `VillageEsService` does not expose expansion culture pass-through helpers.
-
-This use case intentionally refreshes player culture points before returning
-the player culture snapshot. That write-through behavior must remain explicit
-in `VillageExpansionUseCases`; it must not be hidden inside a generic query
-port or a service method named like a pure read.
-
-Expansion tests should assert refresh-before-player-read ordering, required CP
-calculation, and app-visible output. Repository tests should cover SQL snapshot
-aggregation.
-
-### Refactor Slice: Village References
-
-Village references are compact village labels used to render relationships in
-other views:
-
-- village name,
-- village position,
-- village id.
-
-This slice replaces vague `VillageInfo` naming:
-
-- request types live in `parabellum_app/villages/requests/village_references.rs`,
-- orchestration lives in `VillageReferenceUseCases`,
-- read ports live in `parabellum_app/villages/ports/village_reference_reads.rs`,
-- compact read model is `VillageReference`,
-- app facade method is `get_village_references`,
-- embedded maps should be named `village_references`,
-- the old broad `VillageQueryPort` does not expose reference lookup methods.
-
-Use `VillageReference` only for display labels and route/distance context. Do
-not use it as a substitute for full village state.
-
-### Refactor Slice: Village State Reads
-
-Village state reads return full `VillageModel` projections. They are heavier
-than directory summaries and should be named as full state reads:
-
-- `get_village_state`,
-- `list_player_village_states`.
-
-This slice removes the remaining broad query port:
-
-- request types live in `parabellum_app/villages/requests/village_state.rs`,
-- orchestration lives in `VillageStateUseCases`,
-- read ports live in `parabellum_app/villages/ports/village_state_reads.rs`,
-- infrastructure implements `VillageStateReadPort`,
-- app facade methods use `state`, not `model`,
-- `VillageQueryPort` is removed.
-
-Use full village state only where callers need the complete projection or
-domain hydration. Player profiles, public directories, and lightweight UI lists
-should use a later summary/directory read model instead of `VillageModel`.
-
-### Refactor Slice: Heroes
-
-Heroes covers player hero lifecycle and hero profile updates:
-
-- `create_hero`
-- `revive_hero`
-- `assign_hero_points`
-- `reset_hero_points`
-- `set_hero_resource_focus`
-
-This slice follows the same app-layer pattern:
-
-- request types live in `parabellum_app/villages/requests/heroes.rs`,
-- orchestration lives in `HeroUseCases`,
-- infrastructure implements `HeroReadPort` and `HeroCommandExecutor`,
-- the old broad `VillageCommandsPort` is removed instead of left empty,
-- HTTP handlers import hero requests from the new request module,
-- server speed is explicit `HeroSettings`, not hidden adapter state,
-- revival uses injected `Clock` and `IdGenerator`,
-- aggregate commands keep ownership, resource, mansion, and hero-point domain
-  validation.
-
-Hero tests should assert loaded-context command intent, deterministic revival
-id/time, and pre-command guards such as pending revival or existing living hero.
-They should not duplicate aggregate hero validation.
-
-### Refactor Slice: Hero Queries
-
-Hero queries covers app-facing hero lifecycle reads:
-
-- `get_hero_by_player`
-- `get_pending_hero_revival_at`
-
-This slice keeps hero reads in the hero concern instead of the broad query port:
-
-- request types live in `parabellum_app/villages/requests/heroes.rs`,
-- read orchestration lives in `HeroUseCases`,
-- infrastructure implements the existing `HeroReadPort`,
-- `VillageQueryPort` no longer exposes hero methods,
-- app-facing naming includes `_at` for timestamp-returning revival reads.
-
-Hero query tests should assert read-port delegation and naming semantics. They
-should not duplicate hero repository or scheduled-action repository tests.
-
-### Refactor Slice: Reports
-
-Reports covers projected report reads and the event-backed read marker:
-
-- `list_reports_for_player`
-- `get_report_for_player`
-- `count_unread_reports_for_player`
-- `mark_report_as_read`
-
-This slice follows the app-layer pattern with one important distinction:
-reports are projected read models, but marking a report as read still appends a
-village event.
-
-- request types live in `parabellum_app/villages/requests/reports.rs`,
-- orchestration lives in `ReportUseCases`,
-- infrastructure implements `ReportReadPort` and `ReportCommandExecutor`,
-- `VillageQueryPort` no longer exposes report methods,
-- `mark_report_as_read` loads the report first to determine its village stream
-  anchor, then emits `MarkReportRead`,
-- the read timestamp comes from injected `Clock`, not from the command handler,
-- aggregate commands only emit the already-planned report event.
-
-Report tests should assert read-port delegation, stream-anchor selection,
-deterministic read timestamps, and missing-report rejection before command
-execution. They should not duplicate report projector or repository tests.
-
-### Refactor Slice: Trap Building
-
-Trap building follows the same app-layer pattern:
-
-- request types live in `parabellum_app/villages/requests/traps.rs`,
-- orchestration lives in `TrapUseCases`,
-- infrastructure implements `TrapReadPort` and `TrapCommandExecutor`,
-- `VillageCommandsPort` does not expose trap-building methods,
-- HTTP handlers import trap requests from the new request module,
-- trap capacity and cost planning delegates to `parabellum_game::models::trapper`,
-- resource availability checks use the domain `Village` model via hydration,
-- behavior tests assert ownership, resource/capacity rejection, deterministic
-  ids/timestamps, and command intent.
-
-### Refactor Slice: Village Read Models
-
-Village read models are app-facing query shapes returned by focused village use
-cases. They are not ports and must not live under `parabellum_app/ports`.
-
-This slice removes the old generic `ports::queries` module and assigns read
-models to their owning village concerns:
-
-- activity queues and troop movements live in
-  `parabellum_app/villages/read_models/activity.rs`,
-- marketplace offers and merchant movements live in
-  `parabellum_app/villages/read_models/marketplace.rs`,
-- army occupancy views live in
-  `parabellum_app/villages/read_models/village_army.rs`,
-- focused village read ports return these concern-owned read models,
-- web and infra import app query shapes through
-  `parabellum_app::villages::read_models`,
-- root `parabellum_app/ports` is not used for read model ownership.
-
-When adding a new query shape, choose the owning use-case concern first. If no
-single concern owns it, create a focused root module such as `map` or
-`leaderboards`; do not add another generic query module.
-
-### Refactor Slice: Projection Repository Contracts
-
-Projection repositories are technical persistence contracts for village
-projectors and CQRS read models. They are app-owned interfaces implemented by
-`parabellum_infra`, but they are not use-case ports.
-
-This slice replaces the old single-file repository bag with focused contract
-modules:
-
-- army projection contracts live in
-  `parabellum_app/villages/projection_repositories/armies.rs`,
-- scheduled-action projection contracts live in
-  `parabellum_app/villages/projection_repositories/scheduled_actions.rs`,
-- marketplace projection contracts live in
-  `parabellum_app/villages/projection_repositories/marketplace.rs`,
-- report projection contracts live in
-  `parabellum_app/villages/projection_repositories/reports.rs`,
-- hero projection contracts live in
-  `parabellum_app/villages/projection_repositories/heroes.rs`,
-- village movement projection contracts live in
-  `parabellum_app/villages/projection_repositories/movements.rs`,
-- village state and map occupancy projection contracts live in
-  `parabellum_app/villages/projection_repositories/villages.rs`,
-- expansion projection snapshots live in
-  `parabellum_app/villages/projection_repositories/expansion.rs`.
-
-`projection_repositories::...` re-exports remain the public app path for these
-technical contracts. This keeps imports concise while preventing unrelated
-repository traits from accumulating in one large file.
-
-### Refactor Slice: Village CQRS Models
-
-Village CQRS models are app-owned technical contracts used by projectors,
-scheduled actions, and ES workflows. They are not domain models; game rules and
-calculations still belong in `parabellum_game`.
-
-This slice replaces the old broad `parabellum_app/villages/models.rs` file with
-focused modules:
-
-- projected village state lives in `parabellum_app/villages/models/villages.rs`,
-- projected village movement rows live in
-  `parabellum_app/villages/models/movements.rs`,
-- marketplace projection rows live in
-  `parabellum_app/villages/models/marketplace.rs`,
-- report projection rows live in `parabellum_app/villages/models/reports.rs`,
-- scheduled action records and payload dispatch live in
-  `parabellum_app/villages/models/scheduled_actions.rs`,
-- scheduled workflow payloads live in
-  `parabellum_app/villages/models/workflows.rs`.
-
-`villages::models::...` remains the public import path for these contracts.
-Submodules exist to keep ownership clear, not to create multiple public naming
-styles.
-
-### Refactor Slice: Identity Organization
-
-Identity is a first-class app concern, not a miscellaneous root port file.
-
-This slice moves identity contracts out of `parabellum_app/ports/identity.rs`
-and assigns them to the identity concern:
-
-- registration request shapes live in `parabellum_app/identity/requests.rs`,
-- authentication, registration, user, and player contracts live in
-  `parabellum_app/identity/ports.rs`,
-- public callers import through `parabellum_app::identity`,
-- root `parabellum_app/ports` no longer exposes identity contracts.
-
-### Refactor Slice: Registration Orchestration
-
-Registration is a cross-context application workflow. The app layer owns the
-ordering and command planning:
+Registration is a cross-context application workflow owned by
+`RegistrationUseCases`:
 
 - hash the submitted password,
 - create user/player rows and reserve the initial map valley through
   `RegistrationIdentityPort`,
 - build the initial domain `Village` from the reserved valley,
-- apply seed/test setup overrides to the initial village plan,
+- apply optional seed/test setup overrides to the initial village plan,
 - append `FoundVillage`,
 - append the initial `CreateHero`,
 - optionally append `SetVillageResources`,
 - clean up committed identity rows and map reservation if village foundation or
   initial hero creation fails.
 
-Infrastructure still owns the database transaction that creates identity rows
-and soft-reserves the map field. That transaction is exposed as a focused app
-port instead of being hidden inside the registration orchestration. Initial
-village ES commands are exposed through `InitialVillageCommandExecutor`.
+`IdentityPort` is for authentication and identity/player lookup only. Do not add
+registration back to `IdentityPort`; keep registration orchestration explicit in
+`RegistrationUseCases`.
 
-Do not reintroduce `IdentityPort::register_player`. Registration belongs in
-`RegistrationUseCases`; `IdentityPort` is for authentication and identity/player
-lookup only.
+#### Scheduler
 
-### Refactor Slice: Scheduler
+Scheduler is an operational app concern. `SchedulerUseCases` owns the public
+request semantics for processing due actions and delegates execution to
+`SchedulerPort`.
 
-Scheduler is an operational application concern, not a direct `GameApplication`
-port dependency.
+Workflow claiming, advisory locking, scheduled fact append, and projector
+execution are infrastructure responsibilities. The app scheduler use case should
+not know queue table details or CQRS runtime internals.
 
-This slice moves scheduler contracts out of `parabellum_app/ports/scheduler.rs`
-and assigns them to the scheduler concern:
+#### Read Models
 
-- scheduler request shapes live in `parabellum_app/scheduler/requests.rs`,
-- scheduler execution contracts live in `parabellum_app/scheduler/ports.rs`,
-- scheduler orchestration lives in `SchedulerUseCases`,
-- `GameApplication::process_due_actions` delegates to `SchedulerUseCases`,
-- infrastructure implements `SchedulerPort` through the ES adapter,
-- root `parabellum_app/ports` no longer exposes scheduler contracts.
+App read models are returned by focused use cases and are not ports.
 
-Keep workflow claiming, locking, and fact append behavior in infrastructure.
-The app use case owns only the public operation boundary and request semantics.
+- village activity shapes live in
+  `parabellum_app/villages/read_models/activity.rs`,
+- marketplace and merchant movement views live in
+  `parabellum_app/villages/read_models/marketplace.rs`,
+- army occupancy views live in
+  `parabellum_app/villages/read_models/village_army.rs`,
+- cross-context shapes live in focused root modules such as
+  `parabellum_app/read_models`, `parabellum_app/map`, or
+  `parabellum_app/leaderboards`.
+
+Choose the owning use-case concern before adding a read model. Do not create a
+generic query/read-model bag.
+
+#### Projection Repository Contracts
+
+Projection repositories are technical persistence contracts for village
+projectors and CQRS read models. They are app-owned interfaces implemented by
+`parabellum_infra`, but they are not use-case ports and should not be injected
+into app use cases directly.
+
+Projection repository contracts live under
+`parabellum_app/villages/projection_repositories/<concern>.rs`:
+
+- `armies.rs` for projected army placement,
+- `scheduled_actions.rs` for scheduled action projections,
+- `marketplace.rs` for marketplace offer and merchant movement projections,
+- `reports.rs` for report projection and audience rows,
+- `heroes.rs` for projected hero state,
+- `movements.rs` for village movement rows,
+- `villages.rs` for projected village state and map occupancy,
+- `expansion.rs` for expansion projection snapshots.
+
+`projection_repositories::...` is the public app import path. Submodules exist
+to keep ownership clear; callers should prefer the re-export path unless they
+are editing the contract module itself.
+
+#### Village CQRS Models
+
+Village CQRS models are app-owned technical contracts used by projectors,
+scheduled actions, and ES workflows. They are not domain models; game rules and
+calculations belong in `parabellum_game`.
+
+CQRS model contracts live under `parabellum_app/villages/models/<concern>.rs`:
+
+- `villages.rs` for full projected village state,
+- `movements.rs` for projected movement rows,
+- `marketplace.rs` for marketplace projection rows and snapshots,
+- `reports.rs` for report projection rows,
+- `scheduled_actions.rs` for scheduled action records and payload dispatch,
+- `workflows.rs` for scheduled workflow payloads.
+
+`villages::models::...` is the public app import path. Submodules exist to keep
+ownership clear, not to create multiple public naming styles.
 
 ## CQRS/ES Boundaries
 
