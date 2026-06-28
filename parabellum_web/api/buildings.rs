@@ -426,8 +426,10 @@ pub struct RallyCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<PositionDto>,
     pub tribe: String,
-    pub units: Vec<u32>,
-    pub has_hero: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_hero: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upkeep: Option<u32>,
     pub category: RallyCardCategoryDto,
@@ -1035,8 +1037,14 @@ pub async fn building_detail(
                     &cancelable_movement_ids,
                 )
                 .into_iter()
+                .filter(|card| !hides_incoming_scout_movement(card))
                 .map(|card| {
-                    let upkeep = troop_upkeep_for_rally_card(&user.village, &card);
+                    let redact_composition = redacts_incoming_army_composition(&card);
+                    let upkeep = if redact_composition {
+                        None
+                    } else {
+                        troop_upkeep_for_rally_card(&user.village, &card)
+                    };
                     let (action, action_id) = match card.action_button {
                         Some(ArmyAction::Recall { army_id }) => {
                             (Some(RallyActionDto::Recall), Some(army_id))
@@ -1061,8 +1069,16 @@ pub async fn building_detail(
                         village_name: card.village_name,
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         tribe: format!("{:?}", card.tribe),
-                        units: card.units.units().to_vec(),
-                        has_hero: card.has_hero,
+                        units: if redact_composition {
+                            None
+                        } else {
+                            Some(card.units.units().to_vec())
+                        },
+                        has_hero: if redact_composition {
+                            None
+                        } else {
+                            Some(card.has_hero)
+                        },
                         upkeep,
                         category: match card.category {
                             ArmyCategory::Stationed => RallyCardCategoryDto::Stationed,
@@ -1081,7 +1097,11 @@ pub async fn building_detail(
                             MovementKind::FoundVillage => RallyMovementKindDto::FoundVillage,
                         }),
                         arrives_at: card.arrives_at,
-                        bounty: card.bounty.as_ref().map(resource_group_to_dto),
+                        bounty: if redact_composition {
+                            None
+                        } else {
+                            card.bounty.as_ref().map(resource_group_to_dto)
+                        },
                         action,
                         action_id,
                     }
@@ -1520,6 +1540,18 @@ fn movement_kind_to_card_kind(kind: TroopMovementType) -> MovementKind {
         TroopMovementType::Return => MovementKind::Return,
         TroopMovementType::FoundVillage => MovementKind::FoundVillage,
     }
+}
+
+fn hides_incoming_scout_movement(card: &ArmyCardData) -> bool {
+    card.category == ArmyCategory::Incoming && card.movement_kind == Some(MovementKind::Scout)
+}
+
+fn redacts_incoming_army_composition(card: &ArmyCardData) -> bool {
+    card.category == ArmyCategory::Incoming
+        && !matches!(
+            card.movement_kind,
+            Some(MovementKind::Reinforcement | MovementKind::Return | MovementKind::FoundVillage)
+        )
 }
 
 fn resource_group_to_dto(resource: &ResourceGroup) -> ResourceAmountsDto {

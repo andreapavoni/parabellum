@@ -21,7 +21,7 @@ import { useCurrentHeroQuery } from "@/query/hooks";
 import type { BuildingPageResponse, MovementPreviewResponse, RallyCard } from "@/types/api";
 
 function unitsFromCard(card: RallyCard) {
-  return Array.from({ length: 10 }, (_, idx) => Number(card.units[idx] ?? 0));
+  return Array.from({ length: 10 }, (_, idx) => Number(card.units?.[idx] ?? 0));
 }
 
 function clampUnitAmount(value: number, max: number) {
@@ -52,6 +52,13 @@ type RallyTab = "armies" | "send";
 function movementKindLabel(kind: RallyCard["movementKind"]) {
   if (!kind) return null;
   return kind.replace("_", " ");
+}
+
+function hidesIncomingArmyComposition(card: RallyCard) {
+  return card.category === "incoming"
+    && card.movementKind !== "reinforcement"
+    && card.movementKind !== "return"
+    && card.movementKind !== "found_village";
 }
 
 function tribeFromSendableUnits(
@@ -236,7 +243,7 @@ function RallyReinforcementActionForm({
 
   useEffect(() => {
     setAmounts(unitsFromCard(card));
-  }, [card.actionId, card.units.join(",")]);
+  }, [card.actionId, unitsFromCard(card).join(",")]);
 
   if (!expanded) {
     return (
@@ -271,7 +278,7 @@ function RallyReinforcementActionForm({
       </div>
 
       <UnitAmountGrid
-        available={card.units.map((value) => Number(value ?? 0))}
+        available={unitsFromCard(card)}
         amounts={amounts}
         unitLabels={unitNames.map((name, idx) => unitLabel(name ?? `U${idx + 1}`))}
         disabled={submitting}
@@ -680,6 +687,7 @@ export function RallyPointBuilding({
                       : null;
                     const isActionEditorOpen = actionKey !== null && expandedActionKey === actionKey;
                     const movementLabel = movementKindLabel(card.movementKind);
+                    const hideArmyComposition = hidesIncomingArmyComposition(card);
 
                     return (
                       <Panel key={`${category}-${card.villageId}-${card.actionId ?? "no-action"}`} class="space-y-2">
@@ -711,19 +719,19 @@ export function RallyPointBuilding({
                                 }}
                               />
                             ) : null}
-                            {card.bounty ? (
+                            {card.bounty && !hideArmyComposition ? (
                               <BountyResources bounty={card.bounty} />
                             ) : null}
                           </div>
                           {movementLabel ? <Badge>{movementLabel}</Badge> : null}
                         </div>
 
-                        {!isActionEditorOpen ? (
+                        {!isActionEditorOpen && !hideArmyComposition ? (
                           <div>
                             <ArmyTable
-                              units={card.units}
+                              units={unitsFromCard(card)}
                               tribe={card.tribe}
-                              hasHero={card.hasHero}
+                              hasHero={card.hasHero ?? false}
                               showEmpty={category === "stationed"}
                             />
                             {card.upkeep !== undefined ? (

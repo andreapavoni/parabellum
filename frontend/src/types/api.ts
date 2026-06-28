@@ -537,8 +537,8 @@ export type RallyCard = {
   villageName?: string;
   position?: Position;
   tribe: string;
-  units: number[];
-  hasHero: boolean;
+  units?: number[];
+  hasHero?: boolean;
   upkeep?: number;
   category: RallyCardCategory;
   movementKind?: RallyMovementKind;
