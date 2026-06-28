@@ -611,6 +611,11 @@ Workflow claiming, advisory locking, scheduled fact append, and projector
 execution are infrastructure responsibilities. The app scheduler use case should
 not know queue table details or CQRS runtime internals.
 
+The ES scheduled-action worker is a runtime loop only. It owns poll interval,
+batch size, tick logging, and calls into `VillageEsService::process_due_actions`.
+It must not decode scheduled payloads, mutate action status, or append workflow
+facts directly.
+
 #### Read Models
 
 App read models are returned by focused use cases and are not ports.
@@ -772,10 +777,16 @@ runtime wiring, workflow helpers, and projector transaction boundaries. They
 should not grow into persistence modules themselves.
 
 `VillageEsService` is the infrastructure facade for village CQRS/ES command,
-scheduler, and read-helper flows. Its root module owns service construction,
-command dispatch, workflow append preparation, and scheduler tick coordination.
-Concern-specific service helpers live in focused submodules:
+scheduler, and read-helper flows. Its root module owns only the service type,
+construction, exported context structs, and module declarations. Concern-specific
+service helpers live in focused submodules:
 
+- `village_service/commands.rs` for direct CQRS command dispatch helpers;
+- `village_service/marketplace_commands.rs` for marketplace command
+  orchestration that coordinates offer projections and workflow facts;
+- `village_service/economy.rs` for pre-command resource materialization;
+- `village_service/workflow_append.rs` for cross-stream workflow append,
+  projector dispatch, and snapshot refresh mechanics;
 - `village_service/scheduler.rs` for due-action processing and operational
   scheduler coordination;
 - `village_service/queries/buildings.rs` for building cancellation read context;

@@ -30,7 +30,9 @@ impl ReplayService {
         let mut count = 0i64;
 
         for (aggregate_id,) in &ids {
-            let (events, version) = event_store.load_events(aggregate_type, aggregate_id).await?;
+            let (events, version) = event_store
+                .load_events(aggregate_type, aggregate_id)
+                .await?;
 
             let mut aggregate = VillageAggregate::default();
             aggregate.set_aggregate_id(aggregate_id.parse::<u32>().map_err(|_| {

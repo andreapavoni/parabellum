@@ -13,11 +13,121 @@
 //! - New scheduled workflows should follow the same shape: decode payload,
 //!   delegate to a workflow module, append the returned `WorkflowEvents`.
 
+use crate::es::advisory_lock::AdvisoryLock;
+use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::workflows;
-use crate::es::{CqrsError, PostgresArmyRepository, VillageEsService};
+use crate::es::{
+    CqrsError, PostgresArmyRepository, PostgresScheduledActionRepository, VillageEsService,
+    village_cqrs_runtime,
+};
 use parabellum_app::villages::VillageService;
-use parabellum_app::villages::models::ScheduledActionPayload;
-use parabellum_app::villages::projection_repositories::ArmyRepository;
+use parabellum_app::villages::models::{
+    ScheduledAction, ScheduledActionPayload, ScheduledActionStatus,
+};
+use parabellum_app::villages::projection_repositories::{
+    ArmyRepository, ScheduledActionRepository,
+};
+
+const SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS: i64 = 120;
+
+impl VillageEsService {
+    /// Executes due scheduled actions by appending canonical workflow facts.
+    ///
+    /// Status transitions are persisted for each action (`completed` or `failed`).
+    pub async fn process_due_actions(
+        &self,
+        before_or_equal: chrono::DateTime<chrono::Utc>,
+        limit: i64,
+    ) -> Result<usize, CqrsError> {
+        let Some(lock) =
+            AdvisoryLock::try_acquire(self.pool(), SCHEDULED_ACTION_EXECUTION_LOCK_KEY).await?
+        else {
+            tracing::info!(
+                action = "scheduler_skip_locked",
+                "scheduled action execution lock is held; skipping tick"
+            );
+            return Ok(0);
+        };
+
+        let repo =
+            PostgresScheduledActionRepository::new(crate::ProjectionDb::new(self.pool().clone()));
+        let stale_before = before_or_equal
+            - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
+        let requeued = repo
+            .requeue_stale_processing(stale_before)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        if requeued > 0 {
+            tracing::warn!(
+                action = "scheduler_requeue_stale_processing",
+                requeued,
+                stale_before = %stale_before,
+                "requeued stale processing scheduled actions to pending"
+            );
+        }
+        let actions = repo
+            .take_due_pending(before_or_equal, limit)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        let claimed = actions.len();
+        if claimed > 0 {
+            tracing::info!(
+                action = "scheduler_claim_due",
+                claimed,
+                limit,
+                before_or_equal = %before_or_equal,
+                "claimed due scheduled actions"
+            );
+        }
+
+        let result = self.process_actions(&actions).await;
+        lock.release().await?;
+        result
+    }
+
+    pub async fn process_actions(
+        &self,
+        actions: &Vec<ScheduledAction>,
+    ) -> Result<usize, CqrsError> {
+        let runtime = village_cqrs_runtime(self.pool().clone());
+        let service = VillageService::new(&runtime);
+        let mut processed = 0usize;
+        let repo =
+            PostgresScheduledActionRepository::new(crate::ProjectionDb::new(self.pool().clone()));
+
+        for action in actions {
+            let result = execute_action(self, &service, action).await;
+            let next_status = if result.is_ok() {
+                ScheduledActionStatus::Completed
+            } else if matches!(result, Err(CqrsError::Conflict { .. })) {
+                ScheduledActionStatus::Pending
+            } else {
+                ScheduledActionStatus::Failed
+            };
+            repo.update_status(action.id, next_status)
+                .await
+                .map_err(CqrsError::domain_source)?;
+            if let Err(err) = &result {
+                tracing::warn!(
+                    action = "scheduler_action_failed",
+                    action_id = %action.id,
+                    action_type = ?action.action_type,
+                    error = %err,
+                    "scheduled action marked failed"
+                );
+            } else {
+                tracing::info!(
+                    action = "scheduler_action_completed",
+                    action_id = %action.id,
+                    action_type = ?action.action_type,
+                    "scheduled action completed"
+                );
+            }
+            processed += 1;
+        }
+        Ok(processed)
+    }
+}
 
 /// Executes one scheduled action payload by appending canonical workflow fact(s).
 pub(super) async fn execute_action(

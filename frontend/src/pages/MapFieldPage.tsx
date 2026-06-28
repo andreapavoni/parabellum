@@ -23,7 +23,7 @@ export function MapFieldPage({
   const [preview, setPreview] = useState<MovementPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const foundVillage = useFoundVillageMutation(data.id);
-  const canFoundHere = !data.villageId && data.tileType === "valley" && data.canPreviewFounding;
+  const isUnoccupiedValley = data.tileType === "valley" && data.villageId == null;
   const canRenameVillage =
     data.tileType === "village" &&
     !!data.villageId &&
@@ -170,8 +170,7 @@ export function MapFieldPage({
               )}
             </div>
           ) : null}
-
-          {canFoundHere ? (
+          {isUnoccupiedValley ? (
             <div class="pt-1 space-y-2">
               <Button
                 type="button"

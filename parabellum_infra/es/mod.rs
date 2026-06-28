@@ -39,4 +39,4 @@ pub use runtime::{VillageCqrsRuntime, village_cqrs_runtime};
 pub use stores::{PostgresEventStore, PostgresSnapshotStore, WorkflowStreamAppend};
 pub use stream::{VILLAGE_STREAM_TYPE, village_stream_id};
 pub use village_service::VillageEsService;
-pub use worker::EsScheduledActionWorker;
+pub use worker::{EsScheduledActionWorker, EsScheduledActionWorkerConfig};
