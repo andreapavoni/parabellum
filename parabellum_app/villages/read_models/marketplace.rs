@@ -19,10 +19,18 @@ pub enum MerchantMovementKind {
     Return,
 }
 
+/// Direction of a merchant movement relative to the current village.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MerchantMovementDirection {
+    Outgoing,
+    Incoming,
+}
+
 /// App-facing merchant movement summary.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MerchantMovement {
     pub job_id: Uuid,
+    pub direction: MerchantMovementDirection,
     pub kind: MerchantMovementKind,
     pub origin_village_id: u32,
     pub destination_village_id: u32,
@@ -36,7 +44,6 @@ pub struct MerchantMovement {
 pub struct MarketplaceData {
     pub own_offers: Vec<MarketplaceOffer>,
     pub global_offers: Vec<MarketplaceOffer>,
-    pub outgoing_merchants: Vec<MerchantMovement>,
-    pub incoming_merchants: Vec<MerchantMovement>,
+    pub merchant_movements: Vec<MerchantMovement>,
     pub village_references: HashMap<u32, VillageReference>,
 }

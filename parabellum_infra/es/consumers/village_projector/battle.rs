@@ -8,7 +8,9 @@ use std::collections::HashSet;
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{
+    ArmyListFilter, ArmyState, HeroPlacementState,
+};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::buildings::get_building_data;
 use parabellum_game::models::village::Village;
@@ -84,7 +86,7 @@ impl VillageProjector {
         }
 
         self.village
-            .replace_village_state_in_tx(tx, &target_next.village)
+            .store_village_model_in_tx(tx, &target_next.village)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -103,10 +105,14 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(hero) = after_home.hero() {
-                self.heroes
-                    .upsert_in_tx(tx, &hero, hero.village_id, target_village_id, "home")
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.project_hero_placement_in_tx(
+                    tx,
+                    &hero,
+                    target_village_id,
+                    target_village_id,
+                    HeroPlacementState::Home,
+                )
+                .await?;
             }
             after_ids.insert(after_home.id);
         }
@@ -121,10 +127,14 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(hero) = after_reinforcement.hero() {
-                self.heroes
-                    .upsert_in_tx(tx, &hero, hero.village_id, target_village_id, "stationed")
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.project_hero_placement_in_tx(
+                    tx,
+                    &hero,
+                    hero.village_id,
+                    target_village_id,
+                    HeroPlacementState::Stationed,
+                )
+                .await?;
             }
             after_ids.insert(after_reinforcement.id);
         }
@@ -188,7 +198,9 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         target_next.tribe = source.tribe.clone();
-        let mut conquered_village = Self::village_from_model(target_next);
+        let mut conquered_village = self
+            .load_village_state_in_tx(tx, target_next.clone())
+            .await?;
         conquered_village.tribe = source.tribe;
         remove_tribe_incompatible_buildings(&mut conquered_village);
         target_next.buildings = conquered_village.buildings().to_vec();
@@ -199,8 +211,8 @@ impl VillageProjector {
             .delete_by_home_village_in_tx(tx, target_village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        self.village
-            .set_map_occupancy_in_tx(
+        self.map
+            .set_occupancy_in_tx(
                 tx,
                 target_village_id,
                 Some(target_village_id),
@@ -244,22 +256,32 @@ fn target_state_after_battle(
     village.population = *target_population;
     village.stocks = target_stocks.clone();
     village.trapper = *target_trapper;
-    let home = target_army.clone().filter(|army| army.immensity() > 0);
+    let home = target_army
+        .clone()
+        .map(army_without_dead_hero)
+        .filter(|army| army.immensity() > 0);
     let mut stationed: Vec<Army> = target_reinforcements
         .iter()
-        .filter(|army| army.immensity() > 0)
         .cloned()
+        .map(army_without_dead_hero)
+        .filter(|army| army.immensity() > 0)
         .collect();
-    if let Some(stationed_attacker) = stationed_attacker_army
-        && stationed_attacker.immensity() > 0
-    {
-        stationed.push(stationed_attacker.clone());
+    if let Some(stationed_attacker) = stationed_attacker_army {
+        let stationed_attacker = army_without_dead_hero(stationed_attacker.clone());
+        if stationed_attacker.immensity() > 0 {
+            stationed.push(stationed_attacker);
+        }
     }
     BattleTargetState {
         village,
         home,
         stationed,
     }
+}
+
+fn army_without_dead_hero(mut army: Army) -> Army {
+    army.detach_dead_hero();
+    army
 }
 
 fn remove_tribe_incompatible_buildings(village: &mut Village) {

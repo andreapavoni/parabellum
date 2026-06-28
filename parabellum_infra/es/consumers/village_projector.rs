@@ -3,10 +3,8 @@
 //! This consumer runs in the command transaction scope and must keep read-model
 //! updates consistent with event appends.
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
-use parabellum_app::villages::models::{ScheduledAction, VillageModel};
-use parabellum_app::villages::{VillageArmyContext, VillageEvent, hydrate_village};
-use parabellum_game::models::village::Village;
-use parabellum_types::common::ResourceGroup;
+use parabellum_app::villages::VillageEvent;
+use parabellum_app::villages::models::ScheduledAction;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::es::{
@@ -14,12 +12,15 @@ use crate::es::{
     PostgresScheduledActionRepository, PostgresVillageMovementRepository,
     PostgresVillageRepository,
 };
+use crate::map::PostgresMapRepository;
 
 mod armies;
 mod battle;
 mod buildings;
+mod economy;
 mod foundation;
 mod heroes;
+mod hydration;
 mod lifecycle;
 mod merchants;
 mod training;
@@ -33,6 +34,7 @@ pub struct VillageProjector {
     movements: PostgresVillageMovementRepository,
     actions: PostgresScheduledActionRepository,
     offers: PostgresMarketplaceRepository,
+    map: PostgresMapRepository,
     project_operational_actions: bool,
 }
 
@@ -44,57 +46,17 @@ impl VillageProjector {
     pub fn new_with_options(pool: PgPool, project_operational_actions: bool) -> Self {
         Self {
             pool: pool.clone(),
-            village: PostgresVillageRepository::new(pool.clone()),
-            armies: PostgresArmyRepository::new(pool.clone()),
-            heroes: PostgresHeroRepository::new(pool.clone()),
-            movements: PostgresVillageMovementRepository::new(pool.clone()),
-            actions: PostgresScheduledActionRepository::new(pool.clone()),
-            offers: PostgresMarketplaceRepository::new(pool),
+            village: PostgresVillageRepository::new(crate::ProjectionDb::new(pool.clone())),
+            armies: PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone())),
+            heroes: PostgresHeroRepository::new(crate::ProjectionDb::new(pool.clone())),
+            movements: PostgresVillageMovementRepository::new(crate::ProjectionDb::new(
+                pool.clone(),
+            )),
+            actions: PostgresScheduledActionRepository::new(crate::ProjectionDb::new(pool.clone())),
+            offers: PostgresMarketplaceRepository::new(crate::ProjectionDb::new(pool.clone())),
+            map: PostgresMapRepository::new(crate::ProjectionDb::new(pool)),
             project_operational_actions,
         }
-    }
-
-    pub(super) fn village_from_model(model: &VillageModel) -> Village {
-        hydrate_village(model.clone(), VillageArmyContext::default())
-    }
-
-    pub(super) async fn village_from_model_with_armies_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        model: VillageModel,
-    ) -> Result<Village, CqrsError> {
-        let village_id = model.village_id;
-        let armies = self
-            .armies
-            .army_context_for_village_in_tx(tx, village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(hydrate_village(model, armies))
-    }
-
-    pub(super) async fn deduct_village_resources_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-        cost: &ResourceGroup,
-    ) -> Result<(), CqrsError> {
-        if cost.total() == 0 {
-            return Ok(());
-        }
-        let source = self
-            .village
-            .get_by_village_id_in_tx(tx, village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut source = Self::village_from_model(&source);
-        source
-            .deduct_resources(cost)
-            .map_err(CqrsError::domain_source)?;
-        self.village
-            .set_stored_resources_in_tx(tx, village_id, source.stored_resources())
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(())
     }
 
     pub(super) async fn add_scheduled_action_in_tx(
@@ -107,30 +69,6 @@ impl VillageProjector {
         }
         self.actions
             .add_in_tx(tx, action)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
-    }
-
-    pub(super) async fn set_stored_resources_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-        resources: ResourceGroup,
-    ) -> Result<(), CqrsError> {
-        self.village
-            .set_stored_resources_in_tx(tx, village_id, resources)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
-    }
-
-    pub(super) async fn set_busy_merchants_in_tx(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-        busy_merchants: u8,
-    ) -> Result<(), CqrsError> {
-        self.village
-            .set_busy_merchants_in_tx(tx, village_id, busy_merchants)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }

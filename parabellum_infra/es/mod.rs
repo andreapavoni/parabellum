@@ -31,7 +31,8 @@ pub use consumers::{ReportProjector, VillageProjector};
 pub use replay::{ReplayMode, ReplayRequest, ReplayService, ReplaySummary, ReplayTarget};
 pub use repositories::{
     PostgresArmyRepository, PostgresHeroRepository, PostgresMarketplaceRepository,
-    PostgresReportRepository, PostgresScheduledActionRepository, PostgresVillageMovementRepository,
+    PostgresMerchantMovementRepository, PostgresReportRepository,
+    PostgresScheduledActionRepository, PostgresVillageMovementRepository,
     PostgresVillageRepository,
 };
 pub use runtime::{VillageCqrsRuntime, village_cqrs_runtime};

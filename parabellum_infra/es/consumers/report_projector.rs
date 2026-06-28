@@ -2,8 +2,11 @@ use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
 use parabellum_app::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{
+    ArmyListFilter, ArmyState, ProjectedReport, ReportKind,
+};
 use parabellum_game::models::army::Army;
+use parabellum_types::reports::ReportPayload;
 use sqlx::{PgPool, Postgres, Transaction};
 use tracing::warn;
 use uuid::Uuid;
@@ -25,6 +28,7 @@ pub struct ReportProjector {
     players: PostgresPlayerRepository,
 }
 
+/// Read-model context needed to build source-target report payloads.
 pub(super) struct SourceTargetReportContext {
     pub source: VillageModel,
     pub target: VillageModel,
@@ -32,6 +36,42 @@ pub(super) struct SourceTargetReportContext {
     pub target_reinforcements: Vec<Army>,
     pub source_player: String,
     pub target_player: String,
+}
+
+/// Fully prepared report projection before persistence.
+pub(super) struct ReportProjection {
+    pub id: Uuid,
+    pub kind: ReportKind,
+    pub payload: ReportPayload,
+    pub actor_player_id: Uuid,
+    pub actor_village_id: Option<u32>,
+    pub target_player_id: Option<Uuid>,
+    pub target_village_id: Option<u32>,
+    pub audience_player_ids: Vec<Uuid>,
+}
+
+impl ReportProjection {
+    /// Builds a report projection using source/target village context.
+    pub fn source_target(
+        id: Uuid,
+        kind: ReportKind,
+        payload: ReportPayload,
+        context: &SourceTargetReportContext,
+        source_village_id: u32,
+        target_village_id: u32,
+        audience_player_ids: Vec<Uuid>,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            payload,
+            actor_player_id: context.source.player_id,
+            actor_village_id: Some(source_village_id),
+            target_player_id: Some(context.target.player_id),
+            target_village_id: Some(target_village_id),
+            audience_player_ids,
+        }
+    }
 }
 
 impl ReportProjector {
@@ -45,9 +85,9 @@ impl ReportProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool: pool.clone(),
-            villages: PostgresVillageRepository::new(pool.clone()),
-            armies: PostgresArmyRepository::new(pool.clone()),
-            reports: PostgresReportRepository::new(pool.clone()),
+            villages: PostgresVillageRepository::new(crate::ProjectionDb::new(pool.clone())),
+            armies: PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone())),
+            reports: PostgresReportRepository::new(crate::ProjectionDb::new(pool.clone())),
             players: PostgresPlayerRepository::new(pool),
         }
     }
@@ -132,6 +172,32 @@ impl ReportProjector {
             audiences.push(target_player_id);
         }
         audiences
+    }
+
+    pub(super) async fn project_report_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        projection: ReportProjection,
+    ) -> Result<(), CqrsError> {
+        self.reports
+            .add_projected_in_tx(
+                tx,
+                &ProjectedReport {
+                    id: projection.id,
+                    report_type: projection.kind.as_str().to_string(),
+                    payload: serde_json::to_value(projection.payload)
+                        .map_err(CqrsError::Serialization)?,
+                    actor_player_id: projection.actor_player_id,
+                    actor_village_id: projection.actor_village_id,
+                    target_player_id: projection.target_player_id,
+                    target_village_id: projection.target_village_id,
+                },
+                &projection.audience_player_ids,
+            )
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+
+        Ok(())
     }
 
     pub async fn process_in_tx(

@@ -90,7 +90,9 @@ fn build_game_application(
     let identity = Arc::new(IdentityService::new(db_pool.clone()));
     let leaderboards =
         LeaderboardUseCases::new(Arc::new(PostgresPlayerRepository::new(db_pool.clone())));
-    let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(db_pool)));
+    let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(
+        parabellum_infra::ProjectionDb::new(db_pool),
+    )));
     let movement_settings = MovementSettings {
         world_size: config.world_size as i32,
         server_speed: config.speed as u8,

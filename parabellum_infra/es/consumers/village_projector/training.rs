@@ -41,7 +41,7 @@ impl VillageProjector {
         tx: &mut Transaction<'_, Postgres>,
         event: &VillageEvent,
     ) -> Result<(), CqrsError> {
-        let action = workflows::traps::scheduled_action_from_event(event)?;
+        let action = workflows::traps::trap_build_scheduled_action_from_event(event)?;
         self.add_scheduled_action_in_tx(tx, &action).await?;
         let VillageEvent::TrapBuildScheduled {
             village_id,
@@ -99,7 +99,7 @@ impl VillageProjector {
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         current.trapper = trapper;
         self.village
-            .replace_village_state_in_tx(tx, &current)
+            .store_village_model_in_tx(tx, &current)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -109,7 +109,7 @@ impl VillageProjector {
         tx: &mut Transaction<'_, Postgres>,
         event: &VillageEvent,
     ) -> Result<(), CqrsError> {
-        let scheduled = workflows::training::scheduled_action_from_event(event)?;
+        let scheduled = workflows::training::training_scheduled_action_from_event(event)?;
         self.add_scheduled_action_in_tx(tx, &scheduled.action)
             .await?;
         self.deduct_village_resources_in_tx(tx, scheduled.village_id, &scheduled.cost)
@@ -136,9 +136,7 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let player_id = current.player_id;
-        let mut village = self
-            .village_from_model_with_armies_in_tx(tx, current)
-            .await?;
+        let mut village = self.load_village_state_in_tx(tx, current).await?;
         village
             .add_trained_units_home(unit.clone(), *quantity_trained)
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
@@ -157,7 +155,7 @@ impl VillageProjector {
         tx: &mut Transaction<'_, Postgres>,
         event: &VillageEvent,
     ) -> Result<(), CqrsError> {
-        let scheduled = workflows::research::scheduled_action_from_event(event)?;
+        let scheduled = workflows::research::research_scheduled_action_from_event(event)?;
         self.add_scheduled_action_in_tx(tx, &scheduled.action)
             .await?;
         self.deduct_village_resources_in_tx(tx, scheduled.village_id, &scheduled.cost)
@@ -182,14 +180,14 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, *village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut village = Self::village_from_model(&current);
+        let mut village = self.load_village_state_in_tx(tx, current.clone()).await?;
         village
             .research_academy(unit.clone())
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let mut next = current.clone();
         next.academy_research = village.academy_research().clone();
         self.village
-            .replace_village_state_in_tx(tx, &next)
+            .store_village_model_in_tx(tx, &next)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -212,14 +210,14 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, *village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut village = Self::village_from_model(&current);
+        let mut village = self.load_village_state_in_tx(tx, current.clone()).await?;
         village
             .upgrade_smithy(unit.clone())
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let mut next = current.clone();
         next.smithy_upgrades = *village.smithy();
         self.village
-            .replace_village_state_in_tx(tx, &next)
+            .store_village_model_in_tx(tx, &next)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }

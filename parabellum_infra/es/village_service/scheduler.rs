@@ -107,7 +107,7 @@ pub(super) async fn execute_action(
             let mut trapper = parabellum_game::models::trapper::Trapper::from_buildings(
                 &village.buildings,
                 village.trapper,
-                PostgresArmyRepository::new(svc.pool().clone())
+                PostgresArmyRepository::new(crate::ProjectionDb::new(svc.pool().clone()))
                     .army_context_for_village(workflow.village_id)
                     .await
                     .map_err(CqrsError::domain_source)?

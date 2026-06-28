@@ -202,7 +202,7 @@ impl Aggregate for VillageAggregate {
                     });
             }
             VillageEvent::ArmyReturned { army, bounty, .. } => {
-                let _ = self.village.merge_units_home(army.units());
+                let _ = self.village.merge_army_home(army);
                 if let Some(bounty) = bounty {
                     self.village.village.store_resources(bounty);
                 }
@@ -466,5 +466,51 @@ impl Aggregate for VillageAggregate {
 
     fn set_version(&mut self, version: u64) {
         self.version = version;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use parabellum_game::models::hero::Hero;
+    use parabellum_types::tribe::Tribe;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn army_returned_merges_returning_hero_into_home_army() {
+        let player_id = Uuid::new_v4();
+        let village_id = 10;
+        let hero_id = Uuid::new_v4();
+        let hero = Hero::new(Some(hero_id), village_id, player_id, Tribe::Roman, None);
+        let returned_army = Army::new(
+            Some(Uuid::new_v4()),
+            village_id,
+            Some(village_id),
+            player_id,
+            Tribe::Roman,
+            &TroopSet::new([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            &[0; 8],
+            Some(hero),
+        );
+        let mut aggregate = VillageAggregate::founded(village_id, player_id, vec![]);
+
+        aggregate
+            .apply(&VillageEvent::ArmyReturned {
+                action_id: Uuid::new_v4(),
+                movement_id: Uuid::new_v4(),
+                army_id: returned_army.id,
+                player_id,
+                source_village_id: village_id,
+                target_village_id: 20,
+                army: returned_army,
+                bounty: None,
+                returns_at: Utc::now(),
+            })
+            .await;
+
+        let home_army = aggregate.village.village.army().expect("home army");
+        assert_eq!(home_army.units().get(0), 1);
+        assert_eq!(home_army.hero().map(|hero| hero.id), Some(hero_id));
     }
 }

@@ -12,7 +12,7 @@ use crate::villages::models::{
     MarketplaceOfferModel, ReportModel, ScheduledActionStatus, ScheduledActionType,
 };
 use crate::villages::projection_repositories::{
-    MarketplaceRepository, ReportRepository, ScheduledActionRepository,
+    MarketplaceRepository, ReportFilter, ReportRepository, ScheduledActionRepository,
 };
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -113,7 +113,7 @@ impl Query for ListReportsForPlayer {
 
     async fn apply(&self) -> Self::Output {
         self.repository
-            .list_for_player(self.player_id, self.offset, self.limit)
+            .list_reports(ReportFilter::for_player(self.player_id).page(self.offset, self.limit))
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -131,7 +131,7 @@ impl Query for GetReportForPlayer {
 
     async fn apply(&self) -> Self::Output {
         self.repository
-            .get_for_player(self.report_id, self.player_id)
+            .find_report(ReportFilter::for_player(self.player_id).report(self.report_id))
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -148,7 +148,7 @@ impl Query for CountUnreadReportsForPlayer {
 
     async fn apply(&self) -> Self::Output {
         self.repository
-            .count_unread_for_player(self.player_id)
+            .count_reports(ReportFilter::for_player(self.player_id).unread())
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -184,20 +184,34 @@ mod tests {
             Ok(())
         }
 
-        async fn list_for_player(
+        async fn list_reports(
             &self,
-            player_id: Uuid,
-            offset: i64,
-            limit: i64,
+            filter: ReportFilter,
         ) -> Result<Vec<ReportModel>, parabellum_types::errors::ApplicationError> {
             let reads = self.reads.lock().await;
             let rows = self.rows.lock().await;
             let mut out = Vec::new();
             for ((report_id, pid), read_at) in reads.iter() {
-                if *pid != player_id {
+                if *pid != filter.player_id {
+                    continue;
+                }
+                if let Some(filter_report_id) = filter.report_id
+                    && *report_id != filter_report_id
+                {
+                    continue;
+                }
+                if filter.unread_only && read_at.is_some() {
                     continue;
                 }
                 if let Some(row) = rows.get(report_id) {
+                    if !filter.kinds.is_empty()
+                        && !filter
+                            .kinds
+                            .iter()
+                            .any(|kind| kind.as_str() == row.report_type)
+                    {
+                        continue;
+                    }
                     let mut projected = row.clone();
                     projected.read_at = *read_at;
                     out.push(projected);
@@ -205,6 +219,8 @@ mod tests {
             }
             out.sort_by_key(|r| r.created_at);
             out.reverse();
+            let offset = filter.offset.unwrap_or(0);
+            let limit = filter.limit.unwrap_or(i64::MAX);
             if offset > 0 {
                 out = out.into_iter().skip(offset as usize).collect();
             }
@@ -212,17 +228,12 @@ mod tests {
             Ok(out)
         }
 
-        async fn get_for_player(
+        async fn find_report(
             &self,
-            report_id: Uuid,
-            player_id: Uuid,
+            filter: ReportFilter,
         ) -> Result<Option<ReportModel>, parabellum_types::errors::ApplicationError> {
-            let reads = self.reads.lock().await;
-            if !reads.contains_key(&(report_id, player_id)) {
-                return Ok(None);
-            }
-            let rows = self.rows.lock().await;
-            Ok(rows.get(&report_id).cloned())
+            let reports = self.list_reports(filter.page(0, 1)).await?;
+            Ok(reports.into_iter().next())
         }
 
         async fn mark_as_read(
@@ -234,16 +245,12 @@ mod tests {
             reads.insert((report_id, player_id), Some(Utc::now()));
             Ok(())
         }
-        async fn count_unread_for_player(
+
+        async fn count_reports(
             &self,
-            player_id: Uuid,
+            filter: ReportFilter,
         ) -> Result<i64, parabellum_types::errors::ApplicationError> {
-            let rows = self.rows.lock().await;
-            let unread = rows
-                .values()
-                .filter(|r| r.target_player_id == Some(player_id) && r.read_at.is_none())
-                .count() as i64;
-            Ok(unread)
+            Ok(self.list_reports(filter).await?.len() as i64)
         }
     }
 

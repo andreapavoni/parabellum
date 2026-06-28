@@ -26,7 +26,7 @@ pub use commands::{
 };
 pub use cqrs_command_service::VillageService;
 pub use events::VillageEvent;
-pub use mapping::{VillageArmyContext, hydrate_village};
+pub use mapping::{VillageArmyContext, apply_domain_village_state, hydrate_village};
 pub use policies::army_dispatch::{ArmyDispatch, ArmyDispatchRequest};
 pub use policies::expansion::{ConquestAttempt, ExpansionSlotUsage, ExpansionTrainingCommitment};
 pub use policies::marketplace::{MarketplaceAcceptance, MarketplaceOfferCreation};
@@ -46,9 +46,10 @@ pub use ports::{
     VillageStateReadPort,
 };
 pub use read_models::{
-    AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement, MerchantMovementKind,
-    SmithyQueueItem, TrainingQueueItem, TrapQueueItem, TroopMovement, TroopMovementDirection,
-    TroopMovementType, VillageArmyStateView, VillageQueues, VillageTroopMovements,
+    AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
+    MerchantMovementDirection, MerchantMovementKind, SmithyQueueItem, TrainingQueueItem,
+    TrapQueueItem, TroopMovement, TroopMovementDirection, TroopMovementType, VillageArmyStateView,
+    VillageQueues, VillageTroopMovements,
 };
 pub use requests::activity::{
     GetVillageQueuesRequest, GetVillageTroopMovementsRequest,

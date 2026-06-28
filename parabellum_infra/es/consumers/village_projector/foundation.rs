@@ -7,8 +7,10 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
+use parabellum_app::villages::projection_repositories::HeroPlacementState;
 use sqlx::{Postgres, Transaction};
 
+use super::economy::VillageEconomyFacts;
 use crate::es::consumers::village_projector::VillageProjector;
 use crate::es::workflows;
 
@@ -52,10 +54,14 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if let Some(hero) = army.hero() {
-            self.heroes
-                .upsert_in_tx(tx, &hero, hero.village_id, *source_village_id, "moving")
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            self.project_hero_placement_in_tx(
+                tx,
+                &hero,
+                hero.village_id,
+                *source_village_id,
+                HeroPlacementState::Moving,
+            )
+            .await?;
         }
         self.refresh_village_derived_state_in_tx(tx, *source_village_id)
             .await?;
@@ -92,12 +98,16 @@ impl VillageProjector {
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut source = Self::village_from_model(&source);
+        let mut source = self.load_village_state_in_tx(tx, source).await?;
         source
             .deduct_foundation_resources()
             .map_err(CqrsError::domain_source)?;
-        self.set_stored_resources_in_tx(tx, *source_village_id, source.stored_resources())
-            .await?;
+        self.apply_village_economy_facts_in_tx(
+            tx,
+            *source_village_id,
+            VillageEconomyFacts::stored_resources(source.stored_resources()),
+        )
+        .await?;
 
         let action = workflows::movements::settlers_arrival_scheduled_action_from_event(event)?;
         self.add_scheduled_action_in_tx(tx, &action).await

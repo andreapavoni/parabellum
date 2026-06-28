@@ -13,7 +13,7 @@ pub(crate) struct ScheduledResearchAction {
     pub(crate) cost: ResourceGroup,
 }
 
-fn scheduled_action(
+fn research_scheduled_action(
     action_id: Uuid,
     execute_at: chrono::DateTime<chrono::Utc>,
     kind: ResearchWorkflowKind,
@@ -35,7 +35,7 @@ fn scheduled_action(
     )
 }
 
-pub(crate) fn scheduled_action_from_event(
+pub(crate) fn research_scheduled_action_from_event(
     event: &VillageEvent,
 ) -> Result<ScheduledResearchAction, CqrsError> {
     let (kind, action_id, player_id, village_id, unit, cost, execute_at) = match event {
@@ -71,12 +71,14 @@ pub(crate) fn scheduled_action_from_event(
             cost,
             execute_at,
         ),
-        _ => unreachable!("scheduled_action_from_event called with non-research scheduled event"),
+        _ => unreachable!(
+            "research_scheduled_action_from_event called with non-research scheduled event"
+        ),
     };
 
     Ok(ScheduledResearchAction {
         village_id: *village_id,
-        action: scheduled_action(
+        action: research_scheduled_action(
             *action_id,
             *execute_at,
             kind,

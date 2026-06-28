@@ -21,12 +21,6 @@ pub trait HeroReadPort: Send + Sync {
     /// Returns whether the player already has a living hero.
     async fn player_has_alive_hero(&self, player_id: Uuid) -> Result<bool, ApplicationError>;
 
-    /// Returns whether the player already has a pending hero revival.
-    async fn player_has_pending_hero_revival(
-        &self,
-        player_id: Uuid,
-    ) -> Result<bool, ApplicationError>;
-
     /// Returns when the player's pending hero revival completes, if any.
     async fn get_pending_hero_revival_at(
         &self,

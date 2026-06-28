@@ -640,7 +640,8 @@ Projection repository contracts live under
 
 - `armies.rs` for projected army placement,
 - `scheduled_actions.rs` for scheduled action projections,
-- `marketplace.rs` for marketplace offer and merchant movement projections,
+- `marketplace.rs` for marketplace offer projections,
+- `merchant_movements.rs` for active merchant movements derived from scheduled actions,
 - `reports.rs` for report projection and audience rows,
 - `heroes.rs` for projected hero state,
 - `movements.rs` for village movement rows,
@@ -668,6 +669,255 @@ CQRS model contracts live under `parabellum_app/villages/models/<concern>.rs`:
 
 `villages::models::...` is the public app import path. Submodules exist to keep
 ownership clear, not to create multiple public naming styles.
+
+## Infrastructure Layer Pattern
+
+`parabellum_infra` implements app ports, projection repository contracts, and
+CQRS/ES persistence. It may know about SQLx, Postgres, transactions,
+advisory locks, event-store tables, read-model tables, and runtime wiring. It
+must not own gameplay decisions that belong in `parabellum_app` use cases or
+pure rules that belong in `parabellum_game`.
+
+Infrastructure code is organized by persistence role:
+
+- event-store components own canonical event and snapshot persistence;
+- projection repositories own rebuildable read-model and operational queue
+  persistence;
+- projectors translate canonical events into projection rows;
+- workflow modules translate due operational payloads into canonical facts;
+- adapters implement app ports by delegating to infra services and repositories.
+
+### Persistence Boundaries
+
+Events and projections have different durability semantics:
+
+- `EventStoreDb` is the logical database boundary for canonical event-store
+  tables such as `es_events` and `es_snapshots`.
+- `ProjectionDb` is the logical database boundary for rebuildable projection,
+  read-model, and operational tables such as `rm_village`, `rm_armies`,
+  `rm_reports`, `rm_map_fields`, and `rm_scheduled_actions`.
+- `InfraDb` groups both boundaries when one physical Postgres pool backs the
+  whole runtime.
+
+Both boundaries share the same `PgPool` today. Constructors should still ask
+for the logical boundary they need:
+
+- `PostgresEventStore::new(EventStoreDb)`
+- `PostgresSnapshotStore::new(EventStoreDb)`
+- `PostgresVillageRepository::new(ProjectionDb)`
+- `PostgresScheduledActionRepository::new(ProjectionDb)`
+- `PostgresMapRepository::new(ProjectionDb)`
+
+This keeps event-store and projection dependencies visible at composition
+sites. It also prepares the system for a later move to separate schemas or
+databases.
+
+Current workflow execution still appends events and updates projections inside
+one physical Postgres transaction. Moving `EventStoreDb` and `ProjectionDb` to
+separate databases requires an explicit runtime contract change: event append
+must become the durable write, and projection updates must become replayable
+eventual work.
+
+Event-store persistence should be organized as its own store module:
+
+- `stores/mod.rs` is an index and public re-export boundary only;
+- `stores/event_store.rs` owns appending and loading canonical events from
+  `es_events`;
+- `stores/snapshots.rs` owns derived aggregate snapshots in `es_snapshots`;
+- `stores/rows.rs` owns typed SQL row structs and conversions for event-store
+  persistence.
+
+Do not mix event appends, snapshot reads, and raw row conversion in one file.
+The event store is the canonical durability boundary; snapshots are an
+optimization and must remain rebuildable from events.
+
+Replay tooling should mirror that separation:
+
+- `replay/mod.rs` owns the public `ReplayService` type and re-exports replay
+  request/summary models;
+- `replay/request.rs` owns `ReplayRequest`, `ReplayTarget`, `ReplayMode`, and
+  `ReplaySummary`;
+- `replay/runner.rs` owns dry-run/full replay loops, projection reset, and
+  projector dispatch;
+- `replay/filters.rs` owns target/event acceptance rules;
+- `replay/snapshots.rs` owns aggregate snapshot rebuilds.
+
+Replay is allowed to reset projection tables because projections are
+rebuildable. It must not mutate canonical event rows.
+
+### Repository Shape
+
+Postgres repositories implement app-owned contracts. They should expose a small
+public surface:
+
+- app trait methods required by `parabellum_app`,
+- explicit `*_in_tx(&mut Transaction<...>, ...)` helpers used by projectors or
+  workflow transaction boundaries,
+- no app orchestration behavior.
+
+Avoid `Option<&mut Transaction>` as the default transaction pattern. Use two
+explicit entrypoints instead:
+
+- pool-backed app/repository methods for standalone reads and writes,
+- `*_in_tx` methods for projector and workflow code already inside a
+  transaction.
+
+If a query needs to run in both modes, keep SQL construction and row conversion
+shared, not the transaction parameter itself.
+
+### Infrastructure Service Organization
+
+Infrastructure services are orchestration facades over repositories, CQRS
+runtime wiring, workflow helpers, and projector transaction boundaries. They
+should not grow into persistence modules themselves.
+
+`VillageEsService` is the infrastructure facade for village CQRS/ES command,
+scheduler, and read-helper flows. Its root module owns service construction,
+command dispatch, workflow append preparation, and scheduler tick coordination.
+Concern-specific service helpers live in focused submodules:
+
+- `village_service/scheduler.rs` for due-action processing and operational
+  scheduler coordination;
+- `village_service/queries/buildings.rs` for building cancellation read context;
+- `village_service/queries/heroes.rs` for hero read-model lookups;
+- `village_service/queries/marketplace.rs` for marketplace page read
+  composition;
+- `village_service/queries/movements.rs` for troop movement, army state, and
+  movement-control read contexts;
+- `village_service/queries/reports.rs` for report reads and command-backed
+  mark-read orchestration;
+- `village_service/queries/scheduled_actions.rs` for queue and status-count
+  reads;
+- `village_service/queries/villages.rs` for basic village state reads.
+
+The `queries/mod.rs` file should remain an index with module docs and module
+declarations only. Query modules may compose multiple repositories into one
+API-facing read model, but broad SQL and row mapping still belongs in the
+repositories that own the underlying projection tables.
+
+When a service helper needs a repeated mapping from app projection models to UI
+read models, keep that mapping local to the concern module unless it is shared
+by multiple modules. Do not place concern-specific mapping helpers on the root
+service type just because they are convenient to call.
+
+### SQL Row And Query Conventions
+
+SQL result shapes should use dedicated structs:
+
+- derive `sqlx::FromRow` for concrete query result rows;
+- name rows by query shape, for example `DbScheduledActionRow`,
+  `DbPendingTroopArrivalActionRow`, or `DbMerchantMovementRow`;
+- keep row structs and conversions near the repository concern, preferably in
+  `rows.rs` when the repository is split into a directory module;
+- use explicit `From`/`TryFrom` conversions between DB rows and app/domain
+  models.
+
+Avoid raw `PgRow` mapping unless the query shape is genuinely dynamic and a
+typed row would add more complexity than clarity. App/domain models should not
+double as SQL row structs unless the database shape truly is the app contract.
+
+SQL strings and `QueryBuilder` construction belong near the repository concern,
+preferably in `queries.rs` when a repository grows beyond one file. Repositories
+should not inline large unrelated SQL blocks beside app-port implementations if
+the file is already mixing writes, reads, row mapping, and helper queries.
+
+Database enum values should use the same names as the app model variants they
+persist. Do not normalize naming drift with hidden SQLx renames unless the
+database is intentionally integrating with an external schema. For internal
+tables, add a migration and align both sides.
+
+Scheduled-action queries should use the app-owned `ScheduledActionFilter` for
+semantic predicates such as action types, statuses, player, village, movement,
+ordering, and limits. Infrastructure translates that filter into projection SQL
+and JSON workflow-field predicates. App contracts must not expose SQL columns,
+JSON paths, or raw payload keys as filtering concepts.
+Composed projection views may use explicit SQL when a single result shape spans
+multiple scheduled-action types, such as active merchant movements.
+
+Report queries should use the app-owned `ReportFilter` for audience-scoped
+predicates such as player visibility, report id, unread state, pagination, and
+report category. Report category filters use `ReportKind` values; infrastructure
+translates them to the canonical `rm_reports.report_type` discriminators.
+Report projections are split between `rm_reports`, which stores payload and
+actor/target context, and `rm_report_reads`, which stores per-player audience
+visibility and read state. Application callers must not query reports without an
+audience player.
+
+Report projectors should centralize report materialization through one helper
+that assigns the `ReportKind`, serializes the payload, stores actor/target
+context, and writes audience rows. Event-specific projector modules should build
+the report payload and audience rule only; they should not construct
+`ProjectedReport` rows directly.
+
+Village movement queries should use the app-owned `VillageMovementFilter`.
+Every movement query is anchored to the viewing village and may optionally
+filter by viewing direction or movement type. Infrastructure translates those
+semantic filters to `rm_village_movements` columns and database enum values.
+
+The village projection repository is the main read-model owner for `rm_village`
+rows and may refresh derived read state before returning a `VillageModel`.
+The app-facing `VillageRepository` is a read boundary only. It should not expose
+table-field setters or projector maintenance operations.
+
+Its SQL row adapters belong in `villages/rows.rs`, reusable village SELECT
+builders belong in `villages/queries.rs`, and full-model village write SQL
+builders belong in `villages/writes.rs`. When a projector changes only
+`rm_village`, prefer storing a complete updated `VillageModel` through
+`store_village_model_in_tx`. When an event changes multiple read models, keep
+those writes inside one transaction and call the relevant table owners from the
+projector.
+For example, village lifecycle and conquest projection may update both
+`rm_village` and `rm_map_fields`; village state must be stored through the
+village repository, while map occupancy must be stored through the map
+repository in the same transaction.
+
+When an event carries absolute economy facts for `rm_village`, such as stored
+resources or busy merchant counts, apply those facts through one typed
+projector helper and store the full `VillageModel` once. Do not add one
+repository setter per field or one helper per possible fact combination.
+Meaningful lifecycle transitions such as conquest should also use named
+projector fact applicators rather than anonymous field assignments.
+
+Pool-backed methods and `*_in_tx` projector helpers must remain separate
+entrypoints; shared construction should happen through typed projection/query
+builders rather than `Option<&mut Transaction>`.
+Helpers that commit village projection state changes belong in
+`villages/state_changes.rs`; `villages/writes.rs` should stay focused on
+full-model write SQL builder functions.
+
+Read helpers that fetch `VillageModel` rows and refresh them for application
+reads belong in `villages/reads.rs`; the repository trait impl should delegate
+to those helpers instead of repeating row-to-model refresh loops. When derived
+refresh needs to persist materialized state, store the refreshed complete
+`VillageModel`; do not maintain partial derived-field update queries.
+
+Building event projection should hydrate a domain `Village`, apply the event
+through domain mutation methods such as `add_building_at_slot`,
+`set_building_level_at_slot`, or `remove_building_at_slot`, copy the resulting
+domain-owned state back into `VillageModel`, and store the full model. Do not
+reimplement building-derived production, storage capacity, merchant count,
+population, culture point, or resource ticking calculations in
+`parabellum_infra`. Village founding follows the same rule: the lifecycle
+projector builds a domain-hydrated `VillageModel` and stores it through the
+full-model upsert path.
+
+Concern-specific snapshot queries owned by `rm_village`, such as expansion
+culture and ownership counters, should live in focused helper modules like
+`villages/expansion.rs` and return app-owned snapshot structs through typed
+SQLx row structs.
+
+Pure derived read-model calculations belong in `villages/refresh.rs`; repository
+methods should load the required context and delegate the synchronous refresh
+calculation there. Cross-projection lookups used only by refresh, such as active
+hero resource bonuses, should live in focused helper modules instead of the main
+repository body. Gameplay formulas used during refresh, such as army upkeep
+modifiers and loyalty regeneration, must be delegated to `parabellum_game`
+domain helpers.
+
+Repository contracts should follow projection ownership. Marketplace offer
+reads belong to `MarketplaceRepository` because they read `rm_marketplace_offers`.
+Active merchant movement reads belong to `MerchantMovementRepository` because
+they are derived from scheduled merchant actions.
 
 ## CQRS/ES Boundaries
 
@@ -810,6 +1060,10 @@ Projector module pattern:
 - Parent projector files are dispatchers and shared infrastructure helpers.
 - Feature modules own one read-model concern such as armies, battle, merchants,
   training, reports, or lifecycle.
+- Shared projector helper modules should be named by concern. For example,
+  `village_projector/hydration.rs` owns complete domain village hydration, and
+  `village_projector/economy.rs` owns fact-carried resource and merchant
+  materialization.
 - Projection methods should load required context, call small private helpers to
   shape the next read-model state, and keep persistence writes inside
   infrastructure transaction methods.
@@ -859,10 +1113,10 @@ Command-side rule:
 - Projectors materialize aggregate army facts into `rm_armies`. When a village
   read model must be hydrated for production or command context, current army
   context is loaded from `rm_armies`.
-- `VillageModel` is the village economy/read-model shape. Converting it with
-  `From<VillageModel>` creates an economy-only domain village. Code that needs
-  troop-aware domain methods must load `VillageArmyContext` from `rm_armies`
-  and call `hydrate_village(model, context)`.
+- `VillageModel` is the village read-model shape without embedded army rows.
+  Projector code that needs a domain `Village` must load `VillageArmyContext`
+  from `rm_armies` and hydrate complete village state. Do not expose a generic
+  "village from model" helper that silently omits armies.
 - Report projectors follow the same read-model rule: reports are
   notifications, but scout/battle report payloads still load troop rows from
   `rm_armies` when visibility requires them.
@@ -967,10 +1221,10 @@ Projector rules:
   repository reads repeatedly and documents the consistency boundary.
 - Domain rehydration should use domain-owned snapshot/input structs, not
   database rows or app read-model structs directly. Translate read models into
-  domain snapshots at application/infrastructure boundaries, and use explicit
-  hydration helpers when required context may be partial. Avoid broad
-  `From<ReadModel> for DomainModel` conversions because they hide missing
-  context and make economy-only or partial hydration look authoritative.
+  domain snapshots at application/infrastructure boundaries, and make missing
+  context explicit in helper names. Avoid broad `From<ReadModel> for
+  DomainModel` conversions because they hide missing context and make
+  economy-only or partial hydration look authoritative.
 - For row mapping, prefer database DTOs such as `DbVillageModelRow` with
   `sqlx::FromRow`, then convert with `From`/`TryFrom` into app or domain
   structs. Do not map SQL rows directly into domain structs unless the domain

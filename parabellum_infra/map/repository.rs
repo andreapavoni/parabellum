@@ -1,5 +1,5 @@
 use serde_json::Value;
-use sqlx::{FromRow, PgPool, QueryBuilder, types::Json};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Transaction, types::Json};
 use uuid::Uuid;
 
 use parabellum_app::{map::MapReadPort, read_models::MapRegionTile};
@@ -14,6 +14,7 @@ use parabellum_types::{
     map::{Position, ValleyTopology},
 };
 
+use crate::ProjectionDb;
 use crate::persistence::models as db_models;
 
 #[derive(Clone)]
@@ -22,8 +23,10 @@ pub struct PostgresMapRepository {
 }
 
 impl PostgresMapRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(db: ProjectionDb) -> Self {
+        Self {
+            pool: db.pool().clone(),
+        }
     }
 
     pub async fn find_unoccupied_valley_for_update(
@@ -37,6 +40,22 @@ impl PostgresMapRepository {
             .await
             .map_err(|_| ApplicationError::Db(DbError::WorldMapNotInitialized))?;
         map_field_to_valley(random_unoccupied_field)
+    }
+
+    /// Stores village occupancy for a map field inside an existing transaction.
+    pub async fn set_occupancy_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        field_id: u32,
+        village_id: Option<u32>,
+        player_id: Option<Uuid>,
+    ) -> Result<(), ApplicationError> {
+        set_occupancy_query(field_id, village_id, player_id)
+            .build()
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        Ok(())
     }
 }
 
@@ -296,6 +315,20 @@ pub(crate) fn random_unoccupied_4446_valley_for_update_query(
             "SELECT id, village_id, player_id, position, topology FROM rm_map_fields WHERE village_id IS NULL AND player_id IS NULL AND (position->>'x')::int < 0 AND (position->>'y')::int > 0 AND topology = '{\"Valley\":[4,4,4,6]}'::jsonb ORDER BY RANDOM() LIMIT 1 FOR UPDATE SKIP LOCKED"
         }
     }
+}
+
+fn set_occupancy_query(
+    field_id: u32,
+    village_id: Option<u32>,
+    player_id: Option<Uuid>,
+) -> QueryBuilder<'static, Postgres> {
+    let mut query = QueryBuilder::new("UPDATE rm_map_fields SET village_id = ");
+    query.push_bind(village_id.map(|id| id as i32));
+    query.push(", player_id = ");
+    query.push_bind(player_id);
+    query.push(", updated_at = NOW() WHERE id = ");
+    query.push_bind(field_id as i32);
+    query
 }
 
 fn map_field_to_valley(field: db_models::MapField) -> Result<Valley, ApplicationError> {

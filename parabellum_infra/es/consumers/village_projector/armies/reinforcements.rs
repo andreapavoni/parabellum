@@ -3,7 +3,9 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
-use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{
+    ArmyListFilter, ArmyState, HeroPlacementState,
+};
 use parabellum_game::models::army::Army;
 use sqlx::{Postgres, Transaction};
 
@@ -106,6 +108,9 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if *hero_alone_transfer {
+            let target_player_id = target.player_id;
+            let default_target_army =
+                Army::new_village_army(&self.load_village_state_in_tx(tx, target).await?);
             let mut target_home_armies = self
                 .armies
                 .list_armies_in_tx(
@@ -118,9 +123,7 @@ impl VillageProjector {
                 )
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-            let mut target_army = target_home_armies
-                .pop()
-                .unwrap_or_else(|| Army::new_village_army(&Self::village_from_model(&target)));
+            let mut target_army = target_home_armies.pop().unwrap_or(default_target_army);
             target_army.set_hero(army.hero());
             let next_target_army = if target_army.immensity() == 0 {
                 None
@@ -129,16 +132,20 @@ impl VillageProjector {
             };
             if let Some(ref home_army) = next_target_army {
                 self.armies
-                    .upsert_home_in_tx(tx, home_army, target.player_id)
+                    .upsert_home_in_tx(tx, home_army, target_player_id)
                     .await
                     .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             }
             if let Some(mut hero) = army.hero() {
                 hero.village_id = *target_village_id;
-                self.heroes
-                    .upsert_in_tx(tx, &hero, *target_village_id, *target_village_id, "home")
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.project_hero_placement_in_tx(
+                    tx,
+                    &hero,
+                    *target_village_id,
+                    *target_village_id,
+                    HeroPlacementState::Home,
+                )
+                .await?;
             }
         } else {
             self.merge_stationed_reinforcement(
@@ -211,10 +218,14 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if let Some(hero) = target_army.hero() {
-            self.heroes
-                .upsert_in_tx(tx, &hero, hero.village_id, target_village_id, "stationed")
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            self.project_hero_placement_in_tx(
+                tx,
+                &hero,
+                hero.village_id,
+                target_village_id,
+                HeroPlacementState::Stationed,
+            )
+            .await?;
         }
 
         Ok(())
@@ -376,16 +387,14 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(hero) = remaining.hero() {
-                self.heroes
-                    .upsert_in_tx(
-                        tx,
-                        &hero,
-                        hero.village_id,
-                        stationed_village_id,
-                        "stationed",
-                    )
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.project_hero_placement_in_tx(
+                    tx,
+                    &hero,
+                    hero.village_id,
+                    stationed_village_id,
+                    HeroPlacementState::Stationed,
+                )
+                .await?;
             }
         } else {
             self.armies

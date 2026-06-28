@@ -5,7 +5,7 @@ import { formatDurationHms, secondsUntilIso } from "@/lib/time";
 import { unitLabel } from "@/lib/labels";
 import { Link } from "@/components/Link";
 import { ResourceSprite } from "@/components/ResourceSprite";
-import { UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
+import { spriteMetaForUnitName, UnitSprite, UnitSpriteByName } from "@/components/UnitSprite";
 import { ArmyTable } from "@/components/ArmyTable";
 import { Badge, Button, Panel, SectionHeader } from "@/components/ui";
 import { useServerDeadlineCountdown } from "@/live/useCountdown";
@@ -52,6 +52,14 @@ type RallyTab = "armies" | "send";
 function movementKindLabel(kind: RallyCard["movementKind"]) {
   if (!kind) return null;
   return kind.replace("_", " ");
+}
+
+function tribeFromSendableUnits(
+  units: NonNullable<BuildingPageResponse["detail"]["rallyPoint"]>["sendableUnits"],
+) {
+  const firstUnit = units[0];
+  if (!firstUnit) return undefined;
+  return spriteMetaForUnitName(firstUnit.name)?.tribe;
 }
 
 function RallyTabs({
@@ -358,6 +366,7 @@ export function RallyPointBuilding({
   }, []);
 
   if (!detail.rallyPoint) return null;
+  const emptyStationedArmyTribe = tribeFromSendableUnits(detail.rallyPoint.sendableUnits);
 
   const toUnitsArray = () => {
     const arr = Array.from({ length: 10 }, (_, idx) => units[idx] ?? 0);
@@ -650,7 +659,7 @@ export function RallyPointBuilding({
         <div class="space-y-4">
           {(["stationed", "deployed", "reinforcement", "trapped", "outgoing", "incoming"] as const).map((category) => {
             const cards = detail.rallyPoint!.cards.filter((card) => card.category === category);
-            if (cards.length === 0) return null;
+            if (cards.length === 0 && category !== "stationed") return null;
             return (
               <div class="space-y-2" key={category}>
                 <h3
@@ -660,6 +669,11 @@ export function RallyPointBuilding({
                   {RALLY_SECTION_TITLES[category]}
                 </h3>
                 <div class="space-y-2">
+                  {cards.length === 0 ? (
+                    <Panel class="space-y-2">
+                      <ArmyTable units={Array(10).fill(0)} tribe={emptyStationedArmyTribe} showEmpty />
+                    </Panel>
+                  ) : null}
                   {cards.map((card) => {
                     const actionKey = card.action && card.actionId
                       ? `${card.action}-${card.actionId}`
@@ -706,7 +720,12 @@ export function RallyPointBuilding({
 
                         {!isActionEditorOpen ? (
                           <div>
-                            <ArmyTable units={card.units} tribe={card.tribe} hasHero={card.hasHero} />
+                            <ArmyTable
+                              units={card.units}
+                              tribe={card.tribe}
+                              hasHero={card.hasHero}
+                              showEmpty={category === "stationed"}
+                            />
                             {card.upkeep !== undefined ? (
                               <div class="mt-2 flex justify-end">
                                 <span class="inline-flex items-center gap-1 text-xs text-gray-500">

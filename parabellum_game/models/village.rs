@@ -179,7 +179,8 @@ impl Village {
         Self::unit_upkeep_with_trough(unit, trough_level)
     }
 
-    fn army_upkeep_with_trough(&self, army: &Army) -> u32 {
+    /// Returns upkeep for an army with village-specific modifiers applied.
+    pub fn army_upkeep(&self, army: &Army) -> u32 {
         let trough_level = self.horse_drinking_trough_level();
         let units_data = army.tribe.units();
         let mut total = 0u32;
@@ -863,6 +864,31 @@ impl Village {
         self.loyalty = loyalty_after.min(100);
     }
 
+    /// Regenerates loyalty over elapsed time using Palace/Residence level.
+    pub fn regenerate_loyalty(&mut self, elapsed: chrono::Duration, speed: f64) {
+        if self.loyalty >= 100 {
+            return;
+        }
+
+        let Some((building, _)) = self.get_palace_or_residence() else {
+            return;
+        };
+        let level = building.level;
+        if level == 0 {
+            return;
+        }
+
+        let elapsed_secs = elapsed.num_seconds();
+        if elapsed_secs <= 0 {
+            return;
+        }
+
+        let speed = speed.max(1.0);
+        let rate_per_sec = (2.0 * level as f64 * speed) / (3.0 * 3600.0);
+        let gained = (elapsed_secs as f64 * rate_per_sec).floor() as u8;
+        self.regenerate_loyalty_to(self.loyalty.saturating_add(gained));
+    }
+
     /// Calculates the total culture points production per day from all buildings.
     pub fn calculate_culture_points_production(&self) -> u32 {
         self.buildings
@@ -1268,12 +1294,9 @@ impl Village {
         }
 
         // armies upkeep
-        self.production.upkeep += self
-            .army
-            .clone()
-            .map_or(0, |a| self.army_upkeep_with_trough(&a));
+        self.production.upkeep += self.army.clone().map_or(0, |a| self.army_upkeep(&a));
         for a in self.reinforcements.iter() {
-            self.production.upkeep += self.army_upkeep_with_trough(a);
+            self.production.upkeep += self.army_upkeep(a);
         }
 
         // update internal data

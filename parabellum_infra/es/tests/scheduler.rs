@@ -740,7 +740,8 @@ async fn village_es_service_chained_scheduling_deducts_cumulative_exact_costs() 
 async fn village_es_service_queued_upgrades_use_incremental_levels_and_exact_cumulative_cost() {
     with_test_pool(|pool| async move {
         let service = VillageEsService::new(pool.clone());
-        let actions = PostgresScheduledActionRepository::new(pool.clone());
+        let actions =
+            PostgresScheduledActionRepository::new(crate::ProjectionDb::new(pool.clone()));
         let scenario = EsScenario::new(&pool, &service);
 
         let (_user_id, player_id, village_id) = scenario
@@ -1024,7 +1025,7 @@ async fn village_es_service_attack_arrival_processes_and_schedules_return_action
                 returns_at,
             },
         };
-        let repo = PostgresScheduledActionRepository::new(pool.clone());
+        let repo = PostgresScheduledActionRepository::new(crate::ProjectionDb::new(pool.clone()));
         repo.add(&ScheduledAction {
             id: arrival_action_id,
             action_type: ScheduledActionType::AttackArrival,

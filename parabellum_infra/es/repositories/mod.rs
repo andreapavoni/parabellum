@@ -1,14 +1,16 @@
 mod armies;
 mod heroes;
 mod marketplace_offers;
+mod merchant_movements;
 mod reports;
-mod scheduled_actions;
+pub(crate) mod scheduled_actions;
 mod village_movements;
 mod villages;
 
 pub use armies::PostgresArmyRepository;
 pub use heroes::PostgresHeroRepository;
 pub use marketplace_offers::PostgresMarketplaceRepository;
+pub use merchant_movements::PostgresMerchantMovementRepository;
 pub use reports::PostgresReportRepository;
 pub use scheduled_actions::PostgresScheduledActionRepository;
 pub use village_movements::PostgresVillageMovementRepository;

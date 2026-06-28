@@ -183,42 +183,13 @@ fn reinforcement_arrival_events_from_models(
     ])
 }
 
-#[allow(clippy::too_many_arguments)]
 fn scout_arrival_scheduled_action(
-    action_id: Uuid,
-    movement_id: Uuid,
-    army_id: Uuid,
-    return_action_id: Uuid,
-    village_id: u32,
-    source_village_id: u32,
-    target_village_id: u32,
-    player_id: Uuid,
-    army: Army,
-    target: parabellum_types::battle::ScoutingTarget,
-    attack_type: parabellum_types::battle::AttackType,
-    arrives_at: chrono::DateTime<chrono::Utc>,
-    returns_at: chrono::DateTime<chrono::Utc>,
+    workflow: ScoutArrivalWorkflow,
 ) -> Result<ScheduledAction, CqrsError> {
     super::scheduled_action(
-        action_id,
-        arrives_at,
-        ScheduledActionPayload::ScoutArrival {
-            workflow: ScoutArrivalWorkflow {
-                action_id,
-                movement_id,
-                army_id,
-                return_action_id,
-                village_id,
-                source_village_id,
-                target_village_id,
-                player_id,
-                army,
-                target,
-                attack_type,
-                arrives_at,
-                returns_at,
-            },
-        },
+        workflow.action_id,
+        workflow.arrives_at,
+        ScheduledActionPayload::ScoutArrival { workflow },
     )
 }
 
@@ -243,59 +214,34 @@ pub(crate) fn scout_arrival_scheduled_action_from_event(
         unreachable!("scout_arrival_scheduled_action_from_event called with non-ScoutSent event");
     };
 
-    scout_arrival_scheduled_action(
-        *arrival_action_id,
-        *movement_id,
-        *army_id,
-        *return_action_id,
-        *source_village_id,
-        *source_village_id,
-        *target_village_id,
-        *player_id,
-        army.clone(),
-        target.clone(),
-        attack_type.clone(),
-        *arrives_at,
-        *returns_at,
-    )
+    scout_arrival_scheduled_action(ScoutArrivalWorkflow {
+        action_id: *arrival_action_id,
+        movement_id: *movement_id,
+        army_id: *army_id,
+        return_action_id: *return_action_id,
+        village_id: *source_village_id,
+        source_village_id: *source_village_id,
+        target_village_id: *target_village_id,
+        player_id: *player_id,
+        army: army.clone(),
+        target: target.clone(),
+        attack_type: attack_type.clone(),
+        arrives_at: *arrives_at,
+        returns_at: *returns_at,
+    })
 }
 
 pub(crate) fn scout_arrived_events(workflow: &ScoutArrivalWorkflow) -> super::WorkflowEvents {
     super::WorkflowEvents::one(workflow.source_village_id, scout_arrived_fact(workflow))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn settlers_arrival_scheduled_action(
-    action_id: Uuid,
-    movement_id: Uuid,
-    army_id: Uuid,
-    village_id: u32,
-    source_village_id: u32,
-    target_village_id: u32,
-    target_position: parabellum_types::map::Position,
-    player_id: Uuid,
-    village_name: String,
-    tribe: parabellum_types::tribe::Tribe,
-    arrives_at: chrono::DateTime<chrono::Utc>,
+    workflow: SettlersArrivalWorkflow,
 ) -> Result<ScheduledAction, CqrsError> {
     super::scheduled_action(
-        action_id,
-        arrives_at,
-        ScheduledActionPayload::SettlersArrival {
-            workflow: SettlersArrivalWorkflow {
-                action_id,
-                movement_id,
-                army_id,
-                village_id,
-                source_village_id,
-                target_village_id,
-                target_position,
-                player_id,
-                village_name,
-                tribe,
-                arrives_at,
-            },
-        },
+        workflow.action_id,
+        workflow.arrives_at,
+        ScheduledActionPayload::SettlersArrival { workflow },
     )
 }
 
@@ -321,57 +267,28 @@ pub(crate) fn settlers_arrival_scheduled_action_from_event(
         );
     };
 
-    settlers_arrival_scheduled_action(
-        *action_id,
-        *movement_id,
-        *army_id,
-        *source_village_id,
-        *source_village_id,
-        *target_village_id,
-        target_position.clone(),
-        *player_id,
-        village_name.clone(),
-        tribe.clone(),
-        *arrives_at,
-    )
+    settlers_arrival_scheduled_action(SettlersArrivalWorkflow {
+        action_id: *action_id,
+        movement_id: *movement_id,
+        army_id: *army_id,
+        village_id: *source_village_id,
+        source_village_id: *source_village_id,
+        target_village_id: *target_village_id,
+        target_position: target_position.clone(),
+        player_id: *player_id,
+        village_name: village_name.clone(),
+        tribe: tribe.clone(),
+        arrives_at: *arrives_at,
+    })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn attack_arrival_scheduled_action(
-    action_id: Uuid,
-    movement_id: Uuid,
-    army_id: Uuid,
-    return_action_id: Uuid,
-    village_id: u32,
-    source_village_id: u32,
-    target_village_id: u32,
-    player_id: Uuid,
-    army: Army,
-    attack_type: parabellum_types::battle::AttackType,
-    catapult_targets: [Option<parabellum_types::buildings::BuildingName>; 2],
-    arrives_at: chrono::DateTime<chrono::Utc>,
-    returns_at: chrono::DateTime<chrono::Utc>,
+    workflow: AttackArrivalWorkflow,
 ) -> Result<ScheduledAction, CqrsError> {
     super::scheduled_action(
-        action_id,
-        arrives_at,
-        ScheduledActionPayload::AttackArrival {
-            workflow: AttackArrivalWorkflow {
-                action_id,
-                movement_id,
-                army_id,
-                return_action_id,
-                village_id,
-                source_village_id,
-                target_village_id,
-                player_id,
-                army,
-                attack_type,
-                catapult_targets,
-                arrives_at,
-                returns_at,
-            },
-        },
+        workflow.action_id,
+        workflow.arrives_at,
+        ScheduledActionPayload::AttackArrival { workflow },
     )
 }
 
@@ -398,21 +315,21 @@ pub(crate) fn attack_arrival_scheduled_action_from_event(
         );
     };
 
-    attack_arrival_scheduled_action(
-        *action_id,
-        *movement_id,
-        *army_id,
-        *return_action_id,
-        *source_village_id,
-        *source_village_id,
-        *target_village_id,
-        *player_id,
-        army.clone(),
-        attack_type.clone(),
-        catapult_targets.clone(),
-        *arrives_at,
-        *returns_at,
-    )
+    attack_arrival_scheduled_action(AttackArrivalWorkflow {
+        action_id: *action_id,
+        movement_id: *movement_id,
+        army_id: *army_id,
+        return_action_id: *return_action_id,
+        village_id: *source_village_id,
+        source_village_id: *source_village_id,
+        target_village_id: *target_village_id,
+        player_id: *player_id,
+        army: army.clone(),
+        attack_type: attack_type.clone(),
+        catapult_targets: catapult_targets.clone(),
+        arrives_at: *arrives_at,
+        returns_at: *returns_at,
+    })
 }
 
 pub(crate) fn attack_arrived_events(workflow: &AttackArrivalWorkflow) -> super::WorkflowEvents {

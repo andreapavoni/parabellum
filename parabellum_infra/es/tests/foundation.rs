@@ -25,7 +25,7 @@ fn residence(level: u8) -> VillageBuilding {
 }
 
 async fn unoccupied_valley(pool: &sqlx::PgPool) -> Valley {
-    PostgresMapRepository::new(pool.clone())
+    PostgresMapRepository::new(crate::ProjectionDb::new(pool.clone()))
         .find_unoccupied_valley(&MapQuadrant::NorthEast)
         .await
         .expect("test map should have an unoccupied valley")
@@ -397,7 +397,7 @@ async fn village_es_service_first_settlers_arrival_wins_when_two_players_target_
         assert_eq!(founded_after_second.village_name, "First Colony");
         assert_eq!(founded_after_second.tribe, Tribe::Roman);
 
-        let map_repository = PostgresMapRepository::new(pool.clone());
+        let map_repository = PostgresMapRepository::new(crate::ProjectionDb::new(pool.clone()));
         let map_field = map_repository
             .get_field_by_id(target_field_id as i32)
             .await

@@ -1,61 +1,19 @@
-use mini_cqrs_es::{
-    Aggregate, AggregateSnapshot, CqrsError, EventConsumer, EventStore, SnapshotStore, StoredEvent,
-};
-use parabellum_app::villages::{VillageAggregate, VillageEvent};
-use sqlx::PgPool;
+//! Replay execution loops and projection reset logic.
+
+use mini_cqrs_es::{CqrsError, EventConsumer};
+use parabellum_app::villages::VillageEvent;
 use tracing::{info, warn};
 
 use crate::es::advisory_lock::AdvisoryLock;
 use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
-use crate::es::{PostgresEventStore, PostgresSnapshotStore, ReportProjector, VillageProjector};
+use crate::es::{ReportProjector, VillageProjector};
+
+use super::filters::{accepts_event, is_report_event};
+use super::{ReplayMode, ReplayRequest, ReplayService, ReplaySummary, ReplayTarget};
 
 const DEFAULT_BATCH_SIZE: i64 = 500;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayTarget {
-    Village,
-    Reports,
-    All,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReplayMode {
-    DryRun,
-    Full,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplayRequest {
-    pub target: ReplayTarget,
-    pub mode: ReplayMode,
-    pub from_global_seq: i64,
-    pub to_global_seq: Option<i64>,
-    pub aggregate_id: Option<String>,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ReplaySummary {
-    pub scanned: usize,
-    pub applied: usize,
-    pub skipped: usize,
-    pub first_global_seq: Option<i64>,
-    pub last_global_seq: Option<i64>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReplayService {
-    pool: PgPool,
-    event_store: PostgresEventStore,
-}
-
 impl ReplayService {
-    pub fn new(pool: PgPool) -> Self {
-        Self {
-            event_store: PostgresEventStore::new(pool.clone()),
-            pool,
-        }
-    }
-
     pub async fn replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
         info!(
             mode = ?request.mode,
@@ -91,8 +49,7 @@ impl ReplayService {
             }
 
             for event in &events {
-                self.update_sequence_bounds(&mut summary, event);
-                summary.scanned += 1;
+                summary.record_scanned_event(event);
 
                 if accepts_event(request.target, event)? {
                     summary.applied += 1;
@@ -152,8 +109,7 @@ impl ReplayService {
             }
 
             for event in &events {
-                self.update_sequence_bounds(&mut summary, event);
-                summary.scanned += 1;
+                summary.record_scanned_event(event);
 
                 if !accepts_event(request.target, event)? {
                     summary.skipped += 1;
@@ -236,85 +192,4 @@ impl ReplayService {
 
         tx.commit().await.map_err(CqrsError::domain_source)
     }
-
-    fn update_sequence_bounds(&self, summary: &mut ReplaySummary, event: &StoredEvent) {
-        let Some(global_seq) = event.global_sequence else {
-            return;
-        };
-        summary.first_global_seq = Some(
-            summary
-                .first_global_seq
-                .map_or(global_seq, |current| current.min(global_seq)),
-        );
-        summary.last_global_seq = Some(
-            summary
-                .last_global_seq
-                .map_or(global_seq, |current| current.max(global_seq)),
-        );
-    }
-
-    /// Rebuilds aggregate snapshots for all village event streams.
-    ///
-    /// Queries every distinct `VillageAggregate` ID from `es_events`, replays all
-    /// events for each through `VillageAggregate::apply_events`, and writes the
-    /// resulting state to `es_snapshots`.
-    pub async fn rebuild_all_snapshots(&self) -> Result<i64, CqrsError> {
-        let aggregate_type = std::any::type_name::<VillageAggregate>();
-        let ids: Vec<(String,)> = sqlx::query_as(
-            "SELECT DISTINCT aggregate_id FROM es_events WHERE aggregate_type = $1 ORDER BY aggregate_id",
-        )
-        .bind(aggregate_type)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(CqrsError::domain_source)?;
-
-        let event_store = PostgresEventStore::new(self.pool.clone());
-        let snapshot_store = PostgresSnapshotStore::new(self.pool.clone());
-        let mut count = 0i64;
-
-        for (aggregate_id,) in &ids {
-            let (events, version) = event_store
-                .load_events(aggregate_type, aggregate_id)
-                .await?;
-
-            let mut aggregate = VillageAggregate::default();
-            aggregate.set_aggregate_id(aggregate_id.parse::<u32>().map_err(|_| {
-                CqrsError::EventStore(format!("invalid aggregate id: {aggregate_id}"))
-            })?);
-            aggregate.apply_events(&events).await?;
-            aggregate.set_version(version);
-
-            snapshot_store
-                .save_snapshot(AggregateSnapshot::new(&aggregate, Some(version))?)
-                .await?;
-
-            count += 1;
-        }
-
-        info!(count, "snapshots rebuilt");
-        Ok(count)
-    }
-}
-
-fn accepts_event(target: ReplayTarget, event: &StoredEvent) -> Result<bool, CqrsError> {
-    if !event.aggregate_type.contains("VillageAggregate") {
-        return Ok(false);
-    }
-
-    let domain_event = event.get_payload::<VillageEvent>()?;
-    Ok(match target {
-        ReplayTarget::Village | ReplayTarget::All => true,
-        ReplayTarget::Reports => is_report_event(&domain_event),
-    })
-}
-
-fn is_report_event(event: &VillageEvent) -> bool {
-    matches!(
-        event,
-        VillageEvent::ReinforcementArrived { .. }
-            | VillageEvent::MerchantsArrived { .. }
-            | VillageEvent::ScoutBattleResolved { .. }
-            | VillageEvent::AttackBattleResolved { .. }
-            | VillageEvent::ReportMarkedAsRead { .. }
-    )
 }

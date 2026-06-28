@@ -7,7 +7,9 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MovementDirection, MovementType, VillageMovement};
-use parabellum_app::villages::projection_repositories::{ArmyListFilter, ArmyState};
+use parabellum_app::villages::projection_repositories::{
+    ArmyListFilter, ArmyState, HeroPlacementState,
+};
 use parabellum_game::models::army::Army;
 use parabellum_types::army::TroopSet;
 use sqlx::{Postgres, Transaction};
@@ -167,10 +169,14 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if let Some(hero) = army.hero() {
-            self.heroes
-                .upsert_in_tx(tx, &hero, hero.village_id, village_id, "moving")
-                .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            self.project_hero_placement_in_tx(
+                tx,
+                &hero,
+                hero.village_id,
+                village_id,
+                HeroPlacementState::Moving,
+            )
+            .await?;
         }
         self.refresh_village_derived_state_in_tx(tx, army.village_id)
             .await

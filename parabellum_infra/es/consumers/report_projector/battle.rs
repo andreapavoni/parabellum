@@ -2,7 +2,7 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::projection_repositories::ProjectedReport;
+use parabellum_app::villages::projection_repositories::ReportKind;
 use parabellum_game::battle::{BattlePartyReport, BattleReport};
 use parabellum_types::army::TroopSet;
 use parabellum_types::common::ResourceGroup;
@@ -10,7 +10,9 @@ use parabellum_types::reports::{BattlePartyPayload, BattleReportPayload, ReportP
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::es::consumers::report_projector::{ReportProjector, SourceTargetReportContext};
+use crate::es::consumers::report_projector::{
+    ReportProjection, ReportProjector, SourceTargetReportContext,
+};
 
 impl ReportProjector {
     pub(super) async fn project_battle_report_in_tx(
@@ -57,23 +59,19 @@ impl ReportProjector {
         let payload =
             scout_battle_payload(report, &context, self.player_username(*player_id).await?);
         let audiences = scout_battle_audiences(*player_id, context.target.player_id, report);
-        self.reports
-            .add_projected_in_tx(
-                tx,
-                &ProjectedReport {
-                    id: projected_report_id,
-                    report_type: "battle".to_string(),
-                    payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                    actor_player_id: *player_id,
-                    actor_village_id: Some(*source_village_id),
-                    target_player_id: Some(context.target.player_id),
-                    target_village_id: Some(*target_village_id),
-                },
-                &audiences,
-            )
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(())
+        self.project_report_in_tx(
+            tx,
+            ReportProjection::source_target(
+                projected_report_id,
+                ReportKind::Battle,
+                payload,
+                &context,
+                *source_village_id,
+                *target_village_id,
+                audiences,
+            ),
+        )
+        .await
     }
 
     async fn project_attack_battle_resolved(
@@ -103,23 +101,19 @@ impl ReportProjector {
         let payload =
             attack_battle_payload(report, &context, self.player_username(*player_id).await?);
         let audiences = attack_battle_audiences(*player_id, context.target.player_id, report);
-        self.reports
-            .add_projected_in_tx(
-                tx,
-                &ProjectedReport {
-                    id: projected_report_id,
-                    report_type: "battle".to_string(),
-                    payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                    actor_player_id: *player_id,
-                    actor_village_id: Some(*source_village_id),
-                    target_player_id: Some(context.target.player_id),
-                    target_village_id: Some(*target_village_id),
-                },
-                &audiences,
-            )
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(())
+        self.project_report_in_tx(
+            tx,
+            ReportProjection::source_target(
+                projected_report_id,
+                ReportKind::Battle,
+                payload,
+                &context,
+                *source_village_id,
+                *target_village_id,
+                audiences,
+            ),
+        )
+        .await
     }
 }
 
@@ -130,6 +124,8 @@ fn battle_party_payload(report: &BattlePartyReport) -> BattlePartyPayload {
         survivors: report.survivors.clone(),
         losses: report.losses.clone(),
         has_hero: report.army_before.hero().is_some(),
+        hero_survived: report.hero_survived(),
+        hero_lost: report.hero_lost(),
     }
 }
 
@@ -172,6 +168,11 @@ fn scout_battle_payload(
                     .target_home_army
                     .as_ref()
                     .is_some_and(|army| army.hero().is_some()),
+                hero_survived: context
+                    .target_home_army
+                    .as_ref()
+                    .is_some_and(|army| army.hero().is_some()),
+                hero_lost: false,
             })
         } else {
             None
@@ -186,6 +187,8 @@ fn scout_battle_payload(
                     survivors: r.units().clone(),
                     losses: TroopSet::default(),
                     has_hero: r.hero().is_some(),
+                    hero_survived: r.hero().is_some(),
+                    hero_lost: false,
                 })
                 .collect()
         } else {
@@ -273,16 +276,16 @@ fn attack_battle_payload(
 }
 
 fn attack_battle_success(report: &BattleReport) -> bool {
-    let attacker_survivors = report.attacker.survivors.immensity();
+    let attacker_survivors = report.attacker.survivor_count();
     let defender_survivors = report
         .defender
         .as_ref()
-        .map(|def| def.survivors.immensity())
+        .map(BattlePartyReport::survivor_count)
         .unwrap_or(0);
     let reinforcements_survivors: u32 = report
         .reinforcements
         .iter()
-        .map(|reinf| reinf.survivors.immensity())
+        .map(BattlePartyReport::survivor_count)
         .sum();
 
     attacker_survivors > 0 && defender_survivors + reinforcements_survivors == 0

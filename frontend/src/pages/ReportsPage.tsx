@@ -299,14 +299,15 @@ function TrapBattleSection({
 }
 
 function groupedReinforcementsByTribe(entries: unknown[]) {
-  const groups = new Map<string, { before: number[]; losses: number[]; hasHero: boolean }>();
+  const groups = new Map<string, { before: number[]; losses: number[]; hasHero: boolean; heroLost: boolean }>();
   for (const entry of entries) {
     const record = asRecord(entry) ?? {};
     const tribe = readString(record, "tribe", "Unknown");
-    const current = groups.get(tribe) ?? { before: [], losses: [], hasHero: false };
+    const current = groups.get(tribe) ?? { before: [], losses: [], hasHero: false, heroLost: false };
     current.before = sumArrays(current.before, troopArray(record.army_before));
     current.losses = sumArrays(current.losses, troopArray(record.losses));
     current.hasHero = current.hasHero || Boolean(record.has_hero);
+    current.heroLost = current.heroLost || Boolean(record.hero_lost);
     groups.set(tribe, current);
   }
   return Array.from(groups.entries()).map(([tribe, data]) => ({ tribe, ...data }));
@@ -404,7 +405,14 @@ function BattleReportDetail({
               villageNamesById,
             )}
           </p>
-          <ArmyTable title="Sent troops" units={attackerBefore} losses={attackerLosses} tribe={attackerTribe} hasHero={Boolean(attacker?.has_hero)} />
+          <ArmyTable
+            title="Sent troops"
+            units={attackerBefore}
+            losses={attackerLosses}
+            tribe={attackerTribe}
+            hasHero={Boolean(attacker?.has_hero)}
+            heroLost={Boolean(attacker?.hero_lost)}
+          />
           {totalResources(bounty) > 0 ? (
             <div class="rounded-md border border-stone-200 bg-white p-3">
               <p class="mb-1 text-xs font-semibold uppercase text-stone-500">Bounty</p>
@@ -461,7 +469,14 @@ function BattleReportDetail({
             )}
           </p>
           {defender ? (
-            <ArmyTable title="Village troops" units={defenderBefore} losses={defenderLosses} tribe={defenderTribe} hasHero={Boolean(defender?.has_hero)} />
+            <ArmyTable
+              title="Village troops"
+              units={defenderBefore}
+              losses={defenderLosses}
+              tribe={defenderTribe}
+              hasHero={Boolean(defender?.has_hero)}
+              heroLost={Boolean(defender?.hero_lost)}
+            />
           ) : (
             <p class="rounded-md border border-stone-200 bg-white p-3 text-sm text-stone-500">No village troops were present.</p>
           )}
@@ -476,7 +491,7 @@ function BattleReportDetail({
                   losses={group.losses}
                   tribe={group.tribe}
                   hasHero={group.hasHero}
-
+                  heroLost={group.heroLost}
                 />
               ))}
             </div>

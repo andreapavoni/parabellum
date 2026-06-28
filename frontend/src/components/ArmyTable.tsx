@@ -21,6 +21,8 @@ export function ArmyTable({
   losses,
   tribe,
   hasHero = false,
+  heroLost = false,
+  showEmpty = false,
   showUpkeep,
 }: {
   title?: string;
@@ -28,12 +30,14 @@ export function ArmyTable({
   losses?: number[];
   tribe?: string;
   hasHero?: boolean;
+  heroLost?: boolean;
+  showEmpty?: boolean;
   showUpkeep?: number;
 }) {
   const normalizedUnits = normalizeUnits(units);
   const normalizedLosses = losses ? normalizeUnits(losses) : undefined;
-  const hasContent = normalizedUnits.some((value) => value > 0) || hasHero;
-  if (!hasContent) return null;
+  const hasContent = normalizedUnits.some((value) => value > 0) || hasHero || heroLost;
+  if (!hasContent && !showEmpty) return null;
 
   return (
     <div class="rounded-md border border-stone-200 bg-stone-50 p-2">
@@ -76,7 +80,9 @@ export function ArmyTable({
                   </td>
                 ))}
                 <td class="bg-stone-100 p-1 text-center">
-                  <div class="text-stone-300">-</div>
+                  <div class={heroLost ? "font-semibold text-stone-700" : "text-stone-300"}>
+                    {heroLost ? "↓1" : "-"}
+                  </div>
                 </td>
               </tr>
             ) : null}

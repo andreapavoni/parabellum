@@ -31,7 +31,7 @@ async fn workflow_append_appends_multiple_streams_atomically() {
         .await;
 
         let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
-        let store = PostgresEventStore::new(pool.clone());
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(pool.clone()));
         let (_, v1_version) = store
             .load_events(aggregate_type, &v1.to_string())
             .await
@@ -111,7 +111,7 @@ async fn workflow_append_conflict_rolls_back_all_streams() {
         .await;
 
         let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
-        let store = PostgresEventStore::new(pool.clone());
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(pool.clone()));
         let (_, v1_version) = store
             .load_events(aggregate_type, &v1.to_string())
             .await

@@ -6,7 +6,7 @@ use parabellum_app::villages::models::{
 use parabellum_game::models::trapper::TrapperState;
 use uuid::Uuid;
 
-pub(crate) fn scheduled_action_from_event(
+pub(crate) fn trap_build_scheduled_action_from_event(
     event: &VillageEvent,
 ) -> Result<ScheduledAction, CqrsError> {
     let VillageEvent::TrapBuildScheduled {
@@ -19,7 +19,9 @@ pub(crate) fn scheduled_action_from_event(
         ..
     } = event
     else {
-        unreachable!("scheduled_action_from_event called with non-TrapBuildScheduled event");
+        unreachable!(
+            "trap_build_scheduled_action_from_event called with non-TrapBuildScheduled event"
+        );
     };
 
     super::scheduled_action(

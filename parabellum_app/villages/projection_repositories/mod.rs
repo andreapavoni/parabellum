@@ -9,6 +9,7 @@ pub mod armies;
 pub mod expansion;
 pub mod heroes;
 pub mod marketplace;
+pub mod merchant_movements;
 pub mod movements;
 pub mod reports;
 pub mod scheduled_actions;
@@ -16,11 +17,13 @@ pub mod villages;
 
 pub use armies::{ArmyListFilter, ArmyRepository, ArmyState};
 pub use expansion::{ExpansionCultureSnapshot, ExpansionOwnershipSnapshot};
-pub use heroes::HeroRepository;
+pub use heroes::{HeroPlacementState, HeroRepository};
 pub use marketplace::{MarketplaceOfferListFilter, MarketplaceRepository};
-pub use movements::VillageMovementRepository;
-pub use reports::{ProjectedReport, ReportRepository};
+pub use merchant_movements::MerchantMovementRepository;
+pub use movements::{VillageMovementFilter, VillageMovementRepository};
+pub use reports::{ProjectedReport, ReportFilter, ReportKind, ReportRepository};
 pub use scheduled_actions::{
-    ScheduledActionListFilter, ScheduledActionRepository, ScheduledActionVillageFilter,
+    ScheduledActionFilter, ScheduledActionOrder, ScheduledActionRepository,
+    ScheduledActionWorkflowFilter,
 };
 pub use villages::VillageRepository;

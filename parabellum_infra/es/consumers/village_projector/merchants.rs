@@ -11,6 +11,7 @@ use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferSt
 use parabellum_game::models::village::VillageStocks;
 use sqlx::{Postgres, Transaction};
 
+use super::economy::{VillageEconomyFacts, apply_village_economy_facts_to_model};
 use crate::es::consumers::village_projector::VillageProjector;
 use crate::es::workflows;
 
@@ -144,20 +145,28 @@ impl VillageProjector {
             return Ok(());
         }
 
-        let source = self
+        let mut source_model = self
             .village
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut source = Self::village_from_model(&source);
+        let mut source = self
+            .load_village_state_in_tx(tx, source_model.clone())
+            .await?;
         source
             .reserve_merchant_transfer(resources, *merchants_used)
             .map_err(CqrsError::domain_source)?;
-
-        self.set_stored_resources_in_tx(tx, *source_village_id, source.stored_resources())
-            .await?;
-        self.set_busy_merchants_in_tx(tx, *source_village_id, source.busy_merchants)
+        apply_village_economy_facts_to_model(
+            &mut source_model,
+            VillageEconomyFacts::stored_resources_and_busy_merchants(
+                source.stored_resources(),
+                source.busy_merchants,
+            ),
+        );
+        self.village
+            .store_village_model_in_tx(tx, &source_model)
             .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     async fn project_merchants_returned(
@@ -166,15 +175,23 @@ impl VillageProjector {
         source_village_id: u32,
         merchants_used: u8,
     ) -> Result<(), CqrsError> {
-        let source = self
+        let mut source_model = self
             .village
             .get_by_village_id_in_tx(tx, source_village_id)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut source = Self::village_from_model(&source);
+        let mut source = self
+            .load_village_state_in_tx(tx, source_model.clone())
+            .await?;
         source.return_merchants(merchants_used);
-        self.set_busy_merchants_in_tx(tx, source_village_id, source.busy_merchants)
+        apply_village_economy_facts_to_model(
+            &mut source_model,
+            VillageEconomyFacts::busy_merchants(source.busy_merchants),
+        );
+        self.village
+            .store_village_model_in_tx(tx, &source_model)
             .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
 
     async fn project_marketplace_offer_created(
@@ -216,8 +233,12 @@ impl VillageProjector {
         village_id: u32,
         stocks: &VillageStocks,
     ) -> Result<(), CqrsError> {
-        self.set_stored_resources_in_tx(tx, village_id, stocks.stored())
-            .await
+        self.apply_village_economy_facts_in_tx(
+            tx,
+            village_id,
+            VillageEconomyFacts::stored_resources(stocks.stored()),
+        )
+        .await
     }
 
     async fn apply_fact_stocks_and_busy_merchants(
@@ -227,9 +248,15 @@ impl VillageProjector {
         stocks: &VillageStocks,
         busy_merchants: u8,
     ) -> Result<(), CqrsError> {
-        self.apply_fact_stocks(tx, village_id, stocks).await?;
-        self.set_busy_merchants_in_tx(tx, village_id, busy_merchants)
-            .await
+        self.apply_village_economy_facts_in_tx(
+            tx,
+            village_id,
+            VillageEconomyFacts::stored_resources_and_busy_merchants(
+                stocks.stored(),
+                busy_merchants,
+            ),
+        )
+        .await
     }
 }
 

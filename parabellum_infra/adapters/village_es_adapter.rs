@@ -407,16 +407,6 @@ impl HeroReadPort for VillageEsAdapter {
             .map_err(Self::map_cqrs_error)
     }
 
-    async fn player_has_pending_hero_revival(
-        &self,
-        player_id: Uuid,
-    ) -> Result<bool, ApplicationError> {
-        self.service
-            .player_has_pending_hero_revival(player_id)
-            .await
-            .map_err(Self::map_cqrs_error)
-    }
-
     async fn get_pending_hero_revival_at(
         &self,
         player_id: Uuid,
@@ -824,7 +814,8 @@ impl VillageReferenceReadPort for VillageEsAdapter {
         &self,
         village_ids: Vec<u32>,
     ) -> Result<HashMap<u32, parabellum_app::read_models::VillageReference>, ApplicationError> {
-        let repo = PostgresVillageRepository::new(self.service.pool().clone());
+        let repo =
+            PostgresVillageRepository::new(crate::ProjectionDb::new(self.service.pool().clone()));
         let villages = repo.list_by_village_ids(&village_ids).await?;
 
         Ok(villages
@@ -853,7 +844,7 @@ impl ExpansionReadPort for VillageEsAdapter {
         parabellum_app::villages::projection_repositories::ExpansionCultureSnapshot,
         ApplicationError,
     > {
-        PostgresVillageRepository::new(self.service.pool().clone())
+        PostgresVillageRepository::new(crate::ProjectionDb::new(self.service.pool().clone()))
             .get_expansion_culture_snapshot(player_id, village_id)
             .await
     }

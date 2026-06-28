@@ -334,7 +334,7 @@ pub async fn train_and_complete(
 }
 
 pub async fn home_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .home_village(village_id)
@@ -353,7 +353,7 @@ pub async fn home_army(
     pool: &sqlx::PgPool,
     village_id: u32,
 ) -> Option<parabellum_game::models::army::Army> {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .home_village(village_id)
@@ -370,7 +370,7 @@ pub async fn stationed_armies(
     pool: &sqlx::PgPool,
     village_id: u32,
 ) -> Vec<parabellum_game::models::army::Army> {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .current_village(village_id)
@@ -384,7 +384,7 @@ pub async fn deployed_armies(
     pool: &sqlx::PgPool,
     village_id: u32,
 ) -> Vec<parabellum_game::models::army::Army> {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .home_village(village_id)
@@ -396,7 +396,7 @@ pub async fn deployed_armies(
 }
 
 pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .current_village(village_id)
@@ -410,7 +410,7 @@ pub async fn stationed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usi
 }
 
 pub async fn deployed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usize) -> u32 {
-    PostgresArmyRepository::new(pool.clone())
+    PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
         .list_armies(
             ArmyListFilter::new()
                 .home_village(village_id)

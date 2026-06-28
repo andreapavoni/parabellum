@@ -162,7 +162,7 @@ pub async fn run_seed(
     seed_file_path: &Path,
 ) -> Result<Vec<SeedRunResult>, ApplicationError> {
     ensure_migrations_and_map(pool, config).await?;
-    let map_repository = PostgresMapRepository::new(pool.clone());
+    let map_repository = PostgresMapRepository::new(crate::ProjectionDb::new(pool.clone()));
     let service = VillageEsService::new(pool.clone());
     let identity = std::sync::Arc::new(IdentityService::new(pool.clone()));
     let registration_identities: std::sync::Arc<dyn RegistrationIdentityPort> = identity;
@@ -474,7 +474,7 @@ async fn apply_village_seed_state(
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
     if let Some(army) = village.army() {
-        PostgresArmyRepository::new(pool.clone())
+        PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone()))
             .upsert_home_in_tx(&mut tx, army, player_id)
             .await?;
     }

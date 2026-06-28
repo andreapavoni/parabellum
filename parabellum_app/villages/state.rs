@@ -550,19 +550,10 @@ impl VillageState {
             .map_err(Into::into)
     }
 
-    pub fn merge_units_home(&mut self, units: &TroopSet) -> Result<(), ApplicationError> {
-        let mut village_army = self
-            .village
-            .army()
-            .map_or(Army::new_village_army(&self.village), |a| a.clone());
-        let mut next_units = village_army.units().clone();
-        for idx in 0..10 {
-            next_units.add(idx, units.get(idx));
-        }
-        village_army.update_units(&next_units);
+    pub fn merge_army_home(&mut self, army: &Army) -> Result<(), ApplicationError> {
         self.village
-            .set_army(Some(&village_army))
-            .map_err(Into::into)
+            .merge_army(army)
+            .map_err(ApplicationError::from)
     }
 
     pub fn schedule_academy_research(

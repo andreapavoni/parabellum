@@ -459,8 +459,7 @@ mod tests {
             MarketplaceData {
                 own_offers: vec![],
                 global_offers: vec![],
-                outgoing_merchants: vec![],
-                incoming_merchants: vec![],
+                merchant_movements: vec![],
                 village_references: HashMap::new(),
             },
         );

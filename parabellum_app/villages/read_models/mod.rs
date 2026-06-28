@@ -12,5 +12,7 @@ pub use activity::{
     AcademyQueueItem, BuildingQueueItem, SmithyQueueItem, TrainingQueueItem, TrapQueueItem,
     TroopMovement, TroopMovementDirection, TroopMovementType, VillageQueues, VillageTroopMovements,
 };
-pub use marketplace::{MarketplaceData, MerchantMovement, MerchantMovementKind};
+pub use marketplace::{
+    MarketplaceData, MerchantMovement, MerchantMovementDirection, MerchantMovementKind,
+};
 pub use village_army::VillageArmyStateView;

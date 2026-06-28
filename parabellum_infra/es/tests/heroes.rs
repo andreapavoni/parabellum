@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use parabellum_app::villages::projection_repositories::HeroRepository;
+use parabellum_app::villages::projection_repositories::{HeroPlacementState, HeroRepository};
 use parabellum_app::villages::{
     AttackVillage, CreateHero, ReviveHero, SendReinforcement, TrainUnits,
     models::ScheduledActionType,
@@ -25,6 +25,60 @@ fn hero_mansion(level: u8) -> VillageBuilding {
         slot_id: 25,
         building,
     }
+}
+
+async fn assert_home_hero_attached(pool: &sqlx::PgPool, village_id: u32, hero_id: Uuid) {
+    let (home_village_id, current_village_id, state): (i32, i32, String) = sqlx::query_as(
+        r#"
+        SELECT home_village_id, current_village_id, state
+        FROM rm_heroes
+        WHERE hero_id = $1
+        "#,
+    )
+    .bind(hero_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    assert_eq!(home_village_id, village_id as i32);
+    assert_eq!(current_village_id, village_id as i32);
+    assert_eq!(state, "home");
+    assert_eq!(
+        home_army(pool, village_id)
+            .await
+            .and_then(|army| army.hero())
+            .map(|hero| hero.id),
+        Some(hero_id)
+    );
+}
+
+async fn assert_stationed_hero_attached(
+    pool: &sqlx::PgPool,
+    home_village_id: u32,
+    current_village_id: u32,
+    hero_id: Uuid,
+) {
+    let (projected_home, projected_current, state): (i32, i32, String) = sqlx::query_as(
+        r#"
+        SELECT home_village_id, current_village_id, state
+        FROM rm_heroes
+        WHERE hero_id = $1
+        "#,
+    )
+    .bind(hero_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
+    assert_eq!(projected_home, home_village_id as i32);
+    assert_eq!(projected_current, current_village_id as i32);
+    assert_eq!(state, "stationed");
+    assert!(
+        stationed_armies(pool, current_village_id)
+            .await
+            .iter()
+            .any(|army| army.hero().is_some_and(|hero| hero.id == hero_id))
+    );
 }
 
 #[tokio::test]
@@ -68,13 +122,7 @@ async fn village_es_service_create_hero_projects_rm_heroes() {
         assert_eq!(hero.player_id, player_id);
         assert_eq!(hero.village_id, village_id);
         assert_eq!(hero.health, 100);
-        assert_eq!(
-            home_army(&pool, village_id)
-                .await
-                .and_then(|army| army.hero())
-                .map(|hero| hero.id),
-            Some(hero_id)
-        );
+        assert_home_hero_attached(&pool, village_id, hero_id).await;
 
         assert!(service.player_has_alive_hero(player_id).await.unwrap());
     })
@@ -120,9 +168,9 @@ async fn village_es_service_revive_hero_schedules_and_completes_action() {
         let mut dead_hero = service.get_hero(hero_id).await.unwrap();
         dead_hero.apply_battle_damage(1.0);
         assert_eq!(dead_hero.health, 0);
-        let heroes = PostgresHeroRepository::new(pool.clone());
+        let heroes = PostgresHeroRepository::new(crate::ProjectionDb::new(pool.clone()));
         heroes
-            .upsert(&dead_hero, village_id, village_id, "home")
+            .upsert(&dead_hero, village_id, village_id, HeroPlacementState::Home)
             .await
             .unwrap();
 
@@ -163,6 +211,7 @@ async fn village_es_service_revive_hero_schedules_and_completes_action() {
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert!(hero_after.health > 0);
         assert_eq!(hero_after.village_id, village_id);
+        assert_home_hero_attached(&pool, village_id, hero_id).await;
 
         let counts = service
             .get_village_scheduled_action_status_counts(
@@ -201,8 +250,8 @@ async fn village_es_service_revive_hero_rejects_without_hero_mansion() {
             Some(5),
         );
         dead_hero.apply_battle_damage(1.0);
-        PostgresHeroRepository::new(pool.clone())
-            .upsert(&dead_hero, village_id, village_id, "home")
+        PostgresHeroRepository::new(crate::ProjectionDb::new(pool.clone()))
+            .upsert(&dead_hero, village_id, village_id, HeroPlacementState::Home)
             .await
             .unwrap();
 
@@ -310,6 +359,7 @@ async fn village_es_service_hero_alone_reinforcement_transfers_home_when_both_ha
 
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert_eq!(hero_after.village_id, target_village_id);
+        assert_home_hero_attached(&pool, target_village_id, hero_id).await;
     })
     .await;
 }
@@ -411,6 +461,7 @@ async fn village_es_service_hero_with_troops_reinforcement_does_not_transfer_hom
 
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert_eq!(hero_after.village_id, source_village_id);
+        assert_stationed_hero_attached(&pool, source_village_id, target_village_id, hero_id).await;
     })
     .await;
 }
@@ -487,6 +538,7 @@ async fn village_es_service_hero_alone_to_village_without_hero_mansion_does_not_
 
         let hero_after = service.get_hero(hero_id).await.unwrap();
         assert_eq!(hero_after.village_id, source_village_id);
+        assert_stationed_hero_attached(&pool, source_village_id, target_village_id, hero_id).await;
     })
     .await;
 }
@@ -637,9 +689,9 @@ async fn village_es_service_revive_hero_rejects_when_pending_revival_exists() {
 
         let mut dead_hero = service.get_hero(hero_id).await.unwrap();
         dead_hero.apply_battle_damage(1.0);
-        let heroes = PostgresHeroRepository::new(pool.clone());
+        let heroes = PostgresHeroRepository::new(crate::ProjectionDb::new(pool.clone()));
         heroes
-            .upsert(&dead_hero, village_id, village_id, "home")
+            .upsert(&dead_hero, village_id, village_id, HeroPlacementState::Home)
             .await
             .unwrap();
 
@@ -786,6 +838,7 @@ async fn village_es_service_attack_with_hero_returns_hero_home() {
                 .map(|h| h.id),
             Some(hero_id)
         );
+        assert_home_hero_attached(&pool, source_village_id, hero_id).await;
     })
     .await;
 }

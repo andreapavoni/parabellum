@@ -49,6 +49,10 @@ pub struct BattlePartyPayload {
     pub losses: TroopSet,
     #[serde(default)]
     pub has_hero: bool,
+    #[serde(default)]
+    pub hero_survived: bool,
+    #[serde(default)]
+    pub hero_lost: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

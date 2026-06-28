@@ -44,7 +44,7 @@ async fn foundation_target(
     svc: &VillageEsService,
     workflow: &SettlersArrivalWorkflow,
 ) -> Result<FoundationTarget, CqrsError> {
-    let topology = PostgresMapRepository::new(svc.pool().clone())
+    let topology = PostgresMapRepository::new(crate::ProjectionDb::new(svc.pool().clone()))
         .get_foundation_target_topology(workflow.target_village_id, workflow.player_id)
         .await
         .map_err(CqrsError::domain_source)?;
@@ -67,7 +67,7 @@ async fn schedule_settlers_return(
         "settlers arrival target unavailable, scheduling army return"
     );
 
-    let army_repo = PostgresArmyRepository::new(svc.pool().clone());
+    let army_repo = PostgresArmyRepository::new(crate::ProjectionDb::new(svc.pool().clone()));
     let army = army_repo
         .get_moving_army(workflow.army_id)
         .await
@@ -97,7 +97,7 @@ async fn schedule_settlers_return(
         return_action_id,
         return_workflow,
     )?;
-    PostgresScheduledActionRepository::new(svc.pool().clone())
+    PostgresScheduledActionRepository::new(crate::ProjectionDb::new(svc.pool().clone()))
         .add(&return_action)
         .await
         .map_err(CqrsError::domain_source)?;

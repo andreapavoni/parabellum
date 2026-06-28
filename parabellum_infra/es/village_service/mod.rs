@@ -2,7 +2,7 @@
 //!
 //! This module is intentionally split by concern:
 //! - `mod.rs`: command dispatch + scheduler tick orchestration
-//! - `queries.rs`: read/query helpers consumed by adapters/web layer
+//! - `queries/`: read/query helpers consumed by adapters/web layer
 //! - `scheduler.rs`: deterministic fact-driven scheduled workflow progression
 //!
 //! Public API remains centered on `VillageEsService`.
@@ -23,7 +23,6 @@ use parabellum_app::villages::models::{
 use parabellum_app::villages::projection_repositories::{
     MarketplaceRepository, ScheduledActionRepository,
 };
-use parabellum_app::villages::read_models::TroopMovementType;
 use parabellum_app::villages::{
     AddBuilding, ApplyBattleOutcomeToVillage, AssignHeroPoints, AttackVillage, BuildTraps,
     CancelBuildingConstruction, CancelMarketplaceOffer, CreateHero, CreateMarketplaceOffer,
@@ -116,7 +115,7 @@ impl VillageEsService {
         workflow_events: Vec<(u32, parabellum_app::villages::VillageEvent)>,
     ) -> Result<Vec<WorkflowStreamAppend>, CqrsError> {
         let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
-        let store = PostgresEventStore::new(self.pool.clone());
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(self.pool.clone()));
         let mut grouped: Vec<(u32, Vec<NewEvent>)> = Vec::new();
         for (aggregate_id, payload) in workflow_events {
             let event = NewEvent {
@@ -144,23 +143,6 @@ impl VillageEsService {
             });
         }
         Ok(streams)
-    }
-
-    fn map_troop_movement_type(
-        movement_type: parabellum_app::villages::models::MovementType,
-    ) -> TroopMovementType {
-        match movement_type {
-            parabellum_app::villages::models::MovementType::Attack => TroopMovementType::Attack,
-            parabellum_app::villages::models::MovementType::Raid => TroopMovementType::Raid,
-            parabellum_app::villages::models::MovementType::Scout => TroopMovementType::Scout,
-            parabellum_app::villages::models::MovementType::Reinforcement => {
-                TroopMovementType::Reinforcement
-            }
-            parabellum_app::villages::models::MovementType::Return => TroopMovementType::Return,
-            parabellum_app::villages::models::MovementType::FoundVillage => {
-                TroopMovementType::FoundVillage
-            }
-        }
     }
 
     fn as_offer_snapshot(
@@ -340,8 +322,9 @@ impl VillageEsService {
         command: &ReviveHero,
     ) -> Result<u32, CqrsError> {
         if self
-            .player_has_pending_hero_revival(command.player_id)
+            .pending_hero_revival_at(command.player_id)
             .await?
+            .is_some()
         {
             return Err(CqrsError::domain_source(
                 GameError::HeroRevivalAlreadyPending,
@@ -387,7 +370,7 @@ impl VillageEsService {
 
     /// Returns whether a target map field is currently an unoccupied valley.
     pub async fn is_unoccupied_valley(&self, field_id: u32) -> Result<bool, CqrsError> {
-        let map_repo = PostgresMapRepository::new(self.pool.clone());
+        let map_repo = PostgresMapRepository::new(crate::ProjectionDb::new(self.pool.clone()));
         map_repo
             .is_unoccupied_valley(field_id as i32)
             .await
@@ -584,7 +567,8 @@ impl VillageEsService {
     ) -> Result<u32, CqrsError> {
         self.materialize_current_resources_for_command(accepting_village_id, accepting_player_id)
             .await?;
-        let offers = PostgresMarketplaceRepository::new(self.pool.clone());
+        let offers =
+            PostgresMarketplaceRepository::new(crate::ProjectionDb::new(self.pool.clone()));
         let offer = offers
             .get_by_offer_id(offer_id)
             .await
@@ -684,7 +668,8 @@ impl VillageEsService {
             return Ok(0);
         };
 
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        let repo =
+            PostgresScheduledActionRepository::new(crate::ProjectionDb::new(self.pool.clone()));
         let stale_before = before_or_equal
             - chrono::Duration::seconds(SCHEDULED_ACTION_PROCESSING_STALE_AFTER_SECS);
         let requeued = repo
@@ -726,7 +711,8 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         let service = VillageService::new(&runtime);
         let mut processed = 0usize;
-        let repo = PostgresScheduledActionRepository::new(self.pool.clone());
+        let repo =
+            PostgresScheduledActionRepository::new(crate::ProjectionDb::new(self.pool.clone()));
 
         for action in actions {
             let result = scheduler::execute_action(self, &service, action).await;
@@ -786,7 +772,7 @@ impl VillageEsService {
         }
 
         let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
-        let store = PostgresEventStore::new(self.pool.clone());
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(self.pool.clone()));
         let streams = self.build_village_workflow_appends(workflow_events).await?;
 
         let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
@@ -811,8 +797,9 @@ impl VillageEsService {
         streams: &[WorkflowStreamAppend],
     ) -> Result<(), CqrsError> {
         let aggregate_type = std::any::type_name::<parabellum_app::villages::VillageAggregate>();
-        let event_store = PostgresEventStore::new(self.pool.clone());
-        let snapshot_store = PostgresSnapshotStore::new(self.pool.clone());
+        let event_store = PostgresEventStore::new(crate::EventStoreDb::new(self.pool.clone()));
+        let snapshot_store =
+            PostgresSnapshotStore::new(crate::EventStoreDb::new(self.pool.clone()));
 
         for stream in streams {
             let (events, version) = event_store

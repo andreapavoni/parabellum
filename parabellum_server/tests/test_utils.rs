@@ -142,7 +142,9 @@ pub mod tests {
     fn build_game_app(pool: &PgPool, config: Arc<Config>) -> Arc<GameApplication> {
         let leaderboards =
             LeaderboardUseCases::new(Arc::new(PostgresPlayerRepository::new(pool.clone())));
-        let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(pool.clone())));
+        let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(
+            parabellum_infra::ProjectionDb::new(pool.clone()),
+        )));
         let identity = Arc::new(IdentityService::new(pool.clone()));
         let villages = Arc::new(VillageEsAdapter::new(VillageEsService::new(pool.clone())));
         let registration_identities: Arc<dyn RegistrationIdentityPort> = identity.clone();

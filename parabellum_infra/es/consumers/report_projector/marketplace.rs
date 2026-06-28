@@ -2,13 +2,15 @@
 
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
-use parabellum_app::villages::projection_repositories::ProjectedReport;
+use parabellum_app::villages::projection_repositories::ReportKind;
 use parabellum_types::common::ResourceGroup;
 use parabellum_types::reports::{MarketplaceDeliveryReportPayload, ReportPayload};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::es::consumers::report_projector::{ReportProjector, SourceTargetReportContext};
+use crate::es::consumers::report_projector::{
+    ReportProjection, ReportProjector, SourceTargetReportContext,
+};
 
 impl ReportProjector {
     pub(super) async fn project_marketplace_report_in_tx(
@@ -51,23 +53,19 @@ impl ReportProjector {
         };
         let payload = marketplace_delivery_payload(&context, resources, *merchants_used);
         let audiences = Self::audience_with_target(*player_id, context.target.player_id);
-        self.reports
-            .add_projected_in_tx(
-                tx,
-                &ProjectedReport {
-                    id: projected_report_id,
-                    report_type: "marketplace_delivery".to_string(),
-                    payload: serde_json::to_value(payload).map_err(CqrsError::Serialization)?,
-                    actor_player_id: context.source.player_id,
-                    actor_village_id: Some(*source_village_id),
-                    target_player_id: Some(context.target.player_id),
-                    target_village_id: Some(*target_village_id),
-                },
-                &audiences,
-            )
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(())
+        self.project_report_in_tx(
+            tx,
+            ReportProjection::source_target(
+                projected_report_id,
+                ReportKind::MarketplaceDelivery,
+                payload,
+                &context,
+                *source_village_id,
+                *target_village_id,
+                audiences,
+            ),
+        )
+        .await
     }
 }
 

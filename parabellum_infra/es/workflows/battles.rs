@@ -67,7 +67,7 @@ async fn hydrate_village_with_current_armies(
     svc: &VillageEsService,
     model: VillageModel,
 ) -> Result<Village, CqrsError> {
-    let army_repo = PostgresArmyRepository::new(svc.pool().clone());
+    let army_repo = PostgresArmyRepository::new(crate::ProjectionDb::new(svc.pool().clone()));
     let village_id = model.village_id;
     let armies = army_repo
         .army_context_for_village(village_id)
@@ -92,7 +92,7 @@ async fn build_attack_outcome(
         && can_attempt_conquer(svc, &source, &target, &workflow.army).await?;
 
     let attacker_village = hydrate_village(source.clone(), VillageArmyContext::default());
-    let defender_armies = PostgresArmyRepository::new(svc.pool().clone())
+    let defender_armies = PostgresArmyRepository::new(crate::ProjectionDb::new(svc.pool().clone()))
         .army_context_for_village(target.village_id)
         .await
         .map_err(CqrsError::domain_source)?;
@@ -466,7 +466,7 @@ async fn load_conquest_attempt(
     attacking_army: &Army,
 ) -> Result<ConquestAttempt, CqrsError> {
     let source_village = hydrate_village(source.clone(), VillageArmyContext::default());
-    let village_repo = PostgresVillageRepository::new(svc.pool().clone());
+    let village_repo = PostgresVillageRepository::new(crate::ProjectionDb::new(svc.pool().clone()));
     let ownership = village_repo
         .get_expansion_ownership_snapshot(source.player_id, source.village_id)
         .await

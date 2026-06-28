@@ -72,6 +72,13 @@ impl Army {
         self.hero = hero.clone();
     }
 
+    /// Removes the attached hero when the hero is dead.
+    pub fn detach_dead_hero(&mut self) {
+        if self.hero.as_ref().is_some_and(|hero| !hero.is_alive()) {
+            self.hero = None;
+        }
+    }
+
     pub fn smithy(&self) -> &SmithyUpgrades {
         &self.smithy
     }
@@ -103,11 +110,7 @@ impl Army {
     /// Update units and hero in the army.
     pub fn apply_battle_report(&mut self, report: &BattlePartyReport) {
         self.update_units(&report.survivors);
-        if let Some(mut hero) = self.hero() {
-            hero.apply_battle_damage(report.loss_percentage);
-            hero.gain_experience(report.hero_exp_gained);
-            self.hero = Some(hero);
-        }
+        self.hero = report.hero_after_battle().filter(|hero| hero.is_alive());
     }
 
     /// Returns the total upkeep cost of the army.

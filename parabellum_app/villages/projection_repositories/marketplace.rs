@@ -3,10 +3,7 @@
 use parabellum_types::errors::ApplicationError;
 use uuid::Uuid;
 
-use crate::villages::{
-    models::{MarketplaceOfferModel, MarketplaceOfferStatus},
-    read_models::MerchantMovement,
-};
+use crate::villages::models::{MarketplaceOfferModel, MarketplaceOfferStatus};
 
 /// Filter for marketplace offer projection queries.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -41,7 +38,7 @@ impl MarketplaceOfferListFilter {
     }
 }
 
-/// Persistence boundary for marketplace offer and merchant movement projections.
+/// Persistence boundary for marketplace offer projections.
 #[async_trait::async_trait]
 pub trait MarketplaceRepository: Send + Sync {
     async fn upsert(&self, offer: &MarketplaceOfferModel) -> Result<(), ApplicationError>;
@@ -85,14 +82,4 @@ pub trait MarketplaceRepository: Send + Sync {
         accepted_by_village_id: u32,
         at: chrono::DateTime<chrono::Utc>,
     ) -> Result<Option<MarketplaceOfferModel>, ApplicationError>;
-
-    async fn list_active_outgoing(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<MerchantMovement>, ApplicationError>;
-
-    async fn list_active_incoming(
-        &self,
-        village_id: u32,
-    ) -> Result<Vec<MerchantMovement>, ApplicationError>;
 }

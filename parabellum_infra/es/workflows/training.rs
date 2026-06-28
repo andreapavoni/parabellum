@@ -11,7 +11,7 @@ pub(crate) struct ScheduledTrainingAction {
     pub(crate) cost: ResourceGroup,
 }
 
-fn scheduled_action(
+fn training_scheduled_action(
     action_id: Uuid,
     execute_at: chrono::DateTime<chrono::Utc>,
     village_id: u32,
@@ -38,7 +38,7 @@ fn scheduled_action(
     )
 }
 
-pub(crate) fn scheduled_action_from_event(
+pub(crate) fn training_scheduled_action_from_event(
     event: &VillageEvent,
 ) -> Result<ScheduledTrainingAction, CqrsError> {
     let VillageEvent::UnitTrainingScheduled {
@@ -53,12 +53,14 @@ pub(crate) fn scheduled_action_from_event(
         execute_at,
     } = event
     else {
-        unreachable!("scheduled_action_from_event called with non-UnitTrainingScheduled event");
+        unreachable!(
+            "training_scheduled_action_from_event called with non-UnitTrainingScheduled event"
+        );
     };
 
     Ok(ScheduledTrainingAction {
         village_id: *village_id,
-        action: scheduled_action(
+        action: training_scheduled_action(
             *action_id,
             *execute_at,
             *village_id,

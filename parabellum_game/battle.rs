@@ -16,6 +16,7 @@ use parabellum_types::{
 use crate::models::{
     army::Army,
     buildings::Building,
+    hero::Hero,
     trapper::{TrapCaptureOutcome, TrapFreeOutcome},
     village::Village,
 };
@@ -27,6 +28,41 @@ pub struct BattlePartyReport {
     pub losses: TroopSet,
     pub hero_exp_gained: u32,
     pub loss_percentage: f64,
+}
+
+impl BattlePartyReport {
+    /// Returns the hero state after battle damage and experience are applied.
+    ///
+    /// A hero can still gain battle experience when dying, but battle death is
+    /// terminal for the current fight: a level-up heal must not resurrect a hero
+    /// whose battle damage already reduced health to zero.
+    pub fn hero_after_battle(&self) -> Option<Hero> {
+        let mut hero = self.army_before.hero()?;
+        hero.apply_battle_damage(self.loss_percentage);
+        let died_in_battle = !hero.is_alive();
+        hero.gain_experience(self.hero_exp_gained);
+        if died_in_battle {
+            hero.health = 0;
+        }
+        Some(hero)
+    }
+
+    /// Returns true when the party had a hero and that hero survived the battle.
+    pub fn hero_survived(&self) -> bool {
+        self.hero_after_battle()
+            .as_ref()
+            .is_some_and(Hero::is_alive)
+    }
+
+    /// Returns true when the party had a hero and that hero died in battle.
+    pub fn hero_lost(&self) -> bool {
+        self.army_before.hero().is_some() && !self.hero_survived()
+    }
+
+    /// Returns total surviving combatants, including a surviving hero.
+    pub fn survivor_count(&self) -> u32 {
+        self.survivors.immensity() + u32::from(self.hero_survived())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -762,9 +798,56 @@ mod tests {
     use super::*;
     use crate::models::{army::Army, village::Village};
     use crate::test_utils::{
-        ArmyFactoryOptions, PlayerFactoryOptions, VillageFactoryOptions, army_factory,
-        player_factory, village_factory,
+        ArmyFactoryOptions, HeroFactoryOptions, PlayerFactoryOptions, VillageFactoryOptions,
+        army_factory, hero_factory, player_factory, village_factory,
     };
+
+    #[test]
+    fn battle_party_report_marks_dead_hero_as_lost() {
+        let hero = hero_factory(HeroFactoryOptions {
+            ..Default::default()
+        });
+        let army = army_factory(ArmyFactoryOptions {
+            hero: Some(hero),
+            ..Default::default()
+        });
+        let report = BattlePartyReport {
+            army_before: army,
+            survivors: TroopSet::default(),
+            losses: TroopSet::default(),
+            hero_exp_gained: 1_000,
+            loss_percentage: 1.0,
+        };
+
+        let hero_after = report.hero_after_battle().unwrap();
+
+        assert_eq!(hero_after.health, 0);
+        assert!(report.hero_lost());
+        assert!(!report.hero_survived());
+    }
+
+    #[test]
+    fn applying_battle_report_detaches_dead_hero_from_army() {
+        let hero = hero_factory(HeroFactoryOptions {
+            ..Default::default()
+        });
+        let mut army = army_factory(ArmyFactoryOptions {
+            hero: Some(hero),
+            ..Default::default()
+        });
+        let report = BattlePartyReport {
+            army_before: army.clone(),
+            survivors: TroopSet::default(),
+            losses: army.units().clone(),
+            hero_exp_gained: 0,
+            loss_percentage: 1.0,
+        };
+
+        army.apply_battle_report(&report);
+
+        assert!(army.hero().is_none());
+        assert_eq!(army.immensity(), 0);
+    }
 
     #[test]
     fn test_battle_calculation_debug() {

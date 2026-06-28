@@ -13,7 +13,7 @@ pub(crate) struct ScheduledBuildingAction {
     pub(crate) cost: Option<ResourceGroup>,
 }
 
-fn scheduled_action(
+fn building_scheduled_action(
     action_id: Uuid,
     execute_at: chrono::DateTime<chrono::Utc>,
     kind: BuildingWorkflowKind,
@@ -41,7 +41,7 @@ fn scheduled_action(
     )
 }
 
-pub(crate) fn scheduled_action_from_event(
+pub(crate) fn building_scheduled_action_from_event(
     event: &VillageEvent,
 ) -> Result<ScheduledBuildingAction, CqrsError> {
     let (
@@ -121,12 +121,14 @@ pub(crate) fn scheduled_action_from_event(
             execute_at,
             None,
         ),
-        _ => unreachable!("scheduled_action_from_event called with non-building scheduled event"),
+        _ => unreachable!(
+            "building_scheduled_action_from_event called with non-building scheduled event"
+        ),
     };
 
     Ok(ScheduledBuildingAction {
         village_id: *village_id,
-        action: scheduled_action(
+        action: building_scheduled_action(
             *action_id,
             *execute_at,
             kind,

@@ -95,8 +95,9 @@ impl HeroUseCases {
         let hero = self.reads.get_hero(request.hero_id).await?;
         if self
             .reads
-            .player_has_pending_hero_revival(request.player_id)
+            .get_pending_hero_revival_at(request.player_id)
             .await?
+            .is_some()
         {
             return Err(ApplicationError::Game(GameError::HeroRevivalAlreadyPending));
         }
@@ -248,7 +249,6 @@ mod tests {
         heroes: Mutex<HashMap<Uuid, Hero>>,
         player_hero: Mutex<HashMap<Uuid, Option<Hero>>>,
         alive_hero: Mutex<HashMap<Uuid, bool>>,
-        pending_revival: Mutex<HashMap<Uuid, bool>>,
         pending_revival_at: Mutex<HashMap<Uuid, Option<chrono::DateTime<Utc>>>>,
     }
 
@@ -281,18 +281,6 @@ mod tests {
                 .alive_hero
                 .lock()
                 .expect("alive lock should not be poisoned")
-                .get(&player_id)
-                .unwrap_or(&false))
-        }
-
-        async fn player_has_pending_hero_revival(
-            &self,
-            player_id: Uuid,
-        ) -> Result<bool, ApplicationError> {
-            Ok(*self
-                .pending_revival
-                .lock()
-                .expect("pending lock should not be poisoned")
                 .get(&player_id)
                 .unwrap_or(&false))
         }
@@ -429,10 +417,10 @@ mod tests {
             .unwrap()
             .insert(hero_id, dead_hero(hero_id, player_id, 1));
         reads
-            .pending_revival
+            .pending_revival_at
             .lock()
             .unwrap()
-            .insert(player_id, true);
+            .insert(player_id, Some(Utc::now()));
         let executor = Arc::new(FakeHeroExecutor::default());
         let use_cases = use_cases(reads, executor.clone());
 

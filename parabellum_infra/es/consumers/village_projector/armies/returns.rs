@@ -5,12 +5,15 @@ use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{
     MovementDirection, MovementType, ScheduledActionStatus, VillageMovement,
 };
+use parabellum_app::villages::projection_repositories::HeroPlacementState;
 use parabellum_game::models::army::Army;
 use parabellum_types::common::ResourceGroup;
 use sqlx::{Postgres, Transaction};
 
 use crate::es::consumers::village_projector::VillageProjector;
 use crate::es::workflows;
+
+use super::super::economy::VillageEconomyFacts;
 
 struct ReturnProjection<'a> {
     movement_id: uuid::Uuid,
@@ -51,9 +54,12 @@ impl VillageProjector {
             );
         };
         let _ = stationed_attacker_army;
+        self.update_battle_hero_stats_in_tx(tx, report).await?;
         if let Some(trapped) = trapped_attacker_army {
+            let mut trapped = trapped.clone();
+            trapped.detach_dead_hero();
             self.armies
-                .upsert_trapped_in_tx(tx, trapped, *target_village_id, *player_id)
+                .upsert_trapped_in_tx(tx, &trapped, *target_village_id, *player_id)
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         }
@@ -186,7 +192,7 @@ impl VillageProjector {
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         current.trapper = trapper;
         self.village
-            .replace_village_state_in_tx(tx, &current)
+            .store_village_model_in_tx(tx, &current)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
     }
@@ -204,11 +210,13 @@ impl VillageProjector {
             target_village_id,
             returning_army,
             returns_at,
+            report,
             ..
         } = event
         else {
             unreachable!("project_scout_battle_resolved called with non-ScoutBattleResolved event");
         };
+        self.update_battle_hero_stats_in_tx(tx, report).await?;
         let Some(return_army) = returning_army else {
             return Ok(());
         };
@@ -234,6 +242,11 @@ impl VillageProjector {
         tx: &mut Transaction<'_, Postgres>,
         projection: ReturnProjection<'_>,
     ) -> Result<(), CqrsError> {
+        let mut army = projection.army.clone();
+        army.detach_dead_hero();
+        if army.immensity() == 0 {
+            return Ok(());
+        }
         let outgoing = VillageMovement {
             movement_id: projection.movement_id,
             movement_type: MovementType::Return,
@@ -248,9 +261,9 @@ impl VillageProjector {
             target_position: None,
             arrives_at: projection.returns_at,
             time_seconds: None,
-            units: projection.army.units().clone(),
-            has_hero: projection.army.hero().is_some(),
-            tribe: Some(projection.army.tribe.clone()),
+            units: army.units().clone(),
+            has_hero: army.hero().is_some(),
+            tribe: Some(army.tribe.clone()),
             bounty: projection.bounty.clone(),
         };
         let incoming = VillageMovement {
@@ -269,7 +282,7 @@ impl VillageProjector {
         }
         self.upsert_moving_army(
             tx,
-            projection.army,
+            &army,
             projection.target_village_id,
             projection.player_id,
         )
@@ -281,7 +294,7 @@ impl VillageProjector {
             projection.source_village_id,
             projection.target_village_id,
             projection.player_id,
-            projection.army.clone(),
+            army,
             projection.bounty,
             projection.returns_at,
         );
@@ -399,9 +412,7 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         let source_stocks = source.stocks.clone();
-        let mut source_village = self
-            .village_from_model_with_armies_in_tx(tx, source)
-            .await?;
+        let mut source_village = self.load_village_state_in_tx(tx, source).await?;
         source_village
             .merge_army(army)
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
@@ -427,10 +438,14 @@ impl VillageProjector {
                 .await
                 .map_err(|e| CqrsError::EventStore(e.to_string()))?;
             if let Some(hero) = home_army.hero() {
-                self.heroes
-                    .upsert_in_tx(tx, &hero, *source_village_id, *source_village_id, "home")
-                    .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                self.project_hero_placement_in_tx(
+                    tx,
+                    &hero,
+                    *source_village_id,
+                    *source_village_id,
+                    HeroPlacementState::Home,
+                )
+                .await?;
             }
         }
 
@@ -441,8 +456,12 @@ impl VillageProjector {
                 source_stocks.iron.saturating_add(bounty.iron()),
                 (source_stocks.crop.max(0) as u32).saturating_add(bounty.crop()),
             );
-            self.set_stored_resources_in_tx(tx, *source_village_id, next_resources)
-                .await?;
+            self.apply_village_economy_facts_in_tx(
+                tx,
+                *source_village_id,
+                VillageEconomyFacts::stored_resources(next_resources),
+            )
+            .await?;
         }
         self.refresh_village_derived_state_in_tx(tx, *source_village_id)
             .await

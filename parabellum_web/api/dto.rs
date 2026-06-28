@@ -352,6 +352,8 @@ pub struct BattlePartyPayloadDoc {
     pub survivors: Vec<u32>,
     pub losses: Vec<u32>,
     pub has_hero: bool,
+    pub hero_survived: bool,
+    pub hero_lost: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

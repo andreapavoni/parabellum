@@ -20,8 +20,8 @@ use parabellum_app::{
     villages::models::{BuildingWorkflowKind, ScheduledActionStatus},
     villages::read_models::{
         AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
-        MerchantMovementKind, SmithyQueueItem, TrainingQueueItem, TrapQueueItem, TroopMovementType,
-        VillageArmyStateView, VillageTroopMovements,
+        MerchantMovementDirection, MerchantMovementKind, SmithyQueueItem, TrainingQueueItem,
+        TrapQueueItem, TroopMovementType, VillageArmyStateView, VillageTroopMovements,
     },
 };
 use parabellum_game::models::{
@@ -947,39 +947,11 @@ pub async fn building_detail(
                     })
                     .collect();
 
-                let pending_outgoing_goings: Vec<&MerchantMovement> = marketplace_data
-                    .outgoing_merchants
+                let merchant_movements = marketplace_data
+                    .merchant_movements
                     .iter()
-                    .filter(|movement| matches!(movement.kind, MerchantMovementKind::Going))
+                    .map(|movement| merchant_movement_to_dto(&marketplace_data, movement))
                     .collect();
-
-                let mut merchant_movements: Vec<_> = Vec::new();
-                for movement in &marketplace_data.outgoing_merchants {
-                    let hide_prescheduled_return =
-                        matches!(movement.kind, MerchantMovementKind::Return)
-                            && paired_outgoing_going_exists(
-                                &marketplace_data,
-                                movement,
-                                &pending_outgoing_goings,
-                            );
-                    if !hide_prescheduled_return {
-                        merchant_movements.push(merchant_movement_to_dto(
-                            &marketplace_data,
-                            movement,
-                            MerchantMovementDirectionDto::Outgoing,
-                        ));
-                    }
-                }
-                merchant_movements.extend(marketplace_data.incoming_merchants.iter().map(
-                    |movement| {
-                        merchant_movement_to_dto(
-                            &marketplace_data,
-                            movement,
-                            MerchantMovementDirectionDto::Incoming,
-                        )
-                    },
-                ));
-                merchant_movements.sort_by_key(|movement| movement.arrives_at);
 
                 BuildingDetailDto {
                     slot_id,
@@ -1648,7 +1620,6 @@ fn marketplace_offer_to_dto(
 fn merchant_movement_to_dto(
     data: &MarketplaceData,
     movement: &MerchantMovement,
-    direction: MerchantMovementDirectionDto,
 ) -> MerchantMovementDto {
     let origin_info = data.village_references.get(&movement.origin_village_id);
     let destination_info = data
@@ -1656,7 +1627,10 @@ fn merchant_movement_to_dto(
         .get(&movement.destination_village_id);
     MerchantMovementDto {
         job_id: movement.job_id.to_string(),
-        direction,
+        direction: match movement.direction {
+            MerchantMovementDirection::Outgoing => MerchantMovementDirectionDto::Outgoing,
+            MerchantMovementDirection::Incoming => MerchantMovementDirectionDto::Incoming,
+        },
         kind: match movement.kind {
             MerchantMovementKind::Going => MerchantMovementKindDto::Going,
             MerchantMovementKind::Return => MerchantMovementKindDto::Return,
@@ -1673,38 +1647,6 @@ fn merchant_movement_to_dto(
         merchants_used: movement.merchants_used,
         arrives_at: movement.arrives_at,
     }
-}
-
-fn paired_outgoing_going_exists(
-    data: &MarketplaceData,
-    return_movement: &MerchantMovement,
-    outgoing_goings: &[&MerchantMovement],
-) -> bool {
-    let return_origin = data
-        .village_references
-        .get(&return_movement.origin_village_id)
-        .map(|info| &info.position);
-    let return_destination = data
-        .village_references
-        .get(&return_movement.destination_village_id)
-        .map(|info| &info.position);
-
-    outgoing_goings.iter().any(|going| {
-        let going_origin = data
-            .village_references
-            .get(&going.origin_village_id)
-            .map(|info| &info.position);
-        let going_destination = data
-            .village_references
-            .get(&going.destination_village_id)
-            .map(|info| &info.position);
-        let reverse_route_match =
-            going_origin == return_destination && going_destination == return_origin;
-        let legacy_loopback_return = return_origin == return_destination;
-        (reverse_route_match || legacy_loopback_return)
-            && going.merchants_used == return_movement.merchants_used
-            && going.arrives_at <= return_movement.arrives_at
-    })
 }
 
 fn position_to_dto(position: &Position) -> PositionDto {

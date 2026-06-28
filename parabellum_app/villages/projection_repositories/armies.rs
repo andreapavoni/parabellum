@@ -118,60 +118,11 @@ pub trait ArmyRepository: Send + Sync {
         army_id: Uuid,
     ) -> Result<Option<(u32, parabellum_game::models::army::Army)>, ApplicationError>;
 
+    /// Returns the complete army placement context needed to hydrate one village.
     async fn army_context_for_village(
         &self,
         village_id: u32,
-    ) -> Result<VillageArmyContext, ApplicationError> {
-        let mut home_armies = self
-            .list_armies(
-                ArmyListFilter::new()
-                    .home_village(village_id)
-                    .current_village(village_id)
-                    .state(ArmyState::Home)
-                    .limit(1),
-            )
-            .await?;
-        Ok(VillageArmyContext {
-            home: home_armies.pop(),
-            stationed: self
-                .list_armies(
-                    ArmyListFilter::new()
-                        .current_village(village_id)
-                        .state(ArmyState::Stationed),
-                )
-                .await?,
-            deployed: self
-                .list_armies(
-                    ArmyListFilter::new()
-                        .home_village(village_id)
-                        .state(ArmyState::Stationed)
-                        .deployed(true),
-                )
-                .await?,
-            moving: self
-                .list_armies(
-                    ArmyListFilter::new()
-                        .home_village(village_id)
-                        .state(ArmyState::Moving),
-                )
-                .await?,
-            trapped_here: self
-                .list_armies(
-                    ArmyListFilter::new()
-                        .current_village(village_id)
-                        .state(ArmyState::Trapped),
-                )
-                .await?,
-            trapped_away: self
-                .list_armies(
-                    ArmyListFilter::new()
-                        .home_village(village_id)
-                        .state(ArmyState::Trapped)
-                        .deployed(true),
-                )
-                .await?,
-        })
-    }
+    ) -> Result<VillageArmyContext, ApplicationError>;
 
     async fn delete_by_home_village(&self, village_id: u32) -> Result<(), ApplicationError>;
 }
