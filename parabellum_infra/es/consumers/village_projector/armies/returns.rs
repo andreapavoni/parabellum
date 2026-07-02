@@ -244,13 +244,17 @@ impl VillageProjector {
     ) -> Result<(), CqrsError> {
         let mut army = projection.army.clone();
         army.detach_dead_hero();
+        self.movements
+            .delete_by_movement_id_in_tx(tx, projection.movement_id)
+            .await
+            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if army.immensity() == 0 {
             return Ok(());
         }
-        let outgoing = VillageMovement {
+        let incoming = VillageMovement {
             movement_id: projection.movement_id,
             movement_type: MovementType::Return,
-            direction: MovementDirection::Outgoing,
+            direction: MovementDirection::Incoming,
             origin_village_id: projection.target_village_id,
             origin_village_name: None,
             origin_player_id: projection.player_id,
@@ -266,14 +270,6 @@ impl VillageProjector {
             tribe: Some(army.tribe.clone()),
             bounty: projection.bounty.clone(),
         };
-        let incoming = VillageMovement {
-            direction: MovementDirection::Incoming,
-            ..outgoing.clone()
-        };
-        self.movements
-            .upsert_in_tx(tx, &outgoing)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         if projection.show_at_origin {
             self.movements
                 .upsert_in_tx(tx, &incoming)
@@ -337,10 +333,10 @@ impl VillageProjector {
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
 
-        let outgoing = VillageMovement {
+        let incoming = VillageMovement {
             movement_id: *movement_id,
             movement_type: MovementType::Return,
-            direction: MovementDirection::Outgoing,
+            direction: MovementDirection::Incoming,
             origin_village_id: *target_village_id,
             origin_village_name: None,
             origin_player_id: *player_id,
@@ -356,14 +352,6 @@ impl VillageProjector {
             tribe: Some(army.tribe.clone()),
             bounty: None,
         };
-        let incoming = VillageMovement {
-            direction: MovementDirection::Incoming,
-            ..outgoing.clone()
-        };
-        self.movements
-            .upsert_in_tx(tx, &outgoing)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
         self.movements
             .upsert_in_tx(tx, &incoming)
             .await
