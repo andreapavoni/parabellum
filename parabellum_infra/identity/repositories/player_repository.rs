@@ -24,6 +24,20 @@ impl PostgresPlayerRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// Reads report identity context without borrowing another pool connection.
+    pub(crate) async fn username_in_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        player_id: Uuid,
+    ) -> Result<String, ApplicationError> {
+        sqlx::query_scalar("SELECT username FROM players WHERE id = $1")
+            .bind(player_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?
+            .ok_or(ApplicationError::Db(DbError::PlayerNotFound(player_id)))
+    }
 }
 
 #[async_trait::async_trait]

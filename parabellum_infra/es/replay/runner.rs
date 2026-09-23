@@ -1,7 +1,8 @@
 //! Replay execution loops and projection reset logic.
 
-use mini_cqrs_es::{CqrsError, EventConsumer};
+use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
+use sqlx::{Postgres, Transaction};
 use tracing::{info, warn};
 
 use crate::es::advisory_lock::AdvisoryLock;
@@ -69,6 +70,14 @@ impl ReplayService {
     }
 
     async fn full_replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
+        if request.from_global_seq != 1
+            || request.to_global_seq.is_some()
+            || request.aggregate_id.is_some()
+        {
+            return Err(CqrsError::EventStore(
+                "full replay requires complete history (--from 1, no --to or --aggregate-id); use dry-run for filtered windows".into(),
+            ));
+        }
         let Some(lock) =
             AdvisoryLock::try_acquire(&self.pool, SCHEDULED_ACTION_EXECUTION_LOCK_KEY).await?
         else {
@@ -85,8 +94,20 @@ impl ReplayService {
     }
 
     async fn run_full_replay(&self, request: ReplayRequest) -> Result<ReplaySummary, CqrsError> {
-        let to_global_seq = self.resolve_upper_bound(request.to_global_seq).await?;
-        self.reset_projection_target(request.target).await?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
+        // Exclude event writers for the entire rebuild, including the reset.
+        // All projection writes use this transaction so failure restores old state.
+        sqlx::query("LOCK TABLE es_events IN SHARE MODE")
+            .execute(&mut *tx)
+            .await
+            .map_err(CqrsError::domain_source)?;
+        let to_global_seq: Option<i64> =
+            sqlx::query_scalar("SELECT MAX(global_seq) FROM es_events")
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(CqrsError::domain_source)?;
+        self.reset_projection_target(&mut tx, request.target)
+            .await?;
         info!(target = ?request.target, "replay projections reset");
 
         let village_projector = VillageProjector::new_with_options(self.pool.clone(), false);
@@ -97,7 +118,8 @@ impl ReplayService {
         loop {
             let events = self
                 .event_store
-                .load_events_by_global_seq(
+                .load_events_by_global_seq_in_tx(
+                    &mut tx,
                     from_global_seq,
                     to_global_seq,
                     request.aggregate_id.as_deref(),
@@ -119,10 +141,10 @@ impl ReplayService {
                 if matches!(request.target, ReplayTarget::Reports | ReplayTarget::All)
                     && is_report_event(&event.get_payload::<VillageEvent>()?)
                 {
-                    report_projector.process(event).await?;
+                    report_projector.process_in_tx(&mut tx, event).await?;
                 }
                 if matches!(request.target, ReplayTarget::Village | ReplayTarget::All) {
-                    village_projector.process(event).await?;
+                    village_projector.process_in_tx(&mut tx, event).await?;
                 }
 
                 summary.applied += 1;
@@ -134,6 +156,7 @@ impl ReplayService {
             };
             from_global_seq = last_global_seq + 1;
         }
+        tx.commit().await.map_err(CqrsError::domain_source)?;
         Ok(summary)
     }
 
@@ -149,47 +172,49 @@ impl ReplayService {
         Ok(upper)
     }
 
-    async fn reset_projection_target(&self, target: ReplayTarget) -> Result<(), CqrsError> {
-        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
-
+    async fn reset_projection_target(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        target: ReplayTarget,
+    ) -> Result<(), CqrsError> {
         if matches!(target, ReplayTarget::Reports | ReplayTarget::All) {
             sqlx::query("DELETE FROM rm_report_reads")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_reports")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
         }
 
         if matches!(target, ReplayTarget::Village | ReplayTarget::All) {
             sqlx::query("DELETE FROM rm_marketplace_offers")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_village_movements")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_armies")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_heroes")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("DELETE FROM rm_village")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
             sqlx::query("UPDATE rm_map_fields SET village_id = NULL, player_id = NULL")
-                .execute(&mut *tx)
+                .execute(&mut **tx)
                 .await
                 .map_err(CqrsError::domain_source)?;
         }
 
-        tx.commit().await.map_err(CqrsError::domain_source)
+        Ok(())
     }
 }

@@ -18,9 +18,7 @@ use crate::es::lock_keys::SCHEDULED_ACTION_EXECUTION_LOCK_KEY;
 use crate::es::workflows;
 use crate::es::{
     CqrsError, PostgresArmyRepository, PostgresScheduledActionRepository, VillageEsService,
-    village_cqrs_runtime,
 };
-use parabellum_app::villages::VillageService;
 use parabellum_app::villages::models::{
     ScheduledAction, ScheduledActionPayload, ScheduledActionStatus,
 };
@@ -85,35 +83,28 @@ impl VillageEsService {
         result
     }
 
-    pub async fn process_actions(
-        &self,
-        actions: &Vec<ScheduledAction>,
-    ) -> Result<usize, CqrsError> {
-        let runtime = village_cqrs_runtime(self.pool().clone());
-        let service = VillageService::new(&runtime);
+    pub async fn process_actions(&self, actions: &[ScheduledAction]) -> Result<usize, CqrsError> {
         let mut processed = 0usize;
         let repo =
             PostgresScheduledActionRepository::new(crate::ProjectionDb::new(self.pool().clone()));
 
         for action in actions {
-            let result = execute_action(self, &service, action).await;
-            let next_status = if result.is_ok() {
-                ScheduledActionStatus::Completed
-            } else if matches!(result, Err(CqrsError::Conflict { .. })) {
-                ScheduledActionStatus::Pending
-            } else {
-                ScheduledActionStatus::Failed
-            };
-            repo.update_status(action.id, next_status)
-                .await
-                .map_err(CqrsError::domain_source)?;
+            let result = execute_action(self, action).await;
+            if let Err(err) = &result {
+                let next_status = if is_retryable(err) {
+                    ScheduledActionStatus::Pending
+                } else {
+                    ScheduledActionStatus::Failed
+                };
+                repo.finish_processing(action.id, next_status).await?;
+            }
             if let Err(err) = &result {
                 tracing::warn!(
                     action = "scheduler_action_failed",
                     action_id = %action.id,
                     action_type = ?action.action_type,
                     error = %err,
-                    "scheduled action marked failed"
+                    "scheduled action attempt failed"
                 );
             } else {
                 tracing::info!(
@@ -132,7 +123,6 @@ impl VillageEsService {
 /// Executes one scheduled action payload by appending canonical workflow fact(s).
 pub(super) async fn execute_action(
     svc: &VillageEsService,
-    _service: &VillageService<'_, crate::es::VillageCqrsRuntime>,
     action: &parabellum_app::villages::models::ScheduledAction,
 ) -> Result<(), CqrsError> {
     tracing::debug!(
@@ -141,17 +131,17 @@ pub(super) async fn execute_action(
         action_type = ?action.action_type,
         "executing scheduled action"
     );
-    let payload: ScheduledActionPayload =
-        serde_json::from_value(action.payload.clone()).map_err(CqrsError::Serialization)?;
-    match payload {
+    match action.payload().map_err(CqrsError::domain_source)? {
         ScheduledActionPayload::ReinforcementArrival { workflow } => {
-            svc.append_workflow_events(
+            svc.append_scheduled_workflow_events(
+                action.id,
                 workflows::movements::reinforcement_arrival_events(svc, workflow).await?,
             )
             .await?;
         }
         ScheduledActionPayload::SettlersArrival { workflow } => {
-            svc.append_workflow_events(
+            svc.append_scheduled_workflow_events(
+                action.id,
                 workflows::foundation::settlers_arrival_events(svc, workflow).await?,
             )
             .await?;
@@ -163,13 +153,17 @@ pub(super) async fn execute_action(
                     .await?
                     .into_inner(),
             );
-            svc.append_workflow_events(workflows::WorkflowEvents::from_events(events))
-                .await?;
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::WorkflowEvents::from_events(events),
+            )
+            .await?;
         }
         ScheduledActionPayload::ArmyReturn { workflow } => {
-            svc.append_workflow_events(workflows::movements::army_return_events(
-                action.id, workflow,
-            ))
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::movements::army_return_events(action.id, workflow),
+            )
             .await?;
         }
         ScheduledActionPayload::ScoutArrival { workflow } => {
@@ -179,35 +173,48 @@ pub(super) async fn execute_action(
                     .await?
                     .into_inner(),
             );
-            svc.append_workflow_events(workflows::WorkflowEvents::from_events(events))
-                .await?;
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::WorkflowEvents::from_events(events),
+            )
+            .await?;
         }
         ScheduledActionPayload::MerchantsArrival { workflow } => {
-            svc.append_workflow_events(
+            svc.append_scheduled_workflow_events(
+                action.id,
                 workflows::merchants::arrival_events(svc, action.id, workflow).await?,
             )
             .await?;
         }
         ScheduledActionPayload::MerchantsReturn { workflow } => {
-            svc.append_workflow_events(workflows::merchants::return_events(action.id, workflow))
-                .await?;
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::merchants::return_events(action.id, workflow),
+            )
+            .await?;
         }
         ScheduledActionPayload::Building { workflow } => {
-            svc.append_workflow_events(workflows::buildings::completion_events(
-                action.id, workflow,
-            ))
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::buildings::completion_events(action.id, workflow),
+            )
             .await?;
         }
         ScheduledActionPayload::Training { workflow } => {
             let workflow_events = workflows::training::completion_events(action.id, workflow);
-            svc.append_workflow_events(workflow_events).await?;
-        }
-        ScheduledActionPayload::Research { workflow } => {
-            svc.append_workflow_events(workflows::research::completion_events(action.id, workflow))
+            svc.append_scheduled_workflow_events(action.id, workflow_events)
                 .await?;
         }
+        ScheduledActionPayload::Research { workflow } => {
+            svc.append_scheduled_workflow_events(
+                action.id,
+                workflows::research::completion_events(action.id, workflow),
+            )
+            .await?;
+        }
         ScheduledActionPayload::HeroRevival { workflow } => {
-            svc.append_workflow_events(
+            svc.append_scheduled_workflow_events(
+                action.id,
                 workflows::heroes::revival_events(svc, action.id, workflow).await?,
             )
             .await?;
@@ -229,8 +236,35 @@ pub(super) async fn execute_action(
             trapper.complete_trap_build(1);
             let workflow_events =
                 workflows::traps::completion_events(action.id, workflow, trapper.state());
-            svc.append_workflow_events(workflow_events).await?;
+            svc.append_scheduled_workflow_events(action.id, workflow_events)
+                .await?;
         }
     }
     Ok(())
+}
+
+/// Preserve business failures while retrying optimistic conflicts and transient
+/// SQL failures with the repository's persistent attempt budget.
+fn is_retryable(error: &CqrsError) -> bool {
+    if matches!(error, CqrsError::Conflict { .. }) {
+        return true;
+    }
+    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(error) = source {
+        if let Some(error) = error.downcast_ref::<sqlx::Error>() {
+            return match error {
+                sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut | sqlx::Error::WorkerCrashed => true,
+                sqlx::Error::Database(error) => error.code().is_some_and(|code| {
+                    code.starts_with("08")
+                        || matches!(
+                            code.as_ref(),
+                            "40001" | "40P01" | "55P03" | "57014" | "57P01" | "57P02" | "57P03"
+                        )
+                }),
+                _ => false,
+            };
+        }
+        source = error.source();
+    }
+    false
 }

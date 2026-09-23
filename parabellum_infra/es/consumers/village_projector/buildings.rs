@@ -86,8 +86,7 @@ impl VillageProjector {
                 *village_id,
                 VillageEconomyFacts::stored_resources(village.stored_resources()),
             )
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .await?;
         }
 
         Ok(())

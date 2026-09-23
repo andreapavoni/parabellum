@@ -79,6 +79,15 @@ pub struct WebRouter {}
 impl WebRouter {
     /// Starts the HTTP server and blocks until shutdown/error.
     pub async fn serve(state: AppState, port: u16) -> Result<(), ApplicationError> {
+        Self::serve_with_shutdown(state, port, std::future::pending()).await
+    }
+
+    /// Serves requests until the shutdown future resolves, then drains connections.
+    pub async fn serve_with_shutdown(
+        state: AppState,
+        port: u16,
+        shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    ) -> Result<(), ApplicationError> {
         tracing::info!("ensuring auth refresh schema");
         state
             .token_service
@@ -171,7 +180,10 @@ impl WebRouter {
         })?;
 
         tracing::info!(address = %addr, "http server started");
-        axum::serve(listener, router).await.map_err(infra_error)?;
+        axum::serve(listener, router)
+            .with_graceful_shutdown(shutdown)
+            .await
+            .map_err(infra_error)?;
 
         Ok(())
     }

@@ -9,6 +9,7 @@
 //! call the domain model directly from the aggregate state or command handler.
 
 pub mod army_dispatch;
+pub mod building_cancellation;
 pub mod expansion;
 pub mod marketplace;
 pub mod reinforcement_control;

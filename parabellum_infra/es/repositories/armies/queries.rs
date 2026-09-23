@@ -132,14 +132,14 @@ pub(super) fn army_query(
         query.push_bind(state_name(state));
     }
 
-    if let Some(deployed) = filter.deployed {
+    if let Some(away_from_home) = filter.away_from_home {
         let Some(home_village_id) = filter.home_village_id else {
             return Err(ApplicationError::Db(DbError::Database(
-                sqlx::Error::Protocol("army deployed filter requires home_village_id".into()),
+                sqlx::Error::Protocol("army away_from_home filter requires home_village_id".into()),
             )));
         };
         push_filter(&mut query, &mut has_where);
-        if deployed {
+        if away_from_home {
             query.push("a.current_village_id <> ");
         } else {
             query.push("a.current_village_id = ");

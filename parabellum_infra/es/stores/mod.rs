@@ -4,6 +4,7 @@
 //! storage is kept separate because snapshots are derived operational state and
 //! can be rebuilt from events.
 
+mod aggregate;
 mod event_store;
 mod rows;
 mod snapshots;

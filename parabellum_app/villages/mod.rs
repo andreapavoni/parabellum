@@ -28,6 +28,7 @@ pub use cqrs_command_service::VillageService;
 pub use events::VillageEvent;
 pub use mapping::{VillageArmyContext, apply_domain_village_state, hydrate_village};
 pub use policies::army_dispatch::{ArmyDispatch, ArmyDispatchRequest};
+pub use policies::building_cancellation::{BuildingCancellationAction, BuildingCancellationPolicy};
 pub use policies::expansion::{ConquestAttempt, ExpansionSlotUsage, ExpansionTrainingCommitment};
 pub use policies::marketplace::{MarketplaceAcceptance, MarketplaceOfferCreation};
 pub use policies::reinforcement_control::ReinforcementControl;

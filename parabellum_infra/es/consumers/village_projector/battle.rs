@@ -18,6 +18,7 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::es::consumers::village_projector::VillageProjector;
+use crate::es::consumers::village_projector::heroes::surviving_army_projection;
 
 struct BattleTargetState {
     village: VillageModel,
@@ -46,7 +47,6 @@ impl VillageProjector {
         event: &VillageEvent,
     ) -> Result<(), CqrsError> {
         let VillageEvent::BattleOutcomeAppliedToVillage {
-            source_village_id,
             target_village_id,
             target_player_id,
             ..
@@ -77,7 +77,6 @@ impl VillageProjector {
         if *target_player_id != target_before.player_id {
             self.apply_conquest_to_target(
                 tx,
-                *source_village_id,
                 *target_village_id,
                 *target_player_id,
                 &mut target_next.village,
@@ -187,21 +186,13 @@ impl VillageProjector {
     async fn apply_conquest_to_target(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        source_village_id: u32,
         target_village_id: u32,
         target_player_id: Uuid,
         target_next: &mut VillageModel,
     ) -> Result<(), CqrsError> {
-        let source = self
-            .village
-            .get_by_village_id_in_tx(tx, source_village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        target_next.tribe = source.tribe.clone();
         let mut conquered_village = self
             .load_village_state_in_tx(tx, target_next.clone())
             .await?;
-        conquered_village.tribe = source.tribe;
         remove_tribe_incompatible_buildings(&mut conquered_village);
         target_next.buildings = conquered_village.buildings().to_vec();
         target_next.production = conquered_village.production.clone();
@@ -229,6 +220,7 @@ fn target_state_after_battle(
 ) -> BattleTargetState {
     let VillageEvent::BattleOutcomeAppliedToVillage {
         target_player_id,
+        target_tribe,
         target_parent_village_id,
         target_loyalty,
         target_buildings,
@@ -249,6 +241,7 @@ fn target_state_after_battle(
 
     let mut village = target_before.clone();
     village.player_id = *target_player_id;
+    village.tribe = target_tribe.clone();
     village.parent_village_id = *target_parent_village_id;
     village.loyalty = *target_loyalty;
     village.buildings = target_buildings.clone();
@@ -256,19 +249,14 @@ fn target_state_after_battle(
     village.population = *target_population;
     village.stocks = target_stocks.clone();
     village.trapper = *target_trapper;
-    let home = target_army
-        .clone()
-        .map(army_without_dead_hero)
-        .filter(|army| army.immensity() > 0);
+    let home = target_army.clone().and_then(surviving_army_projection);
     let mut stationed: Vec<Army> = target_reinforcements
         .iter()
         .cloned()
-        .map(army_without_dead_hero)
-        .filter(|army| army.immensity() > 0)
+        .filter_map(surviving_army_projection)
         .collect();
     if let Some(stationed_attacker) = stationed_attacker_army {
-        let stationed_attacker = army_without_dead_hero(stationed_attacker.clone());
-        if stationed_attacker.immensity() > 0 {
+        if let Some(stationed_attacker) = surviving_army_projection(stationed_attacker.clone()) {
             stationed.push(stationed_attacker);
         }
     }
@@ -277,11 +265,6 @@ fn target_state_after_battle(
         home,
         stationed,
     }
-}
-
-fn army_without_dead_hero(mut army: Army) -> Army {
-    army.detach_dead_hero();
-    army
 }
 
 fn remove_tribe_incompatible_buildings(village: &mut Village) {

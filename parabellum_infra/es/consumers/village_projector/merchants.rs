@@ -8,7 +8,6 @@
 use mini_cqrs_es::CqrsError;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::{MarketplaceOfferModel, MarketplaceOfferStatus};
-use parabellum_game::models::village::VillageStocks;
 use sqlx::{Postgres, Transaction};
 
 use super::economy::{VillageEconomyFacts, apply_village_economy_facts_to_model};
@@ -30,8 +29,12 @@ impl VillageProjector {
                 target_stocks,
                 ..
             } => Some(
-                self.apply_fact_stocks(tx, *target_village_id, target_stocks)
-                    .await,
+                self.apply_village_economy_facts_in_tx(
+                    tx,
+                    *target_village_id,
+                    VillageEconomyFacts::stored_resources(target_stocks.stored()),
+                )
+                .await,
             ),
             VillageEvent::MerchantsReturned {
                 source_village_id,
@@ -51,11 +54,13 @@ impl VillageProjector {
                 owner_busy_merchants,
                 ..
             } => Some(
-                self.apply_fact_stocks_and_busy_merchants(
+                self.apply_village_economy_facts_in_tx(
                     tx,
                     *owner_village_id,
-                    owner_stocks,
-                    *owner_busy_merchants,
+                    VillageEconomyFacts::stored_resources_and_busy_merchants(
+                        owner_stocks.stored(),
+                        *owner_busy_merchants,
+                    ),
                 )
                 .await,
             ),
@@ -80,11 +85,13 @@ impl VillageProjector {
                 owner_busy_merchants,
                 ..
             } => Some(
-                self.apply_fact_stocks_and_busy_merchants(
+                self.apply_village_economy_facts_in_tx(
                     tx,
                     *owner_village_id,
-                    owner_stocks,
-                    *owner_busy_merchants,
+                    VillageEconomyFacts::stored_resources_and_busy_merchants(
+                        owner_stocks.stored(),
+                        *owner_busy_merchants,
+                    ),
                 )
                 .await,
             ),
@@ -111,8 +118,15 @@ impl VillageProjector {
                 busy_merchants,
                 ..
             } => Some(
-                self.apply_fact_stocks_and_busy_merchants(tx, *village_id, stocks, *busy_merchants)
-                    .await,
+                self.apply_village_economy_facts_in_tx(
+                    tx,
+                    *village_id,
+                    VillageEconomyFacts::stored_resources_and_busy_merchants(
+                        stocks.stored(),
+                        *busy_merchants,
+                    ),
+                )
+                .await,
             ),
             _ => None,
         }
@@ -225,38 +239,6 @@ impl VillageProjector {
             )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))
-    }
-
-    async fn apply_fact_stocks(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-        stocks: &VillageStocks,
-    ) -> Result<(), CqrsError> {
-        self.apply_village_economy_facts_in_tx(
-            tx,
-            village_id,
-            VillageEconomyFacts::stored_resources(stocks.stored()),
-        )
-        .await
-    }
-
-    async fn apply_fact_stocks_and_busy_merchants(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        village_id: u32,
-        stocks: &VillageStocks,
-        busy_merchants: u8,
-    ) -> Result<(), CqrsError> {
-        self.apply_village_economy_facts_in_tx(
-            tx,
-            village_id,
-            VillageEconomyFacts::stored_resources_and_busy_merchants(
-                stocks.stored(),
-                busy_merchants,
-            ),
-        )
-        .await
     }
 }
 

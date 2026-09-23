@@ -8,7 +8,7 @@ use parabellum_types::errors::ApplicationError;
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
-    setup_logging();
+    let _logging_guard = setup_logging();
 
     let args = ReplayCliArgs::from_env_args(env::args().collect())?;
     if args.rebuild_snapshots {

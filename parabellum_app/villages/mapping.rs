@@ -8,11 +8,17 @@ use parabellum_game::models::{
 /// from the canonical army read model.
 #[derive(Debug, Clone, Default)]
 pub struct VillageArmyContext {
+    /// The village owner's home army when it is present at this village.
     pub home: Option<Army>,
+    /// Foreign or own armies currently reinforcing this village.
     pub stationed: Vec<Army>,
+    /// This village's own armies stationed as reinforcement elsewhere.
     pub deployed: Vec<Army>,
+    /// This village's own armies currently travelling.
     pub moving: Vec<Army>,
+    /// Foreign or own armies trapped at this village.
     pub trapped_here: Vec<Army>,
+    /// This village's own armies trapped elsewhere.
     pub trapped_away: Vec<Army>,
 }
 

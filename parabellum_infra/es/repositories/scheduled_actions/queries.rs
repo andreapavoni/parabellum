@@ -1,16 +1,82 @@
 //! Scheduled-action query construction.
 
-use parabellum_app::villages::projection_repositories::{
-    ScheduledActionFilter, ScheduledActionOrder, ScheduledActionWorkflowFilter,
+use parabellum_app::villages::{
+    models::{ScheduledAction, ScheduledActionStatus},
+    projection_repositories::{
+        ScheduledActionFilter, ScheduledActionOrder, ScheduledActionWorkflowFilter,
+    },
 };
-use sqlx::{Postgres, QueryBuilder};
+use sqlx::{Postgres, QueryBuilder, types::Json};
+use uuid::Uuid;
 
 use super::rows::{DbScheduledActionStatus, DbScheduledActionType};
+
+pub(crate) fn insert_scheduled_action_query(
+    action: &ScheduledAction,
+) -> QueryBuilder<'static, Postgres> {
+    let mut query = QueryBuilder::new(
+        r#"
+        INSERT INTO rm_scheduled_actions (id, action_type, execute_at, payload, status)
+        VALUES (
+        "#,
+    );
+    query.push_bind(action.id);
+    query.push(", ");
+    query.push_bind(DbScheduledActionType::from(action.action_type));
+    query.push(", ");
+    query.push_bind(action.execute_at);
+    query.push(", ");
+    query.push_bind(Json(action.payload.clone()));
+    query.push(", ");
+    query.push_bind(DbScheduledActionStatus::from(action.status));
+    query.push(")");
+    query
+}
+
+pub(crate) fn update_scheduled_action_status_query(
+    id: Uuid,
+    status: ScheduledActionStatus,
+) -> QueryBuilder<'static, Postgres> {
+    let mut query = QueryBuilder::new(
+        r#"
+        UPDATE rm_scheduled_actions
+        SET status =
+        "#,
+    );
+    query.push_bind(DbScheduledActionStatus::from(status));
+    query.push(", updated_at = NOW() WHERE id = ");
+    query.push_bind(id);
+    query
+}
+
+pub(crate) fn requeue_stale_processing_query(
+    updated_before_or_equal: chrono::DateTime<chrono::Utc>,
+) -> QueryBuilder<'static, Postgres> {
+    let mut query = QueryBuilder::new(
+        r#"
+        UPDATE rm_scheduled_actions
+        SET status =
+        "#,
+    );
+    query.push_bind(DbScheduledActionStatus::Pending);
+    query.push(", updated_at = NOW() WHERE status = ");
+    query.push_bind(DbScheduledActionStatus::Processing);
+    query.push(" AND updated_at <= ");
+    query.push_bind(updated_before_or_equal);
+    query
+}
 
 pub(crate) fn scheduled_action_row_query(
     filter: ScheduledActionFilter,
 ) -> QueryBuilder<'static, Postgres> {
     scheduled_action_query(scheduled_action_select_sql(), filter)
+}
+
+pub(crate) fn scheduled_action_by_id_query(id: Uuid) -> QueryBuilder<'static, Postgres> {
+    let mut query = QueryBuilder::new(scheduled_action_select_sql());
+    query.push(" WHERE id = ");
+    query.push_bind(id);
+    query
 }
 
 pub(crate) fn scheduled_action_query(

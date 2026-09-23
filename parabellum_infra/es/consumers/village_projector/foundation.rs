@@ -67,6 +67,7 @@ impl VillageProjector {
             .await?;
 
         let outgoing = VillageMovement {
+            viewing_village_id: *source_village_id,
             movement_id: *movement_id,
             movement_type: MovementType::FoundVillage,
             direction: MovementDirection::Outgoing,

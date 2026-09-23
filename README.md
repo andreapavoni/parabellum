@@ -2,7 +2,7 @@
 
 <img src="frontend/static/header_landing.jpg" alt="Parabellum Hero" width="900">
 
-![Rust](https://img.shields.io/badge/min%20rust-1.85-green.svg)
+![Rust](https://img.shields.io/badge/min%20rust-1.95-green.svg)
 [![CI/CD Pipeline](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml/badge.svg)](https://github.com/andreapavoni/parabellum/actions/workflows/ci.yml)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
@@ -33,7 +33,7 @@ The project is still in its early stages, but the foundations are solidifying ev
 Want to get the server running locally? Here’s how.
 
 **Prerequisites:**
-* Rust (>= 1.85)
+* Rust (>= 1.95)
 * Postgres 16.x
 * Bun 1.x
 * (optional, but much easier for deploy) Docker & Docker Compose
@@ -139,7 +139,9 @@ bun run build:release
 Parabellum persists game events and projects read models from those events.
 
 - **Dry-run replay**: inspect event streams and replay windows without mutating read models.
-- **Full replay**: apply events and rebuild read models for the selected target.
+- **Full replay**: atomically rebuild read models for the selected target from complete history.
+  Filtered windows (`--from` other than 1, `--to`, or `--aggregate-id`) are only supported in dry-run mode.
+  Full replay blocks event writers until it commits; use a maintenance window.
 
 ```sh
 # default: --target all --mode dry-run --from 1
@@ -295,7 +297,7 @@ These packages define the whole game engine. There aren't infrastructure details
 ## Developer Documentation
 
 - Backend architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Frontend architecture overview: [`docs/FRONTEND_ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Frontend architecture overview: [`docs/FRONTEND_ARCHITECTURE.md`](docs/FRONTEND_ARCHITECTURE.md)
 - API contract matrix: [`docs/api-contract-matrix.md`](docs/api-contract-matrix.md)
 - Testing and error conventions: [`docs/TESTING_AND_ERROR_CONVENTIONS.md`](docs/TESTING_AND_ERROR_CONVENTIONS.md)
 

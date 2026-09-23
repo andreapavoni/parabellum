@@ -4,6 +4,8 @@
 //! describing the target slot plus endpoint-specific sections (training, expansion,
 //! academy, smithy, marketplace, rally point).
 
+mod rally_cards;
+
 use std::collections::{HashMap, HashSet};
 
 use axum::{
@@ -21,7 +23,7 @@ use parabellum_app::{
     villages::read_models::{
         AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
         MerchantMovementDirection, MerchantMovementKind, SmithyQueueItem, TrainingQueueItem,
-        TrapQueueItem, TroopMovementType, VillageArmyStateView, VillageTroopMovements,
+        TrapQueueItem, VillageArmyStateView,
     },
 };
 use parabellum_game::models::{
@@ -32,7 +34,7 @@ use parabellum_game::models::{
     village::VillageBuilding,
 };
 use parabellum_types::{
-    army::{TroopSet, UnitGroup, UnitName, UnitRole},
+    army::{UnitGroup, UnitName, UnitRole},
     buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::ApplicationError,
@@ -47,6 +49,9 @@ use crate::{
 
 use super::authenticated_user;
 use super::error_mapping::map_application_error;
+use rally_cards::{
+    ArmyAction, ArmyCardData, ArmyCategory, MovementKind, prepare_rally_point_cards,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -452,50 +457,6 @@ pub struct RallySendableUnitDto {
     pub name: String,
     pub available: u32,
     pub is_researched: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum MovementKind {
-    Attack,
-    Raid,
-    Scout,
-    Reinforcement,
-    Return,
-    FoundVillage,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum ArmyCategory {
-    Stationed,
-    Reinforcement,
-    Deployed,
-    Trapped,
-    Incoming,
-    Outgoing,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum ArmyAction {
-    Recall { army_id: String },
-    Release { army_id: String },
-    Cancel { movement_id: String },
-    ReleaseTrapped { army_id: String },
-    DisbandTrapped { army_id: String },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct ArmyCardData {
-    village_id: u32,
-    village_name: Option<String>,
-    position: Option<Position>,
-    units: TroopSet,
-    has_hero: bool,
-    tribe: Tribe,
-    category: ArmyCategory,
-    movement_kind: Option<MovementKind>,
-    arrives_at: Option<chrono::DateTime<chrono::Utc>>,
-    bounty: Option<ResourceGroup>,
-    action_button: Option<ArmyAction>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1037,13 +998,11 @@ pub async fn building_detail(
                     &cancelable_movement_ids,
                 )
                 .into_iter()
-                .filter(|card| !hides_incoming_scout_movement(card))
                 .map(|card| {
-                    let redact_composition = redacts_incoming_army_composition(&card);
-                    let upkeep = if redact_composition {
-                        None
-                    } else {
+                    let upkeep = if card.expose_composition {
                         troop_upkeep_for_rally_card(&user.village, &card)
+                    } else {
+                        None
                     };
                     let (action, action_id) = match card.action_button {
                         Some(ArmyAction::Recall { army_id }) => {
@@ -1069,15 +1028,15 @@ pub async fn building_detail(
                         village_name: card.village_name,
                         position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
                         tribe: format!("{:?}", card.tribe),
-                        units: if redact_composition {
-                            None
-                        } else {
+                        units: if card.expose_composition {
                             Some(card.units.units().to_vec())
-                        },
-                        has_hero: if redact_composition {
-                            None
                         } else {
+                            None
+                        },
+                        has_hero: if card.expose_composition {
                             Some(card.has_hero)
+                        } else {
+                            None
                         },
                         upkeep,
                         category: match card.category {
@@ -1097,10 +1056,10 @@ pub async fn building_detail(
                             MovementKind::FoundVillage => RallyMovementKindDto::FoundVillage,
                         }),
                         arrives_at: card.arrives_at,
-                        bounty: if redact_composition {
-                            None
-                        } else {
+                        bounty: if card.expose_composition {
                             card.bounty.as_ref().map(resource_group_to_dto)
+                        } else {
+                            None
                         },
                         action,
                         action_id,
@@ -1320,173 +1279,6 @@ async fn fetch_village_references_for_rally_point(
     state.game_app.get_village_references(ids).await
 }
 
-fn prepare_rally_point_cards(
-    village_id: u32,
-    village_name: &str,
-    village_position: &Position,
-    village_tribe: &Tribe,
-    armies: &VillageArmyStateView,
-    movements: &VillageTroopMovements,
-    village_references: &HashMap<u32, VillageReference>,
-    cancelable_movement_ids: &std::collections::HashSet<uuid::Uuid>,
-) -> Vec<ArmyCardData> {
-    let mut cards = Vec::new();
-
-    if let Some(army) = &armies.home_army {
-        cards.push(ArmyCardData {
-            village_id,
-            village_name: Some(village_name.to_string()),
-            position: Some(village_position.clone()),
-            units: army.units().clone(),
-            has_hero: army.hero().is_some(),
-            tribe: village_tribe.clone(),
-            category: ArmyCategory::Stationed,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: None,
-        });
-    }
-
-    for army in &armies.deployed_armies {
-        let destination_id = army.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_references
-            .get(&destination_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: destination_id,
-            village_name: destination_name,
-            position: destination_position,
-            units: army.units().clone(),
-            has_hero: army.hero().is_some(),
-            tribe: army.tribe.clone(),
-            category: ArmyCategory::Deployed,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::Recall {
-                army_id: army.id.to_string(),
-            }),
-        });
-    }
-
-    for reinforcement in &armies.reinforcements {
-        let origin_id = reinforcement.village_id;
-        let (origin_name, origin_position) = village_references
-            .get(&origin_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: origin_id,
-            village_name: origin_name,
-            position: origin_position,
-            units: reinforcement.units().clone(),
-            has_hero: reinforcement.hero().is_some(),
-            tribe: reinforcement.tribe.clone(),
-            category: ArmyCategory::Reinforcement,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::Release {
-                army_id: reinforcement.id.to_string(),
-            }),
-        });
-    }
-
-    for trapped in &armies.trapped_here {
-        let origin_id = trapped.village_id;
-        let (origin_name, origin_position) = village_references
-            .get(&origin_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: origin_id,
-            village_name: origin_name,
-            position: origin_position,
-            units: trapped.units().clone(),
-            has_hero: trapped.hero().is_some(),
-            tribe: trapped.tribe.clone(),
-            category: ArmyCategory::Trapped,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::ReleaseTrapped {
-                army_id: trapped.id.to_string(),
-            }),
-        });
-    }
-
-    for trapped in &armies.trapped_away {
-        let destination_id = trapped.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_references
-            .get(&destination_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: destination_id,
-            village_name: destination_name,
-            position: destination_position,
-            units: trapped.units().clone(),
-            has_hero: trapped.hero().is_some(),
-            tribe: trapped.tribe.clone(),
-            category: ArmyCategory::Trapped,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::DisbandTrapped {
-                army_id: trapped.id.to_string(),
-            }),
-        });
-    }
-
-    for movement in &movements.outgoing {
-        let action_button = if cancelable_movement_ids.contains(&movement.job_id) {
-            Some(ArmyAction::Cancel {
-                movement_id: movement.job_id.to_string(),
-            })
-        } else {
-            None
-        };
-
-        cards.push(ArmyCardData {
-            village_id: movement.target_village_id,
-            village_name: movement.target_village_name.clone(),
-            position: Some(movement.target_position.clone()),
-            units: movement.units.clone(),
-            has_hero: movement.has_hero,
-            tribe: movement.tribe.clone(),
-            category: ArmyCategory::Outgoing,
-            movement_kind: Some(movement_kind_to_card_kind(movement.movement_type)),
-            arrives_at: Some(movement.arrives_at),
-            bounty: movement.bounty.clone(),
-            action_button,
-        });
-    }
-
-    for movement in &movements.incoming {
-        cards.push(ArmyCardData {
-            village_id: movement.origin_village_id,
-            village_name: movement.origin_village_name.clone(),
-            position: Some(movement.origin_position.clone()),
-            units: movement.units.clone(),
-            has_hero: movement.has_hero,
-            tribe: movement.tribe.clone(),
-            category: ArmyCategory::Incoming,
-            movement_kind: Some(movement_kind_to_card_kind(movement.movement_type)),
-            arrives_at: Some(movement.arrives_at),
-            bounty: movement.bounty.clone(),
-            action_button: None,
-        });
-    }
-
-    cards
-}
-
 fn trapper_detail_for_village(
     village: &parabellum_app::villages::models::VillageModel,
     army_state: Option<&VillageArmyStateView>,
@@ -1529,29 +1321,6 @@ fn trap_queue_to_dto(queue: &[TrapQueueItem]) -> Vec<TrapQueueItemDto> {
             is_processing: matches!(item.status, ScheduledActionStatus::Processing),
         })
         .collect()
-}
-
-fn movement_kind_to_card_kind(kind: TroopMovementType) -> MovementKind {
-    match kind {
-        TroopMovementType::Attack => MovementKind::Attack,
-        TroopMovementType::Raid => MovementKind::Raid,
-        TroopMovementType::Scout => MovementKind::Scout,
-        TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-        TroopMovementType::Return => MovementKind::Return,
-        TroopMovementType::FoundVillage => MovementKind::FoundVillage,
-    }
-}
-
-fn hides_incoming_scout_movement(card: &ArmyCardData) -> bool {
-    card.category == ArmyCategory::Incoming && card.movement_kind == Some(MovementKind::Scout)
-}
-
-fn redacts_incoming_army_composition(card: &ArmyCardData) -> bool {
-    card.category == ArmyCategory::Incoming
-        && !matches!(
-            card.movement_kind,
-            Some(MovementKind::Reinforcement | MovementKind::Return | MovementKind::FoundVillage)
-        )
 }
 
 fn resource_group_to_dto(resource: &ResourceGroup) -> ResourceAmountsDto {

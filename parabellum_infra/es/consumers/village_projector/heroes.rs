@@ -12,6 +12,16 @@ use sqlx::{Postgres, Transaction};
 use crate::es::consumers::village_projector::VillageProjector;
 use crate::es::workflows;
 
+/// Returns the army that should remain projected after battle survival is applied.
+///
+/// Battle reports update persisted hero stats separately. Army projections only
+/// keep heroes that are still alive and only keep army rows that still contain
+/// troops or a surviving hero.
+pub(super) fn surviving_army_projection(mut army: Army) -> Option<Army> {
+    army.detach_dead_hero();
+    (army.immensity() > 0).then_some(army)
+}
+
 impl VillageProjector {
     /// Projects hero placement in the hero read model.
     ///

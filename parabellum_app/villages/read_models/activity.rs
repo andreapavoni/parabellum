@@ -117,9 +117,94 @@ pub struct TroopMovement {
     pub bounty: Option<ResourceGroup>,
 }
 
+impl TroopMovement {
+    /// Returns whether this row should expose army composition to the viewing
+    /// village.
+    ///
+    /// Hostile incoming attacks, raids, and scouts are intentionally opaque
+    /// until battle reports exist. Friendly incoming reinforcements, returns,
+    /// and founding movements may expose their composition because they are
+    /// visible from the owner's perspective.
+    pub fn exposes_army_composition_to_viewer(&self) -> bool {
+        match self.direction {
+            TroopMovementDirection::Outgoing => true,
+            TroopMovementDirection::Incoming => matches!(
+                self.movement_type,
+                TroopMovementType::Reinforcement
+                    | TroopMovementType::Return
+                    | TroopMovementType::FoundVillage
+            ),
+        }
+    }
+}
+
 /// Incoming and outgoing troop movement summary for a village.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct VillageTroopMovements {
     pub outgoing: Vec<TroopMovement>,
     pub incoming: Vec<TroopMovement>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parabellum_types::{map::Position, tribe::Tribe};
+
+    fn movement(
+        direction: TroopMovementDirection,
+        movement_type: TroopMovementType,
+    ) -> TroopMovement {
+        TroopMovement {
+            job_id: Uuid::nil(),
+            movement_type,
+            direction,
+            origin_village_id: 1,
+            origin_village_name: None,
+            origin_player_id: Uuid::nil(),
+            origin_position: Position { x: 0, y: 0 },
+            target_village_id: 2,
+            target_village_name: None,
+            target_player_id: Uuid::nil(),
+            target_position: Position { x: 1, y: 1 },
+            arrives_at: DateTime::<Utc>::UNIX_EPOCH,
+            time_seconds: 0,
+            units: TroopSet::default(),
+            has_hero: false,
+            tribe: Tribe::Roman,
+            bounty: None,
+        }
+    }
+
+    #[test]
+    fn outgoing_movements_expose_composition_to_owner() {
+        let movement = movement(TroopMovementDirection::Outgoing, TroopMovementType::Attack);
+
+        assert!(movement.exposes_army_composition_to_viewer());
+    }
+
+    #[test]
+    fn hostile_incoming_movements_hide_composition_from_target() {
+        for movement_type in [
+            TroopMovementType::Attack,
+            TroopMovementType::Raid,
+            TroopMovementType::Scout,
+        ] {
+            let movement = movement(TroopMovementDirection::Incoming, movement_type);
+
+            assert!(!movement.exposes_army_composition_to_viewer());
+        }
+    }
+
+    #[test]
+    fn friendly_incoming_movements_expose_composition_to_viewer() {
+        for movement_type in [
+            TroopMovementType::Reinforcement,
+            TroopMovementType::Return,
+            TroopMovementType::FoundVillage,
+        ] {
+            let movement = movement(TroopMovementDirection::Incoming, movement_type);
+
+            assert!(movement.exposes_army_composition_to_viewer());
+        }
+    }
 }

@@ -4,13 +4,16 @@ use parabellum_app::villages::models::{MovementDirection, MovementType, VillageM
 use sqlx::{FromRow, types::Json};
 
 #[derive(Debug, Clone, FromRow)]
-pub(super) struct DbVillageMovementPayloadRow {
+pub(super) struct DbVillageMovementRow {
+    village_id: i32,
     payload: Json<VillageMovement>,
 }
 
-impl From<DbVillageMovementPayloadRow> for VillageMovement {
-    fn from(row: DbVillageMovementPayloadRow) -> Self {
-        row.payload.0
+impl From<DbVillageMovementRow> for VillageMovement {
+    fn from(row: DbVillageMovementRow) -> Self {
+        let mut movement = row.payload.0;
+        movement.viewing_village_id = row.village_id.max(0) as u32;
+        movement
     }
 }
 

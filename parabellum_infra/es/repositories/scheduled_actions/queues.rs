@@ -1,6 +1,10 @@
 //! Queue read helpers backed by scheduled-action rows.
 
-use parabellum_app::villages::models::{ScheduledActionPayload, ScheduledActionType};
+use chrono::{DateTime, Utc};
+use parabellum_app::villages::models::{
+    BuildingWorkflow, ResearchWorkflow, ResearchWorkflowKind, ScheduledActionPayload,
+    ScheduledActionStatus, ScheduledActionType, TrainingWorkflow, TrapBuildWorkflow,
+};
 use parabellum_app::villages::projection_repositories::{
     ScheduledActionFilter, ScheduledActionOrder,
 };
@@ -9,6 +13,7 @@ use parabellum_app::villages::read_models::{
     VillageQueues,
 };
 use parabellum_types::errors::{ApplicationError, DbError};
+use uuid::Uuid;
 
 use super::{PostgresScheduledActionRepository, queries, rows::DbScheduledActionRow};
 
@@ -52,59 +57,118 @@ fn map_rows_to_village_queues(
 ) -> Result<VillageQueues, ApplicationError> {
     let mut queues = VillageQueues::default();
     for row in rows {
-        let status = row.status.into();
-        let payload: ScheduledActionPayload = serde_json::from_value(row.payload)
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-        match payload {
-            ScheduledActionPayload::Building { workflow } => {
-                queues.building.push(BuildingQueueItem {
-                    job_id: row.id,
-                    kind: workflow.kind,
-                    slot_id: workflow.slot_id,
-                    building_name: workflow.building_name,
-                    target_level: workflow.level,
-                    status,
-                    finishes_at: row.execute_at,
-                });
-            }
-            ScheduledActionPayload::Training { workflow } => {
-                queues.training.push(TrainingQueueItem {
-                    job_id: row.id,
-                    slot_id: workflow.slot_id,
-                    unit: workflow.unit,
-                    quantity: workflow.quantity_remaining,
-                    time_per_unit: workflow.time_per_unit,
-                    status,
-                    finishes_at: row.execute_at,
-                });
-            }
-            ScheduledActionPayload::Research { workflow } => match row.action_type.into() {
-                ScheduledActionType::ResearchAcademy => queues.academy.push(AcademyQueueItem {
-                    job_id: row.id,
-                    unit: workflow.unit,
-                    status,
-                    finishes_at: row.execute_at,
-                }),
-                ScheduledActionType::ResearchSmithy => queues.smithy.push(SmithyQueueItem {
-                    job_id: row.id,
-                    unit: workflow.unit,
-                    status,
-                    finishes_at: row.execute_at,
-                }),
-                _ => {}
-            },
-            ScheduledActionPayload::TrapBuild { workflow } => {
-                queues.traps.push(TrapQueueItem {
-                    job_id: row.id,
-                    quantity: workflow.quantity_remaining,
-                    time_per_trap: workflow.time_per_trap,
-                    status,
-                    finishes_at: row.execute_at,
-                });
-            }
-            _ => {}
-        }
+        append_queue_row(&mut queues, row)?;
     }
 
     Ok(queues)
+}
+
+fn append_queue_row(
+    queues: &mut VillageQueues,
+    row: DbScheduledActionRow,
+) -> Result<(), ApplicationError> {
+    let status = ScheduledActionStatus::from(row.status);
+    let payload = decode_queue_payload(row.payload)?;
+
+    match payload {
+        ScheduledActionPayload::Building { workflow } => {
+            queues
+                .building
+                .push(building_queue_item(row.id, row.execute_at, status, workflow));
+        }
+        ScheduledActionPayload::Training { workflow } => {
+            queues
+                .training
+                .push(training_queue_item(row.id, row.execute_at, status, workflow));
+        }
+        ScheduledActionPayload::Research { workflow } => {
+            append_research_queue_item(queues, row.id, row.execute_at, status, workflow);
+        }
+        ScheduledActionPayload::TrapBuild { workflow } => {
+            queues
+                .traps
+                .push(trap_queue_item(row.id, row.execute_at, status, workflow));
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn decode_queue_payload(
+    payload: serde_json::Value,
+) -> Result<ScheduledActionPayload, ApplicationError> {
+    serde_json::from_value(payload).map_err(|e| ApplicationError::Unknown(e.to_string()))
+}
+
+fn building_queue_item(
+    job_id: Uuid,
+    finishes_at: DateTime<Utc>,
+    status: ScheduledActionStatus,
+    workflow: BuildingWorkflow,
+) -> BuildingQueueItem {
+    BuildingQueueItem {
+        job_id,
+        kind: workflow.kind,
+        slot_id: workflow.slot_id,
+        building_name: workflow.building_name,
+        target_level: workflow.level,
+        status,
+        finishes_at,
+    }
+}
+
+fn training_queue_item(
+    job_id: Uuid,
+    finishes_at: DateTime<Utc>,
+    status: ScheduledActionStatus,
+    workflow: TrainingWorkflow,
+) -> TrainingQueueItem {
+    TrainingQueueItem {
+        job_id,
+        slot_id: workflow.slot_id,
+        unit: workflow.unit,
+        quantity: workflow.quantity_remaining,
+        time_per_unit: workflow.time_per_unit,
+        status,
+        finishes_at,
+    }
+}
+
+fn append_research_queue_item(
+    queues: &mut VillageQueues,
+    job_id: Uuid,
+    finishes_at: DateTime<Utc>,
+    status: ScheduledActionStatus,
+    workflow: ResearchWorkflow,
+) {
+    match workflow.kind {
+        ResearchWorkflowKind::Academy => queues.academy.push(AcademyQueueItem {
+            job_id,
+            unit: workflow.unit,
+            status,
+            finishes_at,
+        }),
+        ResearchWorkflowKind::Smithy => queues.smithy.push(SmithyQueueItem {
+            job_id,
+            unit: workflow.unit,
+            status,
+            finishes_at,
+        }),
+    }
+}
+
+fn trap_queue_item(
+    job_id: Uuid,
+    finishes_at: DateTime<Utc>,
+    status: ScheduledActionStatus,
+    workflow: TrapBuildWorkflow,
+) -> TrapQueueItem {
+    TrapQueueItem {
+        job_id,
+        quantity: workflow.quantity_remaining,
+        time_per_trap: workflow.time_per_trap,
+        status,
+        finishes_at,
+    }
 }

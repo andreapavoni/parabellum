@@ -15,7 +15,7 @@ struct MissingHeroPlayer {
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
-    setup_logging();
+    let _logging_guard = setup_logging();
 
     let execute = std::env::args().skip(1).any(|arg| arg == "--execute");
     let pool = establish_connection_pool().await?;

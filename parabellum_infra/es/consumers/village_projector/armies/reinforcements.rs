@@ -43,6 +43,7 @@ impl VillageProjector {
                 target_village_id: *target_village_id,
                 arrives_at: *arrives_at,
                 army,
+                visible_to_target: true,
             },
         )
         .await?;
@@ -299,6 +300,7 @@ impl VillageProjector {
             .await?;
 
         let incoming = VillageMovement {
+            viewing_village_id: *home_village_id,
             movement_id: *movement_id,
             movement_type: MovementType::Return,
             direction: MovementDirection::Incoming,
@@ -318,7 +320,12 @@ impl VillageProjector {
             bounty: None,
         };
         if visible_to_stationed_village {
+            // A recalled reinforcement leaves a village where it was visible as
+            // a stationed army, so that village may see the departure row. A
+            // release initiated by the stationed village does not need a
+            // second visible movement row after the stationed army is removed.
             let outgoing = VillageMovement {
+                viewing_village_id: *stationed_village_id,
                 direction: MovementDirection::Outgoing,
                 ..incoming.clone()
             };

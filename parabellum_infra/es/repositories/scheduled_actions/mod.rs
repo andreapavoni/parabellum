@@ -23,7 +23,7 @@ use parabellum_types::errors::{ApplicationError, DbError};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use self::rows::DbScheduledActionRow;
+use self::rows::{DbScheduledActionRow, DbScheduledActionStatusCountsRow};
 use crate::ProjectionDb;
 
 #[derive(Debug, Clone)]
@@ -63,17 +63,11 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
     }
 
     async fn get_by_id(&self, id: Uuid) -> Result<ScheduledAction, ApplicationError> {
-        let row: DbScheduledActionRow = sqlx::query_as(
-            r#"
-            SELECT id, action_type, execute_at, payload, status, created_at
-            FROM rm_scheduled_actions
-            WHERE id = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
+        let row: DbScheduledActionRow = queries::scheduled_action_by_id_query(id)
+            .build_query_as()
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(row.into())
     }
@@ -114,7 +108,7 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
             filter = filter.statuses(vec![status]);
         }
 
-        let row: (i64, i64, i64, i64, i64) = queries::scheduled_action_aggregate_query(
+        let row: DbScheduledActionStatusCountsRow = queries::scheduled_action_aggregate_query(
             r#"
             SELECT
               COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::bigint AS pending_count,
@@ -132,11 +126,11 @@ impl ScheduledActionRepository for PostgresScheduledActionRepository {
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
 
         Ok(ScheduledActionStatusCounts {
-            pending: row.0 as usize,
-            processing: row.1 as usize,
-            completed: row.2 as usize,
-            failed: row.3 as usize,
-            canceled: row.4 as usize,
+            pending: row.pending_count as usize,
+            processing: row.processing_count as usize,
+            completed: row.completed_count as usize,
+            failed: row.failed_count as usize,
+            canceled: row.canceled_count as usize,
         })
     }
 }

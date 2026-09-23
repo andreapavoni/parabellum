@@ -1,5 +1,4 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
-use parabellum_app::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::projection_repositories::{
@@ -92,13 +91,15 @@ impl ReportProjector {
         }
     }
 
-    pub(super) async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
-        let player = self
-            .players
-            .get_by_id(player_id)
+    pub(super) async fn player_username(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        player_id: Uuid,
+    ) -> Result<String, CqrsError> {
+        self.players
+            .username_in_tx(tx, player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(player.username)
+            .map_err(CqrsError::domain_source)
     }
 
     pub(super) async fn try_village_in_tx(
@@ -153,8 +154,8 @@ impl ReportProjector {
             )
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let source_player = self.player_username(source.player_id).await?;
-        let target_player = self.player_username(target.player_id).await?;
+        let source_player = self.player_username(tx, source.player_id).await?;
+        let target_player = self.player_username(tx, target.player_id).await?;
 
         Ok(Some(SourceTargetReportContext {
             source,

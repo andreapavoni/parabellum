@@ -7,5 +7,6 @@ mod marketplace;
 mod reinforcement;
 mod replay;
 mod reports;
+mod runtime;
 mod scheduler;
 mod workflow;

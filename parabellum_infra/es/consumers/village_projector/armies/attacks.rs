@@ -45,6 +45,7 @@ impl VillageProjector {
                 target_village_id: *target_village_id,
                 arrives_at: *arrives_at,
                 army,
+                visible_to_target: true,
             },
         )
         .await
@@ -79,6 +80,7 @@ impl VillageProjector {
                 target_village_id: *target_village_id,
                 arrives_at: *arrives_at,
                 army,
+                visible_to_target: false,
             },
         )
         .await?;

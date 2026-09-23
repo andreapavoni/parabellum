@@ -28,6 +28,10 @@ struct MovementPairProjection<'a> {
     target_village_id: u32,
     arrives_at: chrono::DateTime<chrono::Utc>,
     army: &'a Army,
+    /// Whether the target village receives an incoming movement row.
+    ///
+    /// Scout arrivals stay invisible to the target until reports are generated.
+    visible_to_target: bool,
 }
 
 impl VillageProjector {
@@ -188,6 +192,7 @@ impl VillageProjector {
         projection: MovementPairProjection<'_>,
     ) -> Result<(), CqrsError> {
         let outgoing = VillageMovement {
+            viewing_village_id: projection.source_village_id,
             movement_id: projection.movement_id,
             movement_type: projection.movement_type,
             direction: MovementDirection::Outgoing,
@@ -206,18 +211,23 @@ impl VillageProjector {
             tribe: None,
             bounty: None,
         };
-        let incoming = VillageMovement {
-            direction: MovementDirection::Incoming,
-            ..outgoing.clone()
-        };
         self.movements
             .upsert_in_tx(tx, &outgoing)
             .await
             .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        self.movements
-            .upsert_in_tx(tx, &incoming)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+        if projection.visible_to_target {
+            let incoming = VillageMovement {
+                viewing_village_id: projection.target_village_id,
+                direction: MovementDirection::Incoming,
+                ..outgoing
+            };
+            self.movements
+                .upsert_in_tx(tx, &incoming)
+                .await
+                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        }
+
+        Ok(())
     }
 
     fn remaining_after_split(

@@ -12,7 +12,6 @@
 //! Public API remains centered on `VillageEsService`.
 
 use parabellum_game::models::army::Army;
-use parabellum_types::common::ResourceGroup;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -56,14 +55,6 @@ pub struct CancelTroopMovementContext {
     pub army: Army,
     pub sent_at: chrono::DateTime<chrono::Utc>,
     pub arrives_at: chrono::DateTime<chrono::Utc>,
-}
-
-pub struct CancelBuildingConstructionContext {
-    pub action_ids: Vec<Uuid>,
-    pub player_id: Uuid,
-    pub village_id: u32,
-    pub execute_at: chrono::DateTime<chrono::Utc>,
-    pub refund: ResourceGroup,
 }
 
 impl VillageEsService {

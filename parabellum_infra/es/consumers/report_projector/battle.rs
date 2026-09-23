@@ -56,8 +56,11 @@ impl ReportProjector {
         else {
             return Ok(());
         };
-        let payload =
-            scout_battle_payload(report, &context, self.player_username(*player_id).await?);
+        let payload = scout_battle_payload(
+            report,
+            &context,
+            self.player_username(tx, *player_id).await?,
+        );
         let audiences = scout_battle_audiences(*player_id, context.target.player_id, report);
         self.project_report_in_tx(
             tx,
@@ -98,8 +101,11 @@ impl ReportProjector {
         else {
             return Ok(());
         };
-        let payload =
-            attack_battle_payload(report, &context, self.player_username(*player_id).await?);
+        let payload = attack_battle_payload(
+            report,
+            &context,
+            self.player_username(tx, *player_id).await?,
+        );
         let audiences = attack_battle_audiences(*player_id, context.target.player_id, report);
         self.project_report_in_tx(
             tx,

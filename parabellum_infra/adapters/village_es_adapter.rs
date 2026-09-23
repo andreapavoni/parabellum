@@ -316,21 +316,11 @@ impl BuildingReadPort for VillageEsAdapter {
         action_id: Uuid,
         canceled_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<parabellum_app::villages::CancelBuildingConstructionContext, ApplicationError> {
-        let context = self
+        self
             .service
             .find_cancel_building_construction_context(village_id, action_id, canceled_at)
             .await
-            .map_err(Self::map_query_cqrs_error)?;
-
-        Ok(
-            parabellum_app::villages::CancelBuildingConstructionContext {
-                action_ids: context.action_ids,
-                player_id: context.player_id,
-                village_id: context.village_id,
-                execute_at: context.execute_at,
-                refund: context.refund,
-            },
-        )
+            .map_err(Self::map_query_cqrs_error)
     }
 }
 

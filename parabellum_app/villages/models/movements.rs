@@ -24,8 +24,17 @@ pub enum MovementDirection {
 }
 
 /// Projected movement row used by village activity reads.
+///
+/// Rows are materialized per viewing village. If a movement should not be
+/// visible to a village, no row should be written for that village.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VillageMovement {
+    /// Village whose Rally Point/activity view owns this projected row.
+    ///
+    /// Direction is presentation state from this village's perspective; it must
+    /// not be used to infer row ownership.
+    #[serde(default)]
+    pub viewing_village_id: u32,
     pub movement_id: Uuid,
     pub movement_type: MovementType,
     pub direction: MovementDirection,

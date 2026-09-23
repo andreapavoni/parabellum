@@ -61,58 +61,12 @@ fn apply_hero_resource_read_projection(
         return;
     }
 
-    refreshed.production.effective.lumber = refreshed
+    refreshed
         .production
-        .effective
-        .lumber
-        .saturating_add(hero_resources.lumber());
-    refreshed.production.effective.clay = refreshed
-        .production
-        .effective
-        .clay
-        .saturating_add(hero_resources.clay());
-    refreshed.production.effective.iron = refreshed
-        .production
-        .effective
-        .iron
-        .saturating_add(hero_resources.iron());
-    refreshed.production.effective.crop = refreshed
-        .production
-        .effective
-        .crop
-        .saturating_add(hero_resources.crop() as i64);
-
-    let elapsed = (chrono::Utc::now() - previous_updated_at).num_seconds() as f64;
-    if elapsed <= 0.0 {
-        return;
-    }
-
-    let add = |current: u32, per_hour: u32, capacity: u32| -> u32 {
-        (current as f64 + elapsed * (per_hour as f64 / 3600.0))
-            .min(capacity as f64)
-            .max(0.0)
-            .floor() as u32
-    };
-    refreshed.stocks.lumber = add(
-        refreshed.stocks.lumber,
-        hero_resources.lumber(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.clay = add(
-        refreshed.stocks.clay,
-        hero_resources.clay(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.iron = add(
-        refreshed.stocks.iron,
-        hero_resources.iron(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.crop = add(
-        refreshed.stocks.crop.max(0) as u32,
-        hero_resources.crop(),
-        refreshed.stocks.granary_capacity,
-    ) as i64;
+        .add_flat_effective_production(&hero_resources);
+    refreshed
+        .stocks
+        .store_hourly_production(&hero_resources, chrono::Utc::now() - previous_updated_at);
 }
 
 fn moving_armies_upkeep_for_read_projection(

@@ -29,6 +29,15 @@ impl From<DbScheduledActionRow> for ScheduledAction {
     }
 }
 
+#[derive(Debug, Clone, FromRow)]
+pub(super) struct DbScheduledActionStatusCountsRow {
+    pub(super) pending_count: i64,
+    pub(super) processing_count: i64,
+    pub(super) completed_count: i64,
+    pub(super) failed_count: i64,
+    pub(super) canceled_count: i64,
+}
+
 #[derive(Debug, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "scheduled_action_status", rename_all = "lowercase")]
 pub(super) enum DbScheduledActionStatus {

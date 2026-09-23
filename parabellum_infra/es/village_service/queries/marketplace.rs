@@ -14,7 +14,7 @@ use parabellum_app::villages::models::MarketplaceOfferModel;
 use parabellum_app::villages::projection_repositories::{
     MerchantMovementRepository, VillageRepository,
 };
-use parabellum_app::villages::read_models::MarketplaceData;
+use parabellum_app::villages::read_models::{MarketplaceData, MerchantMovement};
 use parabellum_game::models::marketplace::MarketplaceOffer;
 
 use crate::es::{
@@ -77,18 +77,13 @@ impl VillageEsService {
             .await
             .map_err(CqrsError::domain_source)?;
 
-        let village_ids =
-            own_open_models
-                .iter()
-                .chain(global_open_models.iter())
-                .map(|offer| offer.owner_village_id)
-                .chain(merchant_movements.iter().flat_map(|movement| {
-                    [movement.origin_village_id, movement.destination_village_id]
-                }))
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-        let village_references = self.marketplace_village_references(village_ids).await?;
+        let village_references = self
+            .marketplace_village_references(marketplace_reference_village_ids(
+                &own_open_models,
+                &global_open_models,
+                &merchant_movements,
+            ))
+            .await?;
 
         Ok(MarketplaceData {
             own_offers: own_open_models
@@ -133,6 +128,25 @@ impl VillageEsService {
             })
             .collect())
     }
+}
+
+fn marketplace_reference_village_ids(
+    own_offers: &[MarketplaceOfferModel],
+    global_offers: &[MarketplaceOfferModel],
+    merchant_movements: &[MerchantMovement],
+) -> Vec<u32> {
+    own_offers
+        .iter()
+        .chain(global_offers.iter())
+        .map(|offer| offer.owner_village_id)
+        .chain(
+            merchant_movements
+                .iter()
+                .flat_map(|movement| [movement.origin_village_id, movement.destination_village_id]),
+        )
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn marketplace_offer(model: MarketplaceOfferModel) -> MarketplaceOffer {

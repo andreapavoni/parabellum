@@ -42,15 +42,71 @@ use tracing::{error, info};
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
-    setup_logging();
+    let _logging_guard = setup_logging();
     info!("starting parabellum runtime");
     let (config, game_app, es_worker, db_pool) = setup_app().await?;
     let state = AppState::new(game_app, db_pool, &config);
     let port = config.port;
 
-    es_worker.run();
+    let (shutdown, mut shutdown_rx) = tokio::sync::watch::channel(false);
+    let mut worker = es_worker.run(shutdown_rx.clone());
     info!(port, "runtime initialized; launching web server");
-    WebRouter::serve(state, port).await
+    let mut web = Box::pin(WebRouter::serve_with_shutdown(state, port, async move {
+        while !*shutdown_rx.borrow() {
+            if shutdown_rx.changed().await.is_err() {
+                break;
+            }
+        }
+    }));
+    let mut worker_finished = false;
+    let mut web_finished = false;
+    let mut result = tokio::select! {
+        result = &mut web => { web_finished = true; result },
+        result = &mut worker => {
+            worker_finished = true;
+            Err(ApplicationError::Infrastructure(format!("scheduler stopped unexpectedly: {result:?}")))
+        },
+        result = shutdown_signal() => result,
+    };
+    let _ = shutdown.send(true);
+    if !web_finished {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), &mut web).await {
+            Ok(Err(err)) if result.is_ok() => result = Err(err),
+            Err(_) => error!("HTTP shutdown timed out"),
+            _ => {}
+        }
+    }
+    if !worker_finished {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), &mut worker).await {
+            Ok(Err(err)) if result.is_ok() => {
+                result = Err(ApplicationError::Infrastructure(err.to_string()))
+            }
+            Err(_) => {
+                error!("scheduler shutdown timed out; cancelling in-flight transaction");
+                worker.abort();
+                let _ = worker.await;
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+async fn shutdown_signal() -> Result<(), ApplicationError> {
+    #[cfg(unix)]
+    {
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result.map_err(|e| ApplicationError::Infrastructure(e.to_string())),
+            _ = terminate.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c()
+        .await
+        .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
 }
 
 async fn setup_app() -> Result<

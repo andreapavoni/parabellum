@@ -389,7 +389,7 @@ pub async fn deployed_armies(
             ArmyListFilter::new()
                 .home_village(village_id)
                 .state(ArmyState::Stationed)
-                .deployed(true),
+                .away_from_home(true),
         )
         .await
         .unwrap()
@@ -415,7 +415,7 @@ pub async fn deployed_units(pool: &sqlx::PgPool, village_id: u32, unit_idx: usiz
             ArmyListFilter::new()
                 .home_village(village_id)
                 .state(ArmyState::Stationed)
-                .deployed(true),
+                .away_from_home(true),
         )
         .await
         .unwrap()
