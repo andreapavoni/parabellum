@@ -251,7 +251,19 @@ fn is_retryable(error: &CqrsError) -> bool {
     }
     let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
     while let Some(error) = source {
-        if let Some(error) = error.downcast_ref::<sqlx::Error>() {
+        use parabellum_types::errors::{ApplicationError, DbError};
+        // Transparent wrappers may forward source() past the SQLx enum itself.
+        let sql_error = error
+            .downcast_ref::<sqlx::Error>()
+            .or_else(|| match error.downcast_ref::<DbError>() {
+                Some(DbError::Database(error)) => Some(error),
+                _ => None,
+            })
+            .or_else(|| match error.downcast_ref::<ApplicationError>() {
+                Some(ApplicationError::Db(DbError::Database(error))) => Some(error),
+                _ => None,
+            });
+        if let Some(error) = sql_error {
             return match error {
                 sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut | sqlx::Error::WorkerCrashed => true,
                 sqlx::Error::Database(error) => error.code().is_some_and(|code| {

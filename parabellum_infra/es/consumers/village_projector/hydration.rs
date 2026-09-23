@@ -20,7 +20,7 @@ impl VillageProjector {
             .armies
             .army_context_for_village_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(hydrate_village(model, armies))
     }
 }

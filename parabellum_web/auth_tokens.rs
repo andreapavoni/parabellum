@@ -11,11 +11,13 @@ use std::net::IpAddr;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use parabellum_app::identity::refresh_sessions::{
+    RefreshSession, RefreshSessionError, SessionClient,
+};
+use parabellum_types::errors::ApplicationError;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::PgPool;
-use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use parabellum_app::config::Config;
@@ -23,7 +25,6 @@ use parabellum_app::config::Config;
 use crate::session::CurrentUser;
 
 const ACCESS_TOKEN_CLOCK_SKEW_SECS: i64 = 30;
-static REFRESH_SESSION_SCHEMA_READY: OnceCell<()> = OnceCell::const_new();
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthTokenError {
@@ -36,7 +37,7 @@ pub enum AuthTokenError {
     #[error("refresh session revoked")]
     SessionRevoked,
     #[error("database error: {0}")]
-    Database(String),
+    Database(#[source] ApplicationError),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -47,16 +48,6 @@ pub struct AuthenticatedTokenContext {
     pub player_id: Uuid,
     pub current_village_id: u32,
     pub refresh_session_id: Uuid,
-}
-
-#[derive(Debug, Clone)]
-pub struct RefreshSession {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub player_id: Uuid,
-    pub current_village_id: u32,
-    pub expires_at: DateTime<Utc>,
-    pub revoked_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,7 +72,6 @@ pub struct AuthTokenService {
     encoding: EncodingKey,
     decoding: DecodingKey,
     access_ttl_secs: i64,
-    refresh_ttl_secs: i64,
 }
 
 impl AuthTokenService {
@@ -91,7 +81,6 @@ impl AuthTokenService {
             encoding: EncodingKey::from_secret(&key),
             decoding: DecodingKey::from_secret(&key),
             access_ttl_secs: config.access_token_ttl_secs,
-            refresh_ttl_secs: config.refresh_token_ttl_secs,
         }
     }
 
@@ -176,261 +165,96 @@ impl AuthTokenService {
 
     pub async fn create_refresh_session(
         &self,
-        pool: &PgPool,
+        sessions: &parabellum_app::application::GameApplication,
         user: &CurrentUser,
         user_agent: Option<&str>,
         ip: Option<IpAddr>,
     ) -> Result<(RefreshSession, String), AuthTokenError> {
-        ensure_refresh_session_schema_once(pool).await?;
         let token = generate_refresh_token();
-        let token_hash = hash_refresh_token(&token);
-        let expires_at = Utc::now() + Duration::seconds(self.refresh_ttl_secs);
-        let id = Uuid::new_v4();
-
-        sqlx::query(
-            r#"
-            INSERT INTO auth_refresh_sessions
-                (id, user_id, player_id, current_village_id, token_hash, expires_at, user_agent, ip)
-            VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8::inet)
-            "#,
-        )
-        .bind(id)
-        .bind(user.account.id)
-        .bind(user.player.id)
-        .bind(i32::try_from(user.village.id).map_err(|e| AuthTokenError::Internal(e.to_string()))?)
-        .bind(token_hash)
-        .bind(expires_at)
-        .bind(user_agent)
-        .bind(ip.map(|x| x.to_string()))
-        .execute(pool)
-        .await
-        .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-        Ok((
-            RefreshSession {
-                id,
-                user_id: user.account.id,
-                player_id: user.player.id,
-                current_village_id: user.village.id,
-                expires_at,
-                revoked_at: None,
-            },
-            token,
-        ))
+        let session = sessions
+            .create_refresh_session(
+                user.account.id,
+                user.player.id,
+                user.village.id,
+                &hash_refresh_token(&token),
+                SessionClient {
+                    user_agent: user_agent.map(str::to_owned),
+                    ip,
+                },
+            )
+            .await?;
+        Ok((session, token))
     }
-
     pub async fn rotate_refresh_session(
         &self,
-        pool: &PgPool,
+        sessions: &parabellum_app::application::GameApplication,
         refresh_token: &str,
         user_agent: Option<&str>,
         ip: Option<IpAddr>,
     ) -> Result<(RefreshSession, String), AuthTokenError> {
-        ensure_refresh_session_schema_once(pool).await?;
-        let old_hash = hash_refresh_token(refresh_token);
-        let row =
-            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i32, DateTime<Utc>, Option<DateTime<Utc>>)>(
-                r#"
-            SELECT id, user_id, player_id, current_village_id, expires_at, revoked_at
-            FROM auth_refresh_sessions
-            WHERE token_hash = $1
-            "#,
+        let token = generate_refresh_token();
+        let session = sessions
+            .rotate_refresh_session(
+                &hash_refresh_token(refresh_token),
+                hash_refresh_token(&token),
+                SessionClient {
+                    user_agent: user_agent.map(str::to_owned),
+                    ip,
+                },
             )
-            .bind(old_hash)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?
-            .ok_or(AuthTokenError::RefreshExpired)?;
-
-        let (old_id, user_id, player_id, current_village_id_i32, expires_at, revoked_at) = row;
-        if revoked_at.is_some() {
-            return Err(AuthTokenError::SessionRevoked);
-        }
-        if expires_at <= Utc::now() {
-            return Err(AuthTokenError::RefreshExpired);
-        }
-
-        let new_token = generate_refresh_token();
-        let new_hash = hash_refresh_token(&new_token);
-        let new_id = Uuid::new_v4();
-        let new_expires_at = Utc::now() + Duration::seconds(self.refresh_ttl_secs);
-
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-        sqlx::query("UPDATE auth_refresh_sessions SET revoked_at = NOW() WHERE id = $1")
-            .bind(old_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-        sqlx::query(
-            r#"
-            INSERT INTO auth_refresh_sessions
-                (id, user_id, player_id, current_village_id, token_hash, expires_at, user_agent, ip)
-            VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8::inet)
-            "#,
-        )
-        .bind(new_id)
-        .bind(user_id)
-        .bind(player_id)
-        .bind(current_village_id_i32)
-        .bind(new_hash)
-        .bind(new_expires_at)
-        .bind(user_agent)
-        .bind(ip.map(|x| x.to_string()))
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-        tx.commit()
-            .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-        let current_village_id = u32::try_from(current_village_id_i32)
-            .map_err(|e| AuthTokenError::Internal(e.to_string()))?;
-        Ok((
-            RefreshSession {
-                id: new_id,
-                user_id,
-                player_id,
-                current_village_id,
-                expires_at: new_expires_at,
-                revoked_at: None,
-            },
-            new_token,
-        ))
+            .await?;
+        Ok((session, token))
     }
-
     pub async fn revoke_refresh_session(
         &self,
-        pool: &PgPool,
-        refresh_token: &str,
+        sessions: &parabellum_app::application::GameApplication,
+        token: &str,
     ) -> Result<(), AuthTokenError> {
-        let token_hash = hash_refresh_token(refresh_token);
-        sqlx::query(
-            "UPDATE auth_refresh_sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL",
-        )
-        .bind(token_hash)
-        .execute(pool)
-        .await
-        .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-        Ok(())
+        sessions
+            .revoke_refresh_session(&hash_refresh_token(token))
+            .await
+            .map_err(Into::into)
     }
-
     pub async fn revoke_all_user_sessions(
         &self,
-        pool: &PgPool,
+        sessions: &parabellum_app::application::GameApplication,
         user_id: Uuid,
     ) -> Result<(), AuthTokenError> {
-        sqlx::query(
-            "UPDATE auth_refresh_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
-        )
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-        Ok(())
+        sessions
+            .revoke_all_refresh_sessions(user_id)
+            .await
+            .map_err(Into::into)
     }
-
     pub async fn update_refresh_session_village(
         &self,
-        pool: &PgPool,
+        sessions: &parabellum_app::application::GameApplication,
         session_id: Uuid,
-        current_village_id: u32,
+        village_id: u32,
     ) -> Result<(), AuthTokenError> {
-        let village_id_i32 = i32::try_from(current_village_id)
-            .map_err(|e| AuthTokenError::Internal(e.to_string()))?;
-        sqlx::query(
-            "UPDATE auth_refresh_sessions SET current_village_id = $1, last_used_at = NOW() WHERE id = $2 AND revoked_at IS NULL",
-        )
-        .bind(village_id_i32)
-        .bind(session_id)
-        .execute(pool)
-        .await
-        .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-        Ok(())
+        sessions
+            .set_refresh_session_village(session_id, village_id)
+            .await
+            .map_err(Into::into)
     }
-
     pub async fn validate_refresh_session(
         &self,
-        pool: &PgPool,
-        refresh_token: &str,
+        sessions: &parabellum_app::application::GameApplication,
+        token: &str,
     ) -> Result<RefreshSession, AuthTokenError> {
-        let token_hash = hash_refresh_token(refresh_token);
-        let row =
-            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i32, DateTime<Utc>, Option<DateTime<Utc>>)>(
-                r#"
-            SELECT id, user_id, player_id, current_village_id, expires_at, revoked_at
-            FROM auth_refresh_sessions
-            WHERE token_hash = $1
-            "#,
-            )
-            .bind(token_hash)
-            .fetch_optional(pool)
+        sessions
+            .validate_refresh_session_hash(&hash_refresh_token(token))
             .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?
-            .ok_or(AuthTokenError::RefreshExpired)?;
-
-        if row.5.is_some() {
-            return Err(AuthTokenError::SessionRevoked);
-        }
-        if row.4 <= Utc::now() {
-            return Err(AuthTokenError::RefreshExpired);
-        }
-
-        let current_village_id =
-            u32::try_from(row.3).map_err(|e| AuthTokenError::Internal(e.to_string()))?;
-        Ok(RefreshSession {
-            id: row.0,
-            user_id: row.1,
-            player_id: row.2,
-            current_village_id,
-            expires_at: row.4,
-            revoked_at: row.5,
-        })
+            .map_err(Into::into)
     }
-
     pub async fn validate_refresh_session_id(
         &self,
-        pool: &PgPool,
-        session_id: Uuid,
+        sessions: &parabellum_app::application::GameApplication,
+        id: Uuid,
     ) -> Result<RefreshSession, AuthTokenError> {
-        let row =
-            sqlx::query_as::<_, (Uuid, Uuid, Uuid, i32, DateTime<Utc>, Option<DateTime<Utc>>)>(
-                r#"
-            SELECT id, user_id, player_id, current_village_id, expires_at, revoked_at
-            FROM auth_refresh_sessions
-            WHERE id = $1
-            "#,
-            )
-            .bind(session_id)
-            .fetch_optional(pool)
+        sessions
+            .validate_refresh_session_id(id)
             .await
-            .map_err(|e| AuthTokenError::Database(e.to_string()))?
-            .ok_or(AuthTokenError::SessionRevoked)?;
-
-        if row.5.is_some() {
-            return Err(AuthTokenError::SessionRevoked);
-        }
-        if row.4 <= Utc::now() {
-            return Err(AuthTokenError::RefreshExpired);
-        }
-
-        let current_village_id =
-            u32::try_from(row.3).map_err(|e| AuthTokenError::Internal(e.to_string()))?;
-        Ok(RefreshSession {
-            id: row.0,
-            user_id: row.1,
-            player_id: row.2,
-            current_village_id,
-            expires_at: row.4,
-            revoked_at: row.5,
-        })
+            .map_err(Into::into)
     }
 
     pub fn issue_token_pair(
@@ -447,73 +271,16 @@ impl AuthTokenService {
             refresh_session_id,
         })
     }
+}
 
-    pub async fn ensure_refresh_schema(&self, pool: &PgPool) -> Result<(), AuthTokenError> {
-        ensure_refresh_session_schema_once(pool).await
+impl From<RefreshSessionError> for AuthTokenError {
+    fn from(error: RefreshSessionError) -> Self {
+        match error {
+            RefreshSessionError::Expired => Self::RefreshExpired,
+            RefreshSessionError::Revoked => Self::SessionRevoked,
+            RefreshSessionError::Storage(error) => Self::Database(error),
+        }
     }
-}
-
-async fn ensure_refresh_session_schema(pool: &PgPool) -> Result<(), AuthTokenError> {
-    // Defensive bootstrap for integration tests that can run against DBs with
-    // partial migration history. In normal environments the SQL migration owns
-    // this schema.
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS auth_refresh_sessions (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-            current_village_id INTEGER NOT NULL REFERENCES rm_village(village_id) ON DELETE CASCADE,
-            token_hash TEXT NOT NULL UNIQUE,
-            expires_at TIMESTAMPTZ NOT NULL,
-            revoked_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            user_agent TEXT,
-            ip INET
-        )
-        "#,
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_auth_refresh_sessions_user_id ON auth_refresh_sessions (user_id)",
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_auth_refresh_sessions_player_id ON auth_refresh_sessions (player_id)",
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_auth_refresh_sessions_expires_at ON auth_refresh_sessions (expires_at)",
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-    sqlx::query(
-        "CREATE INDEX IF NOT EXISTS idx_auth_refresh_sessions_revoked_at ON auth_refresh_sessions (revoked_at)",
-    )
-    .execute(pool)
-    .await
-    .map_err(|e| AuthTokenError::Database(e.to_string()))?;
-
-    Ok(())
-}
-
-async fn ensure_refresh_session_schema_once(pool: &PgPool) -> Result<(), AuthTokenError> {
-    REFRESH_SESSION_SCHEMA_READY
-        .get_or_try_init(|| async {
-            ensure_refresh_session_schema(pool).await?;
-            Ok(())
-        })
-        .await?;
-    Ok(())
 }
 
 pub fn hash_refresh_token(refresh_token: &str) -> String {

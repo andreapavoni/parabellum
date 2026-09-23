@@ -97,12 +97,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         current.trapper = trapper;
         self.village
             .store_village_model_in_tx(tx, &current)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_unit_training_scheduled(
@@ -135,18 +135,18 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let player_id = current.player_id;
         let mut village = self.load_village_state_in_tx(tx, current).await?;
         village
             .add_trained_units_home(unit.clone(), *quantity_trained)
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let next_army = village.army().cloned();
         if let Some(army) = &next_army {
             self.armies
                 .upsert_home_in_tx(tx, army, player_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
         Ok(())
     }
@@ -215,13 +215,13 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut village = self.load_village_state_in_tx(tx, model.clone()).await?;
         change(&mut village)?;
         apply_domain_village_state(&mut model, &village);
         self.village
             .store_village_model_in_tx(tx, &model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }

@@ -108,12 +108,12 @@ impl VillageProjector {
         };
         let village_id = aggregate_id
             .parse::<u32>()
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let current = self
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut current_home_armies = self
             .armies
             .list_armies_in_tx(
@@ -125,7 +125,7 @@ impl VillageProjector {
                     .limit(1),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let current_home_army = current_home_armies.pop();
         let previous_home_army_id = current_home_army.as_ref().map(|a| a.id);
 
@@ -149,12 +149,12 @@ impl VillageProjector {
             self.armies
                 .upsert_home_in_tx(tx, home_army, current.player_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         } else if let Some(home_army_id) = previous_home_army_id {
             self.armies
                 .delete_in_tx(tx, home_army_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         self.upsert_moving_army(tx, detached_army, village_id, current.player_id)
@@ -171,7 +171,7 @@ impl VillageProjector {
         self.armies
             .upsert_moving_in_tx(tx, army, village_id, player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if let Some(hero) = army.hero() {
             self.project_hero_placement_in_tx(
                 tx,
@@ -214,7 +214,7 @@ impl VillageProjector {
         self.movements
             .upsert_in_tx(tx, &outgoing)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if projection.visible_to_target {
             let incoming = VillageMovement {
                 viewing_village_id: projection.target_village_id,
@@ -224,7 +224,7 @@ impl VillageProjector {
             self.movements
                 .upsert_in_tx(tx, &incoming)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         Ok(())

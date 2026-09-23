@@ -65,12 +65,13 @@ impl PostgresVillageRepository {
         tx: &mut Transaction<'_, Postgres>,
         village_id: u32,
     ) -> Result<VillageModel, ApplicationError> {
-        let row: DbVillageModelRow = queries::village_by_id_query(village_id)
+        let row: Option<DbVillageModelRow> = queries::village_by_id_query(village_id)
             .build_query_as()
-            .fetch_one(&mut **tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        row.try_into()
+        row.ok_or(ApplicationError::Db(DbError::VillageNotFound(village_id)))?
+            .try_into()
     }
 
     async fn refresh_rows_for_read(

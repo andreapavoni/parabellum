@@ -15,7 +15,6 @@ use axum::{
 };
 use parabellum_app::{application::GameApplication, config::Config};
 use parabellum_types::{Result, errors::ApplicationError};
-use sqlx::PgPool;
 use std::{io::Error, net::SocketAddr, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -53,20 +52,18 @@ use crate::{
 /// Shared Axum application state.
 pub struct AppState {
     pub game_app: Arc<GameApplication>,
-    pub db_pool: PgPool,
     pub token_service: Arc<AuthTokenService>,
     pub world_size: i32,
     pub server_speed: i8,
 }
 
 impl AppState {
-    /// Builds a new `AppState` from `GameApplication`, db pool and runtime config.
-    pub fn new(game_app: Arc<GameApplication>, db_pool: PgPool, config: &Config) -> AppState {
+    /// Builds a new `AppState` from `GameApplication`, runtime config.
+    pub fn new(game_app: Arc<GameApplication>, config: &Config) -> AppState {
         let token_service = Arc::new(AuthTokenService::new(config));
 
         AppState {
             game_app,
-            db_pool,
             token_service,
             world_size: config.world_size as i32,
             server_speed: config.speed,
@@ -88,13 +85,6 @@ impl WebRouter {
         port: u16,
         shutdown: impl std::future::Future<Output = ()> + Send + 'static,
     ) -> Result<(), ApplicationError> {
-        tracing::info!("ensuring auth refresh schema");
-        state
-            .token_service
-            .ensure_refresh_schema(&state.db_pool)
-            .await
-            .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
-
         let api_routes = Router::new()
             .route("/auth/token/login", post(token_login))
             .route("/auth/token/register", post(token_register))

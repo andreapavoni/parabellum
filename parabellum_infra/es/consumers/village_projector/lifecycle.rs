@@ -78,11 +78,11 @@ impl VillageProjector {
         self.village
             .upsert_village_model_in_tx(tx, &model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.map
             .set_occupancy_in_tx(tx, *village_id, Some(*village_id), Some(*player_id))
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_village_conquered(
@@ -100,12 +100,12 @@ impl VillageProjector {
         };
         let village_id = aggregate_id
             .parse::<u32>()
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut conquered = self
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         apply_conquest_fact_to_model(
             &mut conquered,
             VillageConquestFact {
@@ -117,11 +117,11 @@ impl VillageProjector {
         self.village
             .store_village_model_in_tx(tx, &conquered)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.map
             .set_occupancy_in_tx(tx, village_id, Some(village_id), Some(*player_id))
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_village_resources_set(
@@ -162,12 +162,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         village.village_name = village_name.clone();
         self.village
             .store_village_model_in_tx(tx, &village)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 

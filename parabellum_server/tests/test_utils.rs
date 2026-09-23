@@ -4,8 +4,8 @@ pub mod tests {
     use parabellum_web::session::current_user_by_ids;
     use parabellum_web::{AppState, WebRouter};
     use reqwest::{Client, header, redirect::Policy};
-    use sqlx::{PgPool, postgres::PgPoolOptions};
-    use std::{env, net::TcpListener, sync::Arc, time::Duration};
+    use sqlx::PgPool;
+    use std::{net::TcpListener, sync::Arc, time::Duration};
     use uuid::Uuid;
 
     use parabellum_app::auth::hash_password;
@@ -56,11 +56,7 @@ pub mod tests {
     use parabellum_types::tribe::Tribe;
     use parabellum_types::{Result, errors::ApplicationError};
 
-    #[derive(Clone)]
-    pub struct IsolatedSchemaHandle {
-        root_url: String,
-        schema_name: String,
-    }
+    pub use parabellum_infra::test_support::IsolatedTestDatabase;
 
     #[derive(Clone)]
     pub struct SeededAuthUser {
@@ -69,74 +65,8 @@ pub mod tests {
         pub password: String,
     }
 
-    impl Drop for IsolatedSchemaHandle {
-        fn drop(&mut self) {
-            let root_url = self.root_url.clone();
-            let schema_name = self.schema_name.clone();
-            std::thread::spawn(move || {
-                if let Ok(rt) = tokio::runtime::Runtime::new() {
-                    rt.block_on(async move {
-                        if let Ok(pool) = PgPoolOptions::new()
-                            .max_connections(1)
-                            .connect(&root_url)
-                            .await
-                        {
-                            let query =
-                                format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema_name);
-                            let _ = sqlx::query(&query).execute(&pool).await;
-                        }
-                    });
-                }
-            });
-        }
-    }
-
-    fn append_search_path(url: &str, schema_name: &str) -> String {
-        let separator = if url.contains('?') { '&' } else { '?' };
-        format!("{url}{separator}options=-csearch_path%3D{schema_name}%2Cpublic")
-    }
-
-    async fn create_isolated_test_pool() -> Result<(PgPool, Arc<IsolatedSchemaHandle>)> {
-        dotenvy::dotenv().ok();
-        let root_url = env::var("TEST_DATABASE_URL")
-            .map_err(|_| ApplicationError::Unknown("TEST_DATABASE_URL must be set".to_string()))?;
-        let schema_name = format!("test_{}", Uuid::new_v4().simple());
-
-        let root_pool = PgPoolOptions::new()
-            .max_connections(1)
-            .connect(&root_url)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-
-        sqlx::query(r#"CREATE EXTENSION IF NOT EXISTS "uuid-ossp""#)
-            .execute(&root_pool)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-
-        let create_query = format!("CREATE SCHEMA \"{}\"", schema_name);
-        sqlx::query(&create_query)
-            .execute(&root_pool)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-
-        let isolated_url = append_search_path(&root_url, &schema_name);
-        let isolated_pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&isolated_url)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-
-        sqlx::migrate!("../migrations")
-            .run(&isolated_pool)
-            .await
-            .map_err(|e| ApplicationError::Unknown(e.to_string()))?;
-
-        let handle = Arc::new(IsolatedSchemaHandle {
-            root_url,
-            schema_name,
-        });
-
-        Ok((isolated_pool, handle))
+    async fn create_isolated_test_pool() -> Result<(PgPool, Arc<IsolatedTestDatabase>)> {
+        IsolatedTestDatabase::create().await
     }
 
     fn build_game_app(pool: &PgPool, config: Arc<Config>) -> Arc<GameApplication> {
@@ -259,6 +189,16 @@ pub mod tests {
         Arc::new(GameApplication::new(
             identity,
             registration,
+            parabellum_app::identity::refresh_sessions::RefreshSessionUseCases::new(
+                Arc::new(
+                    parabellum_infra::identity::repositories::PostgresRefreshSessionRepository::new(
+                        pool.clone(),
+                    ),
+                ),
+                config.refresh_token_ttl_secs,
+                Arc::new(SystemClock),
+                Arc::new(UuidGenerator),
+            ),
             leaderboards,
             map,
             village_profile,
@@ -282,7 +222,6 @@ pub mod tests {
 
     async fn start_web_server(
         game_app: Arc<GameApplication>,
-        pool: PgPool,
         config: Arc<Config>,
     ) -> Result<String> {
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -293,7 +232,7 @@ pub mod tests {
             .port();
         drop(listener);
 
-        let state = AppState::new(game_app, pool, &config);
+        let state = AppState::new(game_app, &config);
         tokio::spawn(WebRouter::serve(state, port));
 
         let base_url = format!("http://127.0.0.1:{port}");
@@ -318,19 +257,19 @@ pub mod tests {
     }
 
     #[allow(dead_code)]
-    pub async fn setup_web_app() -> Result<(Arc<IsolatedSchemaHandle>, String)> {
+    pub async fn setup_web_app() -> Result<(Arc<IsolatedTestDatabase>, String)> {
         let (pool, schema_handle) = create_isolated_test_pool().await?;
         let config = Arc::new(Config::from_env());
         bootstrap_world_map(&pool, config.world_size).await?;
         let game_app = build_game_app(&pool, config.clone());
-        let base_url = start_web_server(game_app, pool, config).await?;
+        let base_url = start_web_server(game_app, config).await?;
 
         Ok((schema_handle, base_url))
     }
 
     #[allow(dead_code)]
     pub async fn setup_web_app_with_seeded_user()
-    -> Result<(Arc<IsolatedSchemaHandle>, String, SeededAuthUser)> {
+    -> Result<(Arc<IsolatedTestDatabase>, String, SeededAuthUser)> {
         let (pool, schema_handle) = create_isolated_test_pool().await?;
         let config = Arc::new(Config::from_env());
         bootstrap_world_map(&pool, config.world_size).await?;
@@ -445,7 +384,7 @@ pub mod tests {
             ));
         }
 
-        let state = AppState::new(game_app.clone(), pool.clone(), &config);
+        let state = AppState::new(game_app.clone(), &config);
         current_user_by_ids(&state, auth_user.id, None)
             .await
             .map_err(|_| {
@@ -453,7 +392,7 @@ pub mod tests {
                     "seeded auth fixture cannot resolve current user context".to_string(),
                 )
             })?;
-        let base_url = start_web_server(game_app, pool, config).await?;
+        let base_url = start_web_server(game_app, config).await?;
 
         let client = reqwest::Client::new();
         let login_probe = client

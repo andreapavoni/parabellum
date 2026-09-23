@@ -70,7 +70,7 @@ impl VillageProjector {
             self.actions
                 .update_status_in_tx(tx, *action_id, ScheduledActionStatus::Canceled)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         if refund.total() > 0 {
@@ -78,7 +78,7 @@ impl VillageProjector {
                 .village
                 .get_by_village_id_in_tx(tx, *village_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             let mut village = self.load_village_state_in_tx(tx, village).await?;
             village.store_resources(refund);
             self.apply_village_economy_facts_in_tx(
@@ -108,7 +108,7 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut village = self.load_village_state_in_tx(tx, model.clone()).await?;
 
         let (building_name, slot_id, level, speed) = match event {
@@ -147,7 +147,7 @@ impl VillageProjector {
         self.village
             .store_village_model_in_tx(tx, &model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(())
     }
 }

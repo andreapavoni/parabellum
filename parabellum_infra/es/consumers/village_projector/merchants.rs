@@ -163,7 +163,7 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut source = self
             .load_village_state_in_tx(tx, source_model.clone())
             .await?;
@@ -180,7 +180,7 @@ impl VillageProjector {
         self.village
             .store_village_model_in_tx(tx, &source_model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_merchants_returned(
@@ -193,7 +193,7 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, source_village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut source = self
             .load_village_state_in_tx(tx, source_model.clone())
             .await?;
@@ -205,7 +205,7 @@ impl VillageProjector {
         self.village
             .store_village_model_in_tx(tx, &source_model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_marketplace_offer_created(
@@ -216,7 +216,7 @@ impl VillageProjector {
         self.offers
             .upsert_in_tx(tx, &offer)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_marketplace_offer_status(
@@ -238,7 +238,7 @@ impl VillageProjector {
                 at,
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 

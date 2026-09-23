@@ -30,6 +30,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost/parabellum_test
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost/parabellum_test
+      PARABELLUM_SERVER_SPEED: "1"
 
     steps:
       - name: Checkout code

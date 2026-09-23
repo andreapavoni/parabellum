@@ -51,6 +51,7 @@ time = "0"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
 
 [dev-dependencies]
+parabellum_infra = { path = "../parabellum_infra", features = ["test-utils"] }
 reqwest = { version = "0.13" }
 parabellum_app = { path = "../parabellum_app", features = ["test-utils"] }
 parabellum_game = { path = "../parabellum_game", features = ["test-utils"] }

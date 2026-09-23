@@ -607,6 +607,26 @@ Registration is a cross-context application workflow owned by
 registration back to `IdentityPort`; keep registration orchestration explicit in
 `RegistrationUseCases`.
 
+#### Refresh sessions
+
+`GameApplication` delegates refresh-session lifecycle operations to
+`identity::refresh_sessions::RefreshSessionUseCases`. The web layer signs access
+tokens and generates/hashes opaque refresh tokens; it holds no database pool and
+passes only hashes into the application facade. The infrastructure
+`PostgresRefreshSessionRepository` implements the session port. Migrations alone
+own the auth schema; HTTP startup performs no auth DDL.
+
+Rotation locks the user, then the old session, validates the locked session,
+revokes it and inserts its successor in one transaction. Failed insertion rolls
+back revocation. Concurrent rotation permits exactly one successor. Creating a
+session and revoking all sessions use the same user lock, so logout-all cannot
+miss a successor inserted by an overlapping rotation.
+
+Single-token logout targets the supplied session: if its row update wins,
+rotation fails; if rotation commits first, logout of the consumed token does not
+revoke the successor. Logout-all also revokes such successors. Village switching
+rejects expired/revoked sessions instead of silently updating zero rows.
+
 #### Scheduler
 
 Scheduler is an operational app concern. `SchedulerUseCases` owns the public

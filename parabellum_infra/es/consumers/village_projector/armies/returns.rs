@@ -93,14 +93,14 @@ impl VillageProjector {
                 self.armies
                     .upsert_trapped_in_tx(tx, &trapped, *target_village_id, *player_id)
                     .await
-                    .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                    .map_err(CqrsError::domain_source)?;
             }
         }
         for army_id in freed_trapped_army_ids {
             self.armies
                 .delete_in_tx(tx, *army_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
         for trapped_return in freed_trapped_returns {
             self.project_battle_return(
@@ -166,7 +166,7 @@ impl VillageProjector {
         self.armies
             .delete_in_tx(tx, *army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.update_trapper_state_for_return_event(tx, *trapped_village_id, *trapper)
             .await?;
         self.project_battle_return(
@@ -207,7 +207,7 @@ impl VillageProjector {
         self.armies
             .delete_in_tx(tx, *army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.update_trapper_state_for_return_event(tx, *trapped_village_id, *trapper)
             .await
     }
@@ -222,12 +222,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         current.trapper = trapper;
         self.village
             .store_village_model_in_tx(tx, &current)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub(super) async fn project_scout_battle_resolved(
@@ -278,7 +278,7 @@ impl VillageProjector {
         self.movements
             .delete_by_movement_id_in_tx(tx, projection.movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let Some(army) = surviving_army_projection(projection.army.clone()) else {
             return Ok(());
         };
@@ -295,7 +295,7 @@ impl VillageProjector {
             self.movements
                 .upsert_in_tx(tx, &incoming)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
         self.upsert_moving_army(
             tx,
@@ -347,12 +347,12 @@ impl VillageProjector {
         self.actions
             .update_status_in_tx(tx, *arrival_action_id, ScheduledActionStatus::Completed)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let incoming = returning_army_movement(
             *movement_id,
@@ -366,7 +366,7 @@ impl VillageProjector {
         self.movements
             .upsert_in_tx(tx, &incoming)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         self.upsert_moving_army(tx, army, *target_village_id, *player_id)
             .await?;
@@ -409,12 +409,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let source_stocks = source.stocks.clone();
         let mut source_village = self.load_village_state_in_tx(tx, source).await?;
         source_village
             .merge_army(army)
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let next_source_army = source_village
             .army()
             .cloned()
@@ -422,20 +422,20 @@ impl VillageProjector {
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.armies
             .delete_in_tx(tx, *movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.armies
             .delete_in_tx(tx, army.id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if let Some(ref home_army) = next_source_army {
             self.armies
                 .upsert_home_in_tx(tx, home_army, *player_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
             if let Some(hero) = home_army.hero() {
                 self.project_hero_placement_in_tx(
                     tx,

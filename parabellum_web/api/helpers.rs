@@ -1,8 +1,9 @@
 use axum::http::HeaderMap;
+use parabellum_app::identity::refresh_sessions::RefreshSession;
 
 use crate::{
     api::{error_mapping::internal_error, errors::ApiError},
-    auth_tokens::{AuthTokenError, RefreshSession},
+    auth_tokens::AuthTokenError,
     http::AppState,
     session::{CurrentUser, current_user_by_ids},
 };
@@ -25,7 +26,7 @@ pub async fn authenticated_user(
         .map_err(map_token_error)?;
     let refresh_session = state
         .token_service
-        .validate_refresh_session_id(&state.db_pool, claims.refresh_session_id)
+        .validate_refresh_session_id(&state.game_app, claims.refresh_session_id)
         .await
         .map_err(map_token_error)?;
     validate_refresh_context(&claims, &refresh_session)?;
@@ -61,8 +62,10 @@ pub(crate) fn map_token_error(error: AuthTokenError) -> ApiError {
         AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh token expired"),
         AuthTokenError::SessionRevoked => ApiError::session_revoked("Refresh session revoked"),
         AuthTokenError::InvalidToken => ApiError::unauthorized("Invalid bearer token"),
-        AuthTokenError::Database(msg) | AuthTokenError::Internal(msg) => {
-            internal_error("auth_helper_token_validation_failed", msg)
+        AuthTokenError::Database(error) => {
+            tracing::error!(error = %error, "auth session storage failure");
+            ApiError::internal("Internal server error")
         }
+        AuthTokenError::Internal(msg) => internal_error("auth_helper_token_validation_failed", msg),
     }
 }

@@ -118,8 +118,11 @@ Want to get the server running locally? Here’s how.
 
 8.  **(optional) Run tests:**
     ```sh
-    cargo test --release --
+    PARABELLUM_SERVER_SPEED=1 cargo test --workspace --release
     ```
+
+Tests create isolated databases using the role in `TEST_DATABASE_URL`; it needs
+`CREATEDB` (provided by the local Docker setup). All migrations run per fixture.
 
 9.  **Run the server:**
     ```sh

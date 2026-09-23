@@ -33,6 +33,32 @@ Policy:
 - Avoid aggregate-shape checks (`len`, `is_empty`) when canonical assertions express intent.
 - Do not build per-test custom fixtures unless reused meaningfully.
 
+### Isolated PostgreSQL fixtures
+
+`parabellum_infra::test_support::IsolatedTestDatabase` (the `test-utils` feature)
+is shared by infrastructure and API tests. It creates a UUID-named database,
+applies all migrations, and drops that database when its owner is released,
+including during panic unwinding. Keep the owner alive as long as the scenario.
+ES fixtures additionally bootstrap the world and create villages through commands.
+No fixture resets the database named in `TEST_DATABASE_URL`.
+
+The role in `TEST_DATABASE_URL` must have `CREATEDB`; the local Compose role and
+CI PostgreSQL role do. The URL may come from the process environment or `.env`.
+Each process permits four live fixture databases, each with at most five pooled
+connections. Separate processes use distinct databases and advisory-lock namespaces.
+Abrupt process termination (for example SIGKILL) cannot run Rust cleanup; orphaned
+`parabellum_test_<uuid>` databases may then need manual removal.
+
+Run the workspace with:
+
+```sh
+PARABELLUM_SERVER_SPEED=1 cargo test --workspace
+```
+
+Fixtures do not mutate server speed. Some legacy runtime paths still read
+`Config::from_env`, so the ES suite requires speed 1 at process launch; injecting
+settings into those remaining paths is a separate follow-up.
+
 ### 2) Allowed low-level tests
 
 Raw SQL/manual setup is still valid when SQL state is the contract under test:
@@ -62,8 +88,10 @@ When behavior is already tested in ES, HTTP tests assert the resulting contract 
 
 At adapter boundaries:
 
-- command-side CQRS/service failures use canonical command mapper (`map_cqrs_error`)
-- query/read failures use canonical query mapper (`map_query_cqrs_error`)
+- commands and queries share `adapters/cqrs_errors::map_cqrs_error`
+- projector and CQRS query failures preserve sources with `CqrsError::domain_source`
+- optimistic version conflicts use `AppError::OptimisticConflict` (`409`)
+- optional report context skips only an explicit `DbError::VillageNotFound`; SQL failures propagate
 
 Known cases should map to typed variants (`Game`, `Db`, `App`) consumed by web error mapping.
 

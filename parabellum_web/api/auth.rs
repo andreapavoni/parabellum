@@ -128,7 +128,7 @@ pub async fn token_login(
     let (refresh_session, refresh_token) = state
         .token_service
         .create_refresh_session(
-            &state.db_pool,
+            &state.game_app,
             &current,
             user_agent(&headers),
             client_ip(&headers),
@@ -219,7 +219,7 @@ pub async fn token_register(
     let (refresh_session, refresh_token) = state
         .token_service
         .create_refresh_session(
-            &state.db_pool,
+            &state.game_app,
             &current,
             user_agent(&headers),
             client_ip(&headers),
@@ -262,7 +262,7 @@ pub async fn token_refresh(
     let (session, rotated_refresh_token) = state
         .token_service
         .rotate_refresh_session(
-            &state.db_pool,
+            &state.game_app,
             &payload.refresh_token,
             user_agent(&headers),
             client_ip(&headers),
@@ -304,7 +304,7 @@ pub async fn token_logout(
 
     state
         .token_service
-        .revoke_refresh_session(&state.db_pool, &payload.refresh_token)
+        .revoke_refresh_session(&state.game_app, &payload.refresh_token)
         .await
         .map_err(map_token_error)?;
 
@@ -317,7 +317,7 @@ pub async fn token_logout(
             .map_err(map_token_error)?;
         state
             .token_service
-            .revoke_all_user_sessions(&state.db_pool, claims.user_id)
+            .revoke_all_user_sessions(&state.game_app, claims.user_id)
             .await
             .map_err(map_token_error)?;
     }
@@ -390,9 +390,11 @@ fn map_token_error(error: AuthTokenError) -> ApiError {
         AuthTokenError::RefreshExpired => ApiError::refresh_expired("Refresh token expired"),
         AuthTokenError::SessionRevoked => ApiError::session_revoked("Refresh session revoked"),
         AuthTokenError::InvalidToken => ApiError::unauthorized("Invalid token"),
-        AuthTokenError::Database(err) | AuthTokenError::Internal(err) => {
-            internal_error("auth_token_validation_failed", err)
+        AuthTokenError::Database(error) => {
+            tracing::error!(error = %error, "auth session storage failure");
+            ApiError::internal("Internal server error")
         }
+        AuthTokenError::Internal(err) => internal_error("auth_token_validation_failed", err),
     }
 }
 

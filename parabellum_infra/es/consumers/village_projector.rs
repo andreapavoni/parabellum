@@ -70,7 +70,7 @@ impl VillageProjector {
         self.actions
             .add_in_tx(tx, action)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub(super) async fn refresh_village_derived_state_in_tx(
@@ -81,7 +81,7 @@ impl VillageProjector {
         self.village
             .refresh_derived_state_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub async fn process_in_tx(
@@ -131,15 +131,9 @@ impl VillageProjector {
 
 impl EventConsumer for VillageProjector {
     async fn process(&self, event: &StoredEvent) -> Result<(), CqrsError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
         self.process_in_tx(&mut tx, event).await?;
-        tx.commit()
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        tx.commit().await.map_err(CqrsError::domain_source)?;
         Ok(())
     }
 }

@@ -49,6 +49,9 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
                 AppError::WrongAuthCredentials | AppError::PasswordError => {
                     ApiError::unauthorized("Invalid credentials")
                 }
+                AppError::OptimisticConflict { .. } => {
+                    ApiError::conflict("State changed; retry the operation")
+                }
                 AppError::QueueLimitReached { .. } | AppError::QueueItemAlreadyQueued { .. } => {
                     ApiError::conflict(app_err.to_string())
                 }
@@ -62,5 +65,38 @@ pub(crate) fn map_application_error(context: &'static str, err: ApplicationError
             internal_error(context, ApplicationError::Unknown(message))
         }
         other => internal_error(context, other),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{http::StatusCode, response::IntoResponse};
+    #[test]
+    fn conflicts_absence_and_storage_failures_keep_distinct_http_statuses() {
+        for (error, status) in [
+            (
+                ApplicationError::App(AppError::OptimisticConflict {
+                    expected_version: 1,
+                    actual_version: 2,
+                }),
+                StatusCode::CONFLICT,
+            ),
+            (
+                ApplicationError::Db(DbError::VillageNotFound(1)),
+                StatusCode::NOT_FOUND,
+            ),
+            (
+                ApplicationError::Db(DbError::Database(sqlx::Error::PoolTimedOut)),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        ] {
+            assert_eq!(
+                map_application_error("test", error)
+                    .into_response()
+                    .status(),
+                status
+            );
+        }
     }
 }

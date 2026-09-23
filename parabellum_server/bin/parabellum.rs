@@ -44,8 +44,8 @@ use tracing::{error, info};
 async fn main() -> Result<(), ApplicationError> {
     let _logging_guard = setup_logging();
     info!("starting parabellum runtime");
-    let (config, game_app, es_worker, db_pool) = setup_app().await?;
-    let state = AppState::new(game_app, db_pool, &config);
+    let (config, game_app, es_worker, _db_pool) = setup_app().await?;
+    let state = AppState::new(game_app, &config);
     let port = config.port;
 
     let (shutdown, mut shutdown_rx) = tokio::sync::watch::channel(false);
@@ -144,6 +144,16 @@ fn build_game_application(
     village_service: VillageEsService,
 ) -> Arc<GameApplication> {
     let identity = Arc::new(IdentityService::new(db_pool.clone()));
+    let refresh_sessions = parabellum_app::identity::refresh_sessions::RefreshSessionUseCases::new(
+        Arc::new(
+            parabellum_infra::identity::repositories::PostgresRefreshSessionRepository::new(
+                db_pool.clone(),
+            ),
+        ),
+        config.refresh_token_ttl_secs,
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     let leaderboards =
         LeaderboardUseCases::new(Arc::new(PostgresPlayerRepository::new(db_pool.clone())));
     let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(
@@ -269,6 +279,7 @@ fn build_game_application(
     Arc::new(GameApplication::new(
         identity,
         registration,
+        refresh_sessions,
         leaderboards,
         map,
         village_profile,

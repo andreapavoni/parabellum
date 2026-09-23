@@ -46,7 +46,7 @@ impl Query for GetScheduledActionStatusCounts {
             .repository
             .list_by_village_and_type(self.village_id, self.action_type)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let mut counts = ScheduledActionStatusCounts::default();
         for action in actions {
@@ -79,7 +79,7 @@ impl Query for GetOpenMarketplaceOffers {
         self.repository
             .list_open()
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 
@@ -96,7 +96,7 @@ impl Query for GetMarketplaceOfferById {
         self.repository
             .get_by_offer_id(self.offer_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 
@@ -115,7 +115,7 @@ impl Query for ListReportsForPlayer {
         self.repository
             .list_reports(ReportFilter::for_player(self.player_id).page(self.offset, self.limit))
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 
@@ -133,7 +133,7 @@ impl Query for GetReportForPlayer {
         self.repository
             .find_report(ReportFilter::for_player(self.player_id).report(self.report_id))
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 
@@ -150,7 +150,7 @@ impl Query for CountUnreadReportsForPlayer {
         self.repository
             .count_reports(ReportFilter::for_player(self.player_id).unread())
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 

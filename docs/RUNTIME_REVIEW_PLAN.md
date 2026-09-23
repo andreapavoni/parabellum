@@ -7,6 +7,44 @@ projection recovery, and operational documentation. It is not a complete gamepla
 or security audit. No testing-server telemetry or heap profile was available; no
 runtime memory leak has been reproduced. Existing application files were not changed.
 
+## Implementation update
+
+The runtime fixes now include:
+
+- transaction-aware command execution (the dependency's `SimpleCqrs` did not
+  actually implement the documented atomic boundary),
+- bounded snapshot-plus-tail loading for commands and workflows,
+- atomic workflow completion, events, projections, and snapshots,
+- monotonic snapshot writes and surfaced snapshot-loading errors,
+- cancellation-safe advisory-lock ownership,
+- persistent, bounded retries for conflicts and typed transient SQL failures,
+- rejection of filtered full rebuilds and rollback-safe full replay with event
+  writers excluded by a database table lock,
+- transaction-local report identity reads to avoid borrowing additional pool
+  connections while holding a transaction,
+- supervised scheduler shutdown, owned logging guards, corrected README and
+  production Compose configuration.
+
+Regression coverage lives in `parabellum_infra/es/tests/runtime.rs`. Full replay
+uses one maintenance transaction; a future online rebuild may use staging tables.
+Production heap profiling, a long-running soak/load harness, exported operational
+metrics, and retention policy remain follow-up work. The allocation-growth cause
+has been removed from the live workflow path; attribution of the testing-server
+memory graph still needs a representative profile.
+
+Validation after implementation:
+
+- `cargo test --workspace`: 285 passed, zero failed, including all 85
+  infrastructure tests (11 new runtime regressions) and 22 HTTP contract tests.
+- Changed Rust files pass `rustfmt --check`.
+- `docker compose -f docker-compose-prod.yml config --quiet` passes.
+- A fresh disposable database and the built server passed a startup/health smoke
+  test (`/health` returned 200), then SIGTERM exited with code 0 and confirmed
+  scheduler shutdown.
+- Testing used disposable databases; the testing server was not accessed or deployed.
+
+The findings below record the initial review, before these changes.
+
 ## Findings
 
 ### 1. High: workflow memory and CPU cost grow with full village history
@@ -172,7 +210,7 @@ of tasks/connections, stable per-workflow cost as old event history grows, and n
 duplicated effects across crash recovery. Set numeric budgets after measuring the
 baseline rather than inventing thresholds.
 
-## Validation performed
+## Initial review validation
 
 Used indxr discovery and targeted source reads, checked cited locations against
 the current working tree, inspected scheduler behavior tests and CI configuration,

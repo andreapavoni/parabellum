@@ -124,10 +124,10 @@ impl VillageProjector {
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.armies
             .delete_in_tx(tx, *army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }

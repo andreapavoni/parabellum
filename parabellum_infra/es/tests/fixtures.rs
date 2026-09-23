@@ -11,13 +11,10 @@ use parabellum_types::{
     map::Position,
     tribe::Tribe,
 };
-use tokio::sync::Mutex;
-use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::es::VillageEsService;
 use crate::es::repositories::PostgresArmyRepository;
-use crate::establish_test_connection_pool;
 use parabellum_app::villages::models::ScheduledActionStatus;
 use parabellum_app::villages::projection_repositories::{
     ArmyListFilter, ArmyRepository, ArmyState,
@@ -25,9 +22,6 @@ use parabellum_app::villages::projection_repositories::{
 use parabellum_app::villages::{ResearchAcademy, SetVillageResources, TrainUnits};
 use parabellum_types::army::UnitName;
 
-static MIGRATIONS_ONCE: OnceCell<()> = OnceCell::const_new();
-static TEST_DB_MUTEX: Mutex<()> = Mutex::const_new(());
-const TEST_DB_ADVISORY_LOCK_KEY: i64 = 9_842_771;
 const TEST_SERVER_SPEED: i8 = 1;
 
 pub fn test_server_speed() -> i8 {
@@ -115,114 +109,27 @@ impl<'a> EsScenario<'a> {
     }
 }
 
-pub async fn setup_pool() -> sqlx::PgPool {
-    // Keep tests independent from local/dev runtime config.
-    unsafe {
-        std::env::set_var("PARABELLUM_SERVER_SPEED", TEST_SERVER_SPEED.to_string());
-    }
-    // Run embedded migrations once for the shared test database.
-    // NOTE: migration sources are embedded at compile time by `sqlx::migrate!`.
-    let pool = establish_test_connection_pool()
-        .await
-        .expect("TEST_DATABASE_URL connection must be available");
-    MIGRATIONS_ONCE
-        .get_or_init(|| async {
-            sqlx::migrate!("../migrations")
-                .run(&pool)
-                .await
-                .expect("failed to run test migrations");
-            crate::bootstrap_world_map(&pool, 100)
-                .await
-                .expect("failed to bootstrap rm_map_fields");
-        })
-        .await;
-    reset_tables(&pool).await;
-    pool
-}
-
 pub async fn with_test_pool<T, F, Fut>(f: F) -> T
 where
     F: FnOnce(sqlx::PgPool) -> Fut,
     Fut: std::future::Future<Output = T>,
 {
-    // In-process serialization.
-    let _guard = TEST_DB_MUTEX.lock().await;
-    let pool = setup_pool().await;
-    // Cross-process serialization (multiple `cargo test` processes sharing TEST_DATABASE_URL).
-    let mut lock_conn = pool
-        .acquire()
+    // Legacy runtime readers still use Config; configure the process before
+    // launch rather than mutating its environment from concurrent test tasks.
+    assert_eq!(
+        parabellum_app::config::Config::from_env().speed,
+        TEST_SERVER_SPEED,
+        "run tests with PARABELLUM_SERVER_SPEED=1"
+    );
+    let (pool, _database) = crate::test_support::IsolatedTestDatabase::create()
         .await
-        .expect("failed to acquire test lock connection");
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(TEST_DB_ADVISORY_LOCK_KEY)
-        .execute(&mut *lock_conn)
+        .expect("isolated test database (TEST_DATABASE_URL role needs CREATEDB)");
+    crate::bootstrap_world_map(&pool, 100)
         .await
-        .expect("failed to acquire test advisory lock");
-
-    let result = f(pool).await;
-
-    // Best-effort unlock; lock also auto-releases when `lock_conn` is dropped.
-    let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
-        .bind(TEST_DB_ADVISORY_LOCK_KEY)
-        .execute(&mut *lock_conn)
-        .await;
-
+        .expect("bootstrap world map");
+    let result = f(pool.clone()).await;
+    pool.close().await;
     result
-}
-
-pub async fn reset_tables(pool: &sqlx::PgPool) {
-    sqlx::query("DELETE FROM rm_report_reads")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_reports")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_marketplace_offers")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_village_movements")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_armies")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_heroes")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_scheduled_actions")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM rm_village")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("UPDATE rm_map_fields SET village_id = NULL, player_id = NULL")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM es_snapshots")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM es_events")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM players")
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM users")
-        .execute(pool)
-        .await
-        .unwrap();
 }
 
 pub async fn seed_user_and_player(pool: &sqlx::PgPool) -> (Uuid, Uuid) {

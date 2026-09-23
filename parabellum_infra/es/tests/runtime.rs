@@ -474,3 +474,31 @@ async fn runtime_scheduler_query_error_does_not_leak_execution_lock() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn runtime_projector_failures_preserve_retryable_sqlstate() {
+    with_test_pool(|pool| async move {
+        let svc = VillageEsService::new(pool.clone());
+        let (player, id) = village(&pool, &svc).await;
+        svc.train_units(id, &TrainUnits { player_id: player, unit_idx: 0,
+            building_name: BuildingName::Barracks, quantity: 2, speed: 1 }).await.unwrap();
+        let before = event_count(&pool).await;
+        sqlx::raw_sql("CREATE FUNCTION reject_runtime_army() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected serialization failure' USING ERRCODE = '40001'; END $$; CREATE TRIGGER reject_runtime_army BEFORE INSERT OR UPDATE ON rm_armies FOR EACH ROW EXECUTE FUNCTION reject_runtime_army();")
+            .execute(&pool).await.unwrap();
+        let mut results = Vec::new();
+        for _ in 0..5 {
+            // New service instances cannot reset the database-backed attempt budget.
+            results.push(VillageEsService::new(pool.clone())
+                .process_due_actions(chrono::Utc::now() + chrono::Duration::days(1), 1).await);
+        }
+        sqlx::raw_sql("DROP TRIGGER reject_runtime_army ON rm_armies; DROP FUNCTION reject_runtime_army();").execute(&pool).await.unwrap();
+        for result in results { assert_eq!(result.unwrap(), 1); }
+        assert_eq!(event_count(&pool).await, before);
+        assert_eq!(home_units(&pool, id, 0).await, 0);
+        assert_eq!(scheduled_action_status_count(&pool, ScheduledActionStatus::Failed).await, 1);
+        assert_eq!(scheduled_action_status_count(&pool, ScheduledActionStatus::Pending).await, 0);
+        let attempts: i32 = sqlx::query_scalar("SELECT attempts FROM rm_scheduled_actions LIMIT 1")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(attempts, 5);
+    }).await;
+}

@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use async_trait::async_trait;
 
+use super::cqrs_errors::map_cqrs_error;
 use parabellum_app::{
     identity::{InitialVillageCommandExecutor, PlayerRepository},
     scheduler::SchedulerPort,
@@ -25,7 +26,7 @@ use parabellum_app::{
     },
     villages::{CreateHero, FoundVillage, SetVillageResources},
 };
-use parabellum_types::errors::{AppError, ApplicationError, DbError, GameError};
+use parabellum_types::errors::ApplicationError;
 
 use crate::es::{PostgresVillageRepository, VillageEsService};
 use crate::identity::repositories::PostgresPlayerRepository;
@@ -40,96 +41,6 @@ impl VillageEsAdapter {
     pub fn new(service: VillageEsService) -> Self {
         Self { service }
     }
-
-    /// Maps CQRS/runtime failures to stable app-layer error categories.
-    ///
-    /// Why this exists:
-    /// - HTTP contract mapping is done from `ApplicationError` variants.
-    /// - Leaving CQRS failures as opaque `Unknown` turns client-visible `4xx`
-    ///   conditions into `500`.
-    ///
-    /// Policy:
-    /// - stream/version conflicts -> app conflict bucket
-    /// - domain/invariant source errors -> downcast into typed app/domain errors
-    /// - string domain/invariant payloads (legacy paths) -> minimal compatibility mapping
-    /// - everything else remains `Unknown` and is treated as internal
-    fn map_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
-        match err {
-            mini_cqrs_es::CqrsError::Conflict { .. } => {
-                ApplicationError::App(AppError::QueueItemAlreadyQueued {
-                    queue: "cqrs",
-                    item: "aggregate_version".to_string(),
-                })
-            }
-            mini_cqrs_es::CqrsError::DomainSource(source)
-            | mini_cqrs_es::CqrsError::CommandInvariantSource(source) => {
-                let source = match source.downcast::<GameError>() {
-                    Ok(game_error) => return ApplicationError::Game(*game_error),
-                    Err(source) => source,
-                };
-                let source = match source.downcast::<AppError>() {
-                    Ok(app_error) => return ApplicationError::App(*app_error),
-                    Err(source) => source,
-                };
-                let source = match source.downcast::<ApplicationError>() {
-                    Ok(app_error) => return *app_error,
-                    Err(source) => source,
-                };
-                ApplicationError::Unknown(source.to_string())
-            }
-            mini_cqrs_es::CqrsError::Domain(msg)
-            | mini_cqrs_es::CqrsError::CommandInvariant(msg) => ApplicationError::Unknown(format!(
-                "unexpected stringly cqrs domain/invariant error: {msg}"
-            )),
-            mini_cqrs_es::CqrsError::Other(other) => {
-                if let Some(game_error) = other
-                    .chain()
-                    .find_map(|cause| cause.downcast_ref::<GameError>())
-                {
-                    return ApplicationError::Game(game_error.clone());
-                }
-                if let Some(app_error) = other
-                    .chain()
-                    .find_map(|cause| cause.downcast_ref::<AppError>())
-                {
-                    return ApplicationError::App(app_error.clone());
-                }
-                ApplicationError::Unknown(other.to_string())
-            }
-            other => ApplicationError::Unknown(other.to_string()),
-        }
-    }
-
-    /// Maps read/query failures that currently cross the ES boundary as
-    /// typed source errors.
-    ///
-    /// Keep this intentionally narrow: only map well-known not-found cases to
-    /// typed DB errors so web layer can return stable `404` contracts.
-    fn map_query_cqrs_error(err: mini_cqrs_es::CqrsError) -> ApplicationError {
-        match err {
-            mini_cqrs_es::CqrsError::DomainSource(source)
-            | mini_cqrs_es::CqrsError::CommandInvariantSource(source) => {
-                let source = match source.downcast::<ApplicationError>() {
-                    Ok(app_error) => return *app_error,
-                    Err(source) => source,
-                };
-                let source = match source.downcast::<DbError>() {
-                    Ok(db_error) => return ApplicationError::Db(*db_error),
-                    Err(source) => source,
-                };
-                let source = match source.downcast::<GameError>() {
-                    Ok(game_error) => return ApplicationError::Game(*game_error),
-                    Err(source) => source,
-                };
-                let source = match source.downcast::<AppError>() {
-                    Ok(app_error) => return ApplicationError::App(*app_error),
-                    Err(source) => source,
-                };
-                ApplicationError::Unknown(source.to_string())
-            }
-            other => ApplicationError::Unknown(other.to_string()),
-        }
-    }
 }
 
 #[async_trait]
@@ -141,24 +52,21 @@ impl MovementReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_movement_hero(
         &self,
         hero_id: Uuid,
     ) -> Result<parabellum_game::models::hero::Hero, ApplicationError> {
-        self.service
-            .get_hero(hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)
+        self.service.get_hero(hero_id).await.map_err(map_cqrs_error)
     }
 
     async fn is_unoccupied_valley(&self, field_id: u32) -> Result<bool, ApplicationError> {
         self.service
             .is_unoccupied_valley(field_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -171,7 +79,7 @@ impl MarketplaceReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_marketplace_offer(
@@ -181,7 +89,7 @@ impl MarketplaceReadPort for VillageEsAdapter {
         self.service
             .get_marketplace_offer(offer_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::MarketplaceOfferNotFound(offer_id)))
+            .map_err(map_cqrs_error)
     }
 
     async fn get_marketplace_data(
@@ -191,7 +99,7 @@ impl MarketplaceReadPort for VillageEsAdapter {
         self.service
             .get_marketplace_data(village_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -205,7 +113,7 @@ impl MovementControlReadPort for VillageEsAdapter {
             .service
             .find_cancel_troop_movement_context(movement_id)
             .await
-            .map_err(Self::map_query_cqrs_error)?;
+            .map_err(map_cqrs_error)?;
         Ok(parabellum_app::villages::CancelTroopMovementContext {
             movement_id: context.movement_id,
             arrival_action_id: context.arrival_action_id,
@@ -226,7 +134,7 @@ impl MovementControlReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -240,7 +148,7 @@ impl ReinforcementReadPort for VillageEsAdapter {
             .service
             .find_reinforcement_context(army_id)
             .await
-            .map_err(Self::map_query_cqrs_error)?;
+            .map_err(map_cqrs_error)?;
         Ok(ReinforcementArmyContext {
             stationed_village_id: context.stationed_village_id,
             home_village_id: context.home_village_id,
@@ -256,7 +164,7 @@ impl ReinforcementReadPort for VillageEsAdapter {
             .service
             .find_trapped_army_context(army_id)
             .await
-            .map_err(Self::map_query_cqrs_error)?;
+            .map_err(map_cqrs_error)?;
         Ok(TrappedArmyContext {
             trapped_village_id: context.trapped_village_id,
             home_village_id: context.home_village_id,
@@ -271,7 +179,7 @@ impl ReinforcementReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_reinforcement_army_state(
@@ -281,7 +189,7 @@ impl ReinforcementReadPort for VillageEsAdapter {
         self.service
             .get_village_army_state_view(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -294,7 +202,7 @@ impl TrapReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_trap_army_state(
@@ -304,7 +212,7 @@ impl TrapReadPort for VillageEsAdapter {
         self.service
             .get_village_army_state_view(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -316,11 +224,10 @@ impl BuildingReadPort for VillageEsAdapter {
         action_id: Uuid,
         canceled_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<parabellum_app::villages::CancelBuildingConstructionContext, ApplicationError> {
-        self
-            .service
+        self.service
             .find_cancel_building_construction_context(village_id, action_id, canceled_at)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -333,7 +240,7 @@ impl DevelopmentReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn count_development_child_villages(
@@ -344,7 +251,7 @@ impl DevelopmentReadPort for VillageEsAdapter {
         self.service
             .count_child_villages(player_id, village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_development_village_queues(
@@ -354,7 +261,7 @@ impl DevelopmentReadPort for VillageEsAdapter {
         self.service
             .get_village_queues(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_development_troop_movements(
@@ -364,7 +271,7 @@ impl DevelopmentReadPort for VillageEsAdapter {
         self.service
             .get_village_troop_movements(village_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -374,10 +281,7 @@ impl HeroReadPort for VillageEsAdapter {
         &self,
         hero_id: Uuid,
     ) -> Result<parabellum_game::models::hero::Hero, ApplicationError> {
-        self.service
-            .get_hero(hero_id)
-            .await
-            .map_err(Self::map_cqrs_error)
+        self.service.get_hero(hero_id).await.map_err(map_cqrs_error)
     }
 
     async fn get_hero_by_player(
@@ -387,14 +291,14 @@ impl HeroReadPort for VillageEsAdapter {
         self.service
             .get_hero_by_player(player_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn player_has_alive_hero(&self, player_id: Uuid) -> Result<bool, ApplicationError> {
         self.service
             .player_has_alive_hero(player_id)
             .await
-            .map_err(Self::map_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_pending_hero_revival_at(
@@ -404,7 +308,7 @@ impl HeroReadPort for VillageEsAdapter {
         self.service
             .pending_hero_revival_at(player_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -420,22 +324,22 @@ impl VillageCommandExecutor for VillageEsAdapter {
                 .service
                 .send_reinforcement(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             VillageCommandIntent::AttackVillage(command) => self
                 .service
                 .send_attack(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             VillageCommandIntent::ScoutVillage(command) => self
                 .service
                 .send_scout(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             VillageCommandIntent::SendSettlers(command) => self
                 .service
                 .send_settlers(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -455,7 +359,7 @@ impl BuildingCommandExecutor for VillageEsAdapter {
                 .service
                 .add_building(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             BuildingCommandIntent::UpgradeBuilding {
                 village_id,
                 command,
@@ -463,7 +367,7 @@ impl BuildingCommandExecutor for VillageEsAdapter {
                 .service
                 .upgrade_building(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             BuildingCommandIntent::DowngradeBuilding {
                 village_id,
                 command,
@@ -471,7 +375,7 @@ impl BuildingCommandExecutor for VillageEsAdapter {
                 .service
                 .downgrade_building(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             BuildingCommandIntent::CancelBuildingConstruction {
                 village_id,
                 command,
@@ -479,7 +383,7 @@ impl BuildingCommandExecutor for VillageEsAdapter {
                 .service
                 .cancel_building_construction(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -499,7 +403,7 @@ impl VillageProfileCommandExecutor for VillageEsAdapter {
                 .service
                 .rename_village(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -519,7 +423,7 @@ impl DevelopmentCommandExecutor for VillageEsAdapter {
                 .service
                 .train_units(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             DevelopmentCommandIntent::ResearchAcademy {
                 village_id,
                 command,
@@ -527,7 +431,7 @@ impl DevelopmentCommandExecutor for VillageEsAdapter {
                 .service
                 .research_academy(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             DevelopmentCommandIntent::ResearchSmithy {
                 village_id,
                 command,
@@ -535,7 +439,7 @@ impl DevelopmentCommandExecutor for VillageEsAdapter {
                 .service
                 .research_smithy(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -555,7 +459,7 @@ impl HeroCommandExecutor for VillageEsAdapter {
                 .service
                 .create_hero(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             HeroCommandIntent::ReviveHero {
                 village_id,
                 command,
@@ -563,7 +467,7 @@ impl HeroCommandExecutor for VillageEsAdapter {
                 .service
                 .revive_hero(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             HeroCommandIntent::AssignHeroPoints {
                 village_id,
                 command,
@@ -571,7 +475,7 @@ impl HeroCommandExecutor for VillageEsAdapter {
                 .service
                 .assign_hero_points(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             HeroCommandIntent::ResetHeroPoints {
                 village_id,
                 command,
@@ -579,7 +483,7 @@ impl HeroCommandExecutor for VillageEsAdapter {
                 .service
                 .reset_hero_points(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             HeroCommandIntent::SetHeroResourceFocus {
                 village_id,
                 command,
@@ -587,7 +491,7 @@ impl HeroCommandExecutor for VillageEsAdapter {
                 .service
                 .set_hero_resource_focus(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -607,7 +511,7 @@ impl MarketplaceCommandExecutor for VillageEsAdapter {
                 .service
                 .send_resources(source_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             MarketplaceCommandIntent::CreateOffer {
                 village_id,
                 command,
@@ -615,7 +519,7 @@ impl MarketplaceCommandExecutor for VillageEsAdapter {
                 .service
                 .create_marketplace_offer(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             MarketplaceCommandIntent::AcceptOffer {
                 accepting_village_id,
                 accepting_player_id,
@@ -632,7 +536,7 @@ impl MarketplaceCommandExecutor for VillageEsAdapter {
                     accepting_arrives_at,
                 )
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             MarketplaceCommandIntent::CancelOffer {
                 village_id,
                 player_id,
@@ -641,7 +545,7 @@ impl MarketplaceCommandExecutor for VillageEsAdapter {
                 .service
                 .cancel_marketplace_offer(village_id, player_id, offer_id)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -661,7 +565,7 @@ impl MovementControlCommandExecutor for VillageEsAdapter {
                 .service
                 .cancel_troop_movement(source_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -681,7 +585,7 @@ impl ReinforcementCommandExecutor for VillageEsAdapter {
                 .service
                 .recall_reinforcements(home_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             ReinforcementCommandIntent::ReleaseReinforcements {
                 stationed_village_id,
                 command,
@@ -689,7 +593,7 @@ impl ReinforcementCommandExecutor for VillageEsAdapter {
                 .service
                 .release_reinforcements(stationed_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             ReinforcementCommandIntent::ReleaseTrappedTroops {
                 trapped_village_id,
                 command,
@@ -697,7 +601,7 @@ impl ReinforcementCommandExecutor for VillageEsAdapter {
                 .service
                 .release_trapped_troops(trapped_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
             ReinforcementCommandIntent::DisbandTrappedTroops {
                 trapped_village_id,
                 command,
@@ -705,7 +609,7 @@ impl ReinforcementCommandExecutor for VillageEsAdapter {
                 .service
                 .disband_trapped_troops(trapped_village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -725,7 +629,7 @@ impl TrapCommandExecutor for VillageEsAdapter {
                 .service
                 .build_traps(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -737,7 +641,7 @@ impl VillageActivityReadPort for VillageEsAdapter {
         self.service
             .get_village_queues(village_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map_err(map_cqrs_error)
     }
 
     async fn get_village_troop_movements(
@@ -747,7 +651,7 @@ impl VillageActivityReadPort for VillageEsAdapter {
         self.service
             .get_village_troop_movements(village_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map_err(map_cqrs_error)
     }
 
     async fn list_cancelable_outgoing_movement_ids(
@@ -758,7 +662,7 @@ impl VillageActivityReadPort for VillageEsAdapter {
         self.service
             .list_cancelable_outgoing_movement_ids(village_id, now)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -771,7 +675,7 @@ impl VillageArmyReadPort for VillageEsAdapter {
         self.service
             .get_village_army_state_view(village_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -784,7 +688,7 @@ impl VillageStateReadPort for VillageEsAdapter {
         self.service
             .list_player_village_states(player_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_village_state(
@@ -794,7 +698,7 @@ impl VillageStateReadPort for VillageEsAdapter {
         self.service
             .get_village(village_id)
             .await
-            .map_err(|_| ApplicationError::Db(DbError::VillageNotFound(village_id)))
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -866,7 +770,7 @@ impl ReportReadPort for VillageEsAdapter {
         self.service
             .list_reports_for_player(player_id, offset, limit)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn get_report_for_player(
@@ -877,7 +781,7 @@ impl ReportReadPort for VillageEsAdapter {
         self.service
             .get_report_for_player(report_id, player_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn count_unread_reports_for_player(
@@ -887,7 +791,7 @@ impl ReportReadPort for VillageEsAdapter {
         self.service
             .count_unread_reports_for_player(player_id)
             .await
-            .map_err(Self::map_query_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -905,7 +809,7 @@ impl ReportCommandExecutor for VillageEsAdapter {
                 .service
                 .mark_report_read(village_id, &command)
                 .await
-                .map_err(Self::map_cqrs_error)?,
+                .map_err(map_cqrs_error)?,
         };
         Ok(())
     }
@@ -921,7 +825,7 @@ impl InitialVillageCommandExecutor for VillageEsAdapter {
         self.service
             .found_village(village_id, &command)
             .await
-            .map_err(Self::map_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn create_initial_hero(
@@ -933,7 +837,7 @@ impl InitialVillageCommandExecutor for VillageEsAdapter {
             .create_hero(village_id, &command)
             .await
             .map(|_| ())
-            .map_err(Self::map_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 
     async fn set_initial_village_resources(
@@ -944,7 +848,7 @@ impl InitialVillageCommandExecutor for VillageEsAdapter {
         self.service
             .set_village_resources(village_id, &command)
             .await
-            .map_err(Self::map_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
 
@@ -958,6 +862,6 @@ impl SchedulerPort for VillageEsAdapter {
         self.service
             .process_due_actions(before_or_equal, limit)
             .await
-            .map_err(Self::map_cqrs_error)
+            .map_err(map_cqrs_error)
     }
 }
