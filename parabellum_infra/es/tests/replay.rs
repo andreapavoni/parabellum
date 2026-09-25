@@ -304,8 +304,20 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
             .process_until(Utc::now() + Duration::seconds(3), 100)
             .await;
 
-        let owner_before = service.get_village(owner_village_id).await.unwrap();
-        let acceptor_before = service.get_village(acceptor_village_id).await.unwrap();
+        let owner_before = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1",
+        )
+        .bind(owner_village_id as i32)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let acceptor_before = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1",
+        )
+        .bind(acceptor_village_id as i32)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         let offer_before = service.get_marketplace_offer(offer.offer_id).await.unwrap();
         let queue_counts_before: (i64, i64, i64, i64) = sqlx::query_as(
             r#"
@@ -333,8 +345,20 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
             .await
             .unwrap();
 
-        let owner_after = service.get_village(owner_village_id).await.unwrap();
-        let acceptor_after = service.get_village(acceptor_village_id).await.unwrap();
+        let owner_after = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1",
+        )
+        .bind(owner_village_id as i32)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let acceptor_after = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1",
+        )
+        .bind(acceptor_village_id as i32)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         let offer_after = service.get_marketplace_offer(offer.offer_id).await.unwrap();
         let queue_counts_after: (i64, i64, i64, i64) = sqlx::query_as(
             r#"
@@ -350,13 +374,8 @@ async fn replay_full_mode_rebuilds_marketplace_window_deterministically() {
         .await
         .unwrap();
 
-        assert_eq!(owner_after.stocks, owner_before.stocks);
-        assert_eq!(owner_after.busy_merchants, owner_before.busy_merchants);
-        assert_eq!(acceptor_after.stocks, acceptor_before.stocks);
-        assert_eq!(
-            acceptor_after.busy_merchants,
-            acceptor_before.busy_merchants
-        );
+        assert_eq!(owner_after, owner_before);
+        assert_eq!(acceptor_after, acceptor_before);
         assert_eq!(offer_after.status, offer_before.status);
         assert_eq!(queue_counts_after, queue_counts_before);
     })
@@ -539,6 +558,16 @@ async fn replay_full_mode_is_idempotent_for_attack_outcome_window() {
             deployed_units(&pool, source_village_id, 8).await,
             before_source_deployed_senator
         );
+        let request = ReplayRequest { target: ReplayTarget::All, mode: ReplayMode::Full,
+            from_global_seq: 1, to_global_seq: None, aggregate_id: None };
+        replay.replay(request.clone()).await.unwrap();
+        let canonical_sql = "SELECT jsonb_build_object('villages', (SELECT jsonb_agg(to_jsonb(v) ORDER BY village_id) FROM rm_village v), 'armies', (SELECT jsonb_agg(to_jsonb(a) - 'updated_at' ORDER BY army_id) FROM rm_armies a), 'reports', (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM rm_reports r))";
+        let first: serde_json::Value = sqlx::query_scalar(canonical_sql).fetch_one(&pool).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        replay.replay(request).await.unwrap();
+        let second: serde_json::Value = sqlx::query_scalar(canonical_sql).fetch_one(&pool).await.unwrap();
+        assert_eq!(first, second);
+
     })
     .await;
 }

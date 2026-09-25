@@ -21,10 +21,11 @@ use crate::map::{
 };
 use crate::scheduler::{ProcessDueActionsRequest, SchedulerUseCases};
 use crate::villages::{
-    BuildingUseCases, DevelopmentUseCases, HeroUseCases, MarketplaceUseCases,
-    MovementControlUseCases, MovementUseCases, ReinforcementUseCases, ReportUseCases, TrapUseCases,
-    VillageActivityUseCases, VillageArmyUseCases, VillageExpansionUseCases, VillageProfileUseCases,
-    VillageReferenceUseCases, VillageStateUseCases,
+    BuildingOverviewUseCases, BuildingUseCases, DevelopmentUseCases, HeroUseCases,
+    MarketplaceUseCases, MovementControlUseCases, MovementUseCases, ReinforcementUseCases,
+    ReportUseCases, TrapUseCases, VillageActivityUseCases, VillageArmyUseCases,
+    VillageExpansionUseCases, VillageProfileUseCases, VillageReferenceUseCases,
+    VillageStateUseCases,
     requests::activity::{
         GetVillageQueuesRequest, GetVillageTroopMovementsRequest,
         ListCancelableOutgoingMovementIdsRequest,
@@ -74,6 +75,7 @@ pub struct GameApplication {
     map: MapUseCases,
     village_profile: VillageProfileUseCases,
     buildings: BuildingUseCases,
+    building_overview: BuildingOverviewUseCases,
     development: DevelopmentUseCases,
     heroes: HeroUseCases,
     movements: MovementUseCases,
@@ -100,6 +102,7 @@ impl GameApplication {
         map: MapUseCases,
         village_profile: VillageProfileUseCases,
         buildings: BuildingUseCases,
+        building_overview: BuildingOverviewUseCases,
         development: DevelopmentUseCases,
         heroes: HeroUseCases,
         movements: MovementUseCases,
@@ -123,6 +126,7 @@ impl GameApplication {
             map,
             village_profile,
             buildings,
+            building_overview,
             development,
             heroes,
             movements,
@@ -347,6 +351,14 @@ impl GameApplication {
         self.movement_control_use_cases()
             .cancel_troop_movement(request)
             .await
+    }
+
+    /// Loads common building previews for an explicitly owned village slot.
+    pub async fn get_building_overview(
+        &self,
+        request: crate::villages::requests::building_overview::GetBuildingOverviewRequest,
+    ) -> Result<crate::villages::read_models::buildings::BuildingOverview, ApplicationError> {
+        self.building_overview.get_building_overview(request).await
     }
 
     pub async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {

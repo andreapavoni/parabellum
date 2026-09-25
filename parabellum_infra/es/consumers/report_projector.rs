@@ -21,6 +21,7 @@ mod reinforcements;
 #[derive(Debug, Clone)]
 pub struct ReportProjector {
     pool: PgPool,
+    event_at: chrono::DateTime<chrono::Utc>,
     villages: PostgresVillageRepository,
     armies: PostgresArmyRepository,
     reports: PostgresReportRepository,
@@ -84,6 +85,7 @@ impl ReportProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool: pool.clone(),
+            event_at: chrono::DateTime::UNIX_EPOCH,
             villages: PostgresVillageRepository::new(crate::ProjectionDb::new(pool.clone())),
             armies: PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone())),
             reports: PostgresReportRepository::new(crate::ProjectionDb::new(pool.clone())),
@@ -184,7 +186,7 @@ impl ReportProjector {
         projection: ReportProjection,
     ) -> Result<(), CqrsError> {
         self.reports
-            .add_projected_in_tx(
+            .add_projected_at_in_tx(
                 tx,
                 &ProjectedReport {
                     id: projection.id,
@@ -197,6 +199,7 @@ impl ReportProjector {
                     target_village_id: projection.target_village_id,
                 },
                 &projection.audience_player_ids,
+                self.event_at,
             )
             .await
             .map_err(CqrsError::domain_source)?;
@@ -212,28 +215,33 @@ impl ReportProjector {
         if !event.aggregate_type.contains("VillageAggregate") {
             return Ok(());
         }
+        let mut projector = self.clone();
+        projector.event_at = parabellum_app::villages::effective_event_time(event)?;
+        projector.villages = projector
+            .villages
+            .at_event_time(parabellum_app::villages::effective_event_time(event)?);
         let projected_report_id = Self::projected_report_id(event);
 
         let domain_event = event.get_payload::<VillageEvent>()?;
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_reinforcement_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_marketplace_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_battle_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self.project_read_state_in_tx(tx, &domain_event).await {
+        if let Some(result) = projector.project_read_state_in_tx(tx, &domain_event).await {
             return result;
         }
 

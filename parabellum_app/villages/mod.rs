@@ -13,7 +13,7 @@ pub mod requests;
 mod state;
 pub mod use_cases;
 
-pub use aggregate::VillageAggregate;
+pub use aggregate::{VillageAggregate, effective_event_time};
 pub use commands::{
     AcceptMarketplaceOffer, AddBuilding, ApplyBattleOutcomeToVillage, AssignHeroPoints,
     AttackVillage, BuildTraps, CancelBuildingConstruction, CancelMarketplaceOffer,
@@ -26,7 +26,9 @@ pub use commands::{
 };
 pub use cqrs_command_service::VillageService;
 pub use events::VillageEvent;
-pub use mapping::{VillageArmyContext, apply_domain_village_state, hydrate_village};
+pub use mapping::{
+    VillageArmyContext, apply_domain_village_state, hydrate_village, hydrate_village_at,
+};
 pub use policies::army_dispatch::{ArmyDispatch, ArmyDispatchRequest};
 pub use policies::building_cancellation::{BuildingCancellationAction, BuildingCancellationPolicy};
 pub use policies::expansion::{ConquestAttempt, ExpansionSlotUsage, ExpansionTrainingCommitment};
@@ -90,10 +92,10 @@ pub use requests::village_references::GetVillageReferencesRequest;
 pub use requests::village_state::{GetVillageStateRequest, ListPlayerVillageStatesRequest};
 pub use state::VillageState;
 pub use use_cases::{
-    BuildingSettings, BuildingUseCases, DevelopmentSettings, DevelopmentUseCases,
-    ExpansionCultureInfo, HeroSettings, HeroUseCases, MarketplaceSettings, MarketplaceUseCases,
-    MovementControlUseCases, MovementSettings, MovementUseCases, ReinforcementSettings,
-    ReinforcementUseCases, ReportUseCases, TrapUseCases, VillageActivityUseCases,
-    VillageArmyUseCases, VillageExpansionUseCases, VillageProfileUseCases,
+    BuildingOverviewUseCases, BuildingSettings, BuildingUseCases, DevelopmentSettings,
+    DevelopmentUseCases, ExpansionCultureInfo, HeroSettings, HeroUseCases, MarketplaceSettings,
+    MarketplaceUseCases, MovementControlUseCases, MovementSettings, MovementUseCases,
+    ReinforcementSettings, ReinforcementUseCases, ReportUseCases, TrapUseCases,
+    VillageActivityUseCases, VillageArmyUseCases, VillageExpansionUseCases, VillageProfileUseCases,
     VillageReferenceUseCases, VillageStateUseCases,
 };

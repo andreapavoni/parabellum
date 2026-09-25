@@ -19,3 +19,5 @@ pub mod village_army;
 pub mod village_profile;
 pub mod village_references;
 pub mod village_state;
+
+pub mod building_overview;

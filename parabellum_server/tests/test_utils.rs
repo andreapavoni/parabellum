@@ -114,6 +114,14 @@ pub mod tests {
         let trap_executor: Arc<dyn TrapCommandExecutor> = villages.clone();
         let scheduler_port: Arc<dyn SchedulerPort> = villages.clone();
         let scheduler = SchedulerUseCases::new(scheduler_port);
+        let building_overview = parabellum_app::villages::BuildingOverviewUseCases::new(
+            village_state_reads.clone(),
+            activity_reads.clone(),
+            Arc::new(SystemClock),
+            BuildingSettings {
+                server_speed: config.speed,
+            },
+        );
         let buildings = BuildingUseCases::new(
             building_reads,
             building_executor,
@@ -203,6 +211,7 @@ pub mod tests {
             map,
             village_profile,
             buildings,
+            building_overview,
             development,
             heroes,
             movements,

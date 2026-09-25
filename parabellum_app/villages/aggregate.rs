@@ -2,10 +2,12 @@
 //!
 //! The aggregate mirrors domain state in `VillageState` and applies only
 //! `VillageEvent` transitions.
-use mini_cqrs_es::Aggregate;
+use chrono::{DateTime, Utc};
+use mini_cqrs_es::{Aggregate, CqrsError, StoredEvent};
 use parabellum_game::models::army::Army;
 use parabellum_game::models::village::{VillageBuilding, VillageSnapshot};
 use parabellum_types::army::TroopSet;
+use parabellum_types::errors::ApplicationError;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -16,6 +18,8 @@ pub struct VillageAggregate {
     id: u32,
     version: u64,
     village: VillageState,
+    #[serde(default)]
+    reducer_version: u8,
 }
 
 impl VillageAggregate {
@@ -23,6 +27,7 @@ impl VillageAggregate {
         Self {
             id,
             version: 0,
+            reducer_version: 1,
             village: VillageState::founded(
                 id,
                 format!("village-{id}"),
@@ -78,6 +83,49 @@ impl Aggregate for VillageAggregate {
     type Event = VillageEvent;
 
     async fn apply(&mut self, event: &Self::Event) {
+        // Payload-only application has no envelope time. Use the aggregate's
+        // recorded time; persisted streams always use the fallible method below.
+        self.apply_fact_at(event, self.village.village.updated_at)
+            .expect("invalid village fact");
+    }
+
+    async fn apply_events(&mut self, events: &[StoredEvent]) -> Result<(), CqrsError> {
+        for stored in events {
+            let event = stored.get_payload::<VillageEvent>()?;
+            self.apply_fact_at(&event, effective_event_time(stored)?)
+                .map_err(CqrsError::domain_source)?;
+            self.version = stored.version;
+        }
+        Ok(())
+    }
+
+    fn aggregate_id(&self) -> Self::Id {
+        self.id
+    }
+
+    fn set_aggregate_id(&mut self, id: Self::Id) {
+        self.id = id;
+    }
+
+    fn version(&self) -> u64 {
+        self.version
+    }
+
+    fn set_version(&mut self, version: u64) {
+        self.version = version;
+    }
+}
+
+impl VillageAggregate {
+    pub fn apply_fact_at(
+        &mut self,
+        event: &VillageEvent,
+        at: DateTime<Utc>,
+    ) -> Result<(), ApplicationError> {
+        if self.village.village.id != 0 {
+            self.village.village.advance_resources_to(at);
+        }
+        self.reducer_version = 1;
         // Keep apply deterministic: no external reads/writes, only state transitions.
         match event {
             VillageEvent::VillageFounded {
@@ -90,7 +138,7 @@ impl Aggregate for VillageAggregate {
                 buildings,
             } => {
                 self.id = *village_id;
-                self.village = VillageState::founded(
+                self.village = VillageState::founded_at(
                     *village_id,
                     village_name.clone(),
                     position.clone(),
@@ -98,6 +146,7 @@ impl Aggregate for VillageAggregate {
                     *player_id,
                     *parent_village_id,
                     buildings.clone(),
+                    at,
                 );
             }
             VillageEvent::VillageConquered { player_id, .. } => {
@@ -110,7 +159,7 @@ impl Aggregate for VillageAggregate {
                 self.village.set_resources(resources.clone());
             }
             VillageEvent::VillageArmyDetached { army } => {
-                self.village.detach_army(army);
+                self.village.detach_army(army)?;
             }
             VillageEvent::HeroCreated { hero, .. } => {
                 let mut home_army = self
@@ -120,10 +169,10 @@ impl Aggregate for VillageAggregate {
                     .cloned()
                     .unwrap_or_else(|| Army::new_village_army(&self.village.village));
                 home_army.set_hero(Some(hero.clone()));
-                let _ = self.village.village.set_army(Some(&home_army));
+                self.village.village.set_army_fact(Some(home_army));
             }
             VillageEvent::HeroRevivalScheduled { cost, .. } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
             }
             VillageEvent::HeroRevived { hero, .. } => {
                 let mut home_army = self
@@ -133,7 +182,7 @@ impl Aggregate for VillageAggregate {
                     .cloned()
                     .unwrap_or_else(|| Army::new_village_army(&self.village.village));
                 home_army.set_hero(Some(hero.clone()));
-                let _ = self.village.village.set_army(Some(&home_army));
+                self.village.village.set_army_fact(Some(home_army));
             }
             VillageEvent::HeroUpdated { hero, .. } => {
                 if let Some(mut home_army) = self.village.village.army().cloned()
@@ -142,7 +191,7 @@ impl Aggregate for VillageAggregate {
                         .is_some_and(|current| current.id == hero.id)
                 {
                     home_army.set_hero(Some(hero.clone()));
-                    let _ = self.village.village.set_army(Some(&home_army));
+                    self.village.village.set_army_fact(Some(home_army));
                 }
             }
             VillageEvent::ReinforcementSent { .. } => {}
@@ -151,7 +200,9 @@ impl Aggregate for VillageAggregate {
             VillageEvent::ReinforcementsRecalled { .. } => {}
             VillageEvent::ReinforcementsReleased { .. } => {}
             VillageEvent::SettlersSent { .. } => {
-                let _ = self.village.village.deduct_foundation_resources();
+                self.village.village.deduct_resources_fact(
+                    &parabellum_game::models::village::Village::foundation_cost(),
+                )?;
             }
             VillageEvent::SettlersArrived { .. } => {}
             VillageEvent::AttackSent { .. } => {}
@@ -180,7 +231,7 @@ impl Aggregate for VillageAggregate {
                     reinforcements.push(stationed_attacker);
                 }
                 self.village.village =
-                    parabellum_game::models::village::Village::rehydrate(VillageSnapshot {
+                    parabellum_game::models::village::Village::rehydrate_facts(VillageSnapshot {
                         id: current.id,
                         name: current.name.clone(),
                         player_id: *target_player_id,
@@ -197,14 +248,14 @@ impl Aggregate for VillageAggregate {
                         stocks: target_stocks.clone(),
                         academy_research: current.academy_research().clone(),
                         culture_points: current.culture_points,
-                        updated_at: chrono::Utc::now(),
+                        updated_at: at,
                         parent_village_id: *target_parent_village_id,
                     });
             }
             VillageEvent::ArmyReturned { army, bounty, .. } => {
-                let _ = self.village.merge_army_home(army);
+                self.village.merge_army_home(army)?;
                 if let Some(bounty) = bounty {
-                    self.village.village.store_resources(bounty);
+                    self.village.village.store_resources_fact(bounty);
                 }
             }
             VillageEvent::ScoutSent { .. } => {}
@@ -218,9 +269,8 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 if !resources_already_reserved {
-                    let _ = self
-                        .village
-                        .apply_merchant_departure(resources, *merchants_used);
+                    self.village
+                        .apply_merchant_departure(resources, *merchants_used)?;
                 }
             }
             VillageEvent::MerchantsArrived { .. } => {}
@@ -234,9 +284,8 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 let resources: parabellum_types::common::ResourceGroup = (*offer_resources).into();
-                let _ = self
-                    .village
-                    .apply_merchant_departure(&resources, *merchants_reserved);
+                self.village
+                    .apply_merchant_departure(&resources, *merchants_reserved)?;
             }
             VillageEvent::MarketplaceOfferReservationAppliedToVillage { .. } => {}
             VillageEvent::MarketplaceOfferCanceled {
@@ -248,9 +297,12 @@ impl Aggregate for VillageAggregate {
                 if *owner_village_id == self.id {
                     let resources: parabellum_types::common::ResourceGroup =
                         (*offer_resources).into();
-                    self.village
+                    self.village.village.store_resources_fact(&resources);
+                    self.village.village.busy_merchants = self
                         .village
-                        .release_merchant_transfer(&resources, *merchants_reserved);
+                        .village
+                        .busy_merchants
+                        .saturating_sub(*merchants_reserved);
                 }
             }
             VillageEvent::MarketplaceOfferReservationReleasedFromVillage { .. } => {}
@@ -262,31 +314,7 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 if *village_id == self.id {
-                    let current = self.village.village.stored_resources();
-                    let desired = parabellum_types::common::ResourceGroup::new(
-                        stocks.lumber,
-                        stocks.clay,
-                        stocks.iron,
-                        stocks.crop.max(0) as u32,
-                    );
-                    let delta_add = parabellum_types::common::ResourceGroup::new(
-                        desired.lumber().saturating_sub(current.lumber()),
-                        desired.clay().saturating_sub(current.clay()),
-                        desired.iron().saturating_sub(current.iron()),
-                        desired.crop().saturating_sub(current.crop()),
-                    );
-                    let delta_sub = parabellum_types::common::ResourceGroup::new(
-                        current.lumber().saturating_sub(desired.lumber()),
-                        current.clay().saturating_sub(desired.clay()),
-                        current.iron().saturating_sub(desired.iron()),
-                        current.crop().saturating_sub(desired.crop()),
-                    );
-                    if delta_add.total() > 0 {
-                        self.village.village.store_resources(&delta_add);
-                    }
-                    if delta_sub.total() > 0 {
-                        let _ = self.village.village.deduct_resources(&delta_sub);
-                    }
+                    self.village.village.set_stocks_fact(stocks.clone());
                     self.village.village.busy_merchants = *busy_merchants;
                 }
             }
@@ -298,7 +326,7 @@ impl Aggregate for VillageAggregate {
                 execute_at,
                 ..
             } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
                 self.village.record_building_action_scheduled(
                     *action_id,
                     crate::villages::models::BuildingWorkflowKind::Add,
@@ -315,7 +343,7 @@ impl Aggregate for VillageAggregate {
                 execute_at,
                 ..
             } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
                 self.village.record_building_action_scheduled(
                     *action_id,
                     crate::villages::models::BuildingWorkflowKind::Upgrade,
@@ -343,7 +371,7 @@ impl Aggregate for VillageAggregate {
                 for action_id in action_ids {
                     self.village.mark_building_action_consumed(*action_id);
                 }
-                self.village.village.store_resources(refund);
+                self.village.village.store_resources_fact(refund);
             }
             VillageEvent::BuildingAdded {
                 action_id,
@@ -355,7 +383,7 @@ impl Aggregate for VillageAggregate {
             } => {
                 self.village.mark_building_action_consumed(*action_id);
                 self.village
-                    .set_building_level(*slot_id, building_name.clone(), *level, *speed);
+                    .set_building_level(*slot_id, building_name.clone(), *level, *speed)?;
             }
             VillageEvent::BuildingUpgraded {
                 action_id,
@@ -367,7 +395,7 @@ impl Aggregate for VillageAggregate {
             } => {
                 self.village.mark_building_action_consumed(*action_id);
                 self.village
-                    .set_building_level(*slot_id, building_name.clone(), *level, *speed);
+                    .set_building_level(*slot_id, building_name.clone(), *level, *speed)?;
             }
             VillageEvent::BuildingDowngraded {
                 action_id,
@@ -379,7 +407,7 @@ impl Aggregate for VillageAggregate {
             } => {
                 self.village.mark_building_action_consumed(*action_id);
                 self.village
-                    .set_building_level(*slot_id, building_name.clone(), *level, *speed);
+                    .set_building_level(*slot_id, building_name.clone(), *level, *speed)?;
             }
             VillageEvent::UnitTrainingScheduled {
                 action_id,
@@ -391,7 +419,7 @@ impl Aggregate for VillageAggregate {
                 execute_at,
                 ..
             } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
                 self.village.record_training_action_scheduled(
                     *action_id,
                     *slot_id,
@@ -408,10 +436,10 @@ impl Aggregate for VillageAggregate {
                 ..
             } => {
                 self.village.mark_training_action_consumed(*action_id);
-                let _ = self.village.train_units(unit.clone(), *quantity_trained);
+                self.village.train_units(unit.clone(), *quantity_trained)?;
             }
             VillageEvent::TrapBuildScheduled { cost, .. } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
             }
             VillageEvent::TrapBuilt { .. } => {}
             VillageEvent::AcademyResearchScheduled {
@@ -421,7 +449,7 @@ impl Aggregate for VillageAggregate {
                 execute_at,
                 ..
             } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
                 self.village
                     .record_academy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
@@ -429,7 +457,8 @@ impl Aggregate for VillageAggregate {
                 action_id, unit, ..
             } => {
                 self.village.mark_academy_action_consumed(*action_id);
-                let _ = self.village.apply_academy_research_completed(unit.clone());
+                self.village
+                    .apply_academy_research_completed(unit.clone())?;
             }
             VillageEvent::SmithyResearchScheduled {
                 action_id,
@@ -438,7 +467,7 @@ impl Aggregate for VillageAggregate {
                 execute_at,
                 ..
             } => {
-                let _ = self.village.village.deduct_resources(cost);
+                self.village.village.deduct_resources_fact(cost)?;
                 self.village
                     .record_smithy_action_scheduled(*action_id, unit.clone(), *execute_at);
             }
@@ -446,26 +475,11 @@ impl Aggregate for VillageAggregate {
                 action_id, unit, ..
             } => {
                 self.village.mark_smithy_action_consumed(*action_id);
-                let _ = self.village.apply_smithy_research_completed(unit.clone());
+                self.village.apply_smithy_research_completed(unit.clone())?;
             }
             VillageEvent::ReportMarkedAsRead { .. } => {}
         }
-    }
-
-    fn aggregate_id(&self) -> Self::Id {
-        self.id
-    }
-
-    fn set_aggregate_id(&mut self, id: Self::Id) {
-        self.id = id;
-    }
-
-    fn version(&self) -> u64 {
-        self.version
-    }
-
-    fn set_version(&mut self, version: u64) {
-        self.version = version;
+        Ok(())
     }
 }
 
@@ -512,5 +526,81 @@ mod tests {
         let home_army = aggregate.village.village.army().expect("home army");
         assert_eq!(home_army.units().get(0), 1);
         assert_eq!(home_army.hero().map(|hero| hero.id), Some(hero_id));
+    }
+}
+
+/// Domain time for new workflows, durable envelope time for historical events.
+/// Missing historical decision times cannot be reconstructed from the current clock.
+pub fn effective_event_time(event: &StoredEvent) -> Result<DateTime<Utc>, CqrsError> {
+    match event.metadata.extra.get("effective_at") {
+        Some(value) => serde_json::from_value(value.clone()).map_err(CqrsError::Serialization),
+        None => Ok(event.timestamp),
+    }
+}
+
+#[cfg(test)]
+mod replay_contract_tests {
+    use super::*;
+    use mini_cqrs_es::{EventMetadata, NewEvent};
+    use parabellum_types::{buildings::BuildingName, common::ResourceGroup};
+
+    #[tokio::test]
+    async fn invalid_persisted_cost_fails_instead_of_being_silently_ignored() {
+        let player = Uuid::nil();
+        let mut aggregate = VillageAggregate::founded(7, player, vec![]);
+        aggregate.village.set_resources(ResourceGroup::default());
+        let payload = VillageEvent::BuildingUpgradeScheduled {
+            action_id: Uuid::nil(),
+            player_id: player,
+            village_id: 7,
+            slot_id: 19,
+            building_name: BuildingName::MainBuilding,
+            level: 2,
+            speed: 1,
+            cost: ResourceGroup::new(100, 100, 100, 100),
+            execute_at: DateTime::UNIX_EPOCH,
+        };
+        let new = NewEvent::from_payload(payload, EventMetadata::default()).unwrap();
+        let event = StoredEvent {
+            id: "invalid-cost".into(),
+            aggregate_id: "7".into(),
+            aggregate_type: std::any::type_name::<VillageAggregate>().into(),
+            version: 1,
+            event_type: new.event_type,
+            payload: new.payload,
+            metadata: new.metadata,
+            global_sequence: Some(1),
+            timestamp: aggregate.village.village.updated_at,
+        };
+        assert!(matches!(
+            aggregate.apply_events(&[event]).await,
+            Err(CqrsError::DomainSource(_))
+        ));
+    }
+
+    #[test]
+    fn explicit_event_time_overrides_ingestion_time_and_invalid_metadata_fails() {
+        let mut event = StoredEvent {
+            id: "clock".into(),
+            aggregate_id: "7".into(),
+            aggregate_type: "village".into(),
+            version: 1,
+            event_type: "ignored".into(),
+            payload: serde_json::Value::Null,
+            metadata: EventMetadata::default(),
+            global_sequence: Some(1),
+            timestamp: DateTime::UNIX_EPOCH + chrono::Duration::days(1),
+        };
+        assert_eq!(effective_event_time(&event).unwrap(), event.timestamp);
+        event.metadata.extra.insert(
+            "effective_at".into(),
+            serde_json::to_value(DateTime::<Utc>::UNIX_EPOCH).unwrap(),
+        );
+        assert_eq!(effective_event_time(&event).unwrap(), DateTime::UNIX_EPOCH);
+        event
+            .metadata
+            .extra
+            .insert("effective_at".into(), serde_json::json!("invalid"));
+        assert!(effective_event_time(&event).is_err());
     }
 }

@@ -412,9 +412,15 @@ impl VillageProjector {
             .map_err(CqrsError::domain_source)?;
         let source_stocks = source.stocks.clone();
         let mut source_village = self.load_village_state_in_tx(tx, source).await?;
-        source_village
-            .merge_army(army)
-            .map_err(CqrsError::domain_source)?;
+        let mut home = source_village
+            .army()
+            .cloned()
+            .unwrap_or_else(|| Army::new_village_army(&source_village));
+        home.merge(army).map_err(CqrsError::domain_source)?;
+        if army.hero().is_some() {
+            home.set_hero(army.hero());
+        }
+        source_village.set_army_fact(Some(home));
         let next_source_army = source_village
             .army()
             .cloned()

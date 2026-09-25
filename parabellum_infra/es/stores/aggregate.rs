@@ -43,6 +43,16 @@ impl PostgresEventStore {
         .map_err(CqrsError::domain_source)?;
         let mut aggregate = A::default();
         let mut version = 0;
+        // Older village snapshots were produced by clock-dependent reducers.
+        // Rebuild them once from their durable event envelopes.
+        let snapshot = snapshot.filter(|snapshot| {
+            aggregate_type != std::any::type_name::<parabellum_app::villages::VillageAggregate>()
+                || snapshot
+                    .state
+                    .get("reducer_version")
+                    .and_then(serde_json::Value::as_u64)
+                    == Some(1)
+        });
         if let Some(snapshot) = snapshot {
             aggregate = serde_json::from_value(snapshot.state)?;
             version = snapshot.stream_version;

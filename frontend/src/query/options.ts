@@ -8,10 +8,13 @@ export function sessionQueryOptions() {
   };
 }
 
-export function gameContextQueryOptions() {
+export function gameContextQueryOptions(villageId: number | undefined) {
   return {
-    queryKey: queryKeys.gameContext,
-    queryFn: () => api.gameContext(),
+    queryKey: queryKeys.gameContextFor(villageId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => {
+      if (villageId === undefined) throw new Error("No village selected");
+      return api.gameContext(villageId, signal);
+    },
   };
 }
 

@@ -245,6 +245,13 @@ impl Village {
 
     /// Rehydrates a Village domain model from a domain snapshot.
     pub fn rehydrate(snapshot: VillageSnapshot) -> Self {
+        let mut village = Self::rehydrate_facts(snapshot);
+        village.update_resources();
+        village
+    }
+
+    /// Restores persisted facts and derived values without consulting the clock.
+    pub fn rehydrate_facts(snapshot: VillageSnapshot) -> Self {
         let mut village = Self {
             id: snapshot.id,
             name: snapshot.name,
@@ -271,7 +278,7 @@ impl Village {
             parent_village_id: snapshot.parent_village_id,
         };
 
-        village.update_state();
+        village.refresh_derived_state();
         village
     }
 
@@ -501,6 +508,48 @@ impl Village {
     /// Checks if the village has enough resources.
     pub fn has_enough_resources(&self, cost: &ResourceGroup) -> bool {
         self.stocks.has_availability(cost)
+    }
+
+    /// Applies an already accepted resource cost without a wall-clock tick.
+    pub fn deduct_resources_fact(&mut self, cost: &ResourceGroup) -> Result<(), GameError> {
+        if !self.has_enough_resources(cost) {
+            return Err(GameError::NotEnoughResources);
+        }
+        self.stocks.remove_resources(cost);
+        Ok(())
+    }
+
+    /// Applies resource receipts at the current fact time, respecting storage capacity.
+    pub fn store_resources_fact(&mut self, resources: &ResourceGroup) {
+        self.stocks.store(resources);
+    }
+
+    /// Assigns absolute economy facts without converting them into new decisions.
+    pub fn set_resources_fact(&mut self, resources: &ResourceGroup) {
+        self.stocks.lumber = resources.lumber().min(self.stocks.warehouse_capacity);
+        self.stocks.clay = resources.clay().min(self.stocks.warehouse_capacity);
+        self.stocks.iron = resources.iron().min(self.stocks.warehouse_capacity);
+        self.stocks.crop = i64::from(resources.crop().min(self.stocks.granary_capacity));
+    }
+
+    pub fn set_stocks_fact(&mut self, stocks: VillageStocks) {
+        self.stocks = stocks;
+    }
+
+    /// Replaces the home army from a recorded outcome, updating derived upkeep only.
+    pub fn set_army_fact(&mut self, army: Option<Army>) {
+        self.army = army;
+        self.refresh_derived_state();
+    }
+
+    /// Sets an already resolved building outcome without charging costs or advancing time.
+    pub fn set_building_fact(&mut self, slot_id: u8, building: Option<Building>) {
+        self.buildings.retain(|entry| entry.slot_id != slot_id);
+        if let Some(building) = building {
+            self.buildings.push(VillageBuilding { slot_id, building });
+        }
+        self.buildings.sort_by_key(|entry| entry.slot_id);
+        self.refresh_derived_state();
     }
 
     /// Tries to deduct resources. Returns GameError::NotEnoughResources if funds are insufficient.
@@ -1246,6 +1295,12 @@ impl Village {
 
     /// Updates the village state (production, upkeep, etc...).
     fn update_state(&mut self) {
+        self.refresh_derived_state();
+        self.update_resources();
+    }
+
+    /// Recomputes production, upkeep and capacities without generating resources.
+    pub fn refresh_derived_state(&mut self) {
         self.population = 0;
         self.production = Default::default();
         let default_capacity = 800 * self.inferred_server_speed().max(1) as u32;
@@ -1303,7 +1358,6 @@ impl Village {
         self.production.calculate_effective_production();
         self.update_merchants_count();
         self.update_culture_points_production();
-        self.update_resources();
     }
 
     /// Updates culture points production based on all buildings.
@@ -1325,9 +1379,15 @@ impl Village {
     fn update_resources(&mut self) {
         let now = Utc::now();
         if self.updated_at > now {
-            // Guard against local clock skew/sleep/manual time adjustments:
-            // keep state monotonic so resource growth can resume on next reads/actions.
             self.updated_at = now;
+            return;
+        }
+        self.advance_resources_to(now);
+    }
+
+    /// Advances the economy to an explicit instant. Historical facts never rewind time.
+    pub fn advance_resources_to(&mut self, now: DateTime<Utc>) {
+        if now <= self.updated_at {
             return;
         }
         let time_elapsed = (now - self.updated_at).num_seconds() as f64;

@@ -16,15 +16,27 @@ impl PostgresReportRepository {
         report: &ProjectedReport,
         audience_player_ids: &[Uuid],
     ) -> Result<Uuid, ApplicationError> {
+        self.add_projected_at_in_tx(tx, report, audience_player_ids, Utc::now())
+            .await
+    }
+
+    /// Stores the logical creation time from the event envelope during live projection and replay.
+    pub async fn add_projected_at_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        report: &ProjectedReport,
+        audience_player_ids: &[Uuid],
+        created_at: DateTime<Utc>,
+    ) -> Result<Uuid, ApplicationError> {
         let report_id = report.id;
 
         sqlx::query(
             r#"
             INSERT INTO rm_reports (
                 id, report_type, payload, actor_player_id, actor_village_id,
-                target_player_id, target_village_id
+                target_player_id, target_village_id, created_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
         .bind(report_id)
@@ -34,6 +46,7 @@ impl PostgresReportRepository {
         .bind(report.actor_village_id.map(|v| v as i32))
         .bind(report.target_player_id)
         .bind(report.target_village_id.map(|v| v as i32))
+        .bind(created_at)
         .execute(&mut **tx)
         .await
         .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;

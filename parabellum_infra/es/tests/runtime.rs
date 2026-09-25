@@ -380,13 +380,12 @@ async fn runtime_replay_failure_restores_previous_projection() {
         // Failure after a valid foundation event has already been projected.
         sqlx::query("UPDATE es_events SET payload = '{}' WHERE aggregate_id = $1 AND stream_version = (SELECT MAX(stream_version) FROM es_events WHERE aggregate_id = $1)")
             .bind(id.to_string()).execute(&pool).await.unwrap();
-        let before = svc.get_village(id).await.unwrap();
+        let before = sqlx::query_scalar::<_, serde_json::Value>("SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1").bind(id as i32).fetch_one(&pool).await.unwrap();
         let result = replay.replay(ReplayRequest { target: ReplayTarget::All, mode: ReplayMode::Full,
             from_global_seq: 1, to_global_seq: None, aggregate_id: None }).await;
         assert!(result.is_err());
-        let after = svc.get_village(id).await.unwrap();
-        assert_eq!(after.village_name, before.village_name);
-        assert_eq!(after.stocks, before.stocks);
+        let after = sqlx::query_scalar::<_, serde_json::Value>("SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1").bind(id as i32).fetch_one(&pool).await.unwrap();
+        assert_eq!(after, before);
     }).await;
 }
 
@@ -500,5 +499,95 @@ async fn runtime_projector_failures_preserve_retryable_sqlstate() {
         let attempts: i32 = sqlx::query_scalar("SELECT attempts FROM rm_scheduled_actions LIMIT 1")
             .fetch_one(&pool).await.unwrap();
         assert_eq!(attempts, 5);
+    }).await;
+}
+
+#[tokio::test]
+async fn runtime_full_replay_equals_snapshot_tail_and_discards_legacy_snapshots() {
+    use mini_cqrs_es::Aggregate;
+    with_test_pool(|pool| async move {
+        let svc = VillageEsService::new(pool.clone());
+        let (player, id) = village(&pool, &svc).await;
+        svc.train_units(id, &TrainUnits { player_id: player, unit_idx: 0, building_name: BuildingName::Barracks, quantity: 2, speed: 1 }).await.unwrap();
+        let snapshots = PostgresSnapshotStore::new(crate::EventStoreDb::new(pool.clone()));
+        let prefix = snapshots.load_snapshot::<VillageAggregate>(&id).await.unwrap();
+        svc.process_due_actions(chrono::Utc::now() + chrono::Duration::days(1), 1).await.unwrap();
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(pool.clone()));
+        let (events, _) = store.load_events(std::any::type_name::<VillageAggregate>(), &id.to_string()).await.unwrap();
+        let mut full = VillageAggregate::default();
+        full.apply_events(&events).await.unwrap();
+        let mut resumed = prefix.get_payload::<VillageAggregate>().unwrap();
+        resumed.apply_events(&events.iter().filter(|e| e.version > prefix.version).cloned().collect::<Vec<_>>()).await.unwrap();
+        let canonical = serde_json::to_value(&full).unwrap();
+        assert_eq!(canonical, serde_json::to_value(&resumed).unwrap());
+        // A corrupt old snapshot must be bypassed, while the stored event stream remains unchanged.
+        sqlx::query("UPDATE es_snapshots SET state = jsonb_set(state - 'reducer_version', '{village,village,name}', '\"legacy-corruption\"') WHERE aggregate_id = $1")
+            .bind(id.to_string()).execute(&pool).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        let rebuilt = store.load_aggregate_in_tx::<VillageAggregate>(&mut tx, &id).await.unwrap();
+        assert_eq!(canonical, serde_json::to_value(rebuilt).unwrap());
+        tx.rollback().await.unwrap();
+        // Persisted economy and logical timestamps are stable across rebuilds on different wall-clock ticks.
+        let replay = ReplayService::new(pool.clone());
+        let request = ReplayRequest { target: ReplayTarget::Village, mode: ReplayMode::Full, from_global_seq: 1, to_global_seq: None, aggregate_id: None };
+        replay.replay(request.clone()).await.unwrap();
+        let before: serde_json::Value = sqlx::query_scalar("SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1").bind(id as i32).fetch_one(&pool).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        replay.replay(request).await.unwrap();
+        let after: serde_json::Value = sqlx::query_scalar("SELECT to_jsonb(v) FROM rm_village v WHERE village_id = $1").bind(id as i32).fetch_one(&pool).await.unwrap();
+        assert_eq!(before, after);
+        let mut later = VillageAggregate::default();
+        later.apply_events(&events).await.unwrap();
+        assert_eq!(canonical, serde_json::to_value(later).unwrap());
+    }).await;
+}
+
+/// Opt-in scale check; synthetic rename facts exercise history loading, not
+/// production battle payload sizes or overdue scheduler throughput.
+#[tokio::test]
+#[ignore = "50k-event diagnostic; run explicitly with --ignored --nocapture"]
+async fn runtime_large_history_cold_and_snapshot_load() {
+    use mini_cqrs_es::Aggregate;
+    with_test_pool(|pool| async move {
+        let service = VillageEsService::new(pool.clone());
+        let (player, id) = village(&pool, &service).await;
+        service.rename_village(id, &RenameVillage {
+            player_id: player, village_name: "Scale diagnostic".into(),
+        }).await.unwrap();
+        let base_version = snapshot_version(&pool, id).await.unwrap();
+        let aggregate_type = std::any::type_name::<VillageAggregate>();
+        // Generate rows in PostgreSQL rather than allocating the history in the test.
+        let inserted = sqlx::query(r#"
+            INSERT INTO es_events (event_id, aggregate_type, aggregate_id,
+                stream_version, event_type, payload, metadata, occurred_at)
+            SELECT gen_random_uuid()::text, e.aggregate_type, e.aggregate_id,
+                e.stream_version + n, e.event_type, e.payload, e.metadata, e.occurred_at
+            FROM es_events e CROSS JOIN generate_series(1, 50000) AS n
+            WHERE e.aggregate_type = $1 AND e.aggregate_id = $2 AND e.stream_version = $3
+        "#).bind(aggregate_type).bind(id.to_string()).bind(base_version as i64)
+            .execute(&pool).await.unwrap().rows_affected();
+        assert_eq!(inserted, 50000);
+        let store = PostgresEventStore::new(crate::EventStoreDb::new(pool.clone()));
+        let snapshots = PostgresSnapshotStore::new(crate::EventStoreDb::new(pool.clone()));
+        let started = std::time::Instant::now();
+        let mut tx = pool.begin().await.unwrap();
+        let aggregate = store.load_aggregate_in_tx::<VillageAggregate>(&mut tx, &id).await.unwrap();
+        let cold_ms = started.elapsed().as_millis();
+        assert_eq!(aggregate.version(), base_version + 50000);
+        assert_eq!(aggregate.village().village.name, "Scale diagnostic");
+        snapshots.save_in_tx(&mut tx, AggregateSnapshot::new(&aggregate, Some(aggregate.version())).unwrap()).await.unwrap();
+        tx.commit().await.unwrap();
+        let expected = serde_json::to_value(&aggregate).unwrap();
+        drop(aggregate);
+
+        let started = std::time::Instant::now();
+        for _ in 0..25 {
+            let mut tx = pool.begin().await.unwrap();
+            let loaded = store.load_aggregate_in_tx::<VillageAggregate>(&mut tx, &id).await.unwrap();
+            assert_eq!(serde_json::to_value(loaded).unwrap(), expected);
+            tx.rollback().await.unwrap();
+        }
+        println!("large_history_diagnostic: added_events=50000 page_size=256 cold_load_ms={cold_ms} warm_loads=25 warm_total_ms={} snapshot_json_bytes={}",
+            started.elapsed().as_millis(), serde_json::to_vec(&expected).unwrap().len());
     }).await;
 }

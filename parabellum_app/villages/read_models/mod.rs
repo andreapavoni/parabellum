@@ -16,3 +16,5 @@ pub use marketplace::{
     MarketplaceData, MerchantMovement, MerchantMovementDirection, MerchantMovementKind,
 };
 pub use village_army::VillageArmyStateView;
+
+pub mod buildings;

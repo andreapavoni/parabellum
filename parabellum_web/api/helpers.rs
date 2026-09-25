@@ -30,9 +30,23 @@ pub async fn authenticated_user(
         .await
         .map_err(map_token_error)?;
     validate_refresh_context(&claims, &refresh_session)?;
-    current_user_by_ids(state, claims.user_id, Some(claims.current_village_id))
+    let mut user = current_user_by_ids(state, claims.user_id, Some(claims.current_village_id))
         .await
-        .map_err(|_| ApiError::unauthorized("Authentication required"))
+        .map_err(|_| ApiError::unauthorized("Authentication required"))?;
+    if let Some(selected) = headers.get("X-Village-Id") {
+        let village_id = selected
+            .to_str()
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .ok_or_else(|| ApiError::bad_request("Invalid village id"))?;
+        user.village = user
+            .villages
+            .iter()
+            .find(|village| village.id == village_id && village.player_id == user.player.id)
+            .cloned()
+            .ok_or_else(|| ApiError::not_found("Village not available for the current player"))?;
+    }
+    Ok(user)
 }
 
 /// Parse `Authorization: Bearer <token>` from request headers.

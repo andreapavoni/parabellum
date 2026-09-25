@@ -96,6 +96,7 @@ impl PostgresVillageRepository {
             model,
             army,
             hero_resources,
+            self.read_at.unwrap_or_else(chrono::Utc::now),
         ))
     }
 
@@ -110,6 +111,7 @@ impl PostgresVillageRepository {
             model,
             army,
             hero_resources,
+            self.read_at.unwrap_or_else(chrono::Utc::now),
         ))
     }
 

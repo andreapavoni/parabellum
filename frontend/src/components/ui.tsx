@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 
-export function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
+export function cx(...classes: Array<JSX.HTMLAttributes<HTMLElement>["class"] | false | null>) {
+  return classes.map((value) => value && typeof value === "object" ? value.value : value).filter(Boolean).join(" ");
 }
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "warning" | "ghost";

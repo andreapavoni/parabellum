@@ -34,3 +34,7 @@ pub use village_army::VillageArmyUseCases;
 pub use village_profile::VillageProfileUseCases;
 pub use village_references::VillageReferenceUseCases;
 pub use village_state::VillageStateUseCases;
+
+pub mod building_overview;
+
+pub use building_overview::BuildingOverviewUseCases;

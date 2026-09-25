@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "test": "bun test frontend/src",
+    "typecheck": "tsc --noEmit",
     "build:js": "vite build",
     "build:dev": "vite build --mode development",
     "build:release": "vite build",

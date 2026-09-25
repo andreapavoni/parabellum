@@ -25,8 +25,17 @@ pub struct VillageArmyContext {
 /// Hydrates a domain `Village` from the village read model plus explicit army
 /// context.
 pub fn hydrate_village(model: VillageModel, armies: VillageArmyContext) -> Village {
+    hydrate_village_at(model, armies, chrono::Utc::now())
+}
+
+/// Hydrates and advances resources to a caller-selected instant.
+pub fn hydrate_village_at(
+    model: VillageModel,
+    armies: VillageArmyContext,
+    at: chrono::DateTime<chrono::Utc>,
+) -> Village {
     let busy_merchants = model.busy_merchants;
-    let mut village = Village::rehydrate(VillageSnapshot {
+    let mut village = Village::rehydrate_facts(VillageSnapshot {
         id: model.village_id,
         name: model.village_name,
         player_id: model.player_id,
@@ -46,6 +55,7 @@ pub fn hydrate_village(model: VillageModel, armies: VillageArmyContext) -> Villa
         updated_at: model.updated_at,
         parent_village_id: model.parent_village_id,
     });
+    village.advance_resources_to(at);
     village.busy_merchants = busy_merchants.min(village.total_merchants);
     village
 }

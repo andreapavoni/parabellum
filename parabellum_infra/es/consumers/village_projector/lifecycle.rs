@@ -74,6 +74,7 @@ impl VillageProjector {
             tribe.clone(),
             *parent_village_id,
             buildings.clone(),
+            self.event_at,
         );
         self.village
             .upsert_village_model_in_tx(tx, &model)
@@ -186,9 +187,9 @@ fn founded_village_model(
     tribe: parabellum_types::tribe::Tribe,
     parent_village_id: Option<u32>,
     buildings: Vec<parabellum_game::models::village::VillageBuilding>,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> VillageModel {
-    let now = chrono::Utc::now();
-    let village = Village::rehydrate(VillageSnapshot {
+    let village = Village::rehydrate_facts(VillageSnapshot {
         id: village_id,
         name: village_name.to_string(),
         player_id,

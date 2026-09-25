@@ -31,9 +31,28 @@ impl VillageEsService {
             }
         }
 
+        let mut metadata = EventMetadata::default();
+        // Current workflows decide battle/economy outcomes from processing-time
+        // state. Persist that instant; backdating those absolute stocks to the
+        // queue deadline would generate the intervening resources twice.
+        metadata.extra.insert(
+            "effective_at".into(),
+            serde_json::to_value(chrono::Utc::now())?,
+        );
+        if let Some(id) = action_id {
+            let due: chrono::DateTime<chrono::Utc> =
+                sqlx::query_scalar("SELECT execute_at FROM rm_scheduled_actions WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(CqrsError::domain_source)?;
+            metadata
+                .extra
+                .insert("scheduled_for".into(), serde_json::to_value(due)?);
+        }
         let mut grouped: Vec<(u32, Vec<NewEvent>)> = Vec::new();
         for (id, payload) in workflow_events {
-            let event = NewEvent::from_payload(payload, EventMetadata::default())?;
+            let event = NewEvent::from_payload(payload, metadata.clone())?;
             if let Some((_, events)) = grouped.iter_mut().find(|(stream_id, _)| *stream_id == id) {
                 events.push(event);
             } else {

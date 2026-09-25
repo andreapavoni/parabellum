@@ -22,13 +22,21 @@ use crate::ProjectionDb;
 #[derive(Debug, Clone)]
 pub struct PostgresVillageRepository {
     pool: PgPool,
+    read_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl PostgresVillageRepository {
     pub fn new(db: ProjectionDb) -> Self {
         Self {
             pool: db.pool().clone(),
+            read_at: None,
         }
+    }
+
+    /// Restricts projection reads to the persisted event time.
+    pub(crate) fn at_event_time(mut self, at: chrono::DateTime<chrono::Utc>) -> Self {
+        self.read_at = Some(at);
+        self
     }
 
     pub(super) fn pool(&self) -> &PgPool {

@@ -42,6 +42,11 @@ jobs:
       - name: Install Bun Dependencies
         run: bun install
 
+      - name: Check frontend
+        run: |
+          bun run typecheck
+          bun test frontend/src
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:

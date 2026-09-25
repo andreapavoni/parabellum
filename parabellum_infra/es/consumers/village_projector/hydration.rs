@@ -1,7 +1,7 @@
 //! Domain village hydration for projection workflows.
 
 use mini_cqrs_es::CqrsError;
-use parabellum_app::villages::hydrate_village;
+use parabellum_app::villages::hydrate_village_at;
 use parabellum_app::villages::models::VillageModel;
 use parabellum_game::models::village::Village;
 use sqlx::{Postgres, Transaction};
@@ -21,6 +21,6 @@ impl VillageProjector {
             .army_context_for_village_in_tx(tx, village_id)
             .await
             .map_err(CqrsError::domain_source)?;
-        Ok(hydrate_village(model, armies))
+        Ok(hydrate_village_at(model, armies, self.event_at))
     }
 }

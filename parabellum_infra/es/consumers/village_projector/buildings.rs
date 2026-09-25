@@ -80,7 +80,7 @@ impl VillageProjector {
                 .await
                 .map_err(CqrsError::domain_source)?;
             let mut village = self.load_village_state_in_tx(tx, village).await?;
-            village.store_resources(refund);
+            village.store_resources_fact(refund);
             self.apply_village_economy_facts_in_tx(
                 tx,
                 *village_id,
@@ -159,20 +159,15 @@ fn apply_building_level(
     level: u8,
     speed: i8,
 ) -> Result<(), CqrsError> {
-    if level == 0 {
-        return village
-            .remove_building_at_slot(slot_id, speed)
-            .map_err(CqrsError::domain_source);
-    }
-    if village.get_building_by_slot_id(slot_id).is_none() {
-        let building = Building::new(building_name, speed)
-            .at_level(level, speed)
-            .map_err(CqrsError::domain_source)?;
-        return village
-            .add_building_at_slot(building, slot_id)
-            .map_err(CqrsError::domain_source);
-    }
-    village
-        .set_building_level_at_slot(slot_id, level, speed)
-        .map_err(CqrsError::domain_source)
+    let building = if level == 0 && slot_id > 18 {
+        None
+    } else {
+        Some(
+            Building::new(building_name, speed)
+                .at_level(level, speed)
+                .map_err(CqrsError::domain_source)?,
+        )
+    };
+    village.set_building_fact(slot_id, building);
+    Ok(())
 }

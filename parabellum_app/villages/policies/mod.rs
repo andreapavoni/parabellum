@@ -13,3 +13,7 @@ pub mod building_cancellation;
 pub mod expansion;
 pub mod marketplace;
 pub mod reinforcement_control;
+
+pub mod building_preview;
+
+pub mod building_queue;

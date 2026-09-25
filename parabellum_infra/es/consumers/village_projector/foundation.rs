@@ -101,7 +101,7 @@ impl VillageProjector {
             .map_err(CqrsError::domain_source)?;
         let mut source = self.load_village_state_in_tx(tx, source).await?;
         source
-            .deduct_foundation_resources()
+            .deduct_resources_fact(&parabellum_game::models::village::Village::foundation_cost())
             .map_err(CqrsError::domain_source)?;
         self.apply_village_economy_facts_in_tx(
             tx,

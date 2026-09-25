@@ -2,10 +2,13 @@
 //!
 //! Scheduling validation lives on scheduling methods; completion methods assume
 //! work was already validated at scheduling time.
+use crate::villages::policies::building_queue::{
+    building_queue_capacity, ensure_queued_building_allows,
+};
 use chrono::Utc;
 use parabellum_game::models::{
     army::Army,
-    buildings::{Building, get_building_data},
+    buildings::Building,
     village::{AcademyResearch, Village, VillageBuilding, VillageSnapshot, VillageStocks},
 };
 use parabellum_types::{
@@ -76,7 +79,7 @@ struct PendingSmithyAction {
 
 impl Default for VillageState {
     fn default() -> Self {
-        let village = Village::rehydrate(VillageSnapshot {
+        let village = Village::rehydrate_facts(VillageSnapshot {
             id: 0,
             name: "village-0".to_string(),
             player_id: Uuid::nil(),
@@ -93,7 +96,7 @@ impl Default for VillageState {
             stocks: VillageStocks::default(),
             academy_research: AcademyResearch::default(),
             culture_points: 0,
-            updated_at: Utc::now(),
+            updated_at: chrono::DateTime::UNIX_EPOCH,
             parent_village_id: None,
         });
         Self {
@@ -125,7 +128,29 @@ impl VillageState {
         parent_village_id: Option<u32>,
         buildings: Vec<VillageBuilding>,
     ) -> Self {
-        let mut village = Village::rehydrate(VillageSnapshot {
+        Self::founded_at(
+            id,
+            name,
+            position,
+            tribe,
+            player_id,
+            parent_village_id,
+            buildings,
+            Utc::now(),
+        )
+    }
+
+    pub fn founded_at(
+        id: u32,
+        name: String,
+        position: Position,
+        tribe: Tribe,
+        player_id: Uuid,
+        parent_village_id: Option<u32>,
+        buildings: Vec<VillageBuilding>,
+        at: chrono::DateTime<Utc>,
+    ) -> Self {
+        let mut village = Village::rehydrate_facts(VillageSnapshot {
             id,
             name,
             player_id,
@@ -142,10 +167,10 @@ impl VillageState {
             stocks: VillageStocks::default(),
             academy_research: AcademyResearch::default(),
             culture_points: 0,
-            updated_at: Utc::now(),
+            updated_at: at,
             parent_village_id,
         });
-        let _ = village.set_army(None);
+        village.set_army_fact(None);
         Self {
             village,
             pending_building_actions: vec![],
@@ -198,45 +223,28 @@ impl VillageState {
             .is_some_and(|army| army.has_units(units))
     }
 
-    /// Sets stored resources to requested absolute quantities.
-    ///
-    /// This method first removes any excess from current stocks, then stores the
-    /// missing delta through domain storage logic, so final values are capped by
-    /// current warehouse/granary capacities.
-    pub fn set_resources(&mut self, resources: parabellum_types::common::ResourceGroup) {
-        let current = self.village.stored_resources();
-        let to_remove = parabellum_types::common::ResourceGroup::new(
-            current.lumber().saturating_sub(resources.lumber()),
-            current.clay().saturating_sub(resources.clay()),
-            current.iron().saturating_sub(resources.iron()),
-            current.crop().saturating_sub(resources.crop()),
-        );
-        let _ = self.village.deduct_resources(&to_remove);
-
-        let after_remove = self.village.stored_resources();
-        let to_add = parabellum_types::common::ResourceGroup::new(
-            resources.lumber().saturating_sub(after_remove.lumber()),
-            resources.clay().saturating_sub(after_remove.clay()),
-            resources.iron().saturating_sub(after_remove.iron()),
-            resources.crop().saturating_sub(after_remove.crop()),
-        );
-        self.village.store_resources(&to_add);
+    /// Applies absolute stocks from a fact; no implicit economy tick.
+    pub fn set_resources(&mut self, resources: ResourceGroup) {
+        self.village.set_resources_fact(&resources);
     }
 
-    pub fn detach_army(&mut self, army: &Army) {
+    pub fn detach_army(&mut self, army: &Army) -> Result<(), ApplicationError> {
         let mut next = self
             .village
             .army()
             .cloned()
             .unwrap_or_else(|| Army::new_village_army(&self.village));
-        let hero_id = army.hero().map(|hero| hero.id);
-        let _ = next.split_units(army.units().clone(), hero_id, self.village.id);
-        let next = if next.immensity() == 0 {
+        next.split_units(
+            army.units().clone(),
+            army.hero().map(|hero| hero.id),
+            self.village.id,
+        )?;
+        self.village.set_army_fact(if next.immensity() == 0 {
             None
         } else {
             Some(next)
-        };
-        let _ = self.village.set_army(next.as_ref());
+        });
+        Ok(())
     }
 
     pub fn set_building_level(
@@ -245,20 +253,14 @@ impl VillageState {
         building_name: BuildingName,
         level: u8,
         speed: i8,
-    ) {
-        if level == 0 {
-            let _ = self.village.remove_building_at_slot(slot_id, speed);
-            return;
-        }
-        if self.village.get_building_by_slot_id(slot_id).is_none()
-            && let Ok(building) = Building::new(building_name.clone(), speed).at_level(level, speed)
-        {
-            let _ = self.village.add_building_at_slot(building, slot_id);
-            return;
-        }
-        let _ = self
-            .village
-            .set_building_level_at_slot(slot_id, level, speed);
+    ) -> Result<(), ApplicationError> {
+        let building = if level == 0 && slot_id > 18 {
+            None
+        } else {
+            Some(Building::new(building_name, speed).at_level(level, speed)?)
+        };
+        self.village.set_building_fact(slot_id, building);
+        Ok(())
     }
 
     pub fn schedule_add_building(
@@ -481,9 +483,9 @@ impl VillageState {
         resources: &ResourceGroup,
         merchants_used: u8,
     ) -> Result<(), ApplicationError> {
-        self.village
-            .reserve_merchant_transfer(resources, merchants_used)
-            .map_err(ApplicationError::from)
+        self.village.deduct_resources_fact(resources)?;
+        self.village.busy_merchants = self.village.busy_merchants.saturating_add(merchants_used);
+        Ok(())
     }
 
     pub fn apply_merchant_return(&mut self, merchants_used: u8) {
@@ -545,15 +547,22 @@ impl VillageState {
         village_army
             .add_unit(unit, quantity)
             .map_err(ApplicationError::from)?;
-        self.village
-            .set_army(Some(&village_army))
-            .map_err(Into::into)
+        self.village.set_army_fact(Some(village_army));
+        Ok(())
     }
 
     pub fn merge_army_home(&mut self, army: &Army) -> Result<(), ApplicationError> {
-        self.village
-            .merge_army(army)
-            .map_err(ApplicationError::from)
+        let mut home = self
+            .village
+            .army()
+            .cloned()
+            .unwrap_or_else(|| Army::new_village_army(&self.village));
+        home.merge(army)?;
+        if army.hero().is_some() {
+            home.set_hero(army.hero());
+        }
+        self.village.set_army_fact(Some(home));
+        Ok(())
     }
 
     pub fn schedule_academy_research(
@@ -693,11 +702,7 @@ impl VillageState {
     }
 
     fn enforce_building_queue_capacity(&self) -> Result<(), ApplicationError> {
-        let limit = if matches!(self.village.tribe, Tribe::Roman) {
-            3usize
-        } else {
-            2usize
-        };
+        let limit = building_queue_capacity(&self.village.tribe);
         if self.pending_building_actions.len() >= limit {
             return Err(AppError::QueueLimitReached { queue: "building" }.into());
         }
@@ -740,28 +745,8 @@ impl VillageState {
             return Ok(());
         }
 
-        let candidate_data = get_building_data(candidate).map_err(ApplicationError::from)?;
         for action in &self.pending_building_actions {
-            let queued_name = action.building_name.clone();
-
-            if candidate_data
-                .rules
-                .conflicts
-                .iter()
-                .any(|conflict| conflict.0 == queued_name)
-            {
-                return Err(GameError::BuildingConflict(candidate.clone(), queued_name).into());
-            }
-
-            if let Ok(queued_data) = get_building_data(&queued_name)
-                && queued_data
-                    .rules
-                    .conflicts
-                    .iter()
-                    .any(|conflict| conflict.0 == *candidate)
-            {
-                return Err(GameError::BuildingConflict(candidate.clone(), queued_name).into());
-            }
+            ensure_queued_building_allows(candidate, &action.building_name)?;
         }
         Ok(())
     }
