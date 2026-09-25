@@ -1,41 +1,40 @@
+import { useAppStore } from "@/state/appStore";
 import { useMutation, useQueryClient } from "@tanstack/preact-query";
 import { api } from "@/lib/api";
-import { useGameContextQuery } from "@/query/hooks";
 import { queryKeys } from "@/query/keys";
 
 function useInvalidateGameState() {
   const queryClient = useQueryClient();
-  const gameContext = useGameContextQuery();
 
-  const invalidateCurrentVillage = async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.gameContext });
+  const invalidateCurrentVillage = async (villageId: number | undefined) => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.gameContextFor(villageId) });
   };
 
-  const invalidateBuildingCommand = async (slotId: number) => {
+  const invalidateBuildingCommand = async (slotId: number, villageId: number | undefined) => {
     await Promise.all([
-      invalidateCurrentVillage(),
-      queryClient.invalidateQueries({ queryKey: queryKeys.building(slotId) }),
+      invalidateCurrentVillage(villageId),
+      queryClient.invalidateQueries({ queryKey: queryKeys.building(villageId, slotId) }),
     ]);
   };
 
-  const invalidateCurrentVillageBuildings = async () => {
+  const invalidateCurrentVillageBuildings = async (villageId: number | undefined) => {
     await Promise.all([
-      invalidateCurrentVillage(),
-      queryClient.invalidateQueries({ queryKey: ["building"] }),
+      invalidateCurrentVillage(villageId),
+      queryClient.invalidateQueries({ queryKey: queryKeys.buildings(villageId) }),
     ]);
   };
 
-  const invalidateReports = async () => {
+  const invalidateReports = async (villageId: number | undefined) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.gameContext }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.gameContextFor(villageId) }),
       queryClient.invalidateQueries({ queryKey: ["reports"] }),
       queryClient.invalidateQueries({ queryKey: ["report"] }),
     ]);
   };
 
-  const invalidateMap = async (fieldId?: number) => {
+  const invalidateMap = async (fieldId: number | undefined, villageId: number | undefined) => {
     await Promise.all([
-      invalidateCurrentVillage(),
+      invalidateCurrentVillage(villageId),
       queryClient.invalidateQueries({ queryKey: ["mapRegion"] }),
       fieldId
         ? queryClient.invalidateQueries({ queryKey: queryKeys.mapField(fieldId) })
@@ -53,77 +52,91 @@ function useInvalidateGameState() {
 }
 
 export function useRenameVillageMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillage, invalidateMap } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.renameVillage,
-    onSuccess: async () => {
-      await Promise.all([invalidateCurrentVillage(), invalidateMap()]);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.renameVillage>[0]) => api.renameVillage(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
+      await Promise.all([invalidateCurrentVillage(villageId), invalidateMap(undefined, villageId)]);
     },
   });
 }
 
 export function useAddBuildingMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.addBuilding,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.addBuilding>[0]) => api.addBuilding(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useUpgradeBuildingMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.upgradeBuilding,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.upgradeBuilding>[0]) => api.upgradeBuilding(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useDowngradeBuildingMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const queryClient = useQueryClient();
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.downgradeBuilding,
-    onSuccess: async (_result, payload) => {
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.downgradeBuilding>[0]) => api.downgradeBuilding(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
       await Promise.all([
-        invalidateBuildingCommand(payload.slotId),
-        queryClient.invalidateQueries({ queryKey: queryKeys.building(19) }),
+        invalidateBuildingCommand(payload.slotId, villageId),
+        queryClient.invalidateQueries({ queryKey: queryKeys.building(villageId, 19) }),
       ]);
     },
   });
 }
 
 export function useCancelBuildingConstructionMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.cancelBuildingConstruction,
-    onSuccess: async () => {
-      await invalidateCurrentVillageBuildings();
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.cancelBuildingConstruction>[0]) => api.cancelBuildingConstruction(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
+      await invalidateCurrentVillageBuildings(villageId);
     },
   });
 }
 
 export function useTrainUnitsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.trainUnits,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.trainUnits>[0]) => api.trainUnits(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useAssignHeroPointsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const queryClient = useQueryClient();
   const { invalidateCurrentVillage } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.assignHeroPoints,
-    onSuccess: async () => {
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.assignHeroPoints>[0]) => api.assignHeroPoints(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
       await Promise.all([
-        invalidateCurrentVillage(),
+        invalidateCurrentVillage(villageId),
         queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
       ]);
     },
@@ -131,13 +144,15 @@ export function useAssignHeroPointsMutation() {
 }
 
 export function useResetHeroPointsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const queryClient = useQueryClient();
   const { invalidateCurrentVillage } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.resetHeroPoints,
-    onSuccess: async () => {
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.resetHeroPoints>[0]) => api.resetHeroPoints(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
       await Promise.all([
-        invalidateCurrentVillage(),
+        invalidateCurrentVillage(villageId),
         queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
       ]);
     },
@@ -145,13 +160,15 @@ export function useResetHeroPointsMutation() {
 }
 
 export function useSetHeroResourceFocusMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const queryClient = useQueryClient();
   const { invalidateCurrentVillage } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.setHeroResourceFocus,
-    onSuccess: async () => {
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.setHeroResourceFocus>[0]) => api.setHeroResourceFocus(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
       await Promise.all([
-        invalidateCurrentVillage(),
+        invalidateCurrentVillage(villageId),
         queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
       ]);
     },
@@ -159,13 +176,15 @@ export function useSetHeroResourceFocusMutation() {
 }
 
 export function useReviveHeroMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const queryClient = useQueryClient();
   const { invalidateCurrentVillage } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.reviveHero,
-    onSuccess: async () => {
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.reviveHero>[0]) => api.reviveHero(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
       await Promise.all([
-        invalidateCurrentVillage(),
+        invalidateCurrentVillage(villageId),
         queryClient.invalidateQueries({ queryKey: queryKeys.currentHero }),
       ]);
     },
@@ -173,129 +192,157 @@ export function useReviveHeroMutation() {
 }
 
 export function useResearchAcademyMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.researchAcademy,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.researchAcademy>[0]) => api.researchAcademy(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useResearchSmithyMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.researchSmithy,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.researchSmithy>[0]) => api.researchSmithy(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useSendResourcesMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand, invalidateReports } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.sendResources,
-    onSuccess: async (_result, payload) => {
-      await Promise.all([invalidateBuildingCommand(payload.slotId), invalidateReports()]);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.sendResources>[0]) => api.sendResources(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await Promise.all([invalidateBuildingCommand(payload.slotId, villageId), invalidateReports(villageId)]);
     },
   });
 }
 
 export function useCreateMarketplaceOfferMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.createMarketplaceOffer,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.createMarketplaceOffer>[0]) => api.createMarketplaceOffer(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useAcceptMarketplaceOfferMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.acceptMarketplaceOffer,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.acceptMarketplaceOffer>[0]) => api.acceptMarketplaceOffer(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useCancelMarketplaceOfferMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.cancelMarketplaceOffer,
-    onSuccess: async (_result, payload) => {
-      await invalidateBuildingCommand(payload.slotId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.cancelMarketplaceOffer>[0]) => api.cancelMarketplaceOffer(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await invalidateBuildingCommand(payload.slotId, villageId);
     },
   });
 }
 
 export function useSendTroopsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateBuildingCommand, invalidateReports } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.sendTroops,
-    onSuccess: async (_result, payload) => {
-      await Promise.all([invalidateBuildingCommand(payload.slotId), invalidateReports()]);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.sendTroops>[0]) => api.sendTroops(payload, villageId),
+    onSuccess: async (_result, payload, villageId) => {
+      await Promise.all([invalidateBuildingCommand(payload.slotId, villageId), invalidateReports(villageId)]);
     },
   });
 }
 
 export function useRecallTroopsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.recallTroops,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.recallTroops>[0]) => api.recallTroops(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useReleaseReinforcementsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.releaseReinforcements,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.releaseReinforcements>[0]) => api.releaseReinforcements(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useReleaseTrappedTroopsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.releaseTrappedTroops,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.releaseTrappedTroops>[0]) => api.releaseTrappedTroops(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useDisbandTrappedTroopsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.disbandTrappedTroops,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.disbandTrappedTroops>[0]) => api.disbandTrappedTroops(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useBuildTrapsMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.buildTraps,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.buildTraps>[0]) => api.buildTraps(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useCancelTroopMovementMutation() {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateCurrentVillageBuildings } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.cancelTroopMovement,
-    onSuccess: invalidateCurrentVillageBuildings,
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.cancelTroopMovement>[0]) => api.cancelTroopMovement(payload, villageId),
+    onSuccess: (_result, _payload, villageId) => invalidateCurrentVillageBuildings(villageId),
   });
 }
 
 export function useFoundVillageMutation(fieldId?: number) {
+  const villageId = useAppStore().session.currentVillageId;
   const { invalidateMap } = useInvalidateGameState();
   return useMutation({
-    mutationFn: api.foundVillage,
-    onSuccess: async () => {
-      await invalidateMap(fieldId);
+    onMutate: () => villageId,
+    mutationFn: (payload: Parameters<typeof api.foundVillage>[0]) => api.foundVillage(payload, villageId),
+    onSuccess: async (_result, _payload, villageId) => {
+      await invalidateMap(fieldId, villageId);
     },
   });
 }

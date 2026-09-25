@@ -486,6 +486,12 @@ Current village command concerns:
 Use-case modules live in `parabellum_app/villages/use_cases/<concern>.rs`.
 Request types live in `parabellum_app/villages/requests/<concern>.rs`.
 
+Building cancellation uses an app policy to interpret active building workflow
+rows. Infrastructure loads and decodes scheduled actions; the application
+policy selects the selected action plus dependent later actions on the same
+slot, calculates the prorated refund, and returns the command context. SQL
+repositories must not duplicate that cancellation/refund policy.
+
 #### Village Read Use Cases
 
 Village read use cases return app-facing query shapes. They should be explicit
@@ -601,6 +607,26 @@ Registration is a cross-context application workflow owned by
 registration back to `IdentityPort`; keep registration orchestration explicit in
 `RegistrationUseCases`.
 
+#### Refresh sessions
+
+`GameApplication` delegates refresh-session lifecycle operations to
+`identity::refresh_sessions::RefreshSessionUseCases`. The web layer signs access
+tokens and generates/hashes opaque refresh tokens; it holds no database pool and
+passes only hashes into the application facade. The infrastructure
+`PostgresRefreshSessionRepository` implements the session port. Migrations alone
+own the auth schema; HTTP startup performs no auth DDL.
+
+Rotation locks the user, then the old session, validates the locked session,
+revokes it and inserts its successor in one transaction. Failed insertion rolls
+back revocation. Concurrent rotation permits exactly one successor. Creating a
+session and revoking all sessions use the same user lock, so logout-all cannot
+miss a successor inserted by an overlapping rotation.
+
+Single-token logout targets the supplied session: if its row update wins,
+rotation fails; if rotation commits first, logout of the consumed token does not
+revoke the successor. Logout-all also revokes such successors. Village switching
+rejects expired/revoked sessions instead of silently updating zero rows.
+
 #### Scheduler
 
 Scheduler is an operational app concern. `SchedulerUseCases` owns the public
@@ -656,6 +682,21 @@ Projection repository contracts live under
 `projection_repositories::...` is the public app import path. Submodules exist
 to keep ownership clear; callers should prefer the re-export path unless they
 are editing the contract module itself.
+
+`rm_armies` is the canonical projected troop and dispatch-availability table.
+An army row's `village_id` is its home/origin village, `current_village_id` is
+where the army is currently hosted or travelling from, and `state` explains that
+placement (`home`, `stationed`, `moving`, or `trapped`). App-facing filters and
+context names should use these semantics directly. For example,
+`away_from_home` means `current_village_id != village_id`; `deployed` is only
+the village-context bucket for this village's armies stationed elsewhere.
+
+`rm_village_movements` is a viewing-village read model. A row means "this
+movement is visible to this village", not "this village owns the army". Movement
+visibility and army-composition visibility are separate concerns: scout arrivals
+do not produce target-visible rows at projection time, hostile incoming attacks
+and raids expose timing/type only, and army composition is exposed only when the
+app-facing `TroopMovement` says it is visible to the viewer.
 
 #### Village CQRS Models
 
@@ -770,6 +811,25 @@ explicit entrypoints instead:
 If a query needs to run in both modes, keep SQL construction and row conversion
 shared, not the transaction parameter itself.
 
+Scheduled-action reads should use the app-owned `ScheduledActionFilter` and
+typed row structs. Generic scheduled-action inserts, status updates, and stale
+processing requeue updates should use named query builders. Locking scheduler
+operations, such as claiming due actions with `FOR UPDATE SKIP LOCKED`, remain
+explicit write helpers because they are operational queue primitives.
+
+When a scheduled-action helper returns a specific workflow concept, such as a
+pending troop arrival or hero revival, expose a typed helper object with
+workflow-oriented methods instead of leaking raw JSON payload rows to service
+code.
+
+Service code that already has a `ScheduledAction` should use the app-owned
+`ScheduledAction::payload()` decoder. Infrastructure service modules should not
+deserialize scheduled-action workflow JSON directly.
+
+Queue read models may start from generic scheduled-action rows, but the mapper
+should decode app-owned workflow payloads and route by workflow semantics, not
+by storage details.
+
 ### Infrastructure Service Organization
 
 Infrastructure services are orchestration facades over repositories, CQRS
@@ -789,7 +849,8 @@ service helpers live in focused submodules:
   projector dispatch, and snapshot refresh mechanics;
 - `village_service/scheduler.rs` for due-action processing and operational
   scheduler coordination;
-- `village_service/queries/buildings.rs` for building cancellation read context;
+- `village_service/queries/buildings.rs` for loading scheduled building rows
+  and delegating cancellation context selection to the app policy;
 - `village_service/queries/heroes.rs` for hero read-model lookups;
 - `village_service/queries/marketplace.rs` for marketplace page read
   composition;
@@ -858,12 +919,25 @@ Report projectors should centralize report materialization through one helper
 that assigns the `ReportKind`, serializes the payload, stores actor/target
 context, and writes audience rows. Event-specific projector modules should build
 the report payload and audience rule only; they should not construct
-`ProjectedReport` rows directly.
+report rows directly.
+
+Troop movement projection rows are audience rows. Each `VillageMovement` must
+set `viewing_village_id` explicitly, and repositories must persist/query by
+that field. `direction` is presentation state from the viewing village's
+perspective; it must not be used to infer row ownership. Return movement rows
+are written only for audiences that should see them: the home village sees the
+incoming return, and a stationed village may see an outgoing return when a
+previously visible reinforcement is recalled. Scout arrivals are not visible to
+the target village before resolution; the target learns the result from
+generated reports only.
 
 Village movement queries should use the app-owned `VillageMovementFilter`.
 Every movement query is anchored to the viewing village and may optionally
 filter by viewing direction or movement type. Infrastructure translates those
 semantic filters to `rm_village_movements` columns and database enum values.
+When movement rows need village names, positions, owner ids, or tribe fallback
+for API output, service enrichment should load only the missing referenced
+villages, not every origin and target unconditionally.
 
 The village projection repository is the main read-model owner for `rm_village`
 rows and may refresh derived read state before returning a `VillageModel`.
@@ -894,7 +968,9 @@ entrypoints; shared construction should happen through typed projection/query
 builders rather than `Option<&mut Transaction>`.
 Helpers that commit village projection state changes belong in
 `villages/state_changes.rs`; `villages/writes.rs` should stay focused on
-full-model write SQL builder functions.
+full-model write SQL builder functions. Projector-facing village state changes
+are transaction-scoped; do not add standalone pool-backed convenience methods
+unless an app-facing repository contract requires them.
 
 Read helpers that fetch `VillageModel` rows and refresh them for application
 reads belong in `villages/reads.rs`; the repository trait impl should delegate
@@ -912,18 +988,30 @@ population, culture point, or resource ticking calculations in
 projector builds a domain-hydrated `VillageModel` and stores it through the
 full-model upsert path.
 
+Training and research projection follows the same domain-hydration rule when
+the event changes domain-owned village state. Research completion should mutate
+a hydrated domain `Village`, copy domain-owned state back into `VillageModel`,
+and store the full model. Unit training completion updates the canonical army
+projection because troop location lives outside `rm_village`. Projection-only
+state, such as trapper counters, may be applied directly to `VillageModel`.
+
+Battle projection keeps hero stats and army placement separate. Battle reports
+are the canonical source for hero health and experience updates. Army projection
+only stores armies that still contain troops or a surviving hero; dead heroes are
+detached from projected army rows after stats have been written from the report.
+
 Concern-specific snapshot queries owned by `rm_village`, such as expansion
 culture and ownership counters, should live in focused helper modules like
 `villages/expansion.rs` and return app-owned snapshot structs through typed
 SQLx row structs.
 
-Pure derived read-model calculations belong in `villages/refresh.rs`; repository
+Read-model refresh composition belongs in `villages/refresh.rs`; repository
 methods should load the required context and delegate the synchronous refresh
-calculation there. Cross-projection lookups used only by refresh, such as active
-hero resource bonuses, should live in focused helper modules instead of the main
+there. Cross-projection lookups used only by refresh, such as active hero
+resource bonuses, should live in focused helper modules instead of the main
 repository body. Gameplay formulas used during refresh, such as army upkeep
-modifiers and loyalty regeneration, must be delegated to `parabellum_game`
-domain helpers.
+modifiers, loyalty regeneration, flat production bonuses, and elapsed stock
+ticking, must be delegated to `parabellum_game` domain helpers.
 
 Repository contracts should follow projection ownership. Marketplace offer
 reads belong to `MarketplaceRepository` because they read `rm_marketplace_offers`.
@@ -933,12 +1021,17 @@ they are derived from scheduled merchant actions.
 ## CQRS/ES Boundaries
 
 - Aggregate granularity: one village aggregate per village id (`u32`).
-- The live aggregate runtime uses `SnapshotAggregateManager` with
-  `es_snapshots` for aggregate loading. Normal commands save snapshots through
-  the CQRS runtime after events are appended and projected.
-- Scheduled workflow facts are appended outside `SimpleCqrs::execute`, so the
-  workflow append boundary refreshes snapshots for every affected aggregate
-  stream after the workflow events are committed.
+- `VillageCqrsRuntime` implements the CQRS command boundary in infrastructure.
+  It loads `es_snapshots` plus the newer event tail, paging at 256 events with a
+  fixed stream head. Missing snapshots rebuild from paged history; storage and
+  deserialization errors propagate rather than producing an empty aggregate.
+- Commands commit events, synchronous projections, and their snapshot in one SQL
+  transaction. Scheduled workflows use the same loading policy and atomically
+  update snapshots for every affected stream alongside their events, projections,
+  and operational completion status.
+- Snapshot upserts never replace a newer version with an older one. Stream append
+  locks are acquired in stable order, while canonical cross-stream event order
+  follows workflow order (source facts may need to precede target facts).
 - Projectors run synchronously in the command/workflow transaction. There is no
   projector-offset table because offsets are only needed for asynchronous
   catch-up consumers.
@@ -967,15 +1060,29 @@ Scheduled payloads use a strict variant shape with workflow data under
 Execution model:
 1. scheduler claims due `pending` actions into `processing`,
 2. executes deterministic workflow fact production,
-3. terminally marks each action as `completed` or `failed`.
+3. locks the persisted action row, verifies it is still `processing`, and commits
+   `completed` together with its events, projections, and snapshots,
+4. repeated delivery of a terminal/cancelled action cannot append effects.
 
 Recovery model:
 1. at tick start, stale `processing` rows (older than recovery threshold) are requeued to `pending`,
-2. batch failures do not leave actions indefinitely in `processing`.
+2. batch failures do not leave actions indefinitely in `processing`,
+3. optimistic conflicts and typed transient SQL failures retry with exponential
+   dispatch backoff (capped at 60 seconds), up to five persisted claim attempts;
+   permanent failures become `failed`,
+4. a delayed failure handler cannot overwrite an already committed completion,
+5. advisory-lock connections are closed on error/cancellation unless explicitly
+   unlocked; locked sessions are never returned to the pool.
 
 Replay model:
 1. replay rebuilds read models from event facts only,
-2. replay does not recreate or mutate operational queue rows (`rm_scheduled_actions`).
+2. replay does not recreate or mutate operational queue rows (`rm_scheduled_actions`),
+3. full replay requires complete history (`--from 1`, no `--to`/`--aggregate-id`);
+   filtered diagnostic windows remain available in dry-run mode,
+4. reset and rebuild share one transaction; failure or cancellation rolls both back,
+5. full replay takes a SHARE lock on `es_events`; live writers acquire their table
+   lock before loading state. Rebuilds block event writers and belong in a
+   maintenance window. This is an atomic maintenance rebuild, not online staging.
 
 Workflow module responsibilities:
 - `parabellum_app` owns scheduled workflow payload contracts and aggregate fact
@@ -1034,7 +1141,9 @@ transactional append boundary:
 1. collect workflow domain events grouped by target aggregate stream,
 2. load each stream expected version,
 3. append all grouped streams in one DB transaction (`es_events`),
-4. project resulting stored events in `global_seq` order.
+4. project resulting stored events in `global_seq` order,
+5. update each affected aggregate snapshot and scheduled completion (if any),
+6. commit all effects together.
 
 Current usage:
 - attack battle resolution appends:
@@ -1051,6 +1160,16 @@ Current usage:
 - marketplace create/cancel reservation effects:
   - `MarketplaceOfferReservationAppliedToVillage` carries owner stocks/merchant reservation state
   - `MarketplaceOfferReservationReleasedFromVillage` carries owner refund/merchant release state
+
+Projection rule:
+- Cross-stream outcome events are authoritative for the target stream state they
+  describe. A projector may load the previous target read model as a base and
+  may hydrate a domain aggregate to normalize derived state, but it must not
+  re-derive canonical outcome fields from another read row. For example,
+  `BattleOutcomeAppliedToVillage` carries the post-battle target owner, tribe,
+  parent village, loyalty, buildings, production, stocks, trapper state, and
+  surviving target armies; conquest projection uses those facts instead of
+  looking up the source village to infer the target tribe.
 
 Failure semantics:
 - fail fast on any stream conflict (`CqrsError::Conflict`)
@@ -1272,3 +1391,28 @@ Projector rules:
 - HTTP API is served under `/api/v1`.
 - Workflow fact contracts are documented in [`docs/EVENT_CONTRACTS.md`](docs/EVENT_CONTRACTS.md).
 - Machine-readable contract entrypoint: `GET /api/v1/openapi.json`.
+- API route modules should keep transport DTO serialization separate from
+  larger response-shaping helpers. When one endpoint has a substantial mapper,
+  keep that mapper in a private submodule named by endpoint concern, such as
+  `api/buildings/rally_cards.rs`, while app-level visibility and game rules
+  remain in `parabellum_app` and `parabellum_game`.
+
+## Runtime Operations and Memory Diagnostics
+
+The server supervises the scheduler task and handles SIGINT/SIGTERM. Shutdown
+stops accepting HTTP work and signals the scheduler to stop after its current
+batch, with bounded waits before cancellation. The logging guard is owned by each
+binary until exit, so buffered logs can flush. Scheduler intervals skip missed
+ticks instead of generating catch-up bursts.
+
+Set `RUST_LOG=info,parabellum_infra::es::stores::aggregate=debug` during diagnosis
+to record aggregate ID, snapshot/head versions, tail events loaded, and load time.
+Normal work with current snapshots should load zero historical events; recovery
+loads only the missing tail in bounded pages. These logs complement a heap profile;
+RSS alone does not establish a retained-allocation leak.
+
+Migration `20260922120000_add_scheduled_action_attempts` adds the persistent retry
+counter. Failed operational actions remain available for diagnosis. No automatic
+queue/history deletion is introduced: completed action rows currently provide the
+scheduled-delivery deduplication guard, so retention requires a durable replacement
+before pruning them. Apply normal database backups before upgrading.

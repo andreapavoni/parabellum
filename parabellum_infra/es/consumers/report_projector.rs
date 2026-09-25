@@ -1,5 +1,4 @@
 use mini_cqrs_es::{CqrsError, EventConsumer, StoredEvent};
-use parabellum_app::identity::PlayerRepository;
 use parabellum_app::villages::VillageEvent;
 use parabellum_app::villages::models::VillageModel;
 use parabellum_app::villages::projection_repositories::{
@@ -22,6 +21,7 @@ mod reinforcements;
 #[derive(Debug, Clone)]
 pub struct ReportProjector {
     pool: PgPool,
+    event_at: chrono::DateTime<chrono::Utc>,
     villages: PostgresVillageRepository,
     armies: PostgresArmyRepository,
     reports: PostgresReportRepository,
@@ -85,6 +85,7 @@ impl ReportProjector {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool: pool.clone(),
+            event_at: chrono::DateTime::UNIX_EPOCH,
             villages: PostgresVillageRepository::new(crate::ProjectionDb::new(pool.clone())),
             armies: PostgresArmyRepository::new(crate::ProjectionDb::new(pool.clone())),
             reports: PostgresReportRepository::new(crate::ProjectionDb::new(pool.clone())),
@@ -92,13 +93,15 @@ impl ReportProjector {
         }
     }
 
-    pub(super) async fn player_username(&self, player_id: Uuid) -> Result<String, CqrsError> {
-        let player = self
-            .players
-            .get_by_id(player_id)
+    pub(super) async fn player_username(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        player_id: Uuid,
+    ) -> Result<String, CqrsError> {
+        self.players
+            .username_in_tx(tx, player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        Ok(player.username)
+            .map_err(CqrsError::domain_source)
     }
 
     pub(super) async fn try_village_in_tx(
@@ -108,13 +111,16 @@ impl ReportProjector {
     ) -> Result<Option<VillageModel>, CqrsError> {
         match self.villages.get_by_village_id_in_tx(tx, village_id).await {
             Ok(v) => Ok(Some(v)),
-            Err(_) => {
+            Err(parabellum_types::errors::ApplicationError::Db(
+                parabellum_types::errors::DbError::VillageNotFound(_),
+            )) => {
                 warn!(
                     village_id,
                     "ReportProjector skipping event because village read model was not found"
                 );
                 Ok(None)
             }
+            Err(error) => Err(CqrsError::domain_source(error)),
         }
     }
 
@@ -141,7 +147,7 @@ impl ReportProjector {
                     .limit(1),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let target_home_army = target_home_armies.pop();
         let target_reinforcements = self
             .armies
@@ -152,9 +158,9 @@ impl ReportProjector {
                     .state(ArmyState::Stationed),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let source_player = self.player_username(source.player_id).await?;
-        let target_player = self.player_username(target.player_id).await?;
+            .map_err(CqrsError::domain_source)?;
+        let source_player = self.player_username(tx, source.player_id).await?;
+        let target_player = self.player_username(tx, target.player_id).await?;
 
         Ok(Some(SourceTargetReportContext {
             source,
@@ -180,7 +186,7 @@ impl ReportProjector {
         projection: ReportProjection,
     ) -> Result<(), CqrsError> {
         self.reports
-            .add_projected_in_tx(
+            .add_projected_at_in_tx(
                 tx,
                 &ProjectedReport {
                     id: projection.id,
@@ -193,9 +199,10 @@ impl ReportProjector {
                     target_village_id: projection.target_village_id,
                 },
                 &projection.audience_player_ids,
+                self.event_at,
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         Ok(())
     }
@@ -208,28 +215,33 @@ impl ReportProjector {
         if !event.aggregate_type.contains("VillageAggregate") {
             return Ok(());
         }
+        let mut projector = self.clone();
+        projector.event_at = parabellum_app::villages::effective_event_time(event)?;
+        projector.villages = projector
+            .villages
+            .at_event_time(parabellum_app::villages::effective_event_time(event)?);
         let projected_report_id = Self::projected_report_id(event);
 
         let domain_event = event.get_payload::<VillageEvent>()?;
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_reinforcement_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_marketplace_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self
+        if let Some(result) = projector
             .project_battle_report_in_tx(tx, projected_report_id, &domain_event)
             .await
         {
             return result;
         }
-        if let Some(result) = self.project_read_state_in_tx(tx, &domain_event).await {
+        if let Some(result) = projector.project_read_state_in_tx(tx, &domain_event).await {
             return result;
         }
 
@@ -239,15 +251,37 @@ impl ReportProjector {
 
 impl EventConsumer for ReportProjector {
     async fn process(&self, event: &StoredEvent) -> Result<(), CqrsError> {
-        let mut dbtx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        let mut dbtx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
         self.process_in_tx(&mut dbtx, event).await?;
-        dbtx.commit()
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+        dbtx.commit().await.map_err(CqrsError::domain_source)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn optional_village_skips_absence_but_propagates_storage_failure() {
+        let (pool, _database) = crate::test_support::IsolatedTestDatabase::create()
+            .await
+            .unwrap();
+        let projector = ReportProjector::new(pool.clone());
+        let mut tx = pool.begin().await.unwrap();
+        assert!(
+            projector
+                .try_village_in_tx(&mut tx, 123)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        sqlx::query("ALTER TABLE rm_village RENAME TO unavailable_village")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let error = projector.try_village_in_tx(&mut tx, 123).await.unwrap_err();
+        assert!(matches!(error, CqrsError::DomainSource(_)));
+        tx.rollback().await.unwrap();
+        pool.close().await;
     }
 }

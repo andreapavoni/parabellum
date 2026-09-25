@@ -37,14 +37,14 @@ impl ReportProjector {
             .reports
             .mark_as_read_in_tx(tx, *report_id, *player_id, *read_at)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if updated {
             return Ok(());
         }
         self.reports
             .mark_latest_unread_as_read_before_in_tx(tx, *player_id, *read_at)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         Ok(())
     }
 }

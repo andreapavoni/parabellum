@@ -7,7 +7,7 @@
 //! for moving armies.
 
 use parabellum_app::villages::models::VillageModel;
-use parabellum_app::villages::{VillageArmyContext, hydrate_village};
+use parabellum_app::villages::{VillageArmyContext, hydrate_village_at};
 use parabellum_types::common::ResourceGroup;
 
 /// Recomputes derived read fields before returning or storing a village model.
@@ -15,9 +15,10 @@ pub(super) fn refresh_materialized_village_state(
     model: VillageModel,
     army_context: VillageArmyContext,
     hero_resources: ResourceGroup,
+    at: chrono::DateTime<chrono::Utc>,
 ) -> VillageModel {
     let moving_armies = army_context.moving.clone();
-    let mut hydrated = hydrate_village(model.clone(), army_context);
+    let mut hydrated = hydrate_village_at(model.clone(), army_context, at);
     let busy_merchants = model.busy_merchants;
     let previous_updated_at = model.updated_at;
     let mut refreshed = model;
@@ -32,12 +33,12 @@ pub(super) fn refresh_materialized_village_state(
             ));
     refreshed.production.calculate_effective_production();
     refreshed.stocks = hydrated.stocks().clone();
-    apply_hero_resource_read_projection(&mut refreshed, previous_updated_at, hero_resources);
+    apply_hero_resource_read_projection(&mut refreshed, previous_updated_at, hero_resources, at);
     refreshed.population = hydrated.population;
     refreshed.culture_points_production = hydrated.culture_points_production;
     refreshed.total_merchants = hydrated.total_merchants;
 
-    let loyalty_elapsed = chrono::Utc::now() - refreshed.loyalty_updated_at;
+    let loyalty_elapsed = at - refreshed.loyalty_updated_at;
     hydrated.regenerate_loyalty(
         loyalty_elapsed,
         parabellum_app::config::Config::from_env().speed as f64,
@@ -56,63 +57,18 @@ fn apply_hero_resource_read_projection(
     refreshed: &mut VillageModel,
     previous_updated_at: chrono::DateTime<chrono::Utc>,
     hero_resources: ResourceGroup,
+    at: chrono::DateTime<chrono::Utc>,
 ) {
     if hero_resources == ResourceGroup::default() {
         return;
     }
 
-    refreshed.production.effective.lumber = refreshed
+    refreshed
         .production
-        .effective
-        .lumber
-        .saturating_add(hero_resources.lumber());
-    refreshed.production.effective.clay = refreshed
-        .production
-        .effective
-        .clay
-        .saturating_add(hero_resources.clay());
-    refreshed.production.effective.iron = refreshed
-        .production
-        .effective
-        .iron
-        .saturating_add(hero_resources.iron());
-    refreshed.production.effective.crop = refreshed
-        .production
-        .effective
-        .crop
-        .saturating_add(hero_resources.crop() as i64);
-
-    let elapsed = (chrono::Utc::now() - previous_updated_at).num_seconds() as f64;
-    if elapsed <= 0.0 {
-        return;
-    }
-
-    let add = |current: u32, per_hour: u32, capacity: u32| -> u32 {
-        (current as f64 + elapsed * (per_hour as f64 / 3600.0))
-            .min(capacity as f64)
-            .max(0.0)
-            .floor() as u32
-    };
-    refreshed.stocks.lumber = add(
-        refreshed.stocks.lumber,
-        hero_resources.lumber(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.clay = add(
-        refreshed.stocks.clay,
-        hero_resources.clay(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.iron = add(
-        refreshed.stocks.iron,
-        hero_resources.iron(),
-        refreshed.stocks.warehouse_capacity,
-    );
-    refreshed.stocks.crop = add(
-        refreshed.stocks.crop.max(0) as u32,
-        hero_resources.crop(),
-        refreshed.stocks.granary_capacity,
-    ) as i64;
+        .add_flat_effective_production(&hero_resources);
+    refreshed
+        .stocks
+        .store_hourly_production(&hero_resources, at - previous_updated_at);
 }
 
 fn moving_armies_upkeep_for_read_projection(

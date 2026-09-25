@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::ProjectionDb;
 
-use rows::DbVillageMovementPayloadRow;
+use rows::DbVillageMovementRow;
 
 /// Postgres-backed repository for village movement projections.
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ impl VillageMovementRepository for PostgresVillageMovementRepository {
         &self,
         filter: VillageMovementFilter,
     ) -> Result<Vec<VillageMovement>, ApplicationError> {
-        let rows: Vec<DbVillageMovementPayloadRow> = queries::village_movement_list_query(filter)
+        let rows: Vec<DbVillageMovementRow> = queries::village_movement_list_query(filter)
             .build_query_as()
             .fetch_all(&self.pool)
             .await

@@ -1,3 +1,4 @@
+import { useAppStore } from "@/state/appStore";
 import { useQuery } from "@tanstack/preact-query";
 import { api } from "@/lib/api";
 import { gameContextQueryOptions, sessionQueryOptions } from "@/query/options";
@@ -11,9 +12,10 @@ export function useSessionQuery(enabled = true) {
 }
 
 export function useGameContextQuery(enabled = true) {
+  const villageId = useAppStore().session.currentVillageId;
   return useQuery({
-    ...gameContextQueryOptions(),
-    enabled,
+    ...gameContextQueryOptions(villageId),
+    enabled: enabled && villageId !== undefined,
     staleTime: 30_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -29,9 +31,11 @@ export function useCurrentHeroQuery(enabled = true) {
 }
 
 export function useBuildingQuery(slotId: number) {
+  const villageId = useAppStore().session.currentVillageId;
   return useQuery({
-    queryKey: queryKeys.building(slotId),
-    queryFn: () => api.building(slotId),
+    queryKey: queryKeys.building(villageId, slotId),
+    queryFn: ({ signal }) => api.building(villageId!, slotId, signal),
+    enabled: villageId !== undefined,
   });
 }
 

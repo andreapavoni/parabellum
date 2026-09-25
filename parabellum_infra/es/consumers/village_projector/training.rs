@@ -1,7 +1,8 @@
 //! Unit training and research projection.
 
 use mini_cqrs_es::CqrsError;
-use parabellum_app::villages::VillageEvent;
+use parabellum_app::villages::{VillageEvent, apply_domain_village_state};
+use parabellum_game::models::village::Village;
 use sqlx::{Postgres, Transaction};
 
 use crate::es::consumers::village_projector::VillageProjector;
@@ -96,12 +97,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         current.trapper = trapper;
         self.village
             .store_village_model_in_tx(tx, &current)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_unit_training_scheduled(
@@ -134,18 +135,18 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let player_id = current.player_id;
         let mut village = self.load_village_state_in_tx(tx, current).await?;
         village
             .add_trained_units_home(unit.clone(), *quantity_trained)
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let next_army = village.army().cloned();
         if let Some(army) = &next_army {
             self.armies
                 .upsert_home_in_tx(tx, army, player_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
         Ok(())
     }
@@ -175,21 +176,12 @@ impl VillageProjector {
                 "project_academy_research_completed called with non-AcademyResearchCompleted event"
             );
         };
-        let current = self
-            .village
-            .get_by_village_id_in_tx(tx, *village_id)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut village = self.load_village_state_in_tx(tx, current.clone()).await?;
-        village
-            .research_academy(unit.clone())
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut next = current.clone();
-        next.academy_research = village.academy_research().clone();
-        self.village
-            .store_village_model_in_tx(tx, &next)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+        self.apply_village_domain_change_in_tx(tx, *village_id, |village| {
+            village
+                .research_academy(unit.clone())
+                .map_err(CqrsError::domain_source)
+        })
+        .await
     }
 
     async fn project_smithy_research_completed(
@@ -205,20 +197,31 @@ impl VillageProjector {
                 "project_smithy_research_completed called with non-SmithyResearchCompleted event"
             );
         };
-        let current = self
+        self.apply_village_domain_change_in_tx(tx, *village_id, |village| {
+            village
+                .upgrade_smithy(unit.clone())
+                .map_err(CqrsError::domain_source)
+        })
+        .await
+    }
+
+    async fn apply_village_domain_change_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        village_id: u32,
+        change: impl FnOnce(&mut Village) -> Result<(), CqrsError>,
+    ) -> Result<(), CqrsError> {
+        let mut model = self
             .village
-            .get_by_village_id_in_tx(tx, *village_id)
+            .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut village = self.load_village_state_in_tx(tx, current.clone()).await?;
-        village
-            .upgrade_smithy(unit.clone())
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        let mut next = current.clone();
-        next.smithy_upgrades = *village.smithy();
+            .map_err(CqrsError::domain_source)?;
+        let mut village = self.load_village_state_in_tx(tx, model.clone()).await?;
+        change(&mut village)?;
+        apply_domain_village_state(&mut model, &village);
         self.village
-            .store_village_model_in_tx(tx, &next)
+            .store_village_model_in_tx(tx, &model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }

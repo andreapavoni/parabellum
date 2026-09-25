@@ -52,7 +52,7 @@ impl VillageProjector {
         self.armies
             .upsert_moving_in_tx(tx, army, *source_village_id, *player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if let Some(hero) = army.hero() {
             self.project_hero_placement_in_tx(
                 tx,
@@ -67,6 +67,7 @@ impl VillageProjector {
             .await?;
 
         let outgoing = VillageMovement {
+            viewing_village_id: *source_village_id,
             movement_id: *movement_id,
             movement_type: MovementType::FoundVillage,
             direction: MovementDirection::Outgoing,
@@ -91,16 +92,16 @@ impl VillageProjector {
         self.movements
             .upsert_in_tx(tx, &outgoing)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
 
         let source = self
             .village
             .get_by_village_id_in_tx(tx, *source_village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut source = self.load_village_state_in_tx(tx, source).await?;
         source
-            .deduct_foundation_resources()
+            .deduct_resources_fact(&parabellum_game::models::village::Village::foundation_cost())
             .map_err(CqrsError::domain_source)?;
         self.apply_village_economy_facts_in_tx(
             tx,
@@ -129,10 +130,10 @@ impl VillageProjector {
         self.movements
             .delete_by_movement_id_in_tx(tx, *movement_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.armies
             .delete_in_tx(tx, *army_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }

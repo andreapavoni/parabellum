@@ -4,6 +4,14 @@
 //! describing the target slot plus endpoint-specific sections (training, expansion,
 //! academy, smithy, marketplace, rally point).
 
+mod overview_mapping;
+mod rally_cards;
+
+use parabellum_app::villages::{
+    read_models::buildings::{BuildingOverview, BuildingSlotOverview, BuildingUpgradePreview},
+    requests::building_overview::GetBuildingOverviewRequest,
+};
+
 use std::collections::{HashMap, HashSet};
 
 use axum::{
@@ -21,18 +29,17 @@ use parabellum_app::{
     villages::read_models::{
         AcademyQueueItem, BuildingQueueItem, MarketplaceData, MerchantMovement,
         MerchantMovementDirection, MerchantMovementKind, SmithyQueueItem, TrainingQueueItem,
-        TrapQueueItem, TroopMovementType, VillageArmyStateView, VillageTroopMovements,
+        TrapQueueItem, VillageArmyStateView,
     },
 };
 use parabellum_game::models::{
-    buildings::{Building, get_building_data},
     marketplace::MarketplaceOffer,
     smithy::smithy_upgrade_cost_for_unit,
     trapper::{TRAP_BUILD_TIME_SECS, TRAP_COST, Trapper},
     village::VillageBuilding,
 };
 use parabellum_types::{
-    army::{TroopSet, UnitGroup, UnitName, UnitRole},
+    army::{UnitGroup, UnitName, UnitRole},
     buildings::{BuildingName, BuildingRequirement},
     common::ResourceGroup,
     errors::ApplicationError,
@@ -47,6 +54,9 @@ use crate::{
 
 use super::authenticated_user;
 use super::error_mapping::map_application_error;
+use rally_cards::{
+    ArmyAction, ArmyCardData, ArmyCategory, MovementKind, prepare_rally_point_cards,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -454,50 +464,6 @@ pub struct RallySendableUnitDto {
     pub is_researched: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum MovementKind {
-    Attack,
-    Raid,
-    Scout,
-    Reinforcement,
-    Return,
-    FoundVillage,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum ArmyCategory {
-    Stationed,
-    Reinforcement,
-    Deployed,
-    Trapped,
-    Incoming,
-    Outgoing,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum ArmyAction {
-    Recall { army_id: String },
-    Release { army_id: String },
-    Cancel { movement_id: String },
-    ReleaseTrapped { army_id: String },
-    DisbandTrapped { army_id: String },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct ArmyCardData {
-    village_id: u32,
-    village_name: Option<String>,
-    position: Option<Position>,
-    units: TroopSet,
-    has_hero: bool,
-    tribe: Tribe,
-    category: ArmyCategory,
-    movement_kind: Option<MovementKind>,
-    arrives_at: Option<chrono::DateTime<chrono::Utc>>,
-    bounty: Option<ResourceGroup>,
-    action_button: Option<ArmyAction>,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionDto {
@@ -526,146 +492,220 @@ pub async fn building_detail(
     }
 
     let user = authenticated_user(&state, &headers).await?;
-    let village_model = state
+    let BuildingOverview {
+        server_time,
+        village: village_model,
+        queues,
+        queue_full: building_queue_full,
+        slot: overview_slot,
+    } = state
         .game_app
-        .get_village_state(user.village.id)
+        .get_building_overview(GetBuildingOverviewRequest {
+            player_id: user.player.id,
+            village_id: user.village.id,
+            slot_id,
+        })
         .await
-        .map_err(|err| map_application_error("unable_to_load_village", err))?;
-    let queues = state
-        .game_app
-        .get_village_queues(user.village.id)
-        .await
-        .map_err(|err| map_application_error("unable_to_load_village_queues", err))?;
-    let stored = user.village.stored_resources();
-    let building_queue_capacity: usize =
-        if matches!(user.village.tribe, parabellum_types::tribe::Tribe::Roman) {
-            3
-        } else {
-            2
-        };
-    let building_queue_full = queues.building.len() >= building_queue_capacity;
-    let slot = user.village.get_building_by_slot_id(slot_id);
+        .map_err(|err| map_application_error("unable_to_load_building_overview", err))?;
+    let stored = village_model.stocks.stored();
 
-    let detail = if let Some(slot) = slot {
-        let building_type = match slot.building.name {
-            BuildingName::Barracks
-            | BuildingName::GreatBarracks
-            | BuildingName::Stable
-            | BuildingName::GreatStable
-            | BuildingName::Workshop
-            | BuildingName::GreatWorkshop => BuildingTypeDto::Training,
-            BuildingName::Residence | BuildingName::Palace => BuildingTypeDto::Expansion,
-            BuildingName::Academy => BuildingTypeDto::Academy,
-            BuildingName::Smithy => BuildingTypeDto::Smithy,
-            BuildingName::Marketplace => BuildingTypeDto::Marketplace,
-            BuildingName::RallyPoint => BuildingTypeDto::RallyPoint,
-            _ => BuildingTypeDto::Generic,
-        };
+    let detail = match overview_slot {
+        BuildingSlotOverview::Occupied {
+            building: slot,
+            upgrade,
+        } => {
+            let building_type = match slot.building.name {
+                BuildingName::Barracks
+                | BuildingName::GreatBarracks
+                | BuildingName::Stable
+                | BuildingName::GreatStable
+                | BuildingName::Workshop
+                | BuildingName::GreatWorkshop => BuildingTypeDto::Training,
+                BuildingName::Residence | BuildingName::Palace => BuildingTypeDto::Expansion,
+                BuildingName::Academy => BuildingTypeDto::Academy,
+                BuildingName::Smithy => BuildingTypeDto::Smithy,
+                BuildingName::Marketplace => BuildingTypeDto::Marketplace,
+                BuildingName::RallyPoint => BuildingTypeDto::RallyPoint,
+                _ => BuildingTypeDto::Generic,
+            };
 
-        let main_building_level = user.village.main_building_level();
-        let current_level = slot.building.level;
-        let queued_upgrades = queues
-            .building
-            .iter()
-            .filter(|item| {
-                item.slot_id == slot_id
-                    && matches!(
-                        item.kind,
-                        BuildingWorkflowKind::Add | BuildingWorkflowKind::Upgrade
-                    )
-            })
-            .count() as u8;
-        let has_pending_downgrade_for_slot = queues.building.iter().any(|item| {
-            item.slot_id == slot_id && matches!(item.kind, BuildingWorkflowKind::Downgrade)
-        });
-        let queue_full = building_queue_full || has_pending_downgrade_for_slot;
-        let max_level = get_building_data(&slot.building.name)
-            .map(|data| data.rules.max_level)
-            .unwrap_or(current_level);
-        let pending_level = current_level.saturating_add(queued_upgrades);
-        let at_max_level = pending_level >= max_level;
-        let next_level = pending_level.saturating_add(1).min(max_level);
-
-        let upgrade_info = if at_max_level {
-            None
-        } else {
-            slot.building
-                .clone()
-                .at_level(next_level, state.server_speed)
-                .ok()
-        };
-        let (cost, time_secs, next_upkeep) = if let Some(ref upgraded) = upgrade_info {
-            let computed = upgraded.cost();
-            (
-                computed.resources,
-                upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level),
-                computed.upkeep,
-            )
-        } else {
-            let current_cost = slot.building.cost();
-            (current_cost.resources, 0, current_cost.upkeep)
-        };
-
-        let current_value = if slot.building.value == 0 {
-            None
-        } else {
-            Some(slot.building.value)
-        };
-        let next_value = upgrade_info.as_ref().map(|upgraded| upgraded.value);
-        let (chiefs_moving, settlers_moving) = state
-            .game_app
-            .get_village_troop_movements(user.village.id)
-            .await
-            .map(|movements| {
-                movements
-                    .outgoing
-                    .iter()
-                    .chain(movements.incoming.iter())
-                    .filter(|m| m.origin_player_id == user.player.id)
-                    .fold((0u32, 0u32), |(chiefs, settlers), m| {
-                        (
-                            chiefs.saturating_add(m.units.get(8)),
-                            settlers.saturating_add(m.units.get(9)),
-                        )
-                    })
-            })
-            .unwrap_or((0, 0));
-        let main_building_detail = if matches!(slot.building.name, BuildingName::MainBuilding) {
-            Some(main_building_detail_for_village(
-                &user.village,
-                &queues.building,
-            ))
-        } else {
-            None
-        };
-
-        match building_type {
-            BuildingTypeDto::Empty => unreachable!(),
-            BuildingTypeDto::Generic => BuildingDetailDto {
-                slot_id,
-                village_id: user.village.id,
-                building_name: building_key(&slot.building.name),
-                building_type: BuildingTypeDto::Generic,
+            let BuildingUpgradePreview {
                 current_level,
-                population: slot.building.population,
-                current_upkeep: slot.building.cost().upkeep,
                 next_level,
                 next_upkeep,
                 time_secs,
-                queue_full,
                 at_max_level,
                 current_value,
                 next_value,
-                cost: resource_group_to_dto(&cost),
-                stored_resources: resource_group_to_dto(&stored),
-                empty_slot: None,
-                training: None,
-                expansion: None,
-                academy: None,
-                smithy: None,
-                marketplace: None,
-                rally_point: None,
-                trapper: if slot.building.name == BuildingName::Trapper {
+                cost,
+                ..
+            } = upgrade;
+            let queue_full = building_queue_full;
+            let (chiefs_moving, settlers_moving) = if matches!(
+                building_type,
+                BuildingTypeDto::Training | BuildingTypeDto::Expansion
+            ) {
+                state
+                    .game_app
+                    .get_village_troop_movements(user.village.id)
+                    .await
+                    .map(|movements| {
+                        movements
+                            .outgoing
+                            .iter()
+                            .chain(movements.incoming.iter())
+                            .filter(|m| m.origin_player_id == user.player.id)
+                            .fold((0u32, 0u32), |(chiefs, settlers), m| {
+                                (
+                                    chiefs.saturating_add(m.units.get(8)),
+                                    settlers.saturating_add(m.units.get(9)),
+                                )
+                            })
+                    })
+                    .map_err(|err| map_application_error("unable_to_load_troop_movements", err))?
+            } else {
+                (0, 0)
+            };
+            let main_building_detail = if matches!(slot.building.name, BuildingName::MainBuilding) {
+                Some(main_building_detail_for_village(
+                    &user.village,
+                    &queues.building,
+                ))
+            } else {
+                None
+            };
+
+            match building_type {
+                BuildingTypeDto::Empty => unreachable!(),
+                BuildingTypeDto::Generic => BuildingDetailDto {
+                    slot_id,
+                    village_id: user.village.id,
+                    building_name: building_key(&slot.building.name),
+                    building_type: BuildingTypeDto::Generic,
+                    current_level,
+                    population: slot.building.population,
+                    current_upkeep: slot.building.cost().upkeep,
+                    next_level,
+                    next_upkeep,
+                    time_secs,
+                    queue_full,
+                    at_max_level,
+                    current_value,
+                    next_value,
+                    cost: resource_group_to_dto(&cost),
+                    stored_resources: resource_group_to_dto(&stored),
+                    empty_slot: None,
+                    training: None,
+                    expansion: None,
+                    academy: None,
+                    smithy: None,
+                    marketplace: None,
+                    rally_point: None,
+                    trapper: if slot.building.name == BuildingName::Trapper {
+                        let army_state = state
+                            .game_app
+                            .get_village_army_state_view(user.village.id)
+                            .await
+                            .map_err(|err| {
+                                map_application_error("unable_to_load_village_army_state", err)
+                            })?;
+                        trapper_detail_for_village(&village_model, Some(&army_state), &queues.traps)
+                    } else {
+                        None
+                    },
+                    main_building: main_building_detail,
+                },
+                BuildingTypeDto::Training => {
+                    let (expected_buildings, group) = match slot.building.name {
+                        BuildingName::Barracks | BuildingName::GreatBarracks => (
+                            vec![BuildingName::Barracks, BuildingName::GreatBarracks],
+                            UnitGroup::Infantry,
+                        ),
+                        BuildingName::Stable | BuildingName::GreatStable => (
+                            vec![BuildingName::Stable, BuildingName::GreatStable],
+                            UnitGroup::Cavalry,
+                        ),
+                        BuildingName::Workshop | BuildingName::GreatWorkshop => (
+                            vec![BuildingName::Workshop, BuildingName::GreatWorkshop],
+                            UnitGroup::Siege,
+                        ),
+                        _ => unreachable!(),
+                    };
+
+                    let units = training_options_for_group(
+                        &user.village,
+                        state.server_speed,
+                        &slot,
+                        &expected_buildings,
+                        group,
+                        &queues.training,
+                        None,
+                        (chiefs_moving, settlers_moving),
+                        None,
+                    );
+                    let queue = training_queue_for_slot(slot_id, &queues.training);
+
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::Training,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: Some(TrainingDetailDto {
+                            training_speed_percent: (slot.building.value as f32 / 10.0) as u32,
+                            units,
+                            queue,
+                        }),
+                        expansion: None,
+                        academy: None,
+                        smithy: None,
+                        marketplace: None,
+                        rally_point: None,
+                        trapper: None,
+                        main_building: None,
+                    }
+                }
+                BuildingTypeDto::Expansion => {
+                    let culture_points_info = state
+                        .game_app
+                        .get_expansion_culture_info(
+                            user.player.id,
+                            user.village.id,
+                            state.server_speed,
+                        )
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_expansion_info", err)
+                        })?;
+                    let account_culture_points_production =
+                        culture_points_info.player_culture_points_production;
+                    let account_culture_points = culture_points_info.player_culture_points;
+                    let village_culture_points_production =
+                        culture_points_info.village_culture_points_production;
+                    let next_cp_required = culture_points_info.next_cp_required;
+
+                    let max_slots = user.village.max_foundation_slots();
+                    let child_villages_count = if max_slots > 0 {
+                        user.villages
+                            .iter()
+                            .filter(|v| v.parent_village_id == Some(user.village.id))
+                            .count() as u32
+                    } else {
+                        0
+                    };
+                    let available_slots = max_slots.saturating_sub(child_villages_count as u8);
                     let army_state = state
                         .game_app
                         .get_village_army_state_view(user.village.id)
@@ -673,575 +713,406 @@ pub async fn building_detail(
                         .map_err(|err| {
                             map_application_error("unable_to_load_village_army_state", err)
                         })?;
-                    trapper_detail_for_village(&village_model, Some(&army_state), &queues.traps)
-                } else {
-                    None
-                },
-                main_building: main_building_detail,
-            },
-            BuildingTypeDto::Training => {
-                let (expected_buildings, group) = match slot.building.name {
-                    BuildingName::Barracks | BuildingName::GreatBarracks => (
-                        vec![BuildingName::Barracks, BuildingName::GreatBarracks],
-                        UnitGroup::Infantry,
-                    ),
-                    BuildingName::Stable | BuildingName::GreatStable => (
-                        vec![BuildingName::Stable, BuildingName::GreatStable],
-                        UnitGroup::Cavalry,
-                    ),
-                    BuildingName::Workshop | BuildingName::GreatWorkshop => (
-                        vec![BuildingName::Workshop, BuildingName::GreatWorkshop],
-                        UnitGroup::Siege,
-                    ),
-                    _ => unreachable!(),
-                };
-
-                let units = training_options_for_group(
-                    &user.village,
-                    state.server_speed,
-                    &slot,
-                    &expected_buildings,
-                    group,
-                    &queues.training,
-                    None,
-                    (chiefs_moving, settlers_moving),
-                    None,
-                );
-                let queue = training_queue_for_slot(slot_id, &queues.training);
-
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::Training,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: Some(TrainingDetailDto {
-                        training_speed_percent: (slot.building.value as f32 / 10.0) as u32,
-                        units,
-                        queue,
-                    }),
-                    expansion: None,
-                    academy: None,
-                    smithy: None,
-                    marketplace: None,
-                    rally_point: None,
-                    trapper: None,
-                    main_building: None,
+                    let training_units = training_options_for_group(
+                        &user.village,
+                        state.server_speed,
+                        &slot,
+                        &[BuildingName::Residence, BuildingName::Palace],
+                        UnitGroup::Expansion,
+                        &queues.training,
+                        Some(available_slots),
+                        (chiefs_moving, settlers_moving),
+                        Some(&army_state),
+                    );
+                    let training_queue = training_queue_for_slot(slot_id, &queues.training);
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::Expansion,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: Some(TrainingDetailDto {
+                            training_speed_percent: (slot.building.value as f32 / 10.0) as u32,
+                            units: training_units,
+                            queue: training_queue,
+                        }),
+                        expansion: Some(ExpansionDetailDto {
+                            loyalty: user.village.loyalty(),
+                            village_culture_points_production,
+                            account_culture_points_production,
+                            account_culture_points,
+                            next_cp_required,
+                            max_foundation_slots: max_slots,
+                            child_villages_count,
+                        }),
+                        academy: None,
+                        smithy: None,
+                        marketplace: None,
+                        rally_point: None,
+                        trapper: None,
+                        main_building: None,
+                    }
                 }
-            }
-            BuildingTypeDto::Expansion => {
-                let culture_points_info = state
-                    .game_app
-                    .get_expansion_culture_info(user.player.id, user.village.id, state.server_speed)
-                    .await
-                    .map_err(|err| map_application_error("unable_to_load_expansion_info", err))?;
-                let account_culture_points_production =
-                    culture_points_info.player_culture_points_production;
-                let account_culture_points = culture_points_info.player_culture_points;
-                let village_culture_points_production =
-                    culture_points_info.village_culture_points_production;
-                let next_cp_required = culture_points_info.next_cp_required;
+                BuildingTypeDto::Academy => {
+                    let (ready_units, locked_units, researched_units) = academy_options_for_village(
+                        &user.village,
+                        state.server_speed,
+                        &queues.academy,
+                    );
+                    let queue = academy_queue_for_slot(&queues.academy);
+                    let queue_full_academy = queues.academy.len() >= 2;
 
-                let max_slots = user.village.max_foundation_slots();
-                let child_villages_count = if max_slots > 0 {
-                    user.villages
-                        .iter()
-                        .filter(|v| v.parent_village_id == Some(user.village.id))
-                        .count() as u32
-                } else {
-                    0
-                };
-                let available_slots = max_slots.saturating_sub(child_villages_count as u8);
-                let army_state = state
-                    .game_app
-                    .get_village_army_state_view(user.village.id)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_village_army_state", err)
-                    })?;
-                let training_units = training_options_for_group(
-                    &user.village,
-                    state.server_speed,
-                    &slot,
-                    &[BuildingName::Residence, BuildingName::Palace],
-                    UnitGroup::Expansion,
-                    &queues.training,
-                    Some(available_slots),
-                    (chiefs_moving, settlers_moving),
-                    Some(&army_state),
-                );
-                let training_queue = training_queue_for_slot(slot_id, &queues.training);
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::Expansion,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: Some(TrainingDetailDto {
-                        training_speed_percent: (slot.building.value as f32 / 10.0) as u32,
-                        units: training_units,
-                        queue: training_queue,
-                    }),
-                    expansion: Some(ExpansionDetailDto {
-                        loyalty: user.village.loyalty(),
-                        village_culture_points_production,
-                        account_culture_points_production,
-                        account_culture_points,
-                        next_cp_required,
-                        max_foundation_slots: max_slots,
-                        child_villages_count,
-                    }),
-                    academy: None,
-                    smithy: None,
-                    marketplace: None,
-                    rally_point: None,
-                    trapper: None,
-                    main_building: None,
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::Academy,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: None,
+                        expansion: None,
+                        academy: Some(AcademyDetailDto {
+                            ready_units,
+                            locked_units,
+                            researched_units,
+                            queue,
+                            queue_full: queue_full_academy,
+                        }),
+                        smithy: None,
+                        marketplace: None,
+                        rally_point: None,
+                        trapper: None,
+                        main_building: None,
+                    }
                 }
-            }
-            BuildingTypeDto::Academy => {
-                let (ready_units, locked_units, researched_units) =
-                    academy_options_for_village(&user.village, state.server_speed, &queues.academy);
-                let queue = academy_queue_for_slot(&queues.academy);
-                let queue_full_academy = queues.academy.len() >= 2;
+                BuildingTypeDto::Smithy => {
+                    let queue_full_smithy = queues.smithy.len() >= 2;
+                    let units = smithy_options_for_village(
+                        &user.village,
+                        &slot,
+                        state.server_speed,
+                        &queues.smithy,
+                        queue_full_smithy,
+                    );
+                    let queue = smithy_queue_for_slot(&queues.smithy);
 
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::Academy,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: None,
-                    expansion: None,
-                    academy: Some(AcademyDetailDto {
-                        ready_units,
-                        locked_units,
-                        researched_units,
-                        queue,
-                        queue_full: queue_full_academy,
-                    }),
-                    smithy: None,
-                    marketplace: None,
-                    rally_point: None,
-                    trapper: None,
-                    main_building: None,
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::Smithy,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: None,
+                        expansion: None,
+                        academy: None,
+                        smithy: Some(SmithyDetailDto {
+                            units,
+                            queue,
+                            queue_full: queue_full_smithy,
+                        }),
+                        marketplace: None,
+                        rally_point: None,
+                        trapper: None,
+                        main_building: None,
+                    }
                 }
-            }
-            BuildingTypeDto::Smithy => {
-                let queue_full_smithy = queues.smithy.len() >= 2;
-                let units = smithy_options_for_village(
-                    &user.village,
-                    &slot,
-                    state.server_speed,
-                    &queues.smithy,
-                    queue_full_smithy,
-                );
-                let queue = smithy_queue_for_slot(&queues.smithy);
-
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::Smithy,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: None,
-                    expansion: None,
-                    academy: None,
-                    smithy: Some(SmithyDetailDto {
-                        units,
-                        queue,
-                        queue_full: queue_full_smithy,
-                    }),
-                    marketplace: None,
-                    rally_point: None,
-                    trapper: None,
-                    main_building: None,
-                }
-            }
-            BuildingTypeDto::Marketplace => {
-                let marketplace_data = state
-                    .game_app
-                    .get_marketplace_data(user.village.id)
-                    .await
-                    .map_err(|err| {
-                    map_application_error("unable_to_load_marketplace_data", err)
-                })?;
-
-                let base_merchant_speed = user.village.tribe.merchant_stats().speed;
-                let effective_merchant_speed =
-                    base_merchant_speed.saturating_mul(state.server_speed.max(1) as u8);
-
-                let own_offers = marketplace_data
-                    .own_offers
-                    .iter()
-                    .map(|offer| {
-                        marketplace_offer_to_dto(
-                            &marketplace_data,
-                            offer,
-                            &user.village.position,
-                            base_merchant_speed.max(1),
-                            state.world_size,
-                            state.server_speed as u8,
-                        )
-                    })
-                    .collect();
-
-                let global_offers = marketplace_data
-                    .global_offers
-                    .iter()
-                    .map(|offer| {
-                        marketplace_offer_to_dto(
-                            &marketplace_data,
-                            offer,
-                            &user.village.position,
-                            base_merchant_speed.max(1),
-                            state.world_size,
-                            state.server_speed as u8,
-                        )
-                    })
-                    .collect();
-
-                let merchant_movements = marketplace_data
-                    .merchant_movements
-                    .iter()
-                    .map(|movement| merchant_movement_to_dto(&marketplace_data, movement))
-                    .collect();
-
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::Marketplace,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: None,
-                    expansion: None,
-                    academy: None,
-                    smithy: None,
-                    marketplace: Some(MarketplaceDetailDto {
-                        // Marketplace stats are displayed as effective values for current server speed.
-                        // Tribe base values are 1x; gameplay speed multiplies both capacity and speed.
-                        merchant_capacity: user
-                            .village
-                            .tribe
-                            .merchant_stats()
-                            .capacity
-                            .saturating_mul(state.server_speed.max(1) as u32),
-                        merchant_speed: effective_merchant_speed as u32,
-                        available_merchants: user.village.available_merchants(),
-                        total_merchants: user.village.total_merchants,
-                        own_offers,
-                        global_offers,
-                        merchant_movements,
-                    }),
-                    rally_point: None,
-                    trapper: None,
-                    main_building: None,
-                }
-            }
-            BuildingTypeDto::RallyPoint => {
-                let movements = state
-                    .game_app
-                    .get_village_troop_movements(user.village.id)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_village_troop_movements", err)
-                    })?;
-                let army_state = state
-                    .game_app
-                    .get_village_army_state_view(user.village.id)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_village_army_state", err)
-                    })?;
-                let village_references =
-                    fetch_village_references_for_rally_point(&state, &army_state)
+                BuildingTypeDto::Marketplace => {
+                    let marketplace_data = state
+                        .game_app
+                        .get_marketplace_data(user.village.id)
                         .await
                         .map_err(|err| {
-                            map_application_error("unable_to_load_rally_village_references", err)
+                            map_application_error("unable_to_load_marketplace_data", err)
                         })?;
-                let cancelable_movement_ids = state
-                    .game_app
-                    .list_cancelable_outgoing_movement_ids(user.village.id)
-                    .await
-                    .map_err(|err| {
-                        map_application_error("unable_to_load_cancelable_movements", err)
-                    })?;
-                let cards = prepare_rally_point_cards(
-                    user.village.id,
-                    &user.village.name,
-                    &user.village.position,
-                    &user.village.tribe,
-                    &army_state,
-                    &movements,
-                    &village_references,
-                    &cancelable_movement_ids,
-                )
-                .into_iter()
-                .filter(|card| !hides_incoming_scout_movement(card))
-                .map(|card| {
-                    let redact_composition = redacts_incoming_army_composition(&card);
-                    let upkeep = if redact_composition {
-                        None
-                    } else {
-                        troop_upkeep_for_rally_card(&user.village, &card)
-                    };
-                    let (action, action_id) = match card.action_button {
-                        Some(ArmyAction::Recall { army_id }) => {
-                            (Some(RallyActionDto::Recall), Some(army_id))
-                        }
-                        Some(ArmyAction::Release { army_id }) => {
-                            (Some(RallyActionDto::Release), Some(army_id))
-                        }
-                        Some(ArmyAction::Cancel { movement_id }) => {
-                            (Some(RallyActionDto::Cancel), Some(movement_id))
-                        }
-                        Some(ArmyAction::ReleaseTrapped { army_id }) => {
-                            (Some(RallyActionDto::ReleaseTrapped), Some(army_id))
-                        }
-                        Some(ArmyAction::DisbandTrapped { army_id }) => {
-                            (Some(RallyActionDto::DisbandTrapped), Some(army_id))
-                        }
-                        None => (None, None),
-                    };
 
-                    RallyCardDto {
-                        village_id: card.village_id,
-                        village_name: card.village_name,
-                        position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
-                        tribe: format!("{:?}", card.tribe),
-                        units: if redact_composition {
-                            None
-                        } else {
-                            Some(card.units.units().to_vec())
-                        },
-                        has_hero: if redact_composition {
-                            None
-                        } else {
-                            Some(card.has_hero)
-                        },
-                        upkeep,
-                        category: match card.category {
-                            ArmyCategory::Stationed => RallyCardCategoryDto::Stationed,
-                            ArmyCategory::Reinforcement => RallyCardCategoryDto::Reinforcement,
-                            ArmyCategory::Deployed => RallyCardCategoryDto::Deployed,
-                            ArmyCategory::Trapped => RallyCardCategoryDto::Trapped,
-                            ArmyCategory::Incoming => RallyCardCategoryDto::Incoming,
-                            ArmyCategory::Outgoing => RallyCardCategoryDto::Outgoing,
-                        },
-                        movement_kind: card.movement_kind.map(|kind| match kind {
-                            MovementKind::Attack => RallyMovementKindDto::Attack,
-                            MovementKind::Raid => RallyMovementKindDto::Raid,
-                            MovementKind::Scout => RallyMovementKindDto::Scout,
-                            MovementKind::Reinforcement => RallyMovementKindDto::Reinforcement,
-                            MovementKind::Return => RallyMovementKindDto::Return,
-                            MovementKind::FoundVillage => RallyMovementKindDto::FoundVillage,
+                    let base_merchant_speed = user.village.tribe.merchant_stats().speed;
+                    let effective_merchant_speed =
+                        base_merchant_speed.saturating_mul(state.server_speed.max(1) as u8);
+
+                    let own_offers = marketplace_data
+                        .own_offers
+                        .iter()
+                        .map(|offer| {
+                            marketplace_offer_to_dto(
+                                &marketplace_data,
+                                offer,
+                                &user.village.position,
+                                base_merchant_speed.max(1),
+                                state.world_size,
+                                state.server_speed as u8,
+                            )
+                        })
+                        .collect();
+
+                    let global_offers = marketplace_data
+                        .global_offers
+                        .iter()
+                        .map(|offer| {
+                            marketplace_offer_to_dto(
+                                &marketplace_data,
+                                offer,
+                                &user.village.position,
+                                base_merchant_speed.max(1),
+                                state.world_size,
+                                state.server_speed as u8,
+                            )
+                        })
+                        .collect();
+
+                    let merchant_movements = marketplace_data
+                        .merchant_movements
+                        .iter()
+                        .map(|movement| merchant_movement_to_dto(&marketplace_data, movement))
+                        .collect();
+
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::Marketplace,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: None,
+                        expansion: None,
+                        academy: None,
+                        smithy: None,
+                        marketplace: Some(MarketplaceDetailDto {
+                            // Marketplace stats are displayed as effective values for current server speed.
+                            // Tribe base values are 1x; gameplay speed multiplies both capacity and speed.
+                            merchant_capacity: user
+                                .village
+                                .tribe
+                                .merchant_stats()
+                                .capacity
+                                .saturating_mul(state.server_speed.max(1) as u32),
+                            merchant_speed: effective_merchant_speed as u32,
+                            available_merchants: user.village.available_merchants(),
+                            total_merchants: user.village.total_merchants,
+                            own_offers,
+                            global_offers,
+                            merchant_movements,
                         }),
-                        arrives_at: card.arrives_at,
-                        bounty: if redact_composition {
-                            None
-                        } else {
-                            card.bounty.as_ref().map(resource_group_to_dto)
-                        },
-                        action,
-                        action_id,
+                        rally_point: None,
+                        trapper: None,
+                        main_building: None,
                     }
-                })
-                .collect();
+                }
+                BuildingTypeDto::RallyPoint => {
+                    let movements = state
+                        .game_app
+                        .get_village_troop_movements(user.village.id)
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_village_troop_movements", err)
+                        })?;
+                    let army_state = state
+                        .game_app
+                        .get_village_army_state_view(user.village.id)
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_village_army_state", err)
+                        })?;
+                    let village_references =
+                        fetch_village_references_for_rally_point(&state, &army_state)
+                            .await
+                            .map_err(|err| {
+                                map_application_error(
+                                    "unable_to_load_rally_village_references",
+                                    err,
+                                )
+                            })?;
+                    let cancelable_movement_ids = state
+                        .game_app
+                        .list_cancelable_outgoing_movement_ids(user.village.id)
+                        .await
+                        .map_err(|err| {
+                            map_application_error("unable_to_load_cancelable_movements", err)
+                        })?;
+                    let cards = prepare_rally_point_cards(
+                        user.village.id,
+                        &user.village.name,
+                        &user.village.position,
+                        &user.village.tribe,
+                        &army_state,
+                        &movements,
+                        &village_references,
+                        &cancelable_movement_ids,
+                    )
+                    .into_iter()
+                    .map(|card| {
+                        let upkeep = if card.expose_composition {
+                            troop_upkeep_for_rally_card(&user.village, &card)
+                        } else {
+                            None
+                        };
+                        let (action, action_id) = match card.action_button {
+                            Some(ArmyAction::Recall { army_id }) => {
+                                (Some(RallyActionDto::Recall), Some(army_id))
+                            }
+                            Some(ArmyAction::Release { army_id }) => {
+                                (Some(RallyActionDto::Release), Some(army_id))
+                            }
+                            Some(ArmyAction::Cancel { movement_id }) => {
+                                (Some(RallyActionDto::Cancel), Some(movement_id))
+                            }
+                            Some(ArmyAction::ReleaseTrapped { army_id }) => {
+                                (Some(RallyActionDto::ReleaseTrapped), Some(army_id))
+                            }
+                            Some(ArmyAction::DisbandTrapped { army_id }) => {
+                                (Some(RallyActionDto::DisbandTrapped), Some(army_id))
+                            }
+                            None => (None, None),
+                        };
 
-                let available_units = army_state
-                    .home_army
-                    .as_ref()
-                    .map(|army| army.units().clone())
-                    .unwrap_or_default();
-                let sendable_units = user
-                    .village
-                    .tribe
-                    .units()
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, unit)| RallySendableUnitDto {
-                        unit_idx: idx,
-                        name: unit_key(&unit.name),
-                        available: available_units.get(idx),
-                        is_researched: user.village.academy_research().get(idx)
-                            || unit.research_cost.time == 0,
+                        RallyCardDto {
+                            village_id: card.village_id,
+                            village_name: card.village_name,
+                            position: card.position.map(|pos| PositionDto { x: pos.x, y: pos.y }),
+                            tribe: format!("{:?}", card.tribe),
+                            units: if card.expose_composition {
+                                Some(card.units.units().to_vec())
+                            } else {
+                                None
+                            },
+                            has_hero: if card.expose_composition {
+                                Some(card.has_hero)
+                            } else {
+                                None
+                            },
+                            upkeep,
+                            category: match card.category {
+                                ArmyCategory::Stationed => RallyCardCategoryDto::Stationed,
+                                ArmyCategory::Reinforcement => RallyCardCategoryDto::Reinforcement,
+                                ArmyCategory::Deployed => RallyCardCategoryDto::Deployed,
+                                ArmyCategory::Trapped => RallyCardCategoryDto::Trapped,
+                                ArmyCategory::Incoming => RallyCardCategoryDto::Incoming,
+                                ArmyCategory::Outgoing => RallyCardCategoryDto::Outgoing,
+                            },
+                            movement_kind: card.movement_kind.map(|kind| match kind {
+                                MovementKind::Attack => RallyMovementKindDto::Attack,
+                                MovementKind::Raid => RallyMovementKindDto::Raid,
+                                MovementKind::Scout => RallyMovementKindDto::Scout,
+                                MovementKind::Reinforcement => RallyMovementKindDto::Reinforcement,
+                                MovementKind::Return => RallyMovementKindDto::Return,
+                                MovementKind::FoundVillage => RallyMovementKindDto::FoundVillage,
+                            }),
+                            arrives_at: card.arrives_at,
+                            bounty: if card.expose_composition {
+                                card.bounty.as_ref().map(resource_group_to_dto)
+                            } else {
+                                None
+                            },
+                            action,
+                            action_id,
+                        }
                     })
                     .collect();
 
-                BuildingDetailDto {
-                    slot_id,
-                    village_id: user.village.id,
-                    building_name: building_key(&slot.building.name),
-                    building_type: BuildingTypeDto::RallyPoint,
-                    current_level,
-                    population: slot.building.population,
-                    current_upkeep: slot.building.cost().upkeep,
-                    next_level,
-                    next_upkeep,
-                    time_secs,
-                    queue_full,
-                    at_max_level,
-                    current_value,
-                    next_value,
-                    cost: resource_group_to_dto(&cost),
-                    stored_resources: resource_group_to_dto(&stored),
-                    empty_slot: None,
-                    training: None,
-                    expansion: None,
-                    academy: None,
-                    smithy: None,
-                    marketplace: None,
-                    rally_point: Some(RallyPointDetailDto {
-                        cards,
-                        sendable_units,
-                        trapper: trapper_detail_for_village(
-                            &village_model,
-                            Some(&army_state),
-                            &queues.traps,
-                        ),
-                    }),
-                    trapper: None,
-                    main_building: None,
+                    let available_units = army_state
+                        .home_army
+                        .as_ref()
+                        .map(|army| army.units().clone())
+                        .unwrap_or_default();
+                    let sendable_units = user
+                        .village
+                        .tribe
+                        .units()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, unit)| RallySendableUnitDto {
+                            unit_idx: idx,
+                            name: unit_key(&unit.name),
+                            available: available_units.get(idx),
+                            is_researched: user.village.academy_research().get(idx)
+                                || unit.research_cost.time == 0,
+                        })
+                        .collect();
+
+                    BuildingDetailDto {
+                        slot_id,
+                        village_id: user.village.id,
+                        building_name: building_key(&slot.building.name),
+                        building_type: BuildingTypeDto::RallyPoint,
+                        current_level,
+                        population: slot.building.population,
+                        current_upkeep: slot.building.cost().upkeep,
+                        next_level,
+                        next_upkeep,
+                        time_secs,
+                        queue_full,
+                        at_max_level,
+                        current_value,
+                        next_value,
+                        cost: resource_group_to_dto(&cost),
+                        stored_resources: resource_group_to_dto(&stored),
+                        empty_slot: None,
+                        training: None,
+                        expansion: None,
+                        academy: None,
+                        smithy: None,
+                        marketplace: None,
+                        rally_point: Some(RallyPointDetailDto {
+                            cards,
+                            sendable_units,
+                            trapper: trapper_detail_for_village(
+                                &village_model,
+                                Some(&army_state),
+                                &queues.traps,
+                            ),
+                        }),
+                        trapper: None,
+                        main_building: None,
+                    }
                 }
             }
         }
-    } else {
-        let queued_for_slot: Vec<&BuildingQueueItem> = queues
-            .building
-            .iter()
-            .filter(|item| item.slot_id == slot_id)
-            .collect();
-        let queued = queued_for_slot.last().copied();
-        let has_queue_for_slot = !queued_for_slot.is_empty();
-        let (buildable_buildings, locked_buildings) = if has_queue_for_slot {
-            (vec![], vec![])
-        } else {
-            build_options_for_slot(&user.village, slot_id, &queues.building, state.server_speed)
-        };
-        let queued_target_level = queued.map(|item| item.target_level);
-        let queued_next_level = queued_target_level.map(|level| level.saturating_add(1));
-        let queued_can_upgrade = queued.and_then(|item| {
-            get_building_data(&item.building_name)
-                .ok()
-                .map(|data| item.target_level < data.rules.max_level)
-        });
-        let queued_upgrade_preview = queued.map(|item| {
-            let current_level = item.target_level;
-            let building_name = item.building_name.clone();
-            let template = Building::new(building_name.clone(), state.server_speed);
-            let current_building = template.at_level(current_level, state.server_speed).ok();
-            let current_upkeep = current_building
-                .as_ref()
-                .map(|b| b.cost().upkeep)
-                .unwrap_or(template.cost().upkeep);
-            let current_value = current_building
-                .as_ref()
-                .and_then(|building| (building.value > 0).then_some(building.value));
-            let max_level = get_building_data(&building_name)
-                .map(|data| data.rules.max_level)
-                .unwrap_or(current_level);
-            let at_max_level = current_level >= max_level;
-            let next_level = current_level.saturating_add(1).min(max_level);
-            let main_building_level = user.village.main_building_level();
-            let next_building = if at_max_level {
-                None
-            } else {
-                template.at_level(next_level, state.server_speed).ok()
-            };
-            let (next_upkeep, time_secs, cost, next_value) = if let Some(ref upgraded) =
-                next_building
-            {
-                let computed = upgraded.cost();
-                (
-                    computed.upkeep,
-                    upgraded.calculate_build_time_secs(&state.server_speed, &main_building_level),
-                    resource_group_to_dto(&computed.resources),
-                    Some(upgraded.value),
-                )
-            } else {
-                (
-                    current_upkeep,
-                    0,
-                    resource_group_to_dto(&ResourceGroup::new(0, 0, 0, 0)),
-                    None,
-                )
-            };
-
-            QueuedUpgradePreviewDto {
-                building_name: building_key(&building_name),
-                current_level,
-                next_level,
-                current_upkeep,
-                next_upkeep,
-                time_secs,
-                at_max_level,
-                current_value,
-                next_value,
-                cost,
-            }
-        });
-
-        BuildingDetailDto {
+        BuildingSlotOverview::Empty(empty) => BuildingDetailDto {
             slot_id,
             village_id: user.village.id,
             building_name: "EmptySlot".to_string(),
@@ -1258,16 +1129,7 @@ pub async fn building_detail(
             next_value: None,
             cost: resource_group_to_dto(&ResourceGroup::new(0, 0, 0, 0)),
             stored_resources: resource_group_to_dto(&stored),
-            empty_slot: Some(EmptySlotDetailDto {
-                buildable_buildings,
-                locked_buildings,
-                has_queue_for_slot,
-                queued_building_name: queued.map(|item| building_key(&item.building_name)),
-                queued_target_level,
-                queued_next_level,
-                queued_can_upgrade,
-                queued_upgrade_preview,
-            }),
+            empty_slot: Some(overview_mapping::empty_slot_to_dto(empty)),
             training: None,
             expansion: None,
             academy: None,
@@ -1276,11 +1138,11 @@ pub async fn building_detail(
             rally_point: None,
             trapper: None,
             main_building: None,
-        }
+        },
     };
 
     Ok(Json(BuildingPageResponse {
-        server_time: Utc::now().timestamp(),
+        server_time: server_time.timestamp(),
         detail,
     }))
 }
@@ -1318,173 +1180,6 @@ async fn fetch_village_references_for_rally_point(
     let ids: Vec<u32> = village_ids.into_iter().collect();
 
     state.game_app.get_village_references(ids).await
-}
-
-fn prepare_rally_point_cards(
-    village_id: u32,
-    village_name: &str,
-    village_position: &Position,
-    village_tribe: &Tribe,
-    armies: &VillageArmyStateView,
-    movements: &VillageTroopMovements,
-    village_references: &HashMap<u32, VillageReference>,
-    cancelable_movement_ids: &std::collections::HashSet<uuid::Uuid>,
-) -> Vec<ArmyCardData> {
-    let mut cards = Vec::new();
-
-    if let Some(army) = &armies.home_army {
-        cards.push(ArmyCardData {
-            village_id,
-            village_name: Some(village_name.to_string()),
-            position: Some(village_position.clone()),
-            units: army.units().clone(),
-            has_hero: army.hero().is_some(),
-            tribe: village_tribe.clone(),
-            category: ArmyCategory::Stationed,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: None,
-        });
-    }
-
-    for army in &armies.deployed_armies {
-        let destination_id = army.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_references
-            .get(&destination_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: destination_id,
-            village_name: destination_name,
-            position: destination_position,
-            units: army.units().clone(),
-            has_hero: army.hero().is_some(),
-            tribe: army.tribe.clone(),
-            category: ArmyCategory::Deployed,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::Recall {
-                army_id: army.id.to_string(),
-            }),
-        });
-    }
-
-    for reinforcement in &armies.reinforcements {
-        let origin_id = reinforcement.village_id;
-        let (origin_name, origin_position) = village_references
-            .get(&origin_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: origin_id,
-            village_name: origin_name,
-            position: origin_position,
-            units: reinforcement.units().clone(),
-            has_hero: reinforcement.hero().is_some(),
-            tribe: reinforcement.tribe.clone(),
-            category: ArmyCategory::Reinforcement,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::Release {
-                army_id: reinforcement.id.to_string(),
-            }),
-        });
-    }
-
-    for trapped in &armies.trapped_here {
-        let origin_id = trapped.village_id;
-        let (origin_name, origin_position) = village_references
-            .get(&origin_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", origin_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: origin_id,
-            village_name: origin_name,
-            position: origin_position,
-            units: trapped.units().clone(),
-            has_hero: trapped.hero().is_some(),
-            tribe: trapped.tribe.clone(),
-            category: ArmyCategory::Trapped,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::ReleaseTrapped {
-                army_id: trapped.id.to_string(),
-            }),
-        });
-    }
-
-    for trapped in &armies.trapped_away {
-        let destination_id = trapped.current_map_field_id.unwrap_or(village_id);
-        let (destination_name, destination_position) = village_references
-            .get(&destination_id)
-            .map(|info| (Some(info.name.clone()), Some(info.position.clone())))
-            .unwrap_or_else(|| (Some(format!("Village #{}", destination_id)), None));
-
-        cards.push(ArmyCardData {
-            village_id: destination_id,
-            village_name: destination_name,
-            position: destination_position,
-            units: trapped.units().clone(),
-            has_hero: trapped.hero().is_some(),
-            tribe: trapped.tribe.clone(),
-            category: ArmyCategory::Trapped,
-            movement_kind: None,
-            arrives_at: None,
-            bounty: None,
-            action_button: Some(ArmyAction::DisbandTrapped {
-                army_id: trapped.id.to_string(),
-            }),
-        });
-    }
-
-    for movement in &movements.outgoing {
-        let action_button = if cancelable_movement_ids.contains(&movement.job_id) {
-            Some(ArmyAction::Cancel {
-                movement_id: movement.job_id.to_string(),
-            })
-        } else {
-            None
-        };
-
-        cards.push(ArmyCardData {
-            village_id: movement.target_village_id,
-            village_name: movement.target_village_name.clone(),
-            position: Some(movement.target_position.clone()),
-            units: movement.units.clone(),
-            has_hero: movement.has_hero,
-            tribe: movement.tribe.clone(),
-            category: ArmyCategory::Outgoing,
-            movement_kind: Some(movement_kind_to_card_kind(movement.movement_type)),
-            arrives_at: Some(movement.arrives_at),
-            bounty: movement.bounty.clone(),
-            action_button,
-        });
-    }
-
-    for movement in &movements.incoming {
-        cards.push(ArmyCardData {
-            village_id: movement.origin_village_id,
-            village_name: movement.origin_village_name.clone(),
-            position: Some(movement.origin_position.clone()),
-            units: movement.units.clone(),
-            has_hero: movement.has_hero,
-            tribe: movement.tribe.clone(),
-            category: ArmyCategory::Incoming,
-            movement_kind: Some(movement_kind_to_card_kind(movement.movement_type)),
-            arrives_at: Some(movement.arrives_at),
-            bounty: movement.bounty.clone(),
-            action_button: None,
-        });
-    }
-
-    cards
 }
 
 fn trapper_detail_for_village(
@@ -1529,29 +1224,6 @@ fn trap_queue_to_dto(queue: &[TrapQueueItem]) -> Vec<TrapQueueItemDto> {
             is_processing: matches!(item.status, ScheduledActionStatus::Processing),
         })
         .collect()
-}
-
-fn movement_kind_to_card_kind(kind: TroopMovementType) -> MovementKind {
-    match kind {
-        TroopMovementType::Attack => MovementKind::Attack,
-        TroopMovementType::Raid => MovementKind::Raid,
-        TroopMovementType::Scout => MovementKind::Scout,
-        TroopMovementType::Reinforcement => MovementKind::Reinforcement,
-        TroopMovementType::Return => MovementKind::Return,
-        TroopMovementType::FoundVillage => MovementKind::FoundVillage,
-    }
-}
-
-fn hides_incoming_scout_movement(card: &ArmyCardData) -> bool {
-    card.category == ArmyCategory::Incoming && card.movement_kind == Some(MovementKind::Scout)
-}
-
-fn redacts_incoming_army_composition(card: &ArmyCardData) -> bool {
-    card.category == ArmyCategory::Incoming
-        && !matches!(
-            card.movement_kind,
-            Some(MovementKind::Reinforcement | MovementKind::Return | MovementKind::FoundVillage)
-        )
 }
 
 fn resource_group_to_dto(resource: &ResourceGroup) -> ResourceAmountsDto {
@@ -1694,116 +1366,6 @@ fn building_key(name: &BuildingName) -> String {
 
 fn unit_key(name: &UnitName) -> String {
     format!("{name:?}")
-}
-
-fn build_options_for_slot(
-    village: &parabellum_game::models::village::Village,
-    slot_id: u8,
-    queue: &[BuildingQueueItem],
-    server_speed: i8,
-) -> (Vec<BuildOptionDto>, Vec<BuildOptionDto>) {
-    let mut buildable = Vec::new();
-    let mut locked = Vec::new();
-    let main_building_level = village.main_building_level();
-
-    for name in village.candidate_buildings_for_slot(slot_id) {
-        if building_blocked_by_queue(&name, queue) {
-            continue;
-        }
-
-        let building = Building::new(name.clone(), server_speed);
-        let validation_ok = village.validate_building_construction(&building).is_ok();
-        let missing_requirements = missing_building_requirements(village, &name);
-
-        if !validation_ok && missing_requirements.is_empty() {
-            continue;
-        }
-
-        let cost = building.cost();
-        let time_secs = building.calculate_build_time_secs(&server_speed, &main_building_level);
-        let option = BuildOptionDto {
-            building_name: building_key(&name),
-            cost: resource_group_to_dto(&cost.resources),
-            next_upkeep: cost.upkeep,
-            upkeep: cost.upkeep,
-            time_secs,
-            missing_requirements,
-        };
-
-        if validation_ok {
-            buildable.push(option);
-        } else {
-            locked.push(option);
-        }
-    }
-
-    (buildable, locked)
-}
-
-fn building_blocked_by_queue(name: &BuildingName, queue: &[BuildingQueueItem]) -> bool {
-    if queue.is_empty() {
-        return false;
-    }
-
-    let Ok(candidate_data) = get_building_data(name) else {
-        return false;
-    };
-
-    queue.iter().any(|job| {
-        let queued_name = &job.building_name;
-        (!candidate_data.rules.allow_multiple && queued_name == name)
-            || candidate_data
-                .rules
-                .conflicts
-                .iter()
-                .any(|conflict| conflict.0 == *queued_name)
-            || conflicts_with_queued(name, queued_name)
-    })
-}
-
-fn conflicts_with_queued(candidate: &BuildingName, queued: &BuildingName) -> bool {
-    match get_building_data(queued) {
-        Ok(data) => {
-            (!data.rules.allow_multiple && queued == candidate)
-                || data
-                    .rules
-                    .conflicts
-                    .iter()
-                    .any(|conflict| conflict.0 == *candidate)
-        }
-        Err(_) => false,
-    }
-}
-
-fn missing_building_requirements(
-    village: &parabellum_game::models::village::Village,
-    name: &BuildingName,
-) -> Vec<RequirementDto> {
-    let Ok(data) = get_building_data(name) else {
-        return vec![];
-    };
-
-    data.rules
-        .requirements
-        .iter()
-        .filter_map(|req| {
-            let level = village
-                .buildings()
-                .iter()
-                .find(|vb| vb.building.name == req.0)
-                .map(|vb| vb.building.level)
-                .unwrap_or(0);
-
-            if level >= req.1 {
-                None
-            } else {
-                Some(RequirementDto {
-                    building_name: building_key(&req.0),
-                    required_level: req.1,
-                })
-            }
-        })
-        .collect()
 }
 
 fn training_options_for_group(

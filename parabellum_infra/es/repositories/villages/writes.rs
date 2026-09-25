@@ -55,15 +55,11 @@ pub(super) fn store_village_model_query(model: &VillageModel) -> QueryBuilder<'s
     push_village_model_update_assignments(&mut query, model);
     query.push(", loyalty_updated_at = CASE WHEN loyalty <> ");
     query.push_bind(model.loyalty as i16);
-    query.push(
-        r#"
-                THEN NOW()
-                ELSE loyalty_updated_at
-            END,
-            updated_at = NOW()
-        WHERE village_id =
-        "#,
-    );
+    query.push(" THEN ");
+    query.push_bind(model.updated_at);
+    query.push(" ELSE loyalty_updated_at END, updated_at = ");
+    query.push_bind(model.updated_at);
+    query.push(" WHERE village_id = ");
     query.push_bind(model.village_id as i32);
     query
 }

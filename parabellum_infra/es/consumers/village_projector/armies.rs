@@ -28,6 +28,10 @@ struct MovementPairProjection<'a> {
     target_village_id: u32,
     arrives_at: chrono::DateTime<chrono::Utc>,
     army: &'a Army,
+    /// Whether the target village receives an incoming movement row.
+    ///
+    /// Scout arrivals stay invisible to the target until reports are generated.
+    visible_to_target: bool,
 }
 
 impl VillageProjector {
@@ -104,12 +108,12 @@ impl VillageProjector {
         };
         let village_id = aggregate_id
             .parse::<u32>()
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let current = self
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut current_home_armies = self
             .armies
             .list_armies_in_tx(
@@ -121,7 +125,7 @@ impl VillageProjector {
                     .limit(1),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let current_home_army = current_home_armies.pop();
         let previous_home_army_id = current_home_army.as_ref().map(|a| a.id);
 
@@ -145,12 +149,12 @@ impl VillageProjector {
             self.armies
                 .upsert_home_in_tx(tx, home_army, current.player_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         } else if let Some(home_army_id) = previous_home_army_id {
             self.armies
                 .delete_in_tx(tx, home_army_id)
                 .await
-                .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+                .map_err(CqrsError::domain_source)?;
         }
 
         self.upsert_moving_army(tx, detached_army, village_id, current.player_id)
@@ -167,7 +171,7 @@ impl VillageProjector {
         self.armies
             .upsert_moving_in_tx(tx, army, village_id, player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         if let Some(hero) = army.hero() {
             self.project_hero_placement_in_tx(
                 tx,
@@ -188,6 +192,7 @@ impl VillageProjector {
         projection: MovementPairProjection<'_>,
     ) -> Result<(), CqrsError> {
         let outgoing = VillageMovement {
+            viewing_village_id: projection.source_village_id,
             movement_id: projection.movement_id,
             movement_type: projection.movement_type,
             direction: MovementDirection::Outgoing,
@@ -206,18 +211,23 @@ impl VillageProjector {
             tribe: None,
             bounty: None,
         };
-        let incoming = VillageMovement {
-            direction: MovementDirection::Incoming,
-            ..outgoing.clone()
-        };
         self.movements
             .upsert_in_tx(tx, &outgoing)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
-        self.movements
-            .upsert_in_tx(tx, &incoming)
-            .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)?;
+        if projection.visible_to_target {
+            let incoming = VillageMovement {
+                viewing_village_id: projection.target_village_id,
+                direction: MovementDirection::Incoming,
+                ..outgoing
+            };
+            self.movements
+                .upsert_in_tx(tx, &incoming)
+                .await
+                .map_err(CqrsError::domain_source)?;
+        }
+
+        Ok(())
     }
 
     fn remaining_after_split(

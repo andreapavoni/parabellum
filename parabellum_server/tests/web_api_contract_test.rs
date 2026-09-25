@@ -680,3 +680,85 @@ async fn extractor_first_precedence_returns_422_before_auth_for_invalid_body()
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     Ok(())
 }
+
+#[tokio::test]
+async fn explicit_village_context_requires_ownership_and_never_falls_back() {
+    let (_database, base_url, seeded) = setup_web_app_with_seeded_user().await.unwrap();
+    let client = reqwest::Client::new();
+    let response = login(&client, &base_url, &seeded.username, &seeded.password).await;
+    let body: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    let access = str_field(&body, &["accessToken", "access_token"]).unwrap();
+    let village = body
+        .get("currentVillageId")
+        .or_else(|| body.get("current_village_id"))
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    for (selected, expected) in [
+        (village.to_string(), StatusCode::OK),
+        ("4294967295".into(), StatusCode::NOT_FOUND),
+        ("invalid".into(), StatusCode::BAD_REQUEST),
+    ] {
+        let response = client
+            .get(format!("{base_url}/api/v1/game/context"))
+            .bearer_auth(access)
+            .header("X-Village-Id", selected)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+}
+
+#[tokio::test]
+async fn building_overview_preserves_generic_and_empty_response_contracts() {
+    let (_database, base_url, seeded) = setup_web_app_with_seeded_user().await.unwrap();
+    let client = reqwest::Client::new();
+    let token = login_access_token(&client, &base_url, &seeded.username, &seeded.password).await;
+    for (slot, name, category) in [(29, "Warehouse", "generic"), (21, "EmptySlot", "empty")] {
+        let response = client
+            .get(format!("{base_url}/api/v1/buildings/{slot}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+        assert!(body["serverTime"].as_i64().is_some());
+        let detail = &body["detail"];
+        assert_eq!(detail["buildingName"], name);
+        assert_eq!(detail["buildingType"], category);
+        assert_eq!(detail["slotId"], slot);
+        assert_eq!(detail["queueFull"], false);
+        for key in ["cost", "storedResources"] {
+            let values = detail[key].as_object().unwrap();
+            assert_eq!(values.len(), 4);
+            for resource in ["lumber", "clay", "iron", "crop"] {
+                assert!(values[resource].as_u64().is_some());
+            }
+        }
+        for key in [
+            "training",
+            "expansion",
+            "academy",
+            "smithy",
+            "marketplace",
+            "rallyPoint",
+            "trapper",
+            "mainBuilding",
+        ] {
+            assert!(detail.get(key).is_none());
+        }
+        if category == "empty" {
+            let empty = &detail["emptySlot"];
+            assert_eq!(empty["hasQueueForSlot"], false);
+            assert!(empty["buildableBuildings"].is_array());
+            assert!(empty["lockedBuildings"].is_array());
+            assert!(empty.get("queuedUpgradePreview").is_none());
+        } else {
+            assert_eq!(detail["currentLevel"], 1);
+            assert_eq!(detail["nextLevel"], 2);
+            assert!(detail.get("emptySlot").is_none());
+        }
+    }
+}

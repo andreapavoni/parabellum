@@ -1,6 +1,7 @@
 //! Scheduled action records and payload dispatch.
 
 use chrono::{DateTime, Utc};
+use parabellum_types::errors::ApplicationError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -80,6 +81,14 @@ pub struct ScheduledAction {
     pub payload: serde_json::Value,
     pub status: ScheduledActionStatus,
     pub created_at: Option<DateTime<Utc>>,
+}
+
+impl ScheduledAction {
+    /// Returns the decoded app-owned workflow payload for this scheduled action.
+    pub fn payload(&self) -> Result<ScheduledActionPayload, ApplicationError> {
+        serde_json::from_value(self.payload.clone())
+            .map_err(|e| ApplicationError::Unknown(e.to_string()))
+    }
 }
 
 /// Serialized workflow payload for a scheduled action.

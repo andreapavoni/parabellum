@@ -7,9 +7,11 @@ use crate::villages::models::{MovementDirection, MovementType, VillageMovement};
 
 /// Village movement query filter.
 ///
-/// Movement rows are stored from one viewing village perspective, so every
-/// query is anchored to a single village id. Optional predicates narrow the
-/// visible movement rows without exposing database columns to callers.
+/// Movement rows are stored from one viewing village perspective. The
+/// `VillageMovement::viewing_village_id` field owns row visibility; direction
+/// only describes how that row should be presented in that village's view.
+/// Optional predicates narrow visible rows without exposing database columns
+/// to callers.
 #[derive(Debug, Clone)]
 pub struct VillageMovementFilter {
     /// Viewing village whose movement rows are requested.
@@ -59,6 +61,10 @@ impl VillageMovementFilter {
 }
 
 /// Persistence boundary for projected troop movement rows.
+///
+/// Implementations must persist rows by `VillageMovement::viewing_village_id`.
+/// They must not infer row ownership from `direction`, because return movements
+/// are visible only as incoming rows for the army's home village.
 #[async_trait::async_trait]
 pub trait VillageMovementRepository: Send + Sync {
     async fn upsert(&self, movement: &VillageMovement) -> Result<(), ApplicationError>;

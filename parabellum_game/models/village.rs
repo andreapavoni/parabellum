@@ -245,6 +245,13 @@ impl Village {
 
     /// Rehydrates a Village domain model from a domain snapshot.
     pub fn rehydrate(snapshot: VillageSnapshot) -> Self {
+        let mut village = Self::rehydrate_facts(snapshot);
+        village.update_resources();
+        village
+    }
+
+    /// Restores persisted facts and derived values without consulting the clock.
+    pub fn rehydrate_facts(snapshot: VillageSnapshot) -> Self {
         let mut village = Self {
             id: snapshot.id,
             name: snapshot.name,
@@ -271,7 +278,7 @@ impl Village {
             parent_village_id: snapshot.parent_village_id,
         };
 
-        village.update_state();
+        village.refresh_derived_state();
         village
     }
 
@@ -501,6 +508,48 @@ impl Village {
     /// Checks if the village has enough resources.
     pub fn has_enough_resources(&self, cost: &ResourceGroup) -> bool {
         self.stocks.has_availability(cost)
+    }
+
+    /// Applies an already accepted resource cost without a wall-clock tick.
+    pub fn deduct_resources_fact(&mut self, cost: &ResourceGroup) -> Result<(), GameError> {
+        if !self.has_enough_resources(cost) {
+            return Err(GameError::NotEnoughResources);
+        }
+        self.stocks.remove_resources(cost);
+        Ok(())
+    }
+
+    /// Applies resource receipts at the current fact time, respecting storage capacity.
+    pub fn store_resources_fact(&mut self, resources: &ResourceGroup) {
+        self.stocks.store(resources);
+    }
+
+    /// Assigns absolute economy facts without converting them into new decisions.
+    pub fn set_resources_fact(&mut self, resources: &ResourceGroup) {
+        self.stocks.lumber = resources.lumber().min(self.stocks.warehouse_capacity);
+        self.stocks.clay = resources.clay().min(self.stocks.warehouse_capacity);
+        self.stocks.iron = resources.iron().min(self.stocks.warehouse_capacity);
+        self.stocks.crop = i64::from(resources.crop().min(self.stocks.granary_capacity));
+    }
+
+    pub fn set_stocks_fact(&mut self, stocks: VillageStocks) {
+        self.stocks = stocks;
+    }
+
+    /// Replaces the home army from a recorded outcome, updating derived upkeep only.
+    pub fn set_army_fact(&mut self, army: Option<Army>) {
+        self.army = army;
+        self.refresh_derived_state();
+    }
+
+    /// Sets an already resolved building outcome without charging costs or advancing time.
+    pub fn set_building_fact(&mut self, slot_id: u8, building: Option<Building>) {
+        self.buildings.retain(|entry| entry.slot_id != slot_id);
+        if let Some(building) = building {
+            self.buildings.push(VillageBuilding { slot_id, building });
+        }
+        self.buildings.sort_by_key(|entry| entry.slot_id);
+        self.refresh_derived_state();
     }
 
     /// Tries to deduct resources. Returns GameError::NotEnoughResources if funds are insufficient.
@@ -1246,6 +1295,12 @@ impl Village {
 
     /// Updates the village state (production, upkeep, etc...).
     fn update_state(&mut self) {
+        self.refresh_derived_state();
+        self.update_resources();
+    }
+
+    /// Recomputes production, upkeep and capacities without generating resources.
+    pub fn refresh_derived_state(&mut self) {
         self.population = 0;
         self.production = Default::default();
         let default_capacity = 800 * self.inferred_server_speed().max(1) as u32;
@@ -1303,7 +1358,6 @@ impl Village {
         self.production.calculate_effective_production();
         self.update_merchants_count();
         self.update_culture_points_production();
-        self.update_resources();
     }
 
     /// Updates culture points production based on all buildings.
@@ -1325,9 +1379,15 @@ impl Village {
     fn update_resources(&mut self) {
         let now = Utc::now();
         if self.updated_at > now {
-            // Guard against local clock skew/sleep/manual time adjustments:
-            // keep state monotonic so resource growth can resume on next reads/actions.
             self.updated_at = now;
+            return;
+        }
+        self.advance_resources_to(now);
+    }
+
+    /// Advances the economy to an explicit instant. Historical facts never rewind time.
+    pub fn advance_resources_to(&mut self, now: DateTime<Utc>) {
+        if now <= self.updated_at {
             return;
         }
         let time_elapsed = (now - self.updated_at).num_seconds() as f64;
@@ -1472,6 +1532,14 @@ impl VillageProduction {
 
         (lumber_delta, clay_delta, iron_delta, crop_delta)
     }
+
+    /// Adds flat hourly resource production to the effective production output.
+    pub fn add_flat_effective_production(&mut self, resources: &ResourceGroup) {
+        self.effective.lumber = self.effective.lumber.saturating_add(resources.lumber());
+        self.effective.clay = self.effective.clay.saturating_add(resources.clay());
+        self.effective.iron = self.effective.iron.saturating_add(resources.iron());
+        self.effective.crop = self.effective.crop.saturating_add(resources.crop() as i64);
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
@@ -1536,6 +1604,38 @@ impl VillageStocks {
         self.crop = (self.crop + resources.crop() as i64).min(self.granary_capacity as i64);
     }
 
+    /// Stores resources produced over elapsed time, capping at storage capacity.
+    pub fn store_hourly_production(
+        &mut self,
+        resources: &ResourceGroup,
+        elapsed: chrono::Duration,
+    ) {
+        let elapsed_secs = elapsed.num_seconds() as f64;
+        if elapsed_secs <= 0.0 {
+            return;
+        }
+
+        let produced = |per_hour: u32| -> u32 {
+            (elapsed_secs * (per_hour as f64 / 3600.0)).max(0.0).floor() as u32
+        };
+
+        self.lumber = self
+            .lumber
+            .saturating_add(produced(resources.lumber()))
+            .min(self.warehouse_capacity);
+        self.clay = self
+            .clay
+            .saturating_add(produced(resources.clay()))
+            .min(self.warehouse_capacity);
+        self.iron = self
+            .iron
+            .saturating_add(produced(resources.iron()))
+            .min(self.warehouse_capacity);
+        self.crop = (self.crop + produced(resources.crop()) as i64)
+            .min(self.granary_capacity as i64)
+            .max(0);
+    }
+
     /// Checks if given resources are present in stocks.
     pub(crate) fn has_availability(&self, resources: &ResourceGroup) -> bool {
         self.lumber >= resources.lumber()
@@ -1573,7 +1673,7 @@ mod tests {
         models::{
             army::Army,
             buildings::Building,
-            village::{VillageBuilding, VillageStocks},
+            village::{VillageBuilding, VillageProduction, VillageStocks},
         },
         test_utils::{
             PlayerFactoryOptions, ValleyFactoryOptions, VillageFactoryOptions, player_factory,
@@ -2051,5 +2151,49 @@ mod tests {
         // Base upkeep for Roman cavalry trio: 2 + 3 + 4 = 9.
         // At trough level 20 each gets -1 => 6 total.
         assert_eq!(v.production.upkeep, v.population + 6);
+    }
+
+    #[test]
+    fn flat_effective_production_adds_to_existing_output() {
+        let mut production = VillageProduction {
+            effective: super::VillageEffectiveProduction {
+                lumber: 10,
+                clay: 20,
+                iron: 30,
+                crop: -5,
+            },
+            ..Default::default()
+        };
+
+        production.add_flat_effective_production(&ResourceGroup::new(3, 4, 5, 6));
+
+        assert_eq!(production.effective.lumber, 13);
+        assert_eq!(production.effective.clay, 24);
+        assert_eq!(production.effective.iron, 35);
+        assert_eq!(production.effective.crop, 1);
+    }
+
+    #[test]
+    fn hourly_production_stores_elapsed_resources_with_capacity_caps() {
+        let mut stocks = VillageStocks {
+            warehouse_capacity: 105,
+            granary_capacity: 110,
+            lumber: 100,
+            clay: 50,
+            iron: 0,
+            crop: 90,
+        };
+
+        stocks.store_hourly_production(&ResourceGroup::new(20, 40, 60, 80), Duration::minutes(30));
+
+        assert_eq!(stocks.lumber, 105);
+        assert_eq!(stocks.clay, 70);
+        assert_eq!(stocks.iron, 30);
+        assert_eq!(stocks.crop, 110);
+
+        stocks.crop = -5;
+        stocks.store_hourly_production(&ResourceGroup::new(0, 0, 0, 4), Duration::minutes(30));
+
+        assert_eq!(stocks.crop, 0);
     }
 }

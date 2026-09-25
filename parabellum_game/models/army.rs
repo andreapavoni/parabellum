@@ -39,7 +39,7 @@ impl Army {
         hero: Option<Hero>,
     ) -> Self {
         Army {
-            id: id.unwrap_or(Uuid::new_v4()),
+            id: id.unwrap_or_else(Uuid::new_v4),
             village_id,
             player_id,
             tribe,
@@ -53,7 +53,10 @@ impl Army {
     /// Helper to get a new empty army for a specific village.
     pub fn new_village_army(village: &Village) -> Self {
         Army::new(
-            None,
+            Some(Uuid::new_v5(
+                &Uuid::NAMESPACE_OID,
+                format!("parabellum:home-army:{}", village.id).as_bytes(),
+            )),
             village.id,
             Some(village.id),
             village.player_id,

@@ -15,6 +15,7 @@ parabellum_types = { path = "../parabellum_types" }
 parabellum_game = { path = "../parabellum_game" }
 mini_cqrs_es = { workspace = true }
 
+thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }

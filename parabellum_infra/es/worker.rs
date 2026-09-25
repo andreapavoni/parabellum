@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::time;
+use tokio::{sync::watch, task::JoinHandle, time};
 use tracing::{error, info};
 
 use crate::es::VillageEsService;
@@ -51,9 +51,12 @@ impl EsScheduledActionWorker {
         }
     }
 
-    pub fn run(self: Arc<Self>) {
+    /// Starts a supervised worker. Shutdown drains the current batch before exit.
+    /// The caller owns the join handle and may abort it after a shutdown deadline.
+    pub fn run(self: Arc<Self>, mut shutdown: watch::Receiver<bool>) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = time::interval(self.config.poll_interval);
+            interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
             info!(
                 batch_limit = self.config.batch_limit,
                 poll_interval_ms = self.config.poll_interval.as_millis(),
@@ -61,12 +64,20 @@ impl EsScheduledActionWorker {
             );
 
             loop {
-                interval.tick().await;
+                if *shutdown.borrow() {
+                    break;
+                }
+                tokio::select! {
+                    biased;
+                    _ = shutdown.changed() => break,
+                    _ = interval.tick() => {},
+                }
                 if let Err(err) = self.process_due_once().await {
                     error!(error = ?err, "ES scheduled action worker tick failed");
                 }
             }
-        });
+            info!("scheduler worker stopped");
+        })
     }
 
     pub async fn process_due_once(&self) -> Result<usize, mini_cqrs_es::CqrsError> {

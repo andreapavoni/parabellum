@@ -9,7 +9,7 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 /// Log levels are controlled by the `RUST_LOG` environment variable.
 /// If `RUST_LOG` is not set, it defaults to `info` for all crates,
 /// and `debug` for the `parabellum` crate itself.
-pub fn setup_logging() {
+pub fn setup_logging() -> tracing_appender::non_blocking::WorkerGuard {
     // File appender for daily log rotation
     let file_appender = tracing_appender::rolling::daily("logs", "parabellum.log");
     let (non_blocking_file, _guard_file) = tracing_appender::non_blocking(file_appender);
@@ -42,8 +42,6 @@ pub fn setup_logging() {
         .with(console_layer)
         .init();
 
-    // We need to keep the guard alive for the file appender to work
-    // A simple way is to leak it. For a more robust solution,
-    // you might store it in the App struct or another long-lived object.
-    std::mem::forget(_guard_file);
+    // The runtime owns this guard until shutdown and flushes pending logs on drop.
+    _guard_file
 }

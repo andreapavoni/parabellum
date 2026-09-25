@@ -10,3 +10,6 @@ mod connection;
 pub use connection::{DbPool, establish_connection_pool, establish_test_connection_pool};
 pub use map::bootstrap_world_map;
 pub use persistence::db::{EventStoreDb, InfraDb, ProjectionDb};
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_support;

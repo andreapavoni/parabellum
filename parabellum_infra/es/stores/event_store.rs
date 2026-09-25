@@ -60,6 +60,36 @@ impl PostgresEventStore {
         rows.into_iter().map(TryInto::try_into).collect()
     }
 
+    pub(crate) async fn load_events_by_global_seq_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        from_global_seq: i64,
+        to_global_seq: Option<i64>,
+        aggregate_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<StoredEvent>, CqrsError> {
+        let rows = sqlx::query_as::<_, StoredEventRow>(
+            r#"
+            SELECT event_id, aggregate_type, aggregate_id, stream_version, event_type, payload, metadata, global_seq, occurred_at
+            FROM es_events
+            WHERE global_seq >= $1
+              AND ($2::BIGINT IS NULL OR global_seq <= $2)
+              AND ($3::TEXT IS NULL OR aggregate_id = $3)
+            ORDER BY global_seq ASC
+            LIMIT $4
+            "#,
+        )
+        .bind(from_global_seq)
+        .bind(to_global_seq)
+        .bind(aggregate_id)
+        .bind(limit)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(CqrsError::domain_source)?;
+
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
+
     /// Atomically appends a workflow spanning multiple streams.
     ///
     /// Contract:
@@ -86,6 +116,16 @@ impl PostgresEventStore {
         aggregate_type: &str,
         streams: &[WorkflowStreamAppend],
     ) -> Result<Vec<StoredEvent>, CqrsError> {
+        // Serialize competing appends in a stable order, including new streams.
+        let mut ordered: Vec<_> = streams.iter().collect();
+        ordered.sort_by(|a, b| a.aggregate_id.cmp(&b.aggregate_id));
+        for stream in &ordered {
+            sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+                .bind(format!("{aggregate_type}:{}", stream.aggregate_id))
+                .execute(&mut **tx)
+                .await
+                .map_err(CqrsError::domain_source)?;
+        }
         for stream in streams {
             assert_expected_version_in_tx(
                 tx,

@@ -74,7 +74,7 @@ pub(super) fn army_context_from_rows(
         let current_village_id = row.current_village_id();
         let is_home_village = home_village_id == village_id;
         let is_current_village = current_village_id == village_id;
-        let is_deployed = current_village_id != home_village_id;
+        let is_away_from_home = current_village_id != home_village_id;
         let army = Army::try_from(row)?;
 
         match state {
@@ -84,7 +84,7 @@ pub(super) fn army_context_from_rows(
             ArmyState::Stationed if is_current_village => {
                 context.stationed.push(army);
             }
-            ArmyState::Stationed if is_home_village && is_deployed => {
+            ArmyState::Stationed if is_home_village && is_away_from_home => {
                 context.deployed.push(army);
             }
             ArmyState::Moving if is_home_village => {
@@ -93,7 +93,7 @@ pub(super) fn army_context_from_rows(
             ArmyState::Trapped if is_current_village => {
                 context.trapped_here.push(army);
             }
-            ArmyState::Trapped if is_home_village && is_deployed => {
+            ArmyState::Trapped if is_home_village && is_away_from_home => {
                 context.trapped_away.push(army);
             }
             _ => {}

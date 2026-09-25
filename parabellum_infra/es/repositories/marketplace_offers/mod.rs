@@ -92,12 +92,14 @@ impl MarketplaceRepository for PostgresMarketplaceRepository {
         &self,
         offer_id: Uuid,
     ) -> Result<MarketplaceOfferModel, ApplicationError> {
-        let row: DbMarketplaceOfferRow = queries::marketplace_offer_by_id_query(offer_id)
+        let row: Option<DbMarketplaceOfferRow> = queries::marketplace_offer_by_id_query(offer_id)
             .build_query_as()
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|e| ApplicationError::Db(DbError::Database(e)))?;
-        Ok(row.into())
+        Ok(row
+            .ok_or(DbError::MarketplaceOfferNotFound(offer_id))?
+            .into())
     }
 
     async fn set_status(

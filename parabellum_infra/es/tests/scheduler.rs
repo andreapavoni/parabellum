@@ -911,6 +911,15 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
 
         assert_eq!(home_units(&pool, village_id, 0).await, 0);
         assert_eq!(deployed_units(&pool, village_id, 0).await, 0);
+        let target_movements_before_arrival = service
+            .get_village_troop_movements(target_village_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            target_movements_before_arrival.incoming.len(),
+            1,
+            "target village should see the incoming attack before arrival"
+        );
 
         let first_processed = scenario
             .process_until(arrives_at + chrono::Duration::seconds(1), 10)
@@ -934,6 +943,15 @@ async fn village_es_service_schedules_attack_arrival_and_return() {
             "returning attack army must keep the attacker's tribe, not the target village tribe"
         );
         assert!(movements_after_arrival.outgoing.is_empty());
+        let target_movements_after_arrival = service
+            .get_village_troop_movements(target_village_id)
+            .await
+            .unwrap();
+        assert!(
+            target_movements_after_arrival.incoming.is_empty()
+                && target_movements_after_arrival.outgoing.is_empty(),
+            "target village must not see the attacker's returning army"
+        );
 
         let second_processed = scenario
             .process_until(returns_at + chrono::Duration::seconds(1), 10)
@@ -1604,6 +1622,15 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             movements_after_scout_send.outgoing[0].movement_type,
             TroopMovementType::Scout
         );
+        let target_movements_after_scout_send = service
+            .get_village_troop_movements(target_village_id)
+            .await
+            .unwrap();
+        assert!(
+            target_movements_after_scout_send.incoming.is_empty()
+                && target_movements_after_scout_send.outgoing.is_empty(),
+            "target village must not see incoming scout movement"
+        );
 
         let first_processed = scenario
             .process_until(arrives_at + chrono::Duration::seconds(1), 10)
@@ -1620,6 +1647,15 @@ async fn village_es_service_schedules_scout_arrival_and_return() {
             .unwrap();
         assert_eq!(movements_after_scout_arrival.incoming.len(), 1);
         assert!(movements_after_scout_arrival.outgoing.is_empty());
+        let target_movements_after_scout_arrival = service
+            .get_village_troop_movements(target_village_id)
+            .await
+            .unwrap();
+        assert!(
+            target_movements_after_scout_arrival.incoming.is_empty()
+                && target_movements_after_scout_arrival.outgoing.is_empty(),
+            "target village must not see returning scout movement"
+        );
 
         let second_processed = scenario
             .process_until(returns_at + chrono::Duration::seconds(1), 10)

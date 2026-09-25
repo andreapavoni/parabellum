@@ -3,6 +3,12 @@ use thiserror::Error;
 /// Errors for app logic.
 #[derive(Debug, Error, Clone)]
 pub enum AppError {
+    #[error("Concurrent update: expected version {expected_version}, got {actual_version}")]
+    OptimisticConflict {
+        expected_version: u64,
+        actual_version: u64,
+    },
+
     #[error("Wrong authentication credentials")]
     WrongAuthCredentials,
 

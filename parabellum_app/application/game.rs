@@ -11,6 +11,9 @@ use parabellum_types::common::{Player, User};
 use parabellum_types::errors::ApplicationError;
 use uuid::Uuid;
 
+use crate::identity::refresh_sessions::{
+    RefreshSession, RefreshSessionError, RefreshSessionUseCases, SessionClient,
+};
 use crate::identity::{IdentityPort, RegisterPlayerRequest, RegistrationUseCases};
 use crate::leaderboards::{GetPlayerPopulationLeaderboardPageRequest, LeaderboardUseCases};
 use crate::map::{
@@ -18,10 +21,11 @@ use crate::map::{
 };
 use crate::scheduler::{ProcessDueActionsRequest, SchedulerUseCases};
 use crate::villages::{
-    BuildingUseCases, DevelopmentUseCases, HeroUseCases, MarketplaceUseCases,
-    MovementControlUseCases, MovementUseCases, ReinforcementUseCases, ReportUseCases, TrapUseCases,
-    VillageActivityUseCases, VillageArmyUseCases, VillageExpansionUseCases, VillageProfileUseCases,
-    VillageReferenceUseCases, VillageStateUseCases,
+    BuildingOverviewUseCases, BuildingUseCases, DevelopmentUseCases, HeroUseCases,
+    MarketplaceUseCases, MovementControlUseCases, MovementUseCases, ReinforcementUseCases,
+    ReportUseCases, TrapUseCases, VillageActivityUseCases, VillageArmyUseCases,
+    VillageExpansionUseCases, VillageProfileUseCases, VillageReferenceUseCases,
+    VillageStateUseCases,
     requests::activity::{
         GetVillageQueuesRequest, GetVillageTroopMovementsRequest,
         ListCancelableOutgoingMovementIdsRequest,
@@ -66,10 +70,12 @@ use crate::villages::{
 pub struct GameApplication {
     identity: Arc<dyn IdentityPort>,
     registration: RegistrationUseCases,
+    refresh_sessions: RefreshSessionUseCases,
     leaderboards: LeaderboardUseCases,
     map: MapUseCases,
     village_profile: VillageProfileUseCases,
     buildings: BuildingUseCases,
+    building_overview: BuildingOverviewUseCases,
     development: DevelopmentUseCases,
     heroes: HeroUseCases,
     movements: MovementUseCases,
@@ -91,10 +97,12 @@ impl GameApplication {
     pub fn new(
         identity: Arc<dyn IdentityPort>,
         registration: RegistrationUseCases,
+        refresh_sessions: RefreshSessionUseCases,
         leaderboards: LeaderboardUseCases,
         map: MapUseCases,
         village_profile: VillageProfileUseCases,
         buildings: BuildingUseCases,
+        building_overview: BuildingOverviewUseCases,
         development: DevelopmentUseCases,
         heroes: HeroUseCases,
         movements: MovementUseCases,
@@ -113,10 +121,12 @@ impl GameApplication {
         Self {
             identity,
             registration,
+            refresh_sessions,
             leaderboards,
             map,
             village_profile,
             buildings,
+            building_overview,
             development,
             heroes,
             movements,
@@ -341,6 +351,14 @@ impl GameApplication {
         self.movement_control_use_cases()
             .cancel_troop_movement(request)
             .await
+    }
+
+    /// Loads common building previews for an explicitly owned village slot.
+    pub async fn get_building_overview(
+        &self,
+        request: crate::villages::requests::building_overview::GetBuildingOverviewRequest,
+    ) -> Result<crate::villages::read_models::buildings::BuildingOverview, ApplicationError> {
+        self.building_overview.get_building_overview(request).await
     }
 
     pub async fn add_building(&self, request: AddBuildingRequest) -> Result<(), ApplicationError> {
@@ -660,5 +678,60 @@ impl GameApplication {
                 limit,
             })
             .await
+    }
+}
+
+impl GameApplication {
+    /// Creates a refresh session from a token hash, never a plaintext token.
+    pub async fn create_refresh_session(
+        &self,
+        user_id: Uuid,
+        player_id: Uuid,
+        village_id: u32,
+        hash: &str,
+        client: SessionClient,
+    ) -> Result<RefreshSession, RefreshSessionError> {
+        self.refresh_sessions
+            .create(user_id, player_id, village_id, hash, client)
+            .await
+    }
+    /// Atomically consumes one session and issues its successor.
+    pub async fn rotate_refresh_session(
+        &self,
+        old_hash: &str,
+        new_hash: String,
+        client: SessionClient,
+    ) -> Result<RefreshSession, RefreshSessionError> {
+        self.refresh_sessions
+            .rotate(old_hash, new_hash, client)
+            .await
+    }
+    pub async fn validate_refresh_session_id(
+        &self,
+        id: Uuid,
+    ) -> Result<RefreshSession, RefreshSessionError> {
+        self.refresh_sessions.validate_id(id).await
+    }
+    pub async fn validate_refresh_session_hash(
+        &self,
+        hash: &str,
+    ) -> Result<RefreshSession, RefreshSessionError> {
+        self.refresh_sessions.validate_hash(hash).await
+    }
+    pub async fn revoke_refresh_session(&self, hash: &str) -> Result<(), RefreshSessionError> {
+        self.refresh_sessions.revoke(hash).await
+    }
+    pub async fn revoke_all_refresh_sessions(
+        &self,
+        user_id: Uuid,
+    ) -> Result<(), RefreshSessionError> {
+        self.refresh_sessions.revoke_all(user_id).await
+    }
+    pub async fn set_refresh_session_village(
+        &self,
+        id: Uuid,
+        village_id: u32,
+    ) -> Result<(), RefreshSessionError> {
+        self.refresh_sessions.set_village(id, village_id).await
     }
 }

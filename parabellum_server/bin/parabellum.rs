@@ -42,15 +42,71 @@ use tracing::{error, info};
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<(), ApplicationError> {
-    setup_logging();
+    let _logging_guard = setup_logging();
     info!("starting parabellum runtime");
-    let (config, game_app, es_worker, db_pool) = setup_app().await?;
-    let state = AppState::new(game_app, db_pool, &config);
+    let (config, game_app, es_worker, _db_pool) = setup_app().await?;
+    let state = AppState::new(game_app, &config);
     let port = config.port;
 
-    es_worker.run();
+    let (shutdown, mut shutdown_rx) = tokio::sync::watch::channel(false);
+    let mut worker = es_worker.run(shutdown_rx.clone());
     info!(port, "runtime initialized; launching web server");
-    WebRouter::serve(state, port).await
+    let mut web = Box::pin(WebRouter::serve_with_shutdown(state, port, async move {
+        while !*shutdown_rx.borrow() {
+            if shutdown_rx.changed().await.is_err() {
+                break;
+            }
+        }
+    }));
+    let mut worker_finished = false;
+    let mut web_finished = false;
+    let mut result = tokio::select! {
+        result = &mut web => { web_finished = true; result },
+        result = &mut worker => {
+            worker_finished = true;
+            Err(ApplicationError::Infrastructure(format!("scheduler stopped unexpectedly: {result:?}")))
+        },
+        result = shutdown_signal() => result,
+    };
+    let _ = shutdown.send(true);
+    if !web_finished {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), &mut web).await {
+            Ok(Err(err)) if result.is_ok() => result = Err(err),
+            Err(_) => error!("HTTP shutdown timed out"),
+            _ => {}
+        }
+    }
+    if !worker_finished {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), &mut worker).await {
+            Ok(Err(err)) if result.is_ok() => {
+                result = Err(ApplicationError::Infrastructure(err.to_string()))
+            }
+            Err(_) => {
+                error!("scheduler shutdown timed out; cancelling in-flight transaction");
+                worker.abort();
+                let _ = worker.await;
+            }
+            _ => {}
+        }
+    }
+    result
+}
+
+async fn shutdown_signal() -> Result<(), ApplicationError> {
+    #[cfg(unix)]
+    {
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .map_err(|e| ApplicationError::Infrastructure(e.to_string()))?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => result.map_err(|e| ApplicationError::Infrastructure(e.to_string())),
+            _ = terminate.recv() => Ok(()),
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c()
+        .await
+        .map_err(|e| ApplicationError::Infrastructure(e.to_string()))
 }
 
 async fn setup_app() -> Result<
@@ -88,6 +144,16 @@ fn build_game_application(
     village_service: VillageEsService,
 ) -> Arc<GameApplication> {
     let identity = Arc::new(IdentityService::new(db_pool.clone()));
+    let refresh_sessions = parabellum_app::identity::refresh_sessions::RefreshSessionUseCases::new(
+        Arc::new(
+            parabellum_infra::identity::repositories::PostgresRefreshSessionRepository::new(
+                db_pool.clone(),
+            ),
+        ),
+        config.refresh_token_ttl_secs,
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     let leaderboards =
         LeaderboardUseCases::new(Arc::new(PostgresPlayerRepository::new(db_pool.clone())));
     let map = MapUseCases::new(Arc::new(PostgresMapRepository::new(
@@ -153,6 +219,14 @@ fn build_game_application(
     let trap_executor: Arc<dyn TrapCommandExecutor> = villages_adapter.clone();
     let scheduler_port: Arc<dyn SchedulerPort> = villages_adapter.clone();
     let scheduler = SchedulerUseCases::new(scheduler_port);
+    let building_overview = parabellum_app::villages::BuildingOverviewUseCases::new(
+        village_state_reads.clone(),
+        activity_reads.clone(),
+        Arc::new(SystemClock),
+        BuildingSettings {
+            server_speed: config.speed,
+        },
+    );
     let buildings = BuildingUseCases::new(
         building_reads,
         building_executor,
@@ -213,10 +287,12 @@ fn build_game_application(
     Arc::new(GameApplication::new(
         identity,
         registration,
+        refresh_sessions,
         leaderboards,
         map,
         village_profile,
         buildings,
+        building_overview,
         development,
         heroes,
         movements,

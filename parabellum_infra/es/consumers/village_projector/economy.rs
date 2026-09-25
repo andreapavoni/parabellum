@@ -56,10 +56,10 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut source = self.load_village_state_in_tx(tx, source).await?;
         source
-            .deduct_resources(cost)
+            .deduct_resources_fact(cost)
             .map_err(CqrsError::domain_source)?;
         self.apply_village_economy_facts_in_tx(
             tx,
@@ -79,12 +79,12 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         apply_village_economy_facts_to_model(&mut model, facts);
         self.village
             .store_village_model_in_tx(tx, &model)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 }
 

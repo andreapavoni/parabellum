@@ -12,6 +12,16 @@ use sqlx::{Postgres, Transaction};
 use crate::es::consumers::village_projector::VillageProjector;
 use crate::es::workflows;
 
+/// Returns the army that should remain projected after battle survival is applied.
+///
+/// Battle reports update persisted hero stats separately. Army projections only
+/// keep heroes that are still alive and only keep army rows that still contain
+/// troops or a surviving hero.
+pub(super) fn surviving_army_projection(mut army: Army) -> Option<Army> {
+    army.detach_dead_hero();
+    (army.immensity() > 0).then_some(army)
+}
+
 impl VillageProjector {
     /// Projects hero placement in the hero read model.
     ///
@@ -29,7 +39,7 @@ impl VillageProjector {
         self.heroes
             .upsert_in_tx(tx, hero, home_village_id, current_village_id, state)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     /// Updates persisted hero stats from a resolved battle report.
@@ -66,7 +76,7 @@ impl VillageProjector {
         self.heroes
             .update_stats_in_tx(tx, &hero)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     pub(super) async fn project_hero_event_in_tx(
@@ -97,11 +107,11 @@ impl VillageProjector {
         self.heroes
             .update_stats_in_tx(tx, hero)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         self.village
             .refresh_derived_state_in_tx(tx, hero.village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_hero_home(
@@ -137,7 +147,7 @@ impl VillageProjector {
             .village
             .get_by_village_id_in_tx(tx, *village_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let default_home_army =
             Army::new_village_army(&self.load_village_state_in_tx(tx, village).await?);
         let mut home_armies = self
@@ -151,13 +161,13 @@ impl VillageProjector {
                     .limit(1),
             )
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))?;
+            .map_err(CqrsError::domain_source)?;
         let mut home_army = home_armies.pop().unwrap_or(default_home_army);
         home_army.set_hero(Some(hero.clone()));
         self.armies
             .upsert_home_in_tx(tx, &home_army, *player_id)
             .await
-            .map_err(|e| CqrsError::EventStore(e.to_string()))
+            .map_err(CqrsError::domain_source)
     }
 
     async fn project_hero_revival_scheduled(

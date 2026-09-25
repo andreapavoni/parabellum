@@ -328,7 +328,7 @@ pub async fn switch_village(
         state
             .token_service
             .update_refresh_session_village(
-                &state.db_pool,
+                &state.game_app,
                 claims.refresh_session_id,
                 payload.village_id,
             )

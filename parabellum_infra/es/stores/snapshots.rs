@@ -1,7 +1,7 @@
 //! Postgres implementation of aggregate snapshot storage.
 
 use mini_cqrs_es::{Aggregate, AggregateSnapshot, CqrsError, SnapshotStore};
-use sqlx::{PgPool, types::Json};
+use sqlx::{PgPool, Postgres, Transaction, types::Json};
 
 use crate::EventStoreDb;
 
@@ -18,10 +18,13 @@ impl PostgresSnapshotStore {
             pool: db.pool().clone(),
         }
     }
-}
 
-impl SnapshotStore for PostgresSnapshotStore {
-    async fn save_snapshot<T>(&self, snapshot: AggregateSnapshot<T>) -> Result<(), CqrsError>
+    /// Persists derived state without allowing an older writer to regress its version.
+    pub(crate) async fn save_in_tx<T>(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        snapshot: AggregateSnapshot<T>,
+    ) -> Result<(), CqrsError>
     where
         T: Aggregate,
     {
@@ -39,17 +42,29 @@ impl SnapshotStore for PostgresSnapshotStore {
                 stream_version = EXCLUDED.stream_version,
                 state = EXCLUDED.state,
                 updated_at = NOW()
+            WHERE es_snapshots.stream_version <= EXCLUDED.stream_version
             "#,
         )
         .bind(aggregate_type)
         .bind(aggregate_id)
         .bind(snapshot.version as i64)
         .bind(Json(&state))
-        .execute(&self.pool)
+        .execute(&mut **tx)
         .await
-        .map_err(|e| CqrsError::SnapshotStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
 
         Ok(())
+    }
+}
+
+impl SnapshotStore for PostgresSnapshotStore {
+    async fn save_snapshot<T>(&self, snapshot: AggregateSnapshot<T>) -> Result<(), CqrsError>
+    where
+        T: Aggregate,
+    {
+        let mut tx = self.pool.begin().await.map_err(CqrsError::domain_source)?;
+        self.save_in_tx(&mut tx, snapshot).await?;
+        tx.commit().await.map_err(CqrsError::domain_source)
     }
 
     async fn load_snapshot<T>(
@@ -73,7 +88,7 @@ impl SnapshotStore for PostgresSnapshotStore {
         .bind(aggregate_id_str)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| CqrsError::SnapshotStore(e.to_string()))?;
+        .map_err(CqrsError::domain_source)?;
 
         let row = row.ok_or_else(|| {
             CqrsError::SnapshotStore(format!("snapshot not found for aggregate `{aggregate_id}`"))

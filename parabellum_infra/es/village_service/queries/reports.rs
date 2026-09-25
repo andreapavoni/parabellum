@@ -29,9 +29,7 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         runtime
             .query(&ListReportsForPlayer {
-                repository: Arc::new(PostgresReportRepository::new(crate::ProjectionDb::new(
-                    self.pool.clone(),
-                ))) as Arc<dyn ReportRepository>,
+                repository: self.report_repository(),
                 player_id,
                 offset,
                 limit,
@@ -48,9 +46,7 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         runtime
             .query(&GetReportForPlayer {
-                repository: Arc::new(PostgresReportRepository::new(crate::ProjectionDb::new(
-                    self.pool.clone(),
-                ))) as Arc<dyn ReportRepository>,
+                repository: self.report_repository(),
                 report_id,
                 player_id,
             })
@@ -65,9 +61,7 @@ impl VillageEsService {
         let runtime = village_cqrs_runtime(self.pool.clone());
         runtime
             .query(&CountUnreadReportsForPlayer {
-                repository: Arc::new(PostgresReportRepository::new(crate::ProjectionDb::new(
-                    self.pool.clone(),
-                ))) as Arc<dyn ReportRepository>,
+                repository: self.report_repository(),
                 player_id,
             })
             .await
@@ -103,5 +97,11 @@ impl VillageEsService {
             )
             .await?;
         Ok(())
+    }
+
+    fn report_repository(&self) -> Arc<dyn ReportRepository> {
+        Arc::new(PostgresReportRepository::new(crate::ProjectionDb::new(
+            self.pool.clone(),
+        )))
     }
 }

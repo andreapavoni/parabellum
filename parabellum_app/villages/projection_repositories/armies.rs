@@ -5,12 +5,20 @@ use uuid::Uuid;
 
 use crate::villages::VillageArmyContext;
 
-/// Projected army placement state.
+/// Projected army placement state stored in `rm_armies`.
+///
+/// `village_id` is the army's home/origin village. `current_village_id` is the
+/// village or map field currently hosting the army. The state describes why the
+/// army is away from or present at `current_village_id`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArmyState {
+    /// The village owner's home army, present at its home village.
     Home,
+    /// An army stationed as reinforcement at another village.
     Stationed,
+    /// An army currently travelling between villages.
     Moving,
+    /// An army held by traps at another village.
     Trapped,
 }
 
@@ -21,7 +29,7 @@ pub struct ArmyListFilter {
     pub home_village_id: Option<u32>,
     pub current_village_id: Option<u32>,
     pub state: Option<ArmyState>,
-    pub deployed: Option<bool>,
+    pub away_from_home: Option<bool>,
     pub limit: Option<i64>,
 }
 
@@ -50,8 +58,13 @@ impl ArmyListFilter {
         self
     }
 
-    pub fn deployed(mut self, deployed: bool) -> Self {
-        self.deployed = Some(deployed);
+    /// Filters rows by whether `current_village_id` differs from
+    /// `home_village_id`.
+    ///
+    /// This requires `home_village` to be set so the query can express the
+    /// comparison against the selected origin village.
+    pub fn away_from_home(mut self, away_from_home: bool) -> Self {
+        self.away_from_home = Some(away_from_home);
         self
     }
 

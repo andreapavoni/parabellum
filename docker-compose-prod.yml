@@ -6,7 +6,7 @@ services:
     environment:
       - RUST_LOG=info,parabellum=info,parabellum_infra=info,parabellum_web=info,tower_http=warn,sqlx=warn
       - PORT=3000
-      - DATABASE_URL=postgres://deployer:some-password@parabellum_db:5432/parabellum_prod
+      - DATABASE_URL=postgres://deployer:some-password@db:5432/parabellum_prod
       - PARABELLUM_WORLD_SIZE=100
       - PARABELLUM_SERVER_SPEED=5
       - PARABELLUM_ACCESS_TOKEN_TTL_SECS=900
@@ -20,8 +20,7 @@ services:
       - ./logs:/app/logs
       - ./:/app/mnt
     depends_on:
-      - caddy
-      - parabellum_db
+      - db
 
   db:
     image: postgres:16-alpine

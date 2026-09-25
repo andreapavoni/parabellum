@@ -43,6 +43,8 @@ export function App() {
   const queryClient = useQueryClient();
   const [route, setRoute] = useState(() => parseRoute(window.location));
   const queueRefreshInFlightRef = useRef(false);
+  const [switchesPending, setSwitchesPending] = useState(0);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const refreshFromQueueElapsed = useCallback(async () => {
     if (queueRefreshInFlightRef.current) return;
@@ -54,7 +56,7 @@ export function App() {
     }
   }, [invalidateVisibleGameState]);
 
-  const gameContextQuery = useGameContextQuery(session.authenticated && !booting);
+  const gameContextQuery = useGameContextQuery(session.authenticated && !booting && switchesPending === 0);
   const meContext = gameContextQuery.data ?? null;
   useGlobalTimer(meContext, gameContextQuery.dataUpdatedAt, refreshFromQueueElapsed);
 
@@ -68,7 +70,7 @@ export function App() {
     const villageId = session.currentVillageId ?? meContext?.currentVillage.id;
     const invalidations = [queryClient.invalidateQueries({ queryKey: queryKeys.gameContext })];
     if (route.name === "building") {
-      invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.building(route.slotId) }));
+      invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.building(villageId, route.slotId) }));
     }
     if (route.name === "mapField") {
       invalidations.push(queryClient.invalidateQueries({ queryKey: queryKeys.mapField(route.fieldId) }));
@@ -83,10 +85,10 @@ export function App() {
       );
     }
     await Promise.all(invalidations);
-    if (session.authenticated) {
+    if (session.authenticated && villageId !== undefined && switchesPending === 0) {
       await queryClient.fetchQuery({
-        queryKey: queryKeys.gameContext,
-        queryFn: () => api.gameContext(),
+        queryKey: queryKeys.gameContextFor(villageId),
+        queryFn: ({ signal }) => api.gameContext(villageId, signal),
       });
     }
   }
@@ -106,12 +108,21 @@ export function App() {
   }, [booting, route, session.authenticated]);
 
   const switchVillage = useCallback(async (villageId: number) => {
-    await api.switchVillage({ villageId });
-    await refreshSession();
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.gameContext }),
-      queryClient.invalidateQueries({ queryKey: ["building"] }),
-    ]);
+    setSwitchesPending((count) => count + 1);
+    setSwitchError(null);
+    try {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.gameContext }),
+        queryClient.cancelQueries({ queryKey: ["building"] }),
+      ]);
+      await api.switchVillage({ villageId });
+      await refreshSession();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.gameContextFor(villageId) });
+    } catch (error) {
+      setSwitchError(queryErrorMessage(error, "Unable to switch village."));
+    } finally {
+      setSwitchesPending((count) => count - 1);
+    }
   }, [queryClient, refreshSession]);
 
   const page = useMemo(() => {
@@ -276,7 +287,8 @@ export function App() {
       }}
       onSwitchVillage={switchVillage}
     >
-      {page}
+      {switchError && <ErrorState message={switchError} />}
+      {switchesPending > 0 ? <Loading label="Switching village..." /> : page}
     </Layout>
   );
 }
